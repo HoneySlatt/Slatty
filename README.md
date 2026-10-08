@@ -6,7 +6,8 @@ Not affiliated with GOG. It relies on reverse-engineered Galaxy services that ma
 
 ```
 nix develop
-cargo run -p slatty-cli -- doctor
+cargo run -p slatty-cli -- doctor   # command line
+cargo run -p slatty-gui             # Iced interface
 ```
 
 See `docs/PLAN.md` for scope and `docs/compat.md` for what has actually been verified.

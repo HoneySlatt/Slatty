@@ -10,5 +10,10 @@ name = "slatty-gui"
 path = "src/main.rs"
 
 [dependencies]
+chrono = "0.4.45"
 iced = { version = "0.14", features = ["image", "tokio"] }
 slatty-core.workspace = true
+tokio = { workspace = true, features = ["sync", "macros"] }
+
+[dev-dependencies]
+iced_test = "0.14"

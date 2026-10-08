@@ -168,6 +168,33 @@ async fn from_product(http: &Client, id: &str) -> LibraryGame {
     }
 }
 
+/// Cover image bytes, served from the per-account disk cache when present.
+pub async fn cover(
+    http: &Client,
+    dirs: &Dirs,
+    user_id: &str,
+    game: &LibraryGame,
+) -> Result<Option<Vec<u8>>> {
+    let Some(url) = &game.cover else {
+        return Ok(None);
+    };
+    let path = dirs
+        .account_cache(user_id)
+        .join("covers")
+        .join(format!("{}.img", game.id));
+    if let Ok(bytes) = tokio::fs::read(&path).await {
+        return Ok(Some(bytes));
+    }
+    let resp = http::send(http.get(url), "downloading a cover").await?;
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| Error::network("downloading a cover", e))?
+        .to_vec();
+    fsutil::write_atomic(&path, &bytes)?;
+    Ok(Some(bytes))
+}
+
 fn cache_file(dirs: &Dirs, user_id: &str) -> std::path::PathBuf {
     dirs.account_cache(user_id).join("library.json")
 }

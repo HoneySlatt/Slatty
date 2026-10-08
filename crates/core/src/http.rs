@@ -5,6 +5,8 @@ use serde::de::DeserializeOwned;
 
 use crate::error::{Error, Result};
 
+pub type HttpClient = Client;
+
 pub const USER_AGENT: &str = concat!("SlattyLauncher/", env!("CARGO_PKG_VERSION"));
 
 pub fn client() -> Result<Client> {
