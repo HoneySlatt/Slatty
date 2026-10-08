@@ -58,7 +58,8 @@ impl Install {
     }
 
     pub fn list(db: &Db) -> Result<Vec<Install>> {
-        let mut stmt = db.conn().prepare(&format!("{SELECT} ORDER BY title"))?;
+        let conn = db.conn();
+        let mut stmt = conn.prepare(&format!("{SELECT} ORDER BY title"))?;
         let rows = stmt.query_map([], from_row)?;
         rows.map(|r| r?).collect()
     }

@@ -14,6 +14,7 @@ pub mod install;
 pub mod library;
 pub mod lock;
 pub mod paths;
+pub mod play;
 pub mod runner;
 pub mod secret;
 pub mod session;

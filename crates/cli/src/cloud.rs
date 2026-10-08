@@ -4,7 +4,7 @@ use slatty_core::account::Account;
 use slatty_core::cloud::{
     self,
     plan::Action,
-    sync::{Prefer, SyncOptions, SyncReport, SyncTarget},
+    sync::{Prefer, SyncOptions, SyncReport},
 };
 use slatty_core::install::Install;
 
@@ -68,37 +68,23 @@ pub async fn run(ctx: &Ctx, cmd: CloudCommand) -> Result<()> {
 pub async fn sync_game(ctx: &Ctx, install: &Install, opts: SyncOptions) -> Result<bool> {
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
-    let Some(game_cloud) = cloud::open(&ctx.http, &tokens, install).await? else {
+    let Some(outcomes) =
+        cloud::sync_game(&ctx.db, &ctx.dirs, &ctx.http, &tokens, install, opts).await?
+    else {
         println!("GOG has no cloud saves for {}.", install.title);
         return Ok(true);
     };
-    let mut clean = true;
-    for (location, root) in &game_cloud.locations {
-        let root = match root {
-            Ok(r) => r,
-            Err(e) => {
-                println!(
-                    "[{}] {} — cannot resolve: {e}",
-                    location.name, location.location
-                );
-                clean = false;
-                continue;
+    for o in &outcomes {
+        match (&o.root, &o.result) {
+            (Some(root), Ok(report)) => {
+                println!("[{}] {}", o.name, root.display());
+                print_report(report, opts.dry_run);
             }
-        };
-        println!("[{}] {}", location.name, root.display());
-        let target = SyncTarget {
-            db: &ctx.db,
-            dirs: &ctx.dirs,
-            user_id: &tokens.user_id,
-            game_id: &install.game_id,
-            location: &location.name,
-            root,
-        };
-        let report = cloud::sync::sync(&game_cloud.transport, &target, opts).await?;
-        print_report(&report, opts.dry_run);
-        clean &= report.is_clean();
+            (_, Err(e)) => println!("[{}] {} — {e}", o.name, o.template),
+            (None, Ok(_)) => unreachable!("a report needs a resolved root"),
+        }
     }
-    Ok(clean)
+    Ok(outcomes.iter().all(|o| o.is_clean()))
 }
 
 fn print_report(r: &SyncReport, dry_run: bool) {

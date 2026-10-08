@@ -45,3 +45,61 @@ pub async fn open(http: &Client, tokens: &Tokens, install: &Install) -> Result<O
         locations,
     }))
 }
+
+use crate::db::Db;
+use crate::paths::Dirs;
+use sync::{SyncOptions, SyncReport, SyncTarget};
+
+pub struct LocationOutcome {
+    pub name: String,
+    pub template: String,
+    pub root: Option<PathBuf>,
+    pub result: Result<SyncReport>,
+}
+
+impl LocationOutcome {
+    pub fn is_clean(&self) -> bool {
+        matches!(&self.result, Ok(r) if r.is_clean())
+    }
+}
+
+/// Syncs every save location of a game. `None` when GOG has no cloud saves for it.
+pub async fn sync_game(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    tokens: &Tokens,
+    install: &Install,
+    opts: SyncOptions,
+) -> Result<Option<Vec<LocationOutcome>>> {
+    let Some(game_cloud) = open(http, tokens, install).await? else {
+        return Ok(None);
+    };
+    let mut outcomes = Vec::new();
+    for (location, root) in game_cloud.locations {
+        let result = match &root {
+            Err(e) => Err(Error::Unsupported(format!(
+                "cannot resolve {}: {e}",
+                location.location
+            ))),
+            Ok(root) => {
+                let target = SyncTarget {
+                    db,
+                    dirs,
+                    user_id: &tokens.user_id,
+                    game_id: &install.game_id,
+                    location: &location.name,
+                    root,
+                };
+                sync::sync(&game_cloud.transport, &target, opts).await
+            }
+        };
+        outcomes.push(LocationOutcome {
+            name: location.name,
+            template: location.location,
+            root: root.ok(),
+            result,
+        });
+    }
+    Ok(Some(outcomes))
+}

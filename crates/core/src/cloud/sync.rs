@@ -400,7 +400,8 @@ fn remote_map(entries: Vec<RemoteEntry>, location: &str) -> Result<BTreeMap<Stri
 }
 
 fn load_base(t: &SyncTarget<'_>) -> Result<BTreeMap<String, BaseEntry>> {
-    let mut stmt = t.db.conn().prepare(
+    let conn = t.db.conn();
+    let mut stmt = conn.prepare(
         "SELECT path, local_sha256, remote_hash FROM sync_baseline
          WHERE user_id = ?1 AND game_id = ?2 AND location = ?3",
     )?;

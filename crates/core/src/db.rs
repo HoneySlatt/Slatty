@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -51,7 +52,7 @@ CREATE TABLE sync_baseline (
 "#];
 
 pub struct Db {
-    conn: Connection,
+    conn: Mutex<Connection>,
 }
 
 impl Db {
@@ -66,44 +67,24 @@ impl Db {
         Self::init(Connection::open_in_memory()?)
     }
 
-    fn init(conn: Connection) -> Result<Self> {
+    fn init(mut conn: Connection) -> Result<Self> {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "foreign_keys", true)?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
-        let mut db = Self { conn };
-        db.migrate()?;
-        Ok(db)
+        migrate(&mut conn)?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
-    fn migrate(&mut self) -> Result<()> {
-        let version: i64 = self
-            .conn
-            .pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version > MIGRATIONS.len() as i64 {
-            return Err(Error::Unsupported(format!(
-                "state database version {version} is newer than this build supports"
-            )));
-        }
-        for (i, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
-            let tx = self.conn.transaction()?;
-            tx.execute_batch(sql)?;
-            tx.pragma_update(None, "user_version", i as i64 + 1)?;
-            tx.commit()?;
-        }
-        Ok(())
-    }
-
-    pub fn conn(&self) -> &Connection {
-        &self.conn
-    }
-
-    pub fn conn_mut(&mut self) -> &mut Connection {
-        &mut self.conn
+    /// Never hold the guard across an `.await`.
+    pub fn conn(&self) -> MutexGuard<'_, Connection> {
+        self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     pub fn setting(&self, key: &str) -> Result<Option<String>> {
         Ok(self
-            .conn
+            .conn()
             .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
                 r.get(0)
             })
@@ -111,18 +92,33 @@ impl Db {
     }
 
     pub fn set_setting(&self, key: &str, value: Option<&str>) -> Result<()> {
+        let conn = self.conn();
         match value {
-            Some(v) => self.conn.execute(
+            Some(v) => conn.execute(
                 "INSERT INTO settings (key, value) VALUES (?1, ?2)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 params![key, v],
             )?,
-            None => self
-                .conn
-                .execute("DELETE FROM settings WHERE key = ?1", [key])?,
+            None => conn.execute("DELETE FROM settings WHERE key = ?1", [key])?,
         };
         Ok(())
     }
+}
+
+fn migrate(conn: &mut Connection) -> Result<()> {
+    let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+    if version > MIGRATIONS.len() as i64 {
+        return Err(Error::Unsupported(format!(
+            "state database version {version} is newer than this build supports"
+        )));
+    }
+    for (i, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
+        let tx = conn.transaction()?;
+        tx.execute_batch(sql)?;
+        tx.pragma_update(None, "user_version", i as i64 + 1)?;
+        tx.commit()?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

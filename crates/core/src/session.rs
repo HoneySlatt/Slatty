@@ -267,11 +267,12 @@ pub struct SessionRecord {
 }
 
 pub fn record_start(db: &Db, game_id: &str, user_id: Option<&str>) -> Result<i64> {
-    db.conn().execute(
+    let conn = db.conn();
+    conn.execute(
         "INSERT INTO sessions (game_id, user_id, started_at, state) VALUES (?1, ?2, ?3, 'running')",
         params![game_id, user_id, Utc::now().timestamp()],
     )?;
-    Ok(db.conn().last_insert_rowid())
+    Ok(conn.last_insert_rowid())
 }
 
 pub fn record_end(db: &Db, id: i64, outcome: &SessionOutcome) -> Result<()> {
@@ -289,7 +290,8 @@ pub fn record_end(db: &Db, id: i64, outcome: &SessionOutcome) -> Result<()> {
 
 /// Sessions that never recorded an end (launcher crash or kill).
 pub fn unfinished(db: &Db) -> Result<Vec<SessionRecord>> {
-    let mut stmt = db.conn().prepare(
+    let conn = db.conn();
+    let mut stmt = conn.prepare(
         "SELECT id, game_id, started_at FROM sessions WHERE state = 'running' ORDER BY id",
     )?;
     let rows = stmt.query_map([], |r| {
