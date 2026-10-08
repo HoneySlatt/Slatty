@@ -1,5 +1,6 @@
 mod auth;
 mod games;
+mod launch;
 mod library;
 
 use anyhow::Result;
@@ -30,6 +31,8 @@ enum Command {
     Installs,
     /// Show the command that would launch a game
     LaunchSpec { game_id: String },
+    /// Launch a game and follow its session until every process has exited
+    Launch(launch::LaunchArgs),
 }
 
 pub struct Ctx {
@@ -38,8 +41,20 @@ pub struct Ctx {
     pub http: reqwest::Client,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|a| a == slatty_core::session::SUPERVISE_ARG)
+    {
+        std::process::exit(slatty_core::session::supervise_main());
+    }
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(run())
+}
+
+async fn run() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_env("SLATTY_LOG"))
         .with_writer(std::io::stderr)
@@ -48,11 +63,20 @@ async fn main() -> Result<()> {
     let dirs = Dirs::from_system()?;
     if let Command::Doctor = cli.command {
         for c in slatty_core::doctor::run(&dirs) {
-            println!("[{}] {:<16} {}", if c.ok { " ok " } else { "FAIL" }, c.name, c.detail);
+            println!(
+                "[{}] {:<16} {}",
+                if c.ok { " ok " } else { "FAIL" },
+                c.name,
+                c.detail
+            );
         }
         return Ok(());
     }
-    let ctx = Ctx { db: Db::open(&dirs.db_file())?, http: slatty_core::http::client()?, dirs };
+    let ctx = Ctx {
+        db: Db::open(&dirs.db_file())?,
+        http: slatty_core::http::client()?,
+        dirs,
+    };
     match cli.command {
         Command::Doctor => unreachable!(),
         Command::Auth(cmd) => auth::run(&ctx, cmd).await,
@@ -60,6 +84,7 @@ async fn main() -> Result<()> {
         Command::Import(args) => games::import(&ctx, args),
         Command::Installs => games::list(&ctx),
         Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),
+        Command::Launch(args) => launch::run(&ctx, args).await,
     }
 }
 
@@ -68,6 +93,10 @@ pub fn local_time(ts: i64) -> String {
     chrono::Utc
         .timestamp_opt(ts, 0)
         .single()
-        .map(|t| t.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string())
+        .map(|t| {
+            t.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+        })
         .unwrap_or_else(|| ts.to_string())
 }

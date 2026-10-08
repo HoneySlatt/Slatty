@@ -30,7 +30,11 @@ pub struct PlayTask {
 
 impl GameInfo {
     pub fn primary_task(&self) -> Option<&PlayTask> {
-        let file_tasks = || self.play_tasks.iter().filter(|t| t.kind == "FileTask" && t.path.is_some());
+        let file_tasks = || {
+            self.play_tasks
+                .iter()
+                .filter(|t| t.kind == "FileTask" && t.path.is_some())
+        };
         file_tasks()
             .find(|t| t.is_primary)
             .or_else(|| file_tasks().find(|t| t.category.as_deref() == Some("game")))
@@ -39,13 +43,16 @@ impl GameInfo {
 
 /// Reads the base game's `goggame-<id>.info` from an install directory.
 pub fn read(dir: &Path, game_id: Option<&str>) -> Result<GameInfo> {
-    let entries = std::fs::read_dir(dir).map_err(|e| Error::io(format!("read {}", dir.display()), e))?;
+    let entries =
+        std::fs::read_dir(dir).map_err(|e| Error::io(format!("read {}", dir.display()), e))?;
     let mut infos = Vec::new();
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.starts_with("goggame-") && name.ends_with(".info") {
-            let bytes = std::fs::read(entry.path()).map_err(|e| Error::io(format!("read {name}"), e))?;
-            let info: GameInfo = serde_json::from_slice(&bytes).map_err(|e| Error::parse("goggame info file", e))?;
+            let bytes =
+                std::fs::read(entry.path()).map_err(|e| Error::io(format!("read {name}"), e))?;
+            let info: GameInfo =
+                serde_json::from_slice(&bytes).map_err(|e| Error::parse("goggame info file", e))?;
             infos.push(info);
         }
     }
@@ -56,16 +63,28 @@ pub fn read(dir: &Path, game_id: Option<&str>) -> Result<GameInfo> {
     let mut matching: Vec<_> = infos.into_iter().filter(wanted).collect();
     match matching.len() {
         1 => Ok(matching.remove(0)),
-        0 => Err(Error::NotFound(format!("no matching goggame-*.info in {}", dir.display()))),
-        _ => Err(Error::Refused(format!("several base games in {}; pass the game id", dir.display()))),
+        0 => Err(Error::NotFound(format!(
+            "no matching goggame-*.info in {}",
+            dir.display()
+        ))),
+        _ => Err(Error::Refused(format!(
+            "several base games in {}; pass the game id",
+            dir.display()
+        ))),
     }
 }
 
 /// Resolves a Windows-style relative path under `base`, matching each component case-insensitively.
 pub fn resolve_relative(base: &Path, rel: &str) -> Result<PathBuf> {
     let mut out = base.to_path_buf();
-    for part in rel.split(['\\', '/']).filter(|p| !p.is_empty() && *p != ".") {
-        if Path::new(part).components().any(|c| !matches!(c, Component::Normal(_))) {
+    for part in rel
+        .split(['\\', '/'])
+        .filter(|p| !p.is_empty() && *p != ".")
+    {
+        if Path::new(part)
+            .components()
+            .any(|c| !matches!(c, Component::Normal(_)))
+        {
             return Err(Error::Refused(format!("unsafe path component `{part}`")));
         }
         let exact = out.join(part);
@@ -130,7 +149,10 @@ mod tests {
                 {"type":"FileTask","path":"bin\\Game.exe","isPrimary":true,"arguments":"-nolauncher"}]}"#,
         )
         .unwrap();
-        assert_eq!(info.primary_task().unwrap().path.as_deref(), Some("bin\\Game.exe"));
+        assert_eq!(
+            info.primary_task().unwrap().path.as_deref(),
+            Some("bin\\Game.exe")
+        );
     }
 
     #[test]
@@ -145,7 +167,10 @@ mod tests {
         let root = std::env::temp_dir().join(format!("slatty-gi-{}", std::process::id()));
         std::fs::create_dir_all(root.join("Bin/X64")).unwrap();
         std::fs::write(root.join("Bin/X64/Game.EXE"), b"").unwrap();
-        assert_eq!(resolve_relative(&root, "bin\\x64\\game.exe").unwrap(), root.join("Bin/X64/Game.EXE"));
+        assert_eq!(
+            resolve_relative(&root, "bin\\x64\\game.exe").unwrap(),
+            root.join("Bin/X64/Game.EXE")
+        );
         assert!(resolve_relative(&root, "..\\outside").is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -154,8 +179,16 @@ mod tests {
     fn reads_base_game_info_and_ignores_dlc() {
         let root = std::env::temp_dir().join(format!("slatty-gi2-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(root.join("goggame-1.info"), r#"{"gameId":"1","rootGameId":"1","name":"Base"}"#).unwrap();
-        std::fs::write(root.join("goggame-2.info"), r#"{"gameId":"2","rootGameId":"1","name":"DLC"}"#).unwrap();
+        std::fs::write(
+            root.join("goggame-1.info"),
+            r#"{"gameId":"1","rootGameId":"1","name":"Base"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("goggame-2.info"),
+            r#"{"gameId":"2","rootGameId":"1","name":"DLC"}"#,
+        )
+        .unwrap();
         assert_eq!(read(&root, None).unwrap().name, "Base");
         assert_eq!(read(&root, Some("2")).unwrap().name, "DLC");
         std::fs::remove_dir_all(root).unwrap();

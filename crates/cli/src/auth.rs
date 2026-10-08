@@ -32,14 +32,20 @@ pub async fn run(ctx: &Ctx, cmd: AuthCommand) -> Result<()> {
         AuthCommand::Refresh => {
             let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
             account.refresh(&ctx.http, true).await?;
-            println!("Session renewed, valid until {}", crate::local_time(account.expires_at()));
+            println!(
+                "Session renewed, valid until {}",
+                crate::local_time(account.expires_at())
+            );
             Ok(())
         }
         AuthCommand::ProbeRotation => {
             let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
             let report = account.probe_rotation(&ctx.http).await?;
             println!("refresh token rotated on refresh: {}", report.rotated);
-            println!("previous refresh token still accepted: {}", report.old_still_valid);
+            println!(
+                "previous refresh token still accepted: {}",
+                report.old_still_valid
+            );
             Ok(())
         }
         AuthCommand::Logout => {
@@ -55,17 +61,28 @@ pub async fn run(ctx: &Ctx, cmd: AuthCommand) -> Result<()> {
 async fn login(ctx: &Ctx, no_browser: bool) -> Result<()> {
     let url = auth::login_url();
     eprintln!("Log in to GOG in your browser:\n\n  {url}\n");
-    if !no_browser && std::process::Command::new("xdg-open").arg(url.as_str()).spawn().is_err() {
+    if !no_browser
+        && std::process::Command::new("xdg-open")
+            .arg(url.as_str())
+            .spawn()
+            .is_err()
+    {
         eprintln!("(could not open a browser, copy the URL above)");
     }
     eprintln!("After logging in, the browser lands on a mostly blank embed.gog.com page.");
     eprint!("Paste that page's full URL here and press Enter: ");
     std::io::stderr().flush()?;
     let mut line = String::new();
-    std::io::stdin().lock().read_line(&mut line).context("reading the pasted URL")?;
+    std::io::stdin()
+        .lock()
+        .read_line(&mut line)
+        .context("reading the pasted URL")?;
     let code = auth::extract_code(&line)?;
     let account = Account::login(&ctx.http, &ctx.db, &ctx.dirs, &code).await?;
-    println!("Logged in as {} (user id {}).", account.info.username, account.info.user_id);
+    println!(
+        "Logged in as {} (user id {}).",
+        account.info.username, account.info.user_id
+    );
     Ok(())
 }
 
@@ -76,7 +93,10 @@ async fn status(ctx: &Ctx) -> Result<()> {
     };
     println!("Account: {} (user id {})", info.username, info.user_id);
     match Account::load(&ctx.db, &ctx.dirs).await {
-        Ok(account) => println!("Access token valid until {}", crate::local_time(account.expires_at())),
+        Ok(account) => println!(
+            "Access token valid until {}",
+            crate::local_time(account.expires_at())
+        ),
         Err(e) => println!("Tokens unavailable: {e}"),
     }
     Ok(())

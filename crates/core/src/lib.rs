@@ -14,5 +14,6 @@ pub mod lock;
 pub mod paths;
 pub mod runner;
 pub mod secret;
+pub mod session;
 
 pub use error::{Error, Result};

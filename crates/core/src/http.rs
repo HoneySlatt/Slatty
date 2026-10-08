@@ -22,7 +22,10 @@ pub async fn send(req: RequestBuilder, context: &'static str) -> Result<Response
     if status.is_success() {
         Ok(resp)
     } else {
-        Err(Error::Http { context, status: status.as_u16() })
+        Err(Error::Http {
+            context,
+            status: status.as_u16(),
+        })
     }
 }
 

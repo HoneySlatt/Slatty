@@ -32,7 +32,10 @@ pub async fn acquire(path: &Path, timeout: Duration) -> Result<FileLock> {
             return Ok(lock);
         }
         if tokio::time::Instant::now() >= deadline {
-            return Err(Error::Refused(format!("{} is held by another operation", path.display())));
+            return Err(Error::Refused(format!(
+                "{} is held by another operation",
+                path.display()
+            )));
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }

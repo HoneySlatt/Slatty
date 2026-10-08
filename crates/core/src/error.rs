@@ -27,7 +27,10 @@ pub enum Error {
         source: std::io::Error,
     },
     #[error("unexpected data from {context}: {detail}")]
-    Parse { context: &'static str, detail: String },
+    Parse {
+        context: &'static str,
+        detail: String,
+    },
     #[error("{0}")]
     Unsupported(String),
     #[error("{0}")]
@@ -40,14 +43,23 @@ pub enum Error {
 
 impl Error {
     pub fn network(context: &'static str, source: reqwest::Error) -> Self {
-        Self::Network { context, source: source.without_url() }
+        Self::Network {
+            context,
+            source: source.without_url(),
+        }
     }
 
     pub fn io(context: impl Into<String>, source: std::io::Error) -> Self {
-        Self::Io { context: context.into(), source }
+        Self::Io {
+            context: context.into(),
+            source,
+        }
     }
 
     pub fn parse(context: &'static str, detail: impl ToString) -> Self {
-        Self::Parse { context, detail: detail.to_string() }
+        Self::Parse {
+            context,
+            detail: detail.to_string(),
+        }
     }
 }

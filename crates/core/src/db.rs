@@ -76,7 +76,9 @@ impl Db {
     }
 
     fn migrate(&mut self) -> Result<()> {
-        let version: i64 = self.conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        let version: i64 = self
+            .conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))?;
         if version > MIGRATIONS.len() as i64 {
             return Err(Error::Unsupported(format!(
                 "state database version {version} is newer than this build supports"
@@ -102,7 +104,9 @@ impl Db {
     pub fn setting(&self, key: &str) -> Result<Option<String>> {
         Ok(self
             .conn
-            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| r.get(0))
+            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
             .optional()?)
     }
 
@@ -113,7 +117,9 @@ impl Db {
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 params![key, v],
             )?,
-            None => self.conn.execute("DELETE FROM settings WHERE key = ?1", [key])?,
+            None => self
+                .conn
+                .execute("DELETE FROM settings WHERE key = ?1", [key])?,
         };
         Ok(())
     }

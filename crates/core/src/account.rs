@@ -46,7 +46,10 @@ impl Account {
         )?;
         db.set_setting(ACTIVE_USER, Some(&tokens.user_id))?;
         Ok(Account {
-            info: AccountInfo { user_id: tokens.user_id.clone(), username },
+            info: AccountInfo {
+                user_id: tokens.user_id.clone(),
+                username,
+            },
             tokens,
             dirs: dirs.clone(),
         })
@@ -58,15 +61,25 @@ impl Account {
         };
         let username: Option<String> = db
             .conn()
-            .query_row("SELECT username FROM accounts WHERE user_id = ?1", [&user_id], |r| r.get(0))
+            .query_row(
+                "SELECT username FROM accounts WHERE user_id = ?1",
+                [&user_id],
+                |r| r.get(0),
+            )
             .optional()?;
         Ok(username.map(|username| AccountInfo { user_id, username }))
     }
 
     pub async fn load(db: &Db, dirs: &Dirs) -> Result<Account> {
         let info = Self::active(db)?.ok_or(Error::NotLoggedIn)?;
-        let tokens = load_tokens(info.user_id.clone()).await?.ok_or(Error::NotLoggedIn)?;
-        Ok(Account { info, tokens, dirs: dirs.clone() })
+        let tokens = load_tokens(info.user_id.clone())
+            .await?
+            .ok_or(Error::NotLoggedIn)?;
+        Ok(Account {
+            info,
+            tokens,
+            dirs: dirs.clone(),
+        })
     }
 
     pub fn expires_at(&self) -> i64 {
@@ -82,7 +95,10 @@ impl Account {
     }
 
     pub async fn refresh(&mut self, http: &Client, force: bool) -> Result<()> {
-        let lock_path = self.dirs.locks().join(format!("auth-{}.lock", self.info.user_id));
+        let lock_path = self
+            .dirs
+            .locks()
+            .join(format!("auth-{}.lock", self.info.user_id));
         let _lock = lock::acquire(&lock_path, Duration::from_secs(30)).await?;
         if let Some(stored) = load_tokens(self.info.user_id.clone()).await? {
             self.tokens = stored;
@@ -92,17 +108,22 @@ impl Account {
         }
         let fresh = auth::refresh(http, &self.tokens).await?;
         if fresh.user_id != self.info.user_id {
-            return Err(Error::parse("refreshing the session", "token belongs to another account"));
+            return Err(Error::parse(
+                "refreshing the session",
+                "token belongs to another account",
+            ));
         }
         store_tokens(fresh.clone()).await?;
         self.tokens = fresh;
         Ok(())
     }
 
-
     /// Characterises refresh-token rotation; always keeps the latest token issued.
     pub async fn probe_rotation(&mut self, http: &Client) -> Result<RotationReport> {
-        let lock_path = self.dirs.locks().join(format!("auth-{}.lock", self.info.user_id));
+        let lock_path = self
+            .dirs
+            .locks()
+            .join(format!("auth-{}.lock", self.info.user_id));
         let _lock = lock::acquire(&lock_path, Duration::from_secs(30)).await?;
         if let Some(stored) = load_tokens(self.info.user_id.clone()).await? {
             self.tokens = stored;
@@ -125,7 +146,10 @@ impl Account {
         } else {
             true
         };
-        Ok(RotationReport { rotated, old_still_valid })
+        Ok(RotationReport {
+            rotated,
+            old_still_valid,
+        })
     }
 
     pub async fn logout(self, db: &Db) -> Result<()> {
@@ -156,5 +180,7 @@ async fn fetch_username(http: &Client, tokens: &Tokens) -> Result<String> {
     }
     let url = format!("https://users.gog.com/users/{}", tokens.user_id);
     let req = http.get(url).bearer_auth(tokens.access_token.expose());
-    Ok(http::json::<User>(req, "fetching the user profile").await?.username)
+    Ok(http::json::<User>(req, "fetching the user profile")
+        .await?
+        .username)
 }

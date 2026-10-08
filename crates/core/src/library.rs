@@ -76,7 +76,10 @@ pub async fn fetch(http: &Client, tokens: &Tokens) -> Result<Vec<LibraryGame>> {
 }
 
 async fn fetch_releases(http: &Client, tokens: &Tokens) -> Result<Vec<Release>> {
-    let url = format!("https://galaxy-library.gog.com/users/{}/releases", tokens.user_id);
+    let url = format!(
+        "https://galaxy-library.gog.com/users/{}/releases",
+        tokens.user_id
+    );
     let mut releases = Vec::new();
     let mut page_token: Option<String> = None;
     loop {
@@ -94,14 +97,19 @@ async fn fetch_releases(http: &Client, tokens: &Tokens) -> Result<Vec<Release>> 
 }
 
 async fn describe(http: &Client, token: &str, release: Release) -> Result<Option<LibraryGame>> {
-    let url = format!("https://gamesdb.gog.com/platforms/gog/external_releases/{}", release.external_id);
+    let url = format!(
+        "https://gamesdb.gog.com/platforms/gog/external_releases/{}",
+        release.external_id
+    );
     let mut req = http.get(url).bearer_auth(token);
     if let Some(cert) = &release.certificate {
         req = req.header("X-GOG-Library-Cert", cert);
     }
     match http::json::<Value>(req, "fetching game metadata").await {
         Ok(v) => Ok(from_gamesdb(&release.external_id, &v)),
-        Err(Error::Http { .. } | Error::Parse { .. }) => Ok(Some(from_product(http, &release.external_id).await)),
+        Err(Error::Http { .. } | Error::Parse { .. }) => {
+            Ok(Some(from_product(http, &release.external_id).await))
+        }
         Err(e) => Err(e),
     }
 }
@@ -124,7 +132,11 @@ fn from_gamesdb(id: &str, v: &Value) -> Option<LibraryGame> {
     };
     let os = v["supported_operating_systems"]
         .as_array()
-        .map(|a| a.iter().filter_map(|o| o["slug"].as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|o| o["slug"].as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
     Some(LibraryGame {
         id: id.to_string(),
@@ -144,7 +156,11 @@ async fn from_product(http: &Client, id: &str) -> LibraryGame {
         .and_then(|v| v["title"].as_str().map(String::from));
     LibraryGame {
         id: id.to_string(),
-        metadata: if title.is_some() { MetadataSource::Product } else { MetadataSource::Missing },
+        metadata: if title.is_some() {
+            MetadataSource::Product
+        } else {
+            MetadataSource::Missing
+        },
         title: title.unwrap_or_else(|| format!("GOG product {id}")),
         cover: None,
         icon: None,
@@ -157,7 +173,11 @@ fn cache_file(dirs: &Dirs, user_id: &str) -> std::path::PathBuf {
 }
 
 pub fn save_cache(dirs: &Dirs, user_id: &str, games: Vec<LibraryGame>) -> Result<LibraryCache> {
-    let cache = LibraryCache { user_id: user_id.to_string(), fetched_at: Utc::now().timestamp(), games };
+    let cache = LibraryCache {
+        user_id: user_id.to_string(),
+        fetched_at: Utc::now().timestamp(),
+        games,
+    };
     let json = serde_json::to_vec_pretty(&cache).map_err(|e| Error::parse("library cache", e))?;
     fsutil::write_atomic(&cache_file(dirs, user_id), &json)?;
     Ok(cache)
@@ -166,7 +186,9 @@ pub fn save_cache(dirs: &Dirs, user_id: &str, games: Vec<LibraryGame>) -> Result
 pub fn load_cache(dirs: &Dirs, user_id: &str) -> Result<Option<LibraryCache>> {
     let path = cache_file(dirs, user_id);
     match std::fs::read(&path) {
-        Ok(bytes) => Ok(serde_json::from_slice(&bytes).ok().filter(|c: &LibraryCache| c.user_id == user_id)),
+        Ok(bytes) => Ok(serde_json::from_slice(&bytes)
+            .ok()
+            .filter(|c: &LibraryCache| c.user_id == user_id)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(Error::io(format!("read {}", path.display()), e)),
     }
@@ -197,12 +219,19 @@ mod tests {
     #[test]
     fn skips_dlc_and_hidden_entries() {
         assert!(from_gamesdb("1", &json!({"type": "dlc", "game": {}})).is_none());
-        assert!(from_gamesdb("1", &json!({"type": "game", "game": {"visible_in_library": false}})).is_none());
+        assert!(
+            from_gamesdb(
+                "1",
+                &json!({"type": "game", "game": {"visible_in_library": false}})
+            )
+            .is_none()
+        );
     }
 
     #[test]
     fn cache_is_scoped_to_its_account() {
-        let dirs = Dirs::under(&std::env::temp_dir().join(format!("slatty-lib-{}", std::process::id())));
+        let dirs =
+            Dirs::under(&std::env::temp_dir().join(format!("slatty-lib-{}", std::process::id())));
         save_cache(&dirs, "111", vec![]).unwrap();
         assert!(load_cache(&dirs, "111").unwrap().is_some());
         assert!(load_cache(&dirs, "222").unwrap().is_none());

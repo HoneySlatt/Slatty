@@ -19,7 +19,9 @@ fn describe(e: keyring::Error) -> Error {
 
 pub fn save(tokens: &Tokens) -> Result<()> {
     let json = serde_json::to_string(tokens).map_err(|e| Error::Keyring(e.to_string()))?;
-    entry(&tokens.user_id)?.set_password(&json).map_err(describe)
+    entry(&tokens.user_id)?
+        .set_password(&json)
+        .map_err(describe)
 }
 
 pub fn load(user_id: &str) -> Result<Option<Tokens>> {

@@ -14,13 +14,21 @@ pub fn sha256_hex(data: &[u8]) -> String {
 }
 
 pub fn temp_sibling(path: &Path) -> PathBuf {
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     path.with_file_name(format!(".{name}.slatty-tmp-{}", std::process::id()))
 }
 
 /// Writes to a sibling temp file, fsyncs, then renames over `path`.
 pub fn write_atomic(path: &Path, data: &[u8]) -> Result<()> {
-    let parent = path.parent().ok_or_else(|| Error::io(path.display().to_string(), std::io::ErrorKind::InvalidInput.into()))?;
+    let parent = path.parent().ok_or_else(|| {
+        Error::io(
+            path.display().to_string(),
+            std::io::ErrorKind::InvalidInput.into(),
+        )
+    })?;
     crate::paths::ensure_dir(parent)?;
     let tmp = temp_sibling(path);
     let result = (|| {
@@ -45,7 +53,10 @@ mod tests {
 
     #[test]
     fn sha256_of_empty_input() {
-        assert_eq!(sha256_hex(b""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
     }
 
     #[test]

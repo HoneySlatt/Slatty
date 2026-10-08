@@ -49,23 +49,40 @@ pub fn import(ctx: &Ctx, args: ImportArgs) -> Result<()> {
         (None, Some(dir)) => {
             let runner = match (args.runner, args.proton, args.wine, args.prefix) {
                 (Some(RunnerKind::Native), None, None, None) => Runner::Native,
-                (Some(RunnerKind::Umu), Some(proton), None, Some(prefix)) => Runner::Umu { proton, prefix },
-                (Some(RunnerKind::Wine), None, Some(wine), Some(prefix)) => Runner::Wine { wine, prefix },
-                _ => bail!("use --runner native, --runner umu --proton DIR --prefix DIR, or --runner wine --wine BIN --prefix DIR"),
+                (Some(RunnerKind::Umu), Some(proton), None, Some(prefix)) => {
+                    Runner::Umu { proton, prefix }
+                }
+                (Some(RunnerKind::Wine), None, Some(wine), Some(prefix)) => {
+                    Runner::Wine { wine, prefix }
+                }
+                _ => bail!(
+                    "use --runner native, --runner umu --proton DIR --prefix DIR, or --runner wine --wine BIN --prefix DIR"
+                ),
             };
             install::from_dir(&dir, args.game_id.as_deref(), runner)?
         }
         (None, None) => bail!("give a directory or --from-heroic GAME_ID"),
     };
     install.save(&ctx.db)?;
-    println!("Imported {} ({}) from {}", install.title, install.game_id, install.path.display());
+    println!(
+        "Imported {} ({}) from {}",
+        install.title,
+        install.game_id,
+        install.path.display()
+    );
     print_runner(&install);
     Ok(())
 }
 
 pub fn list(ctx: &Ctx) -> Result<()> {
     for i in Install::list(&ctx.db)? {
-        println!("{:>12}  {:<40} {:?}  {}", i.game_id, i.title, i.platform, i.path.display());
+        println!(
+            "{:>12}  {:<40} {:?}  {}",
+            i.game_id,
+            i.title,
+            i.platform,
+            i.path.display()
+        );
     }
     Ok(())
 }
@@ -83,15 +100,22 @@ pub fn print_spec(ctx: &Ctx, game_id: &str) -> Result<()> {
 }
 
 pub fn get(ctx: &Ctx, game_id: &str) -> Result<Install> {
-    Install::get(&ctx.db, game_id)?.ok_or_else(|| anyhow::anyhow!("{game_id} is not imported; see `slatty import`"))
+    Install::get(&ctx.db, game_id)?
+        .ok_or_else(|| anyhow::anyhow!("{game_id} is not imported; see `slatty import`"))
 }
 
 fn print_runner(install: &Install) {
     match &install.runner {
         Runner::Native => println!("Runner: native"),
         Runner::Umu { proton, prefix } => {
-            println!("Runner: umu + {}\nPrefix: {}", proton.display(), prefix.display())
+            println!(
+                "Runner: umu + {}\nPrefix: {}",
+                proton.display(),
+                prefix.display()
+            )
         }
-        Runner::Wine { wine, prefix } => println!("Runner: {}\nPrefix: {}", wine.display(), prefix.display()),
+        Runner::Wine { wine, prefix } => {
+            println!("Runner: {}\nPrefix: {}", wine.display(), prefix.display())
+        }
     }
 }

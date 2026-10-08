@@ -30,7 +30,8 @@ pub struct Install {
 impl Install {
     pub fn save(&self, db: &Db) -> Result<()> {
         let runner = serde_json::to_string(&self.runner).map_err(|e| Error::parse("runner", e))?;
-        let platform = serde_json::to_value(self.platform).map_err(|e| Error::parse("platform", e))?;
+        let platform =
+            serde_json::to_value(self.platform).map_err(|e| Error::parse("platform", e))?;
         db.conn().execute(
             "INSERT INTO installs (game_id, title, platform, path, client_id, runner, added_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
@@ -63,7 +64,10 @@ impl Install {
     }
 
     pub fn remove(db: &Db, game_id: &str) -> Result<bool> {
-        Ok(db.conn().execute("DELETE FROM installs WHERE game_id = ?1", [game_id])? > 0)
+        Ok(db
+            .conn()
+            .execute("DELETE FROM installs WHERE game_id = ?1", [game_id])?
+            > 0)
     }
 }
 
@@ -78,7 +82,8 @@ fn from_row(row: &Row<'_>) -> rusqlite::Result<Result<Install>> {
         Ok(Install {
             game_id,
             title,
-            platform: serde_json::from_value(Value::String(platform)).map_err(|e| Error::parse("platform", e))?,
+            platform: serde_json::from_value(Value::String(platform))
+                .map_err(|e| Error::parse("platform", e))?,
             path: PathBuf::from(path),
             client_id,
             runner: serde_json::from_str(&runner).map_err(|e| Error::parse("runner", e))?,
@@ -88,22 +93,36 @@ fn from_row(row: &Row<'_>) -> rusqlite::Result<Result<Install>> {
 
 /// Builds an install record from a directory that already contains the game.
 pub fn from_dir(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Install> {
-    let path = dir.canonicalize().map_err(|e| Error::io(format!("open {}", dir.display()), e))?;
+    let path = dir
+        .canonicalize()
+        .map_err(|e| Error::io(format!("open {}", dir.display()), e))?;
     if path.join("start.sh").is_file() && path.join("gameinfo").is_file() {
-        let id = game_id.ok_or_else(|| Error::Refused("native Linux installs need --game-id".into()))?;
+        let id =
+            game_id.ok_or_else(|| Error::Refused("native Linux installs need --game-id".into()))?;
         if runner != Runner::Native {
-            return Err(Error::Refused("native Linux installs must use the native runner".into()));
+            return Err(Error::Refused(
+                "native Linux installs must use the native runner".into(),
+            ));
         }
         let title = std::fs::read_to_string(path.join("gameinfo"))
             .ok()
             .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| id.to_string());
-        return Ok(Install { game_id: id.into(), title, platform: Platform::Linux, path, client_id: None, runner });
+        return Ok(Install {
+            game_id: id.into(),
+            title,
+            platform: Platform::Linux,
+            path,
+            client_id: None,
+            runner,
+        });
     }
     let info = gameinfo::read(&path, game_id)?;
     if runner == Runner::Native {
-        return Err(Error::Refused("Windows builds need a Wine or Proton runner".into()));
+        return Err(Error::Refused(
+            "Windows builds need a Wine or Proton runner".into(),
+        ));
     }
     Ok(Install {
         game_id: info.game_id,
@@ -169,9 +188,15 @@ mod tests {
     #[test]
     fn imports_windows_dir_and_roundtrips_through_db() {
         let root = fixture("dir");
-        let runner = Runner::Umu { proton: "/p".into(), prefix: "/x".into() };
+        let runner = Runner::Umu {
+            proton: "/p".into(),
+            prefix: "/x".into(),
+        };
         let install = from_dir(&root.join("Game"), None, runner).unwrap();
-        assert_eq!((install.game_id.as_str(), install.client_id.as_deref()), ("42", Some("777")));
+        assert_eq!(
+            (install.game_id.as_str(), install.client_id.as_deref()),
+            ("42", Some("777"))
+        );
         let db = Db::in_memory().unwrap();
         install.save(&db).unwrap();
         assert_eq!(Install::get(&db, "42").unwrap(), Some(install.clone()));
@@ -197,7 +222,13 @@ mod tests {
         )
         .unwrap();
         let install = from_heroic(&heroic, "42").unwrap();
-        assert_eq!(install.runner, Runner::Umu { proton: "/tools/Proton-X".into(), prefix: "/pfx".into() });
+        assert_eq!(
+            install.runner,
+            Runner::Umu {
+                proton: "/tools/Proton-X".into(),
+                prefix: "/pfx".into()
+            }
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 

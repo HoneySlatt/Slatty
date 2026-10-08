@@ -8,7 +8,8 @@ use crate::http;
 use crate::secret::Secret;
 
 pub const GALAXY_CLIENT_ID: &str = "46899977096215655";
-const GALAXY_CLIENT_SECRET: &str = "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9";
+const GALAXY_CLIENT_SECRET: &str =
+    "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9";
 const REDIRECT_URI: &str = "https://embed.gog.com/on_login_success?origin=client";
 const AUTH_URL: &str = "https://auth.gog.com/auth";
 const TOKEN_URL: &str = "https://auth.gog.com/token";
@@ -84,11 +85,15 @@ pub fn extract_code(input: &str) -> Result<Secret> {
             .ok_or(Error::InvalidLoginInput("the URL has no `code` parameter"));
     }
     let looks_like_code = input.len() >= 16
-        && input.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        && input
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
     if looks_like_code {
         Ok(Secret::new(input))
     } else {
-        Err(Error::InvalidLoginInput("expected the final URL or the code"))
+        Err(Error::InvalidLoginInput(
+            "expected the final URL or the code",
+        ))
     }
 }
 
@@ -101,7 +106,10 @@ pub async fn exchange_code(http: &Client, code: &Secret) -> Result<Tokens> {
         ("redirect_uri", REDIRECT_URI),
     ]);
     match http::json::<TokenResponse>(req, "exchanging the login code").await {
-        Err(Error::Http { status: 400 | 401 | 403, .. }) => Err(Error::InvalidLoginInput(
+        Err(Error::Http {
+            status: 400 | 401 | 403,
+            ..
+        }) => Err(Error::InvalidLoginInput(
             "GOG rejected the code (expired, already used or mistyped)",
         )),
         other => other.map(Tokens::from),
@@ -115,7 +123,9 @@ pub async fn refresh(http: &Client, tokens: &Tokens) -> Result<Tokens> {
         ("grant_type", "refresh_token"),
         ("refresh_token", tokens.refresh_token.expose()),
     ]);
-    token_request(req, "refreshing the session").await.map(Tokens::from)
+    token_request(req, "refreshing the session")
+        .await
+        .map(Tokens::from)
 }
 
 /// Token scoped to a game's own Galaxy client, used by cloud storage.
@@ -132,12 +142,20 @@ pub async fn game_access_token(
         ("refresh_token", galaxy.refresh_token.expose()),
         ("without_new_session", "1"),
     ]);
-    token_request(req, "obtaining a game token").await.map(|r| r.access_token)
+    token_request(req, "obtaining a game token")
+        .await
+        .map(|r| r.access_token)
 }
 
-async fn token_request(req: reqwest::RequestBuilder, context: &'static str) -> Result<TokenResponse> {
+async fn token_request(
+    req: reqwest::RequestBuilder,
+    context: &'static str,
+) -> Result<TokenResponse> {
     match http::json::<TokenResponse>(req, context).await {
-        Err(Error::Http { status: 400 | 401 | 403, .. }) => Err(Error::SessionRejected),
+        Err(Error::Http {
+            status: 400 | 401 | 403,
+            ..
+        }) => Err(Error::SessionRejected),
         other => other,
     }
 }
@@ -166,14 +184,21 @@ mod tests {
 
     #[test]
     fn accepts_bare_code() {
-        assert_eq!(extract_code("AbC-123_xyzXYZ0987654").unwrap().expose(), "AbC-123_xyzXYZ0987654");
+        assert_eq!(
+            extract_code("AbC-123_xyzXYZ0987654").unwrap().expose(),
+            "AbC-123_xyzXYZ0987654"
+        );
     }
 
     #[test]
     fn rejects_foreign_or_incomplete_input() {
-        assert!(extract_code("https://evil.example/on_login_success?code=abcdefabcdefabcdef").is_err());
+        assert!(
+            extract_code("https://evil.example/on_login_success?code=abcdefabcdefabcdef").is_err()
+        );
         assert!(extract_code("https://embed.gog.com/on_login_success?origin=client").is_err());
-        assert!(extract_code("https://embed.gog.com/on_login_success?error=access_denied").is_err());
+        assert!(
+            extract_code("https://embed.gog.com/on_login_success?error=access_denied").is_err()
+        );
         assert!(extract_code("my password").is_err());
         assert!(extract_code("").is_err());
     }
