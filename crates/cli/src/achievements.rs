@@ -129,6 +129,9 @@ fn print_list(title: &str, list: &[Achievement]) {
     println!("{title}: {unlocked}/{} unlocked", list.len());
     for a in list {
         let mark = a.date_unlocked.as_deref().unwrap_or("locked");
-        println!("  {mark:<26} {:<40} {}", a.name, a.achievement_key);
+        println!(
+            "  {mark:<26} {:>5.1}%  {:<40} {}",
+            a.rarity, a.name, a.achievement_key
+        );
     }
 }

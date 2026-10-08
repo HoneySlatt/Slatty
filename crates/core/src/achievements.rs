@@ -17,6 +17,9 @@ pub struct Achievement {
     pub description: String,
     pub visible: bool,
     pub date_unlocked: Option<String>,
+    /// Share of GOG players who unlocked it, in percent.
+    #[serde(default)]
+    pub rarity: f32,
 }
 
 #[derive(Deserialize)]
@@ -130,6 +133,7 @@ mod tests {
             description: String::new(),
             visible: true,
             date_unlocked: unlocked.then(|| "2026-10-08T20:00:00+0000".into()),
+            rarity: 0.0,
         }
     }
 

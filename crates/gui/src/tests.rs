@@ -132,6 +132,7 @@ fn fake_achievement(key: &str, unlocked: bool) -> slatty_core::achievements::Ach
         description: String::new(),
         visible: true,
         date_unlocked: unlocked.then(|| "2026-10-09T10:00:00+0000".into()),
+        rarity: 0.0,
     }
 }
 
