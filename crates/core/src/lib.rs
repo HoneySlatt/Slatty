@@ -1,5 +1,6 @@
 pub mod account;
 pub mod auth;
+pub mod cloud;
 pub mod comet;
 pub mod credentials;
 pub mod db;
