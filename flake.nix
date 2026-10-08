@@ -40,6 +40,9 @@
             buildInputs = runtimeLibs;
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;
             RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
+            shellHook = ''
+              export PATH="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/target/debug:$PATH"
+            '';
           };
         }
       );
