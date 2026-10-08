@@ -12,7 +12,7 @@ serde_json.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
-reqwest = { version = "0.13", default-features = false, features = ["json", "gzip", "rustls", "charset", "http2"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "query", "gzip", "rustls", "charset", "http2"] }
 keyring = "4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 directories = "6"
