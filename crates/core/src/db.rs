@@ -5,7 +5,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::error::{Error, Result};
 
-const MIGRATIONS: &[&str] = &[r#"
+const MIGRATIONS: &[&str] = &[
+    r#"
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE accounts (
     user_id TEXT PRIMARY KEY,
@@ -49,7 +50,19 @@ CREATE TABLE sync_baseline (
     synced_at INTEGER NOT NULL,
     PRIMARY KEY (user_id, game_id, location, path)
 );
-"#];
+"#,
+    r#"
+CREATE TABLE install_jobs (
+    game_id TEXT PRIMARY KEY,
+    build_id TEXT NOT NULL,
+    language TEXT NOT NULL,
+    root TEXT NOT NULL,
+    directory TEXT NOT NULL,
+    state TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+"#,
+];
 
 pub struct Db {
     conn: Mutex<Connection>,

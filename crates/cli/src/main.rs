@@ -2,6 +2,7 @@ mod achievements;
 mod auth;
 mod cloud;
 mod games;
+mod install;
 mod launch;
 mod library;
 
@@ -27,9 +28,11 @@ enum Command {
     /// Game library
     #[command(subcommand)]
     Library(library::LibraryCommand),
+    /// Download, verify and register a Windows build (Galaxy depots)
+    Install(install::InstallArgs),
     /// Register a game that is already installed
     Import(games::ImportArgs),
-    /// List imported games
+    /// List installed games and interrupted installs
     Installs,
     /// Show the command that would launch a game
     LaunchSpec { game_id: String },
@@ -89,7 +92,8 @@ async fn run() -> Result<()> {
         Command::Auth(cmd) => auth::run(&ctx, cmd).await,
         Command::Library(cmd) => library::run(&ctx, cmd).await,
         Command::Import(args) => games::import(&ctx, args),
-        Command::Installs => games::list(&ctx),
+        Command::Install(args) => install::run(&ctx, args).await,
+        Command::Installs => games::list(&ctx).and_then(|()| install::list_jobs(&ctx)),
         Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),
         Command::Launch(args) => launch::run(&ctx, args).await,
         Command::Cloud(cmd) => cloud::run(&ctx, cmd).await,

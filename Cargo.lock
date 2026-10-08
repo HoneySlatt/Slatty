@@ -4630,6 +4630,7 @@ dependencies = [
  "reqwest",
  "slatty-core",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
 ]
@@ -4641,6 +4642,7 @@ dependencies = [
  "chrono",
  "directories",
  "flate2",
+ "futures",
  "keyring",
  "md-5",
  "nix",
