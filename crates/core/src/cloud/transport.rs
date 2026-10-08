@@ -21,6 +21,7 @@ pub const IGNORED_REMOTE_HASH: &str = "aadd86936a80ee8a369579c3926f1b3c";
 pub struct RemoteEntry {
     pub name: String,
     pub hash: String,
+    pub last_modified: Option<String>,
 }
 
 pub trait CloudTransport: Send + Sync {
@@ -74,6 +75,7 @@ impl GogCloud {
 struct ListedFile {
     name: String,
     hash: String,
+    last_modified: Option<String>,
 }
 
 impl CloudTransport for GogCloud {
@@ -87,6 +89,7 @@ impl CloudTransport for GogCloud {
                 .map(|f| RemoteEntry {
                     name: f.name,
                     hash: f.hash,
+                    last_modified: f.last_modified,
                 })
                 .collect()),
             Err(Error::Http { status: 404, .. }) => Ok(Vec::new()),
@@ -206,6 +209,7 @@ pub mod memory {
                 .map(|(k, v)| RemoteEntry {
                     name: k.clone(),
                     hash: hash(v),
+                    last_modified: None,
                 })
                 .collect();
             let mut pending = self.after_list.lock().unwrap();

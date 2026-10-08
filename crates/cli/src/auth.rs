@@ -61,12 +61,7 @@ pub async fn run(ctx: &Ctx, cmd: AuthCommand) -> Result<()> {
 async fn login(ctx: &Ctx, no_browser: bool) -> Result<()> {
     let url = auth::login_url();
     eprintln!("Log in to GOG in your browser:\n\n  {url}\n");
-    if !no_browser
-        && std::process::Command::new("xdg-open")
-            .arg(url.as_str())
-            .spawn()
-            .is_err()
-    {
+    if !no_browser && auth::open_in_browser(&url).is_err() {
         eprintln!("(could not open a browser, copy the URL above)");
     }
     eprintln!("After logging in, the browser lands on a mostly blank embed.gog.com page.");

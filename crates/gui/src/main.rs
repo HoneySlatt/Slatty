@@ -190,11 +190,7 @@ impl App {
             Message::Booted(Err(e)) => self.fatal = Some(e),
             Message::OpenLoginPage => {
                 let url = slatty_core::auth::login_url();
-                if std::process::Command::new("xdg-open")
-                    .arg(url.as_str())
-                    .spawn()
-                    .is_err()
-                {
+                if slatty_core::auth::open_in_browser(&url).is_err() {
                     self.notify_error(format!("Impossible d'ouvrir le navigateur. Ouvrez : {url}"));
                 }
             }

@@ -453,3 +453,21 @@ impl super::transport::CloudTransport for MarkerCloud<'_> {
         self.0.delete(name).await
     }
 }
+
+#[tokio::test]
+async fn inspection_is_read_only_and_flags_compressed_downloads() {
+    let env = Env::new("inspect");
+    env.write("same.sav", "x");
+    env.write("diff.sav", "local");
+    env.put_remote("same.sav", "x");
+    env.cloud.put("saves/diff.sav", b"\x1f\x8bstill gzip");
+    let copies = env.tmp.join("copies");
+    let files = super::inspect::compare(&env.cloud, "saves", &env.root(), &copies, None).await.unwrap();
+    let same = files.iter().find(|f| f.path == "same.sav").unwrap();
+    let diff = files.iter().find(|f| f.path == "diff.sav").unwrap();
+    assert!(same.identical() && !diff.identical());
+    assert!(diff.remote.as_ref().unwrap().gzip_magic);
+    assert_eq!(env.read("diff.sav").as_deref(), Some("local"));
+    assert!(copies.join("diff.sav").exists());
+    assert!(env.cloud.uploads.load(Ordering::SeqCst) == 0);
+}

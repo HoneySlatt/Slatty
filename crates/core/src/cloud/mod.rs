@@ -1,3 +1,4 @@
+pub mod inspect;
 pub mod locations;
 pub mod plan;
 pub mod scan;

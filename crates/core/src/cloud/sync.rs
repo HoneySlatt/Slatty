@@ -58,10 +58,11 @@ impl SyncReport {
     }
 }
 
-struct RemoteRef {
-    name: String,
-    rel: String,
-    hash: String,
+pub(crate) struct RemoteRef {
+    pub name: String,
+    pub rel: String,
+    pub hash: String,
+    pub last_modified: Option<String>,
 }
 
 enum Deferred {
@@ -243,7 +244,9 @@ impl<T: CloudTransport> Run<'_, T> {
     }
 
     async fn download_replace(&mut self, key: &str) -> Result<()> {
-        let RemoteRef { name, rel, hash } = &self.remote[key];
+        let RemoteRef {
+            name, rel, hash, ..
+        } = &self.remote[key];
         let (name, rel, hash) = (name.clone(), rel.clone(), hash.clone());
         let bytes = self.cloud.download(&name).await?;
         let dest = match self.local.files.get(key) {
@@ -371,7 +374,10 @@ impl<T: CloudTransport> Run<'_, T> {
     }
 }
 
-fn remote_map(entries: Vec<RemoteEntry>, location: &str) -> Result<BTreeMap<String, RemoteRef>> {
+pub(crate) fn remote_map(
+    entries: Vec<RemoteEntry>,
+    location: &str,
+) -> Result<BTreeMap<String, RemoteRef>> {
     let prefix = format!("{location}/");
     let mut map = BTreeMap::new();
     for e in entries {
@@ -388,6 +394,7 @@ fn remote_map(entries: Vec<RemoteEntry>, location: &str) -> Result<BTreeMap<Stri
                 name: e.name,
                 rel: rel.clone(),
                 hash: e.hash,
+                last_modified: e.last_modified,
             },
         ) {
             return Err(Error::Refused(format!(

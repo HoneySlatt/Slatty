@@ -48,6 +48,17 @@ impl From<TokenResponse> for Tokens {
     }
 }
 
+/// Opens the system browser without letting it write into our terminal.
+pub fn open_in_browser(url: &Url) -> std::io::Result<()> {
+    std::process::Command::new("xdg-open")
+        .arg(url.as_str())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(drop)
+}
+
 pub fn login_url() -> Url {
     Url::parse_with_params(
         AUTH_URL,

@@ -16,6 +16,12 @@ pub enum CloudCommand {
     Status { game_id: String },
     /// Synchronise cloud saves
     Sync(SyncArgs),
+    /// Compare local and cloud copies file by file (read-only; cloud copies go to a separate folder)
+    Diff {
+        game_id: String,
+        /// Only paths containing this text
+        filter: Option<String>,
+    },
 }
 
 #[derive(Args)]
@@ -46,6 +52,7 @@ pub async fn run(ctx: &Ctx, cmd: CloudCommand) -> Result<()> {
                 .await
                 .map(drop)
         }
+        CloudCommand::Diff { game_id, filter } => diff(ctx, &game_id, filter.as_deref()).await,
         CloudCommand::Sync(args) => {
             let opts = SyncOptions {
                 dry_run: false,
@@ -138,4 +145,66 @@ fn print_report(r: &SyncReport, dry_run: bool) {
     if r.is_clean() && r.plan.is_noop() {
         println!("  up to date");
     }
+}
+
+async fn diff(ctx: &Ctx, game_id: &str, filter: Option<&str>) -> Result<()> {
+    let install = crate::games::get(ctx, game_id)?;
+    let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
+    let tokens = account.tokens(&ctx.http).await?.clone();
+    let Some(game_cloud) = cloud::open(&ctx.http, &tokens, &install).await? else {
+        println!("GOG has no cloud saves for {}.", install.title);
+        return Ok(());
+    };
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    for (location, root) in &game_cloud.locations {
+        let Ok(root) = root else { continue };
+        let copies = ctx
+            .dirs
+            .data
+            .join("diagnostics")
+            .join(game_id)
+            .join(&stamp)
+            .join(&location.name);
+        println!("[{}] {}", location.name, root.display());
+        let files =
+            cloud::inspect::compare(&game_cloud.transport, &location.name, root, &copies, filter)
+                .await?;
+        for f in &files {
+            println!(
+                "  {}{}",
+                f.path,
+                if f.identical() { "  (identical)" } else { "" }
+            );
+            match &f.local {
+                Some(l) => println!(
+                    "    local : {} bytes, modified {}, sha256 {}",
+                    l.size,
+                    l.modified
+                        .map(|m| crate::local_time(m.timestamp()))
+                        .unwrap_or_default(),
+                    &l.sha256[..16]
+                ),
+                None => println!("    local : absent"),
+            }
+            match &f.remote {
+                Some(r) => {
+                    println!(
+                        "    cloud : {} bytes, modified {}, sha256 {}, listed hash {}",
+                        r.size,
+                        r.last_modified.as_deref().unwrap_or("?"),
+                        &r.sha256[..16],
+                        r.listed_hash
+                    );
+                    if r.gzip_magic {
+                        println!(
+                            "    WARNING: the cloud copy still looks gzip-compressed (transport decoding issue)"
+                        );
+                    }
+                    println!("    cloud copy saved to {}", r.copy.display());
+                }
+                None => println!("    cloud : absent"),
+            }
+        }
+    }
+    Ok(())
 }
