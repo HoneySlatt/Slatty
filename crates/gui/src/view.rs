@@ -472,6 +472,7 @@ fn describe_cloud(prefix: &str, s: &CloudSummary) -> String {
 
 pub fn describe_play_event(e: &PlayEvent) -> String {
     match e {
+        PlayEvent::PreparingPrefix => "Premier lancement : création du préfixe Wine…".into(),
         PlayEvent::CloudChecked(s) => describe_cloud("Cloud vérifié", s),
         PlayEvent::CloudSkipped(why) => {
             format!("Cloud non vérifié ({why}) ; les sauvegardes locales sont conservées.")

@@ -46,7 +46,36 @@ pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
                 env: Vec::new(),
             })
         }
-        (Platform::Windows, Runner::Umu { proton, prefix }) => {
+        (Platform::Windows, Runner::Umu { .. } | Runner::Wine { .. }) => {
+            let (exe, args, cwd) = windows_task(install)?;
+            windows_command(install, prepend(exe, args), cwd)
+        }
+        (platform, runner) => Err(Error::Unsupported(format!(
+            "{platform:?} game with runner {runner:?}"
+        ))),
+    }
+}
+
+/// `wineboot` for a prefix that has never been created, so save folders exist before the first launch.
+pub fn prefix_init_spec(install: &Install) -> Result<Option<LaunchSpec>> {
+    let Some(prefix) = install.runner.prefix() else {
+        return Ok(None);
+    };
+    if prefix.join("drive_c/users").is_dir() {
+        return Ok(None);
+    }
+    crate::paths::ensure_dir(prefix)?;
+    windows_command(
+        install,
+        vec!["wineboot".into(), "-u".into()],
+        install.path.clone(),
+    )
+    .map(Some)
+}
+
+fn windows_command(install: &Install, args: Vec<String>, cwd: PathBuf) -> Result<LaunchSpec> {
+    match &install.runner {
+        Runner::Umu { proton, prefix } => {
             if !proton.join("proton").is_file() {
                 return Err(Error::NotFound(format!(
                     "no `proton` script in {}",
@@ -55,7 +84,6 @@ pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
             }
             let umu = find_in_path("umu-run")
                 .ok_or_else(|| Error::NotFound("umu-run is not in PATH".into()))?;
-            let (exe, args, cwd) = windows_task(install)?;
             let env = vec![
                 ("WINEPREFIX".into(), prefix.display().to_string()),
                 ("PROTONPATH".into(), proton.display().to_string()),
@@ -68,24 +96,18 @@ pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
             ];
             Ok(LaunchSpec {
                 program: umu,
-                args: prepend(exe, args),
+                args,
                 cwd,
                 env,
             })
         }
-        (Platform::Windows, Runner::Wine { wine, prefix }) => {
-            let (exe, args, cwd) = windows_task(install)?;
-            let env = vec![("WINEPREFIX".into(), prefix.display().to_string())];
-            Ok(LaunchSpec {
-                program: wine.clone(),
-                args: prepend(exe, args),
-                cwd,
-                env,
-            })
-        }
-        (platform, runner) => Err(Error::Unsupported(format!(
-            "{platform:?} game with runner {runner:?}"
-        ))),
+        Runner::Wine { wine, prefix } => Ok(LaunchSpec {
+            program: wine.clone(),
+            args,
+            cwd,
+            env: vec![("WINEPREFIX".into(), prefix.display().to_string())],
+        }),
+        Runner::Native => Err(Error::Unsupported("Windows command without Wine".into())),
     }
 }
 

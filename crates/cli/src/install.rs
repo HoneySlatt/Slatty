@@ -126,7 +126,9 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             let mut last = last.lock().unwrap();
             if last.elapsed() >= Duration::from_secs(1) || p.files_done == p.files_total {
                 *last = Instant::now();
-                let pct = (p.bytes_done * 100).checked_div(p.bytes_total).unwrap_or(100);
+                let pct = (p.bytes_done * 100)
+                    .checked_div(p.bytes_total)
+                    .unwrap_or(100);
                 println!(
                     "  {pct:>3}%  {} / {}  files {}/{}",
                     size(p.bytes_done),

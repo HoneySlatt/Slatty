@@ -66,6 +66,8 @@ impl CloudSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlayEvent {
+    /// First launch of a fresh install: the Wine prefix is being created.
+    PreparingPrefix,
     CloudChecked(CloudSummary),
     /// Cloud not checked; the reason is shown and local saves are kept.
     CloudSkipped(String),
@@ -114,6 +116,26 @@ pub async fn play(
         .ok_or_else(|| Error::NotFound(format!("{} is not imported", req.game_id)))?;
     let spec = runner::launch_spec(&install)?;
     let user_id = Account::active(db)?.map(|a| a.user_id);
+
+    if let Some(init) = runner::prefix_init_spec(&install)? {
+        emit(PlayEvent::PreparingPrefix);
+        let log = dirs.logs().join(format!("prefix-{}.log", install.game_id));
+        let outcome = SessionHandle::start(&req.supervisor, &init, &log)
+            .await?
+            .wait()
+            .await?;
+        if !outcome.clean
+            || !install
+                .runner
+                .prefix()
+                .is_some_and(|p| p.join("drive_c/users").is_dir())
+        {
+            return Err(Error::Refused(format!(
+                "the Wine prefix could not be created; see {}",
+                log.display()
+            )));
+        }
+    }
 
     if req.cloud {
         match cloud_sync(db, dirs, http, &install).await {
