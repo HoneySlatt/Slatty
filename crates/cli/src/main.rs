@@ -38,8 +38,8 @@ enum Command {
     /// Cloud saves
     #[command(subcommand)]
     Cloud(cloud::CloudCommand),
-    /// Achievements of an imported game, as recorded on GOG
-    Achievements { game_id: String },
+    /// Achievements as recorded on GOG; can also unlock or clear them manually
+    Achievements(achievements::AchievementsArgs),
 }
 
 pub struct Ctx {
@@ -93,7 +93,7 @@ async fn run() -> Result<()> {
         Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),
         Command::Launch(args) => launch::run(&ctx, args).await,
         Command::Cloud(cmd) => cloud::run(&ctx, cmd).await,
-        Command::Achievements { game_id } => achievements::list(&ctx, &game_id).await,
+        Command::Achievements(args) => achievements::run(&ctx, args).await,
     }
 }
 

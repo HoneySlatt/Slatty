@@ -2,6 +2,7 @@ use iced::widget::{
     Column, button, column, container, grid, image, row, scrollable, text, text_input,
 };
 use iced::{Alignment, ContentFit, Element, Length};
+use slatty_core::achievements::Achievement;
 use slatty_core::cloud::plan::Warning;
 use slatty_core::cloud::sync::Prefer;
 use slatty_core::install::Install;
@@ -9,7 +10,7 @@ use slatty_core::library::LibraryGame;
 use slatty_core::play::{CloudSummary, PlayEvent};
 use slatty_core::runner::Runner;
 
-use crate::{App, CloudRequest, Loadable, Message};
+use crate::{AchievementChange, App, CloudRequest, Loadable, Message, PendingChange};
 
 impl App {
     pub fn view(&self) -> Element<'_, Message> {
@@ -209,7 +210,8 @@ impl App {
                 "Non installé. L'installation depuis le lanceur n'est pas encore disponible ; \
                  un jeu déjà installé peut être importé avec `slatty import`.",
             ));
-            return scrollable(col.padding(8)).into();
+            col = col.push(self.achievements_section(g));
+            return scrollable(col.padding(8)).height(Length::Fill).into();
         };
         col = col.push(text(format!("Dossier : {}", install.path.display())).size(13));
         col = col.push(text(runner_label(install)).size(13));
@@ -280,19 +282,23 @@ impl App {
             }
         }
         col = col.push(section("Sauvegardes cloud", cloud_items));
+        col = col.push(self.achievements_section(g));
+        scrollable(col.padding(8)).height(Length::Fill).into()
+    }
 
-        let mut ach_items: Vec<Element<'_, Message>> = Vec::new();
+    fn achievements_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let mut items: Vec<Element<'_, Message>> = Vec::new();
         match self.achievements.get(&g.id) {
-            None => ach_items.push(
+            None => items.push(
                 button(text("Afficher les achievements"))
                     .on_press(Message::LoadAchievements(g.id.clone()))
                     .style(button::secondary)
                     .into(),
             ),
-            Some(Loadable::Loading) => ach_items.push(text("Chargement…").into()),
+            Some(Loadable::Loading) => items.push(text("Chargement…").into()),
             Some(Loadable::Failed(e)) => {
-                ach_items.push(text(format!("Indisponible : {e}")).size(13).into());
-                ach_items.push(
+                items.push(text(format!("Indisponible : {e}")).size(13).into());
+                items.push(
                     button(text("Réessayer"))
                         .on_press(Message::LoadAchievements(g.id.clone()))
                         .into(),
@@ -300,31 +306,99 @@ impl App {
             }
             Some(Loadable::Ready(list)) => {
                 let unlocked = list.iter().filter(|a| a.date_unlocked.is_some()).count();
-                ach_items.push(
-                    text(format!(
-                        "{unlocked} / {} débloqués (données GOG)",
-                        list.len()
-                    ))
-                    .size(14)
+                let locked: Vec<AchievementChange> = list
+                    .iter()
+                    .filter(|a| a.date_unlocked.is_none())
+                    .map(|a| change(a, true))
+                    .collect();
+                items.push(
+                    row![
+                        text(format!(
+                            "{unlocked} / {} débloqués (données GOG)",
+                            list.len()
+                        ))
+                        .size(14)
+                        .width(Length::Fill),
+                        button(text("Tout débloquer"))
+                            .on_press_maybe((!locked.is_empty()).then(|| {
+                                Message::AskAchievementChange(g.id.clone(), locked.clone())
+                            }))
+                            .style(button::secondary),
+                    ]
+                    .align_y(Alignment::Center)
                     .into(),
                 );
+                if let Some(p) = self.pending_change.as_ref().filter(|p| p.game_id == g.id) {
+                    items.push(self.confirmation(p));
+                }
                 for a in list {
-                    let name = if a.visible || a.date_unlocked.is_some() {
+                    let done = a.date_unlocked.is_some();
+                    let name = if a.visible || done {
                         a.name.as_str()
                     } else {
                         "Achievement caché"
                     };
-                    let mark = if a.date_unlocked.is_some() {
-                        "✔"
-                    } else {
-                        "·"
-                    };
-                    ach_items.push(text(format!("{mark} {name}")).size(13).into());
+                    let action =
+                        button(text(if done { "Réinitialiser" } else { "Débloquer" }).size(12))
+                            .on_press(Message::AskAchievementChange(
+                                g.id.clone(),
+                                vec![change(a, !done)],
+                            ))
+                            .style(button::text);
+                    items.push(
+                        row![
+                            text(format!("{} {name}", if done { "✔" } else { "·" }))
+                                .size(13)
+                                .width(Length::Fill),
+                            action
+                        ]
+                        .align_y(Alignment::Center)
+                        .into(),
+                    );
                 }
             }
         }
-        col = col.push(section("Achievements", ach_items));
-        scrollable(col.padding(8)).height(Length::Fill).into()
+        section("Achievements", items)
+    }
+
+    fn confirmation<'a>(&'a self, p: &'a PendingChange) -> Element<'a, Message> {
+        let names: Vec<&str> = p.changes.iter().map(|c| c.name.as_str()).collect();
+        let verb = if p.changes.iter().all(|c| c.unlock) {
+            "Débloquer"
+        } else if p.changes.iter().all(|c| !c.unlock) {
+            "Réinitialiser"
+        } else {
+            "Modifier"
+        };
+        container(
+            column![
+                text(format!("{verb} {} achievement(s) sans jouer : {}", p.changes.len(), names.join(", ")))
+                    .size(13),
+                text(
+                    "Le changement est fait directement sur votre profil GOG public, \
+                     avec la date d'aujourd'hui. Il est probablement contraire aux conditions de GOG.",
+                )
+                .size(12),
+                row![
+                    button(text("Confirmer")).on_press(Message::ConfirmAchievementChange).style(button::danger),
+                    button(text("Annuler")).on_press(Message::CancelAchievementChange).style(button::secondary),
+                ]
+                .spacing(8),
+            ]
+            .spacing(6),
+        )
+        .padding(8)
+        .width(Length::Fill)
+        .style(container::bordered_box)
+        .into()
+    }
+}
+
+fn change(a: &Achievement, unlock: bool) -> AchievementChange {
+    AchievementChange {
+        achievement_id: a.achievement_id.clone(),
+        name: a.name.clone(),
+        unlock,
     }
 }
 

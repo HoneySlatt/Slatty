@@ -88,7 +88,22 @@ pub struct App {
     pub notice: Option<Notice>,
     pub play: Option<PlayState>,
     pub achievements: HashMap<String, Loadable<Vec<Achievement>>>,
+    pub pending_change: Option<PendingChange>,
     pub cloud: HashMap<String, CloudView>,
+}
+
+/// Manual achievement changes waiting for the user's confirmation.
+#[derive(Debug, Clone)]
+pub struct PendingChange {
+    pub game_id: String,
+    pub changes: Vec<AchievementChange>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AchievementChange {
+    pub achievement_id: String,
+    pub name: String,
+    pub unlock: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -119,6 +134,10 @@ pub enum Message {
     StopGame,
     LoadAchievements(String),
     Achievements(String, Result<Vec<Achievement>, String>),
+    AskAchievementChange(String, Vec<AchievementChange>),
+    ConfirmAchievementChange,
+    CancelAchievementChange,
+    AchievementsChanged(String, Result<(Vec<Achievement>, Vec<String>), String>),
     Cloud(String, CloudRequest),
     CloudDone(String, CloudRequest, Result<(Vec<String>, bool), String>),
     DismissNotice,
@@ -327,27 +346,75 @@ impl App {
                 }
             }
             Message::LoadAchievements(game_id) => {
-                let (Some(core), Some(install)) =
-                    (self.core.clone(), self.installs.get(&game_id).cloned())
-                else {
+                let Some(core) = self.core.clone() else {
                     return Task::none();
                 };
+                let install = self.installs.get(&game_id).cloned();
                 self.achievements.insert(game_id.clone(), Loadable::Loading);
+                let id = game_id.clone();
                 return Task::perform(
                     async move {
-                        let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-                        let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
-                        let (client_id, token) =
-                            achievements::game_token(&core.http, &tokens, &install)
-                                .await
-                                .map_err(err)?;
-                        achievements::fetch(&core.http, &tokens.user_id, &client_id, &token)
+                        let (user_id, client_id, token) =
+                            achievement_access(&core, &id, install).await?;
+                        achievements::fetch(&core.http, &user_id, &client_id, &token)
                             .await
                             .map_err(err)
                     },
                     move |r| Message::Achievements(game_id.clone(), r),
                 );
             }
+            Message::AskAchievementChange(game_id, changes) => {
+                if !changes.is_empty() {
+                    self.pending_change = Some(PendingChange { game_id, changes });
+                }
+            }
+            Message::CancelAchievementChange => self.pending_change = None,
+            Message::ConfirmAchievementChange => {
+                let (Some(core), Some(pending)) = (self.core.clone(), self.pending_change.take())
+                else {
+                    return Task::none();
+                };
+                let install = self.installs.get(&pending.game_id).cloned();
+                let game_id = pending.game_id.clone();
+                self.achievements.insert(game_id.clone(), Loadable::Loading);
+                return Task::perform(
+                    async move {
+                        let (user_id, client_id, token) =
+                            achievement_access(&core, &pending.game_id, install).await?;
+                        let mut failures = Vec::new();
+                        for change in &pending.changes {
+                            if let Err(e) = achievements::set_unlocked(
+                                &core.http,
+                                &user_id,
+                                &client_id,
+                                &token,
+                                &change.achievement_id,
+                                change.unlock,
+                            )
+                            .await
+                            {
+                                failures.push(format!("{} : {e}", change.name));
+                            }
+                        }
+                        let list = achievements::fetch(&core.http, &user_id, &client_id, &token)
+                            .await
+                            .map_err(err)?;
+                        Ok((list, failures))
+                    },
+                    move |r| Message::AchievementsChanged(game_id.clone(), r),
+                );
+            }
+            Message::AchievementsChanged(game_id, result) => match result {
+                Ok((list, failures)) => {
+                    self.achievements.insert(game_id, Loadable::Ready(list));
+                    if !failures.is_empty() {
+                        self.notify_error(format!("Échec pour : {}", failures.join(" ; ")));
+                    }
+                }
+                Err(e) => {
+                    self.achievements.insert(game_id, Loadable::Failed(e));
+                }
+            },
             Message::Achievements(id, result) => {
                 self.achievements.insert(
                     id,
@@ -450,6 +517,22 @@ impl App {
     fn notify_error(&mut self, text: String) {
         self.notice = Some(Notice { error: true, text });
     }
+}
+
+/// User id, Galaxy client id and game token for any owned game, installed or not.
+async fn achievement_access(
+    core: &Core,
+    game_id: &str,
+    install: Option<Install>,
+) -> Result<(String, String, slatty_core::secret::Secret), String> {
+    let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
+    let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
+    let (client_id, token) = match &install {
+        Some(i) => achievements::game_token(&core.http, &tokens, i).await,
+        None => achievements::product_token(&core.http, &tokens, game_id).await,
+    }
+    .map_err(err)?;
+    Ok((tokens.user_id, client_id, token))
 }
 
 async fn boot() -> Result<Boot, String> {

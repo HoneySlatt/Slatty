@@ -1,8 +1,9 @@
+use chrono::Utc;
 use reqwest::Client;
 use serde::Deserialize;
 
 use crate::auth::{self, Tokens};
-use crate::cloud::locations::game_client_secret;
+use crate::cloud::locations::game_client;
 use crate::error::{Error, Result};
 use crate::http;
 use crate::install::Install;
@@ -10,6 +11,7 @@ use crate::secret::Secret;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Achievement {
+    pub achievement_id: String,
     pub achievement_key: String,
     pub name: String,
     pub description: String,
@@ -28,11 +30,23 @@ pub async fn game_token(
     tokens: &Tokens,
     install: &Install,
 ) -> Result<(String, Secret)> {
-    let client_id = install
-        .client_id
-        .clone()
-        .ok_or_else(|| Error::Unsupported("the install has no Galaxy client id".into()))?;
-    let secret = game_client_secret(http, tokens, &install.game_id, &client_id).await?;
+    let (client_id, token) = product_token(http, tokens, &install.game_id).await?;
+    if install.client_id.as_deref().is_some_and(|c| c != client_id) {
+        return Err(Error::parse(
+            "fetching build metadata",
+            "client id differs from the installed game",
+        ));
+    }
+    Ok((client_id, token))
+}
+
+/// Same as [`game_token`] for any owned product, installed or not.
+pub async fn product_token(
+    http: &Client,
+    tokens: &Tokens,
+    game_id: &str,
+) -> Result<(String, Secret)> {
+    let (client_id, secret) = game_client(http, tokens, game_id).await?;
     let token = auth::game_access_token(http, tokens, &client_id, &secret).await?;
     Ok((client_id, token))
 }
@@ -50,6 +64,42 @@ pub async fn fetch(
     )
     .await?;
     Ok(page.items)
+}
+
+/// Unlocks an achievement now, or clears it, outside any game.
+/// GOG shows the result on the profile exactly like an unlock made in game.
+pub async fn set_unlocked(
+    http: &Client,
+    user_id: &str,
+    client_id: &str,
+    token: &Secret,
+    achievement_id: &str,
+    unlocked: bool,
+) -> Result<()> {
+    let url = format!(
+        "https://gameplay.gog.com/clients/{client_id}/users/{user_id}/achievements/{achievement_id}"
+    );
+    let date = unlocked.then(|| Utc::now().format("%Y-%m-%dT%H:%M:%S+0000").to_string());
+    let req = http
+        .post(url)
+        .bearer_auth(token.expose())
+        .json(&serde_json::json!({ "date_unlocked": date }));
+    let context = if unlocked {
+        "unlocking an achievement"
+    } else {
+        "clearing an achievement"
+    };
+    http::send(req, context).await.map(drop)
+}
+
+/// Finds an achievement by key, numeric id or exact name (case-insensitive).
+pub fn select<'a>(list: &'a [Achievement], query: &str) -> Option<&'a Achievement> {
+    list.iter()
+        .find(|a| a.achievement_key == query || a.achievement_id == query)
+        .or_else(|| {
+            let q = query.to_lowercase();
+            list.iter().find(|a| a.name.to_lowercase() == q)
+        })
 }
 
 /// Achievements unlocked in `after` that were locked in `before`.
@@ -74,6 +124,7 @@ mod tests {
 
     fn a(key: &str, unlocked: bool) -> Achievement {
         Achievement {
+            achievement_id: format!("id-{key}"),
             achievement_key: key.into(),
             name: key.into(),
             description: String::new(),
@@ -94,6 +145,24 @@ mod tests {
     }
 
     #[test]
+    fn selects_by_key_id_or_name() {
+        let list = [a("Bookworm", false), a("lethal_key", true)];
+        assert_eq!(
+            select(&list, "Bookworm").unwrap().achievement_key,
+            "Bookworm"
+        );
+        assert_eq!(
+            select(&list, "id-lethal_key").unwrap().achievement_key,
+            "lethal_key"
+        );
+        assert_eq!(
+            select(&list, "bookworm").unwrap().achievement_key,
+            "Bookworm"
+        );
+        assert!(select(&list, "nope").is_none());
+    }
+
+    #[test]
     fn parses_gameplay_page() {
         let page: Page = serde_json::from_str(
             r#"{"total_count":1,"limit":1000,"page_token":"0","items":[{"achievement_id":"1","achievement_key":"k",
@@ -101,6 +170,6 @@ mod tests {
             "date_unlocked":null,"rarity":1.5,"rarity_level_description":"","rarity_level_slug":""}],"achievements_mode":"all_visible"}"#,
         )
         .unwrap();
-        assert_eq!(page.items[0].achievement_key, "k");
+        assert_eq!(page.items[0].achievement_id, "1");
     }
 }

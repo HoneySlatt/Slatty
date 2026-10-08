@@ -115,11 +115,83 @@ fn installed_game_detail_can_be_played() {
 }
 
 #[test]
-fn uninstalled_game_explains_what_is_unavailable() {
+fn uninstalled_game_offers_achievements_but_not_play_or_cloud() {
     let mut app = library_app();
     app.selected = Some("5".into());
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
     assert!(ui.find("Jouer").is_err());
     assert!(ui.find("Vérifier").is_err());
-    assert!(ui.find("Afficher les achievements").is_err());
+    assert!(ui.find("Afficher les achievements").is_ok());
+}
+
+fn fake_achievement(key: &str, unlocked: bool) -> slatty_core::achievements::Achievement {
+    slatty_core::achievements::Achievement {
+        achievement_id: format!("id-{key}"),
+        achievement_key: key.into(),
+        name: format!("[FICTIF] {key}"),
+        description: String::new(),
+        visible: true,
+        date_unlocked: unlocked.then(|| "2026-10-09T10:00:00+0000".into()),
+    }
+}
+
+fn app_with_achievements() -> App {
+    let mut app = library_app();
+    app.selected = Some("5".into());
+    app.achievements.insert(
+        "5".into(),
+        crate::Loadable::Ready(vec![
+            fake_achievement("Alpha", false),
+            fake_achievement("Beta", true),
+        ]),
+    );
+    app
+}
+
+#[test]
+fn unlocking_only_asks_for_confirmation() {
+    let mut app = app_with_achievements();
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    assert!(ui.find("Réinitialiser").is_ok());
+    ui.click("Débloquer").unwrap();
+    let messages: Vec<Message> = ui.into_messages().collect();
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::AskAchievementChange(game, changes)] if game == "5" && changes.len() == 1 && changes[0].unlock
+    ));
+    for m in messages {
+        let _ = app.update(m);
+    }
+    assert!(app.pending_change.is_some());
+    assert!(matches!(
+        app.achievements.get("5"),
+        Some(crate::Loadable::Ready(_))
+    ));
+
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    snapshot(&mut ui, "achievements-confirm");
+    ui.click("Confirmer").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::ConfirmAchievementChange))
+    );
+}
+
+#[test]
+fn cancelling_drops_the_pending_change() {
+    let mut app = app_with_achievements();
+    let _ = app.update(Message::AskAchievementChange(
+        "5".into(),
+        vec![crate::AchievementChange {
+            achievement_id: "id-Alpha".into(),
+            name: "[FICTIF] Alpha".into(),
+            unlock: true,
+        }],
+    ));
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    ui.click("Annuler").unwrap();
+    for m in ui.into_messages() {
+        let _ = app.update(m);
+    }
+    assert!(app.pending_change.is_none());
 }

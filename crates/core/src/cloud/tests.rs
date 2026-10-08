@@ -462,7 +462,9 @@ async fn inspection_is_read_only_and_flags_compressed_downloads() {
     env.put_remote("same.sav", "x");
     env.cloud.put("saves/diff.sav", b"\x1f\x8bstill gzip");
     let copies = env.tmp.join("copies");
-    let files = super::inspect::compare(&env.cloud, "saves", &env.root(), &copies, None).await.unwrap();
+    let files = super::inspect::compare(&env.cloud, "saves", &env.root(), &copies, None)
+        .await
+        .unwrap();
     let same = files.iter().find(|f| f.path == "same.sav").unwrap();
     let diff = files.iter().find(|f| f.path == "diff.sav").unwrap();
     assert!(same.identical() && !diff.identical());

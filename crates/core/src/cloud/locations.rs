@@ -102,39 +102,43 @@ fn user_folder(install: &Install, var: &str) -> Result<PathBuf> {
     resolve_relative(&home, sub)
 }
 
-/// Galaxy client credentials of a game, read from its build metadata.
-pub async fn game_client_secret(
+/// Galaxy client id and secret of a product, read from its newest generation 2 build.
+pub async fn game_client(
     http: &Client,
     tokens: &Tokens,
     game_id: &str,
-    client_id: &str,
-) -> Result<Secret> {
-    let url =
-        format!("https://content-system.gog.com/products/{game_id}/os/windows/builds?generation=2");
-    let builds: Value = http::json(
-        http.get(url).bearer_auth(tokens.access_token.expose()),
-        "fetching build list",
-    )
-    .await?;
-    let link = builds["items"][0]["link"]
-        .as_str()
-        .ok_or_else(|| Error::parse("fetching build list", "no generation 2 build"))?;
-    let resp = http::send(http.get(link), "fetching build metadata").await?;
+) -> Result<(String, Secret)> {
+    let mut link = None;
+    for os in ["windows", "osx"] {
+        let url = format!(
+            "https://content-system.gog.com/products/{game_id}/os/{os}/builds?generation=2"
+        );
+        let builds: Value = http::json(
+            http.get(url).bearer_auth(tokens.access_token.expose()),
+            "fetching build list",
+        )
+        .await?;
+        if let Some(l) = builds["items"][0]["link"].as_str() {
+            link = Some(l.to_string());
+            break;
+        }
+    }
+    let link = link.ok_or_else(|| {
+        Error::Unsupported("this game has no Galaxy build, hence no Galaxy client".into())
+    })?;
+    let resp = http::send(http.get(link.as_str()), "fetching build metadata").await?;
     let raw = resp
         .bytes()
         .await
         .map_err(|e| Error::network("fetching build metadata", e))?;
     let meta: Value = decode_meta(&raw)?;
-    if meta["clientId"].as_str() != Some(client_id) {
-        return Err(Error::parse(
+    match (meta["clientId"].as_str(), meta["clientSecret"].as_str()) {
+        (Some(id), Some(secret)) => Ok((id.to_string(), Secret::new(secret))),
+        _ => Err(Error::parse(
             "fetching build metadata",
-            "client id differs from the installed game",
-        ));
+            "no Galaxy client credentials",
+        )),
     }
-    meta["clientSecret"]
-        .as_str()
-        .map(Secret::new)
-        .ok_or_else(|| Error::parse("fetching build metadata", "no client secret"))
 }
 
 fn decode_meta(raw: &[u8]) -> Result<Value> {
