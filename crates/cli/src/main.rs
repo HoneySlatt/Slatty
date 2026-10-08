@@ -1,4 +1,5 @@
 mod auth;
+mod games;
 mod library;
 
 use anyhow::Result;
@@ -23,6 +24,12 @@ enum Command {
     /// Game library
     #[command(subcommand)]
     Library(library::LibraryCommand),
+    /// Register a game that is already installed
+    Import(games::ImportArgs),
+    /// List imported games
+    Installs,
+    /// Show the command that would launch a game
+    LaunchSpec { game_id: String },
 }
 
 pub struct Ctx {
@@ -50,6 +57,9 @@ async fn main() -> Result<()> {
         Command::Doctor => unreachable!(),
         Command::Auth(cmd) => auth::run(&ctx, cmd).await,
         Command::Library(cmd) => library::run(&ctx, cmd).await,
+        Command::Import(args) => games::import(&ctx, args),
+        Command::Installs => games::list(&ctx),
+        Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),
     }
 }
 

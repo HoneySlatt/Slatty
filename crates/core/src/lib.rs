@@ -6,10 +6,13 @@ pub mod db;
 pub mod doctor;
 pub mod error;
 pub mod fsutil;
+pub mod gameinfo;
 pub mod http;
+pub mod install;
 pub mod library;
 pub mod lock;
 pub mod paths;
+pub mod runner;
 pub mod secret;
 
 pub use error::{Error, Result};
