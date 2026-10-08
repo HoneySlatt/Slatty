@@ -1,4 +1,5 @@
 mod auth;
+mod library;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -19,6 +20,9 @@ enum Command {
     /// GOG account
     #[command(subcommand)]
     Auth(auth::AuthCommand),
+    /// Game library
+    #[command(subcommand)]
+    Library(library::LibraryCommand),
 }
 
 pub struct Ctx {
@@ -45,5 +49,15 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Doctor => unreachable!(),
         Command::Auth(cmd) => auth::run(&ctx, cmd).await,
+        Command::Library(cmd) => library::run(&ctx, cmd).await,
     }
+}
+
+pub fn local_time(ts: i64) -> String {
+    use chrono::TimeZone;
+    chrono::Utc
+        .timestamp_opt(ts, 0)
+        .single()
+        .map(|t| t.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_else(|| ts.to_string())
 }

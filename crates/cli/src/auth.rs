@@ -1,7 +1,6 @@
 use std::io::{BufRead, Write};
 
 use anyhow::{Context, Result};
-use chrono::{TimeZone, Utc};
 use clap::Subcommand;
 use slatty_core::account::Account;
 use slatty_core::auth;
@@ -33,7 +32,7 @@ pub async fn run(ctx: &Ctx, cmd: AuthCommand) -> Result<()> {
         AuthCommand::Refresh => {
             let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
             account.refresh(&ctx.http, true).await?;
-            println!("Session renewed, valid until {}", local_time(account.expires_at()));
+            println!("Session renewed, valid until {}", crate::local_time(account.expires_at()));
             Ok(())
         }
         AuthCommand::ProbeRotation => {
@@ -77,15 +76,8 @@ async fn status(ctx: &Ctx) -> Result<()> {
     };
     println!("Account: {} (user id {})", info.username, info.user_id);
     match Account::load(&ctx.db, &ctx.dirs).await {
-        Ok(account) => println!("Access token valid until {}", local_time(account.expires_at())),
+        Ok(account) => println!("Access token valid until {}", crate::local_time(account.expires_at())),
         Err(e) => println!("Tokens unavailable: {e}"),
     }
     Ok(())
-}
-
-fn local_time(ts: i64) -> String {
-    Utc.timestamp_opt(ts, 0)
-        .single()
-        .map(|t| t.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string())
-        .unwrap_or_else(|| ts.to_string())
 }
