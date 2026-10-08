@@ -1,4 +1,5 @@
 mod auth;
+mod cloud;
 mod games;
 mod launch;
 mod library;
@@ -33,6 +34,9 @@ enum Command {
     LaunchSpec { game_id: String },
     /// Launch a game and follow its session until every process has exited
     Launch(launch::LaunchArgs),
+    /// Cloud saves
+    #[command(subcommand)]
+    Cloud(cloud::CloudCommand),
 }
 
 pub struct Ctx {
@@ -85,6 +89,7 @@ async fn run() -> Result<()> {
         Command::Installs => games::list(&ctx),
         Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),
         Command::Launch(args) => launch::run(&ctx, args).await,
+        Command::Cloud(cmd) => cloud::run(&ctx, cmd).await,
     }
 }
 

@@ -3,6 +3,7 @@ use std::time::Instant;
 use anyhow::Result;
 use clap::Args;
 use slatty_core::account::Account;
+use slatty_core::cloud::sync::SyncOptions;
 use slatty_core::runner;
 use slatty_core::session::{self, SessionHandle, SupervisorEvent};
 
@@ -11,12 +12,28 @@ use crate::Ctx;
 #[derive(Args)]
 pub struct LaunchArgs {
     game_id: String,
+    /// Do not synchronise cloud saves before and after playing
+    #[arg(long)]
+    no_cloud: bool,
 }
 
 pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
     recover_unfinished(ctx)?;
     let install = crate::games::get(ctx, &args.game_id)?;
     let spec = runner::launch_spec(&install)?;
+    if !args.no_cloud {
+        println!("Checking cloud saves…");
+        match crate::cloud::sync_game(ctx, &install, SyncOptions::default()).await {
+            Ok(true) => {}
+            Ok(false) => anyhow::bail!(
+                "cloud saves need attention; resolve with `slatty cloud sync {}` or launch with --no-cloud",
+                install.game_id
+            ),
+            Err(e) => {
+                println!("Cloud saves not checked ({e}); local saves are kept and will sync later.")
+            }
+        }
+    }
     let user = Account::active(&ctx.db)?.map(|a| a.user_id);
     let log = ctx
         .dirs
@@ -64,6 +81,24 @@ pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
             ", supervisor lost"
         }
     );
+    if !args.no_cloud {
+        if outcome.clean {
+            println!("Uploading cloud saves…");
+            match crate::cloud::sync_game(ctx, &install, SyncOptions::default()).await {
+                Ok(true) => {}
+                Ok(false) => println!(
+                    "Cloud saves need attention; see `slatty cloud status {}`.",
+                    install.game_id
+                ),
+                Err(e) => println!(
+                    "Cloud sync failed ({e}); local saves are kept. Retry with `slatty cloud sync {}`.",
+                    install.game_id
+                ),
+            }
+        } else {
+            println!("The end of the session is uncertain, so cloud saves were not synced.");
+        }
+    }
     Ok(())
 }
 
