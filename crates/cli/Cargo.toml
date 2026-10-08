@@ -1,0 +1,18 @@
+[package]
+name = "slatty-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "slatty"
+path = "src/main.rs"
+
+[dependencies]
+slatty-core.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
