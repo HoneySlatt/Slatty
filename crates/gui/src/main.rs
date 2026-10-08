@@ -1,6 +1,11 @@
+mod installs;
 #[cfg(test)]
 mod tests;
 mod view;
+
+use std::path::PathBuf;
+
+use installs::{InstallMsg, InstallView, SettingsMsg};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -90,6 +95,11 @@ pub struct App {
     pub achievements: HashMap<String, Loadable<Vec<Achievement>>>,
     pub pending_change: Option<PendingChange>,
     pub cloud: HashMap<String, CloudView>,
+    pub install_views: HashMap<String, InstallView>,
+    pub settings_open: bool,
+    pub library_root: String,
+    pub proton: Option<PathBuf>,
+    pub proton_choices: Vec<PathBuf>,
 }
 
 /// Manual achievement changes waiting for the user's confirmation.
@@ -140,6 +150,8 @@ pub enum Message {
     AchievementsChanged(String, Result<(Vec<Achievement>, Vec<String>), String>),
     Cloud(String, CloudRequest),
     CloudDone(String, CloudRequest, Result<(Vec<String>, bool), String>),
+    Install(InstallMsg),
+    Settings(SettingsMsg),
     DismissNotice,
     Key(keyboard::Event),
 }
@@ -158,6 +170,8 @@ pub struct Boot {
     library: Option<LibraryCache>,
     installs: Vec<Install>,
     interrupted: Vec<String>,
+    library_root: PathBuf,
+    proton: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for Core {
@@ -188,6 +202,9 @@ impl App {
             Message::Booted(Ok(boot)) => {
                 self.core = Some(boot.core);
                 self.account = boot.account;
+                self.library_root = boot.library_root.display().to_string();
+                self.proton = boot.proton;
+                self.proton_choices = slatty_core::settings::proton_candidates();
                 self.installs = boot
                     .installs
                     .into_iter()
@@ -468,6 +485,8 @@ impl App {
                 };
                 self.cloud.insert(game_id, view);
             }
+            Message::Install(msg) => return self.update_install(msg),
+            Message::Settings(msg) => return self.update_settings(msg),
             Message::DismissNotice => self.notice = None,
             Message::Key(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                 use keyboard::key::Named;
@@ -550,6 +569,8 @@ async fn boot() -> Result<Boot, String> {
         None => None,
     };
     let installs = Install::list(&db).map_err(err)?;
+    let library_root = slatty_core::settings::library_root(&db).map_err(err)?;
+    let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
     let core = Core {
         dirs,
         db: Arc::new(db),
@@ -562,6 +583,8 @@ async fn boot() -> Result<Boot, String> {
         library,
         installs,
         interrupted,
+        library_root,
+        proton,
     })
 }
 

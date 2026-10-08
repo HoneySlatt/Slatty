@@ -195,3 +195,69 @@ fn cancelling_drops_the_pending_change() {
     }
     assert!(app.pending_change.is_none());
 }
+
+fn fake_plan() -> crate::installs::PlanInfo {
+    crate::installs::PlanInfo {
+        title: "[FICTIF] Jeu 5".into(),
+        version: "1.0".into(),
+        language: "en-US".into(),
+        languages: vec!["en-US".into(), "fr-FR".into()],
+        download_size: 3 << 30,
+        disk_size: 5 << 30,
+        folder: "/jeux/Jeu 5".into(),
+        dependencies: vec!["MSVC2017".into()],
+        resumable: false,
+    }
+}
+
+#[test]
+fn install_needs_a_proton_choice_then_starts() {
+    let mut app = library_app();
+    app.selected = Some("5".into());
+    app.install_views
+        .insert("5".into(), crate::installs::InstallView::Ready(fake_plan()));
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    assert!(
+        ui.find("Choisissez une version de Proton dans les paramètres.")
+            .is_ok()
+    );
+    let _ = ui.click("Installer");
+    assert!(
+        !ui.into_messages()
+            .any(|m| matches!(m, Message::Install(crate::installs::InstallMsg::Start(_))))
+    );
+
+    app.proton = Some("/proton/GE-Proton".into());
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    snapshot(&mut ui, "install-ready");
+    ui.click("Installer").unwrap();
+    assert!(ui.into_messages().any(
+        |m| matches!(m, Message::Install(crate::installs::InstallMsg::Start(id)) if id == "5")
+    ));
+}
+
+#[test]
+fn running_install_shows_progress_and_can_pause() {
+    let mut app = library_app();
+    app.selected = Some("5".into());
+    app.install_views.insert(
+        "5".into(),
+        crate::installs::InstallView::Running {
+            title: "[FICTIF] Jeu 5".into(),
+            progress: slatty_core::installer::Progress {
+                files_done: 3,
+                files_total: 10,
+                bytes_done: 1 << 30,
+                bytes_total: 4 << 30,
+            },
+            cancel: tokio_util::sync::CancellationToken::new(),
+        },
+    );
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    assert!(ui.find("Téléchargement : [FICTIF] Jeu 5").is_ok());
+    snapshot(&mut ui, "install-running");
+    ui.click("Mettre en pause").unwrap();
+    assert!(ui.into_messages().any(
+        |m| matches!(m, Message::Install(crate::installs::InstallMsg::Pause(id)) if id == "5")
+    ));
+}

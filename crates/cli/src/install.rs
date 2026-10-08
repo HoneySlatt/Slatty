@@ -2,16 +2,14 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use clap::Args;
 use slatty_core::account::Account;
 use slatty_core::installer::{self, InstallEvent, InstallJob, InstallRequest};
+use slatty_core::settings;
 use tokio_util::sync::CancellationToken;
 
 use crate::Ctx;
-
-const LIBRARY_ROOT: &str = "library_root";
-const DEFAULT_PROTON: &str = "default_proton";
 
 #[derive(Args)]
 pub struct InstallArgs {
@@ -72,22 +70,28 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     }
 
     let root = match args.dir {
-        Some(d) => remember(ctx, LIBRARY_ROOT, d)?,
-        None => match ctx.db.setting(LIBRARY_ROOT)? {
-            Some(d) => PathBuf::from(d),
-            None => {
-                let home = std::env::var_os("HOME").context("HOME is not set")?;
-                PathBuf::from(home).join("Games/GOG")
-            }
-        },
+        Some(d) => {
+            let d = std::path::absolute(&d)?;
+            settings::set_library_root(&ctx.db, &d)?;
+            d
+        }
+        None => settings::library_root(&ctx.db)?,
     };
     let proton = match args.proton {
-        Some(p) => remember(ctx, DEFAULT_PROTON, p)?,
-        None => match ctx.db.setting(DEFAULT_PROTON)? {
-            Some(p) => PathBuf::from(p),
+        Some(p) => {
+            let p = std::path::absolute(&p)?;
+            settings::set_default_proton(&ctx.db, &p)?;
+            p
+        }
+        None => match settings::default_proton(&ctx.db)? {
+            Some(p) => p,
             None => bail!(
                 "choose a Proton build once with --proton <dir containing `proton`>, e.g. one of:\n{}",
-                proton_candidates().join("\n")
+                settings::proton_candidates()
+                    .iter()
+                    .map(|p| format!("  {}", p.display()))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             ),
         },
     };
@@ -168,7 +172,17 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         proton,
         restart: args.restart,
     };
-    match installer::install(&ctx.db, &ctx.dirs, &ctx.http, &tokens, req, emit, &cancel).await {
+    match installer::install(
+        &ctx.db,
+        &ctx.dirs,
+        &ctx.http,
+        &tokens,
+        req,
+        emit,
+        cancel.clone(),
+    )
+    .await
+    {
         Ok(install) => {
             println!("Ready: `slatty launch {}`", install.game_id);
             Ok(())
@@ -198,28 +212,7 @@ pub fn list_jobs(ctx: &Ctx) -> Result<()> {
     Ok(())
 }
 
-fn remember(ctx: &Ctx, key: &str, path: PathBuf) -> Result<PathBuf> {
-    let path = std::path::absolute(&path)?;
-    ctx.db.set_setting(key, Some(&path.to_string_lossy()))?;
-    Ok(path)
-}
-
-fn proton_candidates() -> Vec<String> {
-    let Some(home) = std::env::var_os("HOME") else {
-        return Vec::new();
-    };
-    let base = PathBuf::from(home).join(".local/share/Steam/compatibilitytools.d");
-    std::fs::read_dir(base)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.join("proton").is_file())
-        .map(|p| format!("  {}", p.display()))
-        .collect()
-}
-
-fn size(bytes: u64) -> String {
+pub fn size(bytes: u64) -> String {
     match bytes {
         b if b >= 1 << 30 => format!("{:.2} GiB", b as f64 / (1u64 << 30) as f64),
         b if b >= 1 << 20 => format!("{:.1} MiB", b as f64 / (1u64 << 20) as f64),

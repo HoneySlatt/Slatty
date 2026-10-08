@@ -134,7 +134,7 @@ impl Env {
         let free_space = move |_: &Path| Ok(free);
         Download {
             source: &self.source,
-            cancel,
+            cancel: cancel.clone(),
             progress: &|_| {},
             free_space: &free_space,
         }

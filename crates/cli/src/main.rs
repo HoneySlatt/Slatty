@@ -36,6 +36,8 @@ enum Command {
     Installs,
     /// Show the command that would launch a game
     LaunchSpec { game_id: String },
+    /// Remove a game from slatty's records; files, prefix and saves are left untouched
+    Forget { game_id: String },
     /// Launch a game and follow its session until every process has exited
     Launch(launch::LaunchArgs),
     /// Cloud saves
@@ -95,6 +97,7 @@ async fn run() -> Result<()> {
         Command::Install(args) => install::run(&ctx, args).await,
         Command::Installs => games::list(&ctx).and_then(|()| install::list_jobs(&ctx)),
         Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),
+        Command::Forget { game_id } => games::forget(&ctx, &game_id),
         Command::Launch(args) => launch::run(&ctx, args).await,
         Command::Cloud(cmd) => cloud::run(&ctx, cmd).await,
         Command::Achievements(args) => achievements::run(&ctx, args).await,

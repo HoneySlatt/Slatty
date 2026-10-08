@@ -1,5 +1,6 @@
 use iced::widget::{
-    Column, button, column, container, grid, image, row, scrollable, text, text_input,
+    Column, button, column, container, grid, image, pick_list, progress_bar, row, scrollable, text,
+    text_input,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::achievements::Achievement;
@@ -10,7 +11,18 @@ use slatty_core::library::LibraryGame;
 use slatty_core::play::{CloudSummary, PlayEvent};
 use slatty_core::runner::Runner;
 
+use slatty_core::installer::Progress;
+
+use crate::installs::{InstallMsg, InstallView, ProtonChoice, SettingsMsg, human_size};
 use crate::{AchievementChange, App, CloudRequest, Loadable, Message, PendingChange};
+
+fn fraction(p: Progress) -> f32 {
+    if p.bytes_total == 0 {
+        0.0
+    } else {
+        p.bytes_done as f32 / p.bytes_total as f32
+    }
+}
 
 impl App {
     pub fn view(&self) -> Element<'_, Message> {
@@ -102,12 +114,36 @@ impl App {
             .on_press_maybe((!self.library_busy).then_some(Message::SyncLibrary))
             .style(button::secondary),
             text(account),
+            button(text("Paramètres"))
+                .on_press(Message::Settings(SettingsMsg::Toggle))
+                .style(button::text),
             button(text("Déconnexion"))
                 .on_press(Message::Logout)
                 .style(button::text),
         ]
         .spacing(12)
         .align_y(Alignment::Center);
+        let mut header = column![top].spacing(10);
+        if let Some((id, title, p)) = self.installing() {
+            header = header.push(
+                button(
+                    row![
+                        text(format!("Téléchargement : {title}"))
+                            .size(13)
+                            .width(Length::Fill),
+                        progress_bar(0.0..=1.0, fraction(p)).length(240).girth(8),
+                        text(format!("{:.0} %", fraction(p) * 100.0)).size(13),
+                    ]
+                    .spacing(10)
+                    .align_y(Alignment::Center),
+                )
+                .on_press(Message::Select(id.to_string()))
+                .style(button::text),
+            );
+        }
+        if self.settings_open {
+            header = header.push(self.settings_panel());
+        }
 
         let needle = self.search.to_lowercase();
         let cards: Vec<Element<'_, Message>> = self
@@ -150,7 +186,166 @@ impl App {
             .spacing(16),
             None => row![gallery],
         };
-        column![top, main].spacing(16).padding(16).into()
+        column![header, main].spacing(16).padding(16).into()
+    }
+
+    fn settings_panel(&self) -> Element<'_, Message> {
+        let choices: Vec<ProtonChoice> = self
+            .proton_choices
+            .iter()
+            .cloned()
+            .map(ProtonChoice)
+            .collect();
+        let selected = self.proton.clone().map(ProtonChoice);
+        section(
+            "Paramètres",
+            vec![
+                row![
+                    text("Dossier des jeux").size(14).width(160),
+                    text_input("/home/…/Games/GOG", &self.library_root)
+                        .on_input(|v| Message::Settings(SettingsMsg::RootInput(v)))
+                        .on_submit(Message::Settings(SettingsMsg::SaveRoot)),
+                    button(text("Enregistrer"))
+                        .on_press(Message::Settings(SettingsMsg::SaveRoot))
+                        .style(button::secondary),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .into(),
+                row![
+                    text("Proton").size(14).width(160),
+                    pick_list(choices, selected, |c| Message::Settings(
+                        SettingsMsg::Proton(c)
+                    ))
+                    .placeholder("Aucune version trouvée dans compatibilitytools.d"),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .into(),
+            ],
+        )
+    }
+
+    fn install_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let prepare = |label| {
+            button(text(label))
+                .on_press(Message::Install(InstallMsg::Prepare(g.id.clone(), None)))
+                .style(button::secondary)
+        };
+        let mut items: Vec<Element<'_, Message>> = Vec::new();
+        match self.install_views.get(&g.id) {
+            None => {
+                items.push(text("Non installé.").size(14).into());
+                items.push(prepare("Préparer l'installation").into());
+            }
+            Some(InstallView::Planning) => {
+                items.push(text("Lecture des informations de GOG…").into())
+            }
+            Some(InstallView::Failed(e)) => {
+                items.push(text(format!("Échec : {e}")).size(13).into());
+                items.push(prepare("Réessayer").into());
+            }
+            Some(InstallView::Running { progress, .. }) => {
+                items.push(
+                    progress_bar(0.0..=1.0, fraction(*progress))
+                        .girth(10)
+                        .into(),
+                );
+                items.push(
+                    text(format!(
+                        "{} / {} · fichiers {}/{}",
+                        human_size(progress.bytes_done),
+                        human_size(progress.bytes_total),
+                        progress.files_done,
+                        progress.files_total
+                    ))
+                    .size(13)
+                    .into(),
+                );
+                items.push(
+                    button(text("Mettre en pause"))
+                        .on_press(Message::Install(InstallMsg::Pause(g.id.clone())))
+                        .style(button::secondary)
+                        .into(),
+                );
+            }
+            Some(InstallView::Ready(info)) => {
+                items.push(text(format!("Version {}", info.version)).size(14).into());
+                items.push(
+                    text(format!(
+                        "Téléchargement {} · sur disque {}",
+                        human_size(info.download_size),
+                        human_size(info.disk_size)
+                    ))
+                    .size(13)
+                    .into(),
+                );
+                items.push(
+                    text(format!("Dossier : {}", info.folder.display()))
+                        .size(13)
+                        .into(),
+                );
+                if info.resumable {
+                    items.push(
+                        text(format!(
+                            "Installation interrompue reprise ({}).",
+                            info.language
+                        ))
+                        .size(13)
+                        .into(),
+                    );
+                } else if info.languages.len() > 1 {
+                    let id = g.id.clone();
+                    items.push(
+                        row![
+                            text("Langue").size(13),
+                            pick_list(
+                                info.languages.clone(),
+                                Some(info.language.clone()),
+                                move |l| {
+                                    Message::Install(InstallMsg::Prepare(id.clone(), Some(l)))
+                                }
+                            ),
+                        ]
+                        .spacing(8)
+                        .align_y(Alignment::Center)
+                        .into(),
+                    );
+                }
+                if !info.dependencies.is_empty() {
+                    items.push(
+                        text(format!(
+                            "Redistribuables non installés par slatty : {}",
+                            info.dependencies.join(", ")
+                        ))
+                        .size(12)
+                        .into(),
+                    );
+                }
+                if self.proton.is_none() {
+                    items.push(
+                        text("Choisissez une version de Proton dans les paramètres.")
+                            .size(13)
+                            .into(),
+                    );
+                }
+                let busy = self.installing().is_some();
+                items.push(
+                    button(text(if info.resumable {
+                        "Reprendre l'installation"
+                    } else {
+                        "Installer"
+                    }))
+                    .on_press_maybe(
+                        (!busy && self.proton.is_some())
+                            .then(|| Message::Install(InstallMsg::Start(g.id.clone()))),
+                    )
+                    .style(button::success)
+                    .into(),
+                );
+            }
+        }
+        section("Installation", items)
     }
 
     fn card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
@@ -206,10 +401,7 @@ impl App {
         .spacing(12);
 
         let Some(install) = self.installs.get(&g.id) else {
-            col = col.push(text(
-                "Non installé. L'installation depuis le lanceur n'est pas encore disponible ; \
-                 un jeu déjà installé peut être importé avec `slatty import`.",
-            ));
+            col = col.push(self.install_section(g));
             col = col.push(self.achievements_section(g));
             return scrollable(col.padding(8)).height(Length::Fill).into();
         };

@@ -119,3 +119,14 @@ fn print_runner(install: &Install) {
         }
     }
 }
+
+pub fn forget(ctx: &Ctx, game_id: &str) -> Result<()> {
+    let install = get(ctx, game_id)?;
+    Install::remove(&ctx.db, game_id)?;
+    println!(
+        "{} is no longer managed by slatty. Nothing was deleted: {} is untouched.",
+        install.title,
+        install.path.display()
+    );
+    Ok(())
+}

@@ -205,7 +205,7 @@ pub struct Progress {
 
 pub struct Download<'a, S> {
     pub source: &'a S,
-    pub cancel: &'a CancellationToken,
+    pub cancel: CancellationToken,
     pub progress: &'a (dyn Fn(Progress) + Send + Sync),
     pub free_space: &'a (dyn Fn(&Path) -> Result<u64> + Send + Sync),
 }
@@ -259,8 +259,10 @@ impl<S: ContentSource> Download<'_, S> {
 
         // A failed file does not stop the others, so a retry has less to fetch; cancelling stops all.
         let first_error: std::sync::Mutex<Option<Error>> = std::sync::Mutex::new(None);
-        futures::stream::iter(set.files.iter())
-            .for_each_concurrent(FILE_CONCURRENCY, |(rel, file)| {
+        // Indices rather than borrowed items keep the future provably Send (rustc HRTB limitation).
+        futures::stream::iter(0..set.files.len())
+            .for_each_concurrent(FILE_CONCURRENCY, |i| {
+                let (rel, file) = &set.files[i];
                 let dest = partial.join(rel);
                 let first_error = &first_error;
                 async move {
@@ -322,18 +324,18 @@ impl<S: ContentSource> Download<'_, S> {
         ));
         let mut out = std::fs::File::create(&tmp)
             .map_err(|e| Error::io(format!("create {}", tmp.display()), e))?;
-        let mut chunks = futures::stream::iter(file.chunks.iter())
-            .map(|c| async move {
-                if self.cancel.is_cancelled() {
-                    return Err(Error::Cancelled);
+        let mut chunks = futures::stream::iter(0..file.chunks.len())
+            .map(|i| {
+                let c = file.chunks[i].clone();
+                async move {
+                    if self.cancel.is_cancelled() {
+                        return Err(Error::Cancelled);
+                    }
+                    let raw = self.source.chunk(&c.compressed_md5).await?;
+                    tokio::task::spawn_blocking(move || unpack_chunk(&raw, &c))
+                        .await
+                        .expect("chunk task panicked")
                 }
-                let raw = self.source.chunk(&c.compressed_md5).await?;
-                tokio::task::spawn_blocking({
-                    let c = c.clone();
-                    move || unpack_chunk(&raw, &c)
-                })
-                .await
-                .expect("chunk task panicked")
             })
             .buffered(CHUNK_CONCURRENCY);
         while let Some(data) = chunks.next().await {
@@ -559,7 +561,7 @@ pub async fn install(
     tokens: &Tokens,
     req: InstallRequest,
     emit: impl Fn(InstallEvent) + Send + Sync,
-    cancel: &CancellationToken,
+    cancel: CancellationToken,
 ) -> Result<Install> {
     if Install::get(db, &req.game_id)?.is_some() {
         return Err(Error::Refused(format!(
