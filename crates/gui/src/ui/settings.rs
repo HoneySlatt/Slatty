@@ -1,16 +1,14 @@
 //! Settings tab and the sign-in screen.
 
 use crate::theme::text;
-use iced::widget::{
-    Space, button, column, container, pick_list, row, scrollable, slider, text_input,
-};
+use iced::widget::{Space, button, column, container, pick_list, row, scrollable, text_input};
 use iced::{Alignment, Element, Length, Padding};
 
 use super::card;
 use super::format::*;
 use super::widgets::logo;
 use crate::icons::{Icon, icon};
-use crate::settings::{FontChoice, ProtonChoice, SettingsMsg};
+use crate::settings::{COVER_SIZES, CoverSize, FontChoice, ProtonChoice, SettingsMsg};
 use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Message};
 
@@ -233,17 +231,17 @@ impl App {
             .align_y(Alignment::Center),
             row![
                 text("Cover size").size(15).width(210).color(tokens().muted),
-                icon(Icon::LayoutGrid, 20.0, tokens().muted),
-                slider(
-                    crate::COVER_WIDTHS.0..=crate::COVER_WIDTHS.1,
-                    self.card_width,
-                    Message::CardWidth
+                pick_list(
+                    COVER_SIZES.map(CoverSize),
+                    Some(CoverSize::of(self.card_width)),
+                    |s| Message::Settings(SettingsMsg::CoverSize(s))
                 )
-                .on_release(Message::Settings(SettingsMsg::SaveCoverWidth))
-                .width(Length::Fill)
-                .style(theme::size_slider),
+                .style(theme::select)
+                .font(theme::font())
+                .padding([8, 16])
+                .width(Length::Fill),
             ]
-            .spacing(12)
+            .spacing(10)
             .align_y(Alignment::Center),
             row![
                 text("Font").size(15).width(210).color(tokens().muted),

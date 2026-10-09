@@ -22,6 +22,38 @@ impl fmt::Display for ProtonChoice {
     }
 }
 
+/// Cover sizes offered, in percent of the usual width.
+pub const COVER_SIZES: [u16; 7] = [75, 85, 100, 115, 130, 145, 160];
+/// Width of a cover at 100 %, in pixels.
+const COVER_WIDTH: f32 = 150.0;
+
+/// A cover size, in percent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CoverSize(pub u16);
+
+impl CoverSize {
+    pub fn width(self) -> f32 {
+        COVER_WIDTH * f32::from(self.0) / 100.0
+    }
+
+    /// The size offered nearest to `width`.
+    pub fn of(width: f32) -> CoverSize {
+        let percent = width / COVER_WIDTH * 100.0;
+        CoverSize(
+            COVER_SIZES
+                .into_iter()
+                .min_by_key(|p| (f32::from(*p) - percent).abs() as u32)
+                .unwrap_or(100),
+        )
+    }
+}
+
+impl fmt::Display for CoverSize {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} %", self.0)
+    }
+}
+
 /// A font family to pick, or the system's default.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FontChoice {
@@ -53,8 +85,8 @@ pub enum SettingsMsg {
     ReloadTheme,
     /// The interface font, from the families installed on the system.
     Font(FontChoice),
-    /// The cover size was let go: it is kept for the next start.
-    SaveCoverWidth,
+    /// Size of the library covers, kept for the next start.
+    CoverSize(CoverSize),
     /// A built-in theme, under the theme file.
     Preset(crate::presets::Preset),
     /// Proton build of one installed game, used from its next launch.
@@ -132,7 +164,8 @@ impl App {
                     self.notify_error(format!("Could not open the theme file: {e}"));
                 }
             }
-            SettingsMsg::SaveCoverWidth => {
+            SettingsMsg::CoverSize(size) => {
+                self.card_width = size.width();
                 if let Err(e) = settings::set_cover_width(&core.db, self.card_width) {
                     self.notify_error(e.to_string());
                 }

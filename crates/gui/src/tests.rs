@@ -1841,12 +1841,15 @@ fn cover_size_is_set_in_settings_and_kept() {
         assert!(ui.find("Cover size").is_ok());
         snapshot(&mut ui, "settings-appearance");
     }
-    let _ = app.update(Message::CardWidth(200.0));
-    let _ = app.update(Message::Settings(SettingsMsg::SaveCoverWidth));
+    let _ = app.update(Message::Settings(SettingsMsg::CoverSize(
+        crate::settings::CoverSize(130),
+    )));
     let db = app.core.as_ref().unwrap().db.clone();
     assert_eq!(
         slatty_core::settings::cover_width(&db).unwrap(),
-        Some(200.0)
+        Some(195.0)
     );
-    assert_eq!(app.card_width, 200.0);
+    assert_eq!(app.card_width, 195.0);
+    // A size saved by the former slider shows as the nearest one offered.
+    assert_eq!(crate::settings::CoverSize::of(200.0).0, 130);
 }

@@ -304,7 +304,6 @@ pub enum Message {
     ShowPage(Page),
     ShowShelf(Shelf),
     SortBy(Sort),
-    CardWidth(f32),
     ToggleFilters,
     SetFilters(Filters),
     ToggleFavorite(String),
@@ -503,7 +502,6 @@ impl App {
             }
             Message::ShowShelf(shelf) => self.shelf = shelf,
             Message::SortBy(sort) => self.sort = sort,
-            Message::CardWidth(w) => self.card_width = w,
             Message::ToggleFilters => self.filters_open = !self.filters_open,
             Message::SetFilters(f) => return self.set_filters(f),
             Message::ToggleFavorite(id) => self.toggle_favorite(id),

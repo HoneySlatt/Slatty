@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use crate::presets::Preset;
 
-use iced::widget::{button, container, pick_list, progress_bar, scrollable, slider, text_input};
+use iced::widget::{button, container, pick_list, progress_bar, scrollable, text_input};
 use iced::{Background, Border, Color, Font, Shadow, Theme, border, color, font};
 
 /// Colours, corner radii and motion of the interface. The defaults are SlattyLauncher's own look.
@@ -780,25 +780,6 @@ pub fn progress(_: &Theme) -> progress_bar::Style {
         background: Background::Color(tokens().surface_high),
         bar: Background::Color(tokens().accent),
         border: round(999.0),
-    }
-}
-
-pub fn size_slider(_: &Theme, _: slider::Status) -> slider::Style {
-    slider::Style {
-        rail: slider::Rail {
-            backgrounds: (
-                Background::Color(tokens().accent),
-                Background::Color(tokens().surface_high),
-            ),
-            width: 4.0,
-            border: round(999.0),
-        },
-        handle: slider::Handle {
-            shape: slider::HandleShape::Circle { radius: 8.0 },
-            background: Background::Color(tokens().accent),
-            border_width: 0.0,
-            border_color: Color::TRANSPARENT,
-        },
     }
 }
 
