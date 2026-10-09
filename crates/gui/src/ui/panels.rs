@@ -15,6 +15,7 @@ use slatty_core::runner::Runner;
 use super::achievements::unlock_all_button;
 use super::format::*;
 use super::{inner, note, round_button};
+use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
 use crate::install::{InstallMsg, InstallView};
 use crate::maintenance::{ContentInfo, MaintenanceMsg};
@@ -527,7 +528,7 @@ impl App {
             Some(Loadable::Ready(list)) => {
                 let unlocked = list.iter().filter(|a| a.date_unlocked.is_some()).count();
                 let mut items = Column::new();
-                for (i, a) in list.iter().enumerate() {
+                for (i, a) in by_rarity(list).into_iter().enumerate() {
                     if i > 0 {
                         items = items.push(rule());
                     }

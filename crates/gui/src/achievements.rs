@@ -223,3 +223,11 @@ impl App {
         games
     }
 }
+
+/// Achievements from the most common to the rarest (share of players who have them); equal
+/// shares keep GOG's order.
+pub fn by_rarity(list: &[Achievement]) -> Vec<&Achievement> {
+    let mut sorted: Vec<&Achievement> = list.iter().collect();
+    sorted.sort_by(|a, b| b.rarity.total_cmp(&a.rarity));
+    sorted
+}

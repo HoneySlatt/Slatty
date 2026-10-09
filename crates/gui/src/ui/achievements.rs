@@ -9,6 +9,7 @@ use slatty_core::achievements::Achievement;
 use slatty_core::library::LibraryGame;
 
 use super::{inner, note, round_button};
+use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{AchievementChange, App, Loadable, Message, Page, PendingChange};
@@ -189,8 +190,8 @@ impl App {
                 ]
                 .spacing(22)
                 .align_y(Alignment::Center);
-                let cards: Vec<Element<'_, Message>> = list
-                    .iter()
+                let cards: Vec<Element<'_, Message>> = by_rarity(list)
+                    .into_iter()
                     .map(|a| {
                         container(self.achievement_row(&g.id, a, 64.0))
                             .padding([14, 18])

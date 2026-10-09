@@ -939,3 +939,34 @@ fn interrupted_work_is_listed_with_a_way_to_finish_it() {
     let _ = app.update(Message::Install(InstallMsg::Done("7".into(), Err(None))));
     assert_eq!(app.interrupted, [("7".to_string(), Interrupted::Download)]);
 }
+
+#[test]
+fn achievements_go_from_the_most_common_to_the_rarest() {
+    let mut app = app_with_achievements();
+    let Some(crate::Loadable::Ready(list)) = app.achievements.get_mut("5") else {
+        unreachable!()
+    };
+    list[0].rarity = 4.5;
+    list[1].rarity = 62.0;
+    list.push(slatty_core::achievements::Achievement {
+        rarity: 30.0,
+        ..fake_achievement("Gamma", false)
+    });
+    let place = |ui: &mut iced_test::Simulator<'_, Message>, name: &str| {
+        let b = ui.find(name).unwrap().bounds();
+        (b.y as i32, b.x as i32)
+    };
+    let expected = ["[FAKE] Beta", "[FAKE] Gamma", "[FAKE] Alpha"];
+
+    {
+        let mut ui = render(&app);
+        let drawer: Vec<_> = expected.iter().map(|n| place(&mut ui, n)).collect();
+        assert!(drawer.is_sorted(), "drawer: {drawer:?}");
+    }
+
+    app.panel = None;
+    let _ = app.update(Message::OpenAchievements("5".into()));
+    let mut ui = render(&app);
+    let page: Vec<_> = expected.iter().map(|n| place(&mut ui, n)).collect();
+    assert!(page.is_sorted(), "page, row by row: {page:?}");
+}
