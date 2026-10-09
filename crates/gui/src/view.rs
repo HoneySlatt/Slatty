@@ -357,53 +357,6 @@ impl App {
             .into()
     }
 
-    /// Games of the current shelf matching search and filters, in the chosen order.
-    pub fn visible_games(&self) -> Vec<&LibraryGame> {
-        let needle = self.search.to_lowercase();
-        let f = self.filters;
-        let mut games: Vec<&LibraryGame> = self
-            .library
-            .iter()
-            .filter(|g| needle.is_empty() || g.title.to_lowercase().contains(&needle))
-            .filter(|g| match self.shelf {
-                Shelf::All => true,
-                Shelf::Installed => self.installs.contains_key(&g.id),
-                Shelf::Favorites => self.favorites.contains(&g.id),
-            })
-            .filter(|g| !f.windows || g.os.iter().any(|o| o == "windows"))
-            .filter(|g| !f.linux || g.os.iter().any(|o| o == "linux"))
-            .filter(|g| {
-                let o = self.overview.get(&g.id);
-                (!f.achievements || o.is_some_and(|o| o.achievements.is_some()))
-                    && (!f.cloud_saves || o.is_some_and(|o| o.cloud_saves))
-            })
-            .collect();
-        let played = |g: &LibraryGame| self.playtime.get(&g.id).copied().unwrap_or_default();
-        match self.sort {
-            Sort::NameAsc => games.sort_by_cached_key(|g| g.title.to_lowercase()),
-            Sort::NameDesc => {
-                games.sort_by_cached_key(|g| std::cmp::Reverse(g.title.to_lowercase()));
-            }
-            Sort::RecentlyPlayed => {
-                games.sort_by_cached_key(|g| {
-                    (
-                        std::cmp::Reverse(played(g).last_played),
-                        g.title.to_lowercase(),
-                    )
-                });
-            }
-            Sort::MostPlayed => {
-                games.sort_by_cached_key(|g| {
-                    (
-                        std::cmp::Reverse(self.played_seconds(&g.id)),
-                        g.title.to_lowercase(),
-                    )
-                });
-            }
-        }
-        games
-    }
-
     fn card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let art: Element<'_, Message> = match self.covers.get(&g.id) {
             Some(h) => image(h.clone())

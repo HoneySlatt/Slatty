@@ -3,6 +3,8 @@ mod cloud;
 mod game;
 mod icons;
 mod install;
+mod library;
+mod login;
 mod maintenance;
 mod play;
 mod settings;
@@ -13,19 +15,17 @@ mod view;
 mod work;
 
 use std::collections::{HashMap, HashSet};
-use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use achievements::{AchievementChange, PendingChange, achievement_icons};
 use cloud::{CloudRequest, CloudResult, CloudStatus, CloudView};
 use install::{InstallMsg, InstallView};
+pub use library::{Filters, Shelf, Sort};
 use maintenance::{MaintenanceMsg, MaintenanceView};
 use play::{PlayMsg, PlayState};
 use settings::SettingsMsg;
-use work::tokens;
 
-use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::widget::{image, operation};
 use iced::{Subscription, Task, keyboard};
 use slatty_core::account::{Account, AccountInfo};
@@ -34,7 +34,7 @@ use slatty_core::db::Db;
 use slatty_core::http::HttpClient;
 use slatty_core::install::Install;
 use slatty_core::installer::{InstallJob, InstallRecord};
-use slatty_core::library::{self, LibraryCache, LibraryGame};
+use slatty_core::library::{LibraryCache, LibraryGame};
 use slatty_core::overview::{self, GameOverview};
 use slatty_core::paths::Dirs;
 use slatty_core::session::{self, Playtime};
@@ -81,58 +81,6 @@ pub enum Page {
     Library,
     Achievements,
     Settings,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Shelf {
-    #[default]
-    All,
-    Installed,
-    Favorites,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Sort {
-    #[default]
-    NameAsc,
-    NameDesc,
-    RecentlyPlayed,
-    MostPlayed,
-}
-
-impl Sort {
-    pub const ALL: [Sort; 4] = [
-        Sort::NameAsc,
-        Sort::NameDesc,
-        Sort::RecentlyPlayed,
-        Sort::MostPlayed,
-    ];
-}
-
-impl fmt::Display for Sort {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Sort::NameAsc => "Name A–Z",
-            Sort::NameDesc => "Name Z–A",
-            Sort::RecentlyPlayed => "Recently played",
-            Sort::MostPlayed => "Most played",
-        })
-    }
-}
-
-/// Library filters; a game must match every enabled one.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Filters {
-    pub windows: bool,
-    pub linux: bool,
-    pub achievements: bool,
-    pub cloud_saves: bool,
-}
-
-impl Filters {
-    pub fn any(&self) -> bool {
-        *self != Filters::default()
-    }
 }
 
 /// Tools of the game page, opened over it.
@@ -397,113 +345,18 @@ impl App {
                 return avatar;
             }
             Message::Booted(Err(e)) => self.fatal = Some(e),
-            Message::OpenLoginPage => {
-                let url = slatty_core::auth::login_url();
-                if slatty_core::auth::open_in_browser(&url).is_err() {
-                    self.notify_error(format!("Could not open a browser. Open: {url}"));
-                }
-            }
+            Message::OpenLoginPage => self.open_login_page(),
             Message::LoginInput(v) => self.login_input = v,
             Message::PasteLogin => return iced::clipboard::read().map(Message::Pasted),
             Message::Pasted(Some(v)) => self.login_input = v.trim().to_string(),
             Message::Pasted(None) => self.notify_error("The clipboard is empty.".into()),
-            Message::SubmitLogin => {
-                let (Some(core), false) = (self.core.clone(), self.login_busy) else {
-                    return Task::none();
-                };
-                let code = match slatty_core::auth::extract_code(&self.login_input) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        self.notify_error(e.to_string());
-                        return Task::none();
-                    }
-                };
-                self.login_busy = true;
-                return Task::perform(
-                    async move {
-                        let account = Account::login(&core.http, &core.db, &core.dirs, &code)
-                            .await
-                            .map_err(err)?;
-                        let cache =
-                            library::load_cache(&core.dirs, &account.info.user_id).map_err(err)?;
-                        Ok((account.info, cache))
-                    },
-                    Message::LoggedIn,
-                );
-            }
-            Message::LoggedIn(result) => {
-                self.login_busy = false;
-                self.login_input.clear();
-                match result {
-                    Ok((info, cache)) => {
-                        if let Some(core) = &self.core {
-                            self.overview =
-                                overview::load(&core.dirs, &info.user_id).unwrap_or_default();
-                        }
-                        self.account = Some(info);
-                        let avatar = self.fetch_avatar();
-                        return Task::batch([
-                            avatar,
-                            match cache {
-                                Some(c) => self.set_library(c),
-                                None => Task::done(Message::SyncLibrary),
-                            },
-                        ]);
-                    }
-                    Err(e) => self.notify_error(e),
-                }
-            }
-            Message::Logout => {
-                let Some(core) = self.core.clone() else {
-                    return Task::none();
-                };
-                return Task::perform(
-                    async move {
-                        let account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-                        account.logout(&core.db).await.map_err(err)
-                    },
-                    Message::LoggedOut,
-                );
-            }
-            Message::LoggedOut(Ok(())) => {
-                self.account = None;
-                self.avatar = None;
-                self.achievements_game = None;
-                self.library.clear();
-                self.covers.clear();
-                self.images.clear();
-                self.images_requested.clear();
-                self.overview.clear();
-                self.selected = None;
-                self.panel = None;
-                self.page = Page::Library;
-                self.achievements.clear();
-                self.cloud.clear();
-            }
+            Message::SubmitLogin => return self.submit_login(),
+            Message::LoggedIn(result) => return self.logged_in(result),
+            Message::Logout => return self.logout(),
+            Message::LoggedOut(Ok(())) => self.logged_out(),
             Message::LoggedOut(Err(e)) => self.notify_error(e),
-            Message::SyncLibrary => {
-                let (Some(core), false) = (self.core.clone(), self.library_busy) else {
-                    return Task::none();
-                };
-                self.library_busy = true;
-                return Task::perform(
-                    async move {
-                        let tokens = tokens(&core).await?;
-                        let games = library::fetch(&core.http, &tokens).await.map_err(err)?;
-                        library::save_cache(&core.dirs, &tokens.user_id, games).map_err(err)
-                    },
-                    Message::LibrarySynced,
-                );
-            }
-            Message::LibrarySynced(result) => {
-                self.library_busy = false;
-                match result {
-                    Ok(cache) => return self.set_library(cache),
-                    Err(e) => self.notify_error(format!(
-                        "Library not refreshed: {e}. Showing the cached version."
-                    )),
-                }
-            }
+            Message::SyncLibrary => return self.sync_library(),
+            Message::LibrarySynced(result) => return self.library_synced(result),
             Message::Search(s) => {
                 self.search = s;
                 self.page = Page::Library;
@@ -520,24 +373,8 @@ impl App {
             Message::SortBy(sort) => self.sort = sort,
             Message::CardWidth(w) => self.card_width = w,
             Message::ToggleFilters => self.filters_open = !self.filters_open,
-            Message::SetFilters(f) => {
-                self.filters = f;
-                if (f.achievements || f.cloud_saves) && !self.overview_complete() {
-                    return self.scan_overview(false);
-                }
-            }
-            Message::ToggleFavorite(id) => {
-                if !self.favorites.remove(&id) {
-                    self.favorites.insert(id);
-                }
-                if let Some(core) = &self.core {
-                    let mut ids: Vec<String> = self.favorites.iter().cloned().collect();
-                    ids.sort();
-                    if let Err(e) = slatty_core::settings::set_favorites(&core.db, &ids) {
-                        self.notify_error(e.to_string());
-                    }
-                }
-            }
+            Message::SetFilters(f) => return self.set_filters(f),
+            Message::ToggleFavorite(id) => self.toggle_favorite(id),
             Message::Select(id) => return self.open_game(id, None),
             Message::SelectWith(id, panel) => return self.open_game(id, Some(panel)),
             Message::OpenAchievements(id) => return self.open_achievements(id),
@@ -563,18 +400,9 @@ impl App {
                 self.images_requested.remove(&url);
             }
             Message::ScanOverview => return self.scan_overview(true),
-            Message::OverviewFetched(id, Ok(o)) => {
-                self.overview.insert(id, o);
-                self.save_overview();
-            }
-            Message::OverviewFetched(_, Err(_)) => {}
+            Message::OverviewFetched(id, result) => self.overview_fetched(id, result),
             Message::OverviewDone => self.overview_busy = false,
-            Message::PlaytimesFetched(times) => {
-                for (id, minutes) in times {
-                    self.overview.entry(id).or_default().playtime_minutes = Some(minutes);
-                }
-                self.save_overview();
-            }
+            Message::PlaytimesFetched(times) => self.playtimes_fetched(times),
             Message::Play(game_id) => return self.start_game(game_id),
             Message::Playing(msg) => return self.on_play(msg),
             Message::StopGame => self.stop_game(),
@@ -747,174 +575,6 @@ impl App {
         }
     }
 
-    fn fetch_avatar(&self) -> Task<Message> {
-        let (Some(core), Some(account)) = (self.core.clone(), self.account.as_ref()) else {
-            return Task::none();
-        };
-        let user_id = account.user_id.clone();
-        Task::perform(
-            async move {
-                slatty_core::account::avatar_url(&core.http, &user_id)
-                    .await
-                    .ok()
-                    .flatten()
-            },
-            Message::Avatar,
-        )
-    }
-
-    /// Reads play time recorded by GOG for these games.
-    fn refresh_playtime(&self, ids: Vec<String>) -> Task<Message> {
-        let Some(core) = self.core.clone() else {
-            return Task::none();
-        };
-        if ids.is_empty() || self.account.is_none() {
-            return Task::none();
-        }
-        Task::perform(
-            async move {
-                let Ok(tokens) = tokens(&core).await else {
-                    return Vec::new();
-                };
-                let (http, tokens) = (&core.http, &tokens);
-                iced::futures::stream::iter(ids)
-                    .map(|id| async move {
-                        let minutes = slatty_core::playtime::total_minutes(http, tokens, &id).await;
-                        minutes.ok().map(|m| (id, m))
-                    })
-                    .buffer_unordered(6)
-                    .filter_map(|r| async move { r })
-                    .collect()
-                    .await
-            },
-            Message::PlaytimesFetched,
-        )
-    }
-
-    /// Seconds played, as GOG records them.
-    pub fn played_seconds(&self, game_id: &str) -> i64 {
-        self.overview
-            .get(game_id)
-            .and_then(|o| o.playtime_minutes)
-            .map_or(0, |m| m as i64 * 60)
-    }
-
-    fn save_overview(&mut self) {
-        let (Some(core), Some(account)) = (&self.core, &self.account) else {
-            return;
-        };
-        if let Err(e) = overview::save(&core.dirs, &account.user_id, &self.overview) {
-            self.notify_error(e.to_string());
-        }
-    }
-
-    fn overview_checked(&self, game_id: &str) -> bool {
-        self.overview.get(game_id).is_some_and(|o| o.checked)
-    }
-
-    pub fn overview_complete(&self) -> bool {
-        self.library.iter().all(|g| self.overview_checked(&g.id))
-    }
-
-    /// Progress of reading achievements and cloud saves from GOG, while anything is missing.
-    pub fn overview_status(&self) -> Option<String> {
-        let total = self.library.len();
-        let read = self
-            .library
-            .iter()
-            .filter(|g| self.overview_checked(&g.id))
-            .count();
-        if self.overview_busy {
-            Some(format!("Reading GOG data… {read}/{total} games"))
-        } else if read < total {
-            Some(match total - read {
-                1 => "1 game could not be read from GOG".into(),
-                n => format!("{n} games could not be read from GOG"),
-            })
-        } else {
-            None
-        }
-    }
-
-    /// Reads achievements and cloud support of every game (or only of those not known yet).
-    fn scan_overview(&mut self, all: bool) -> Task<Message> {
-        let Some(core) = self.core.clone() else {
-            return Task::none();
-        };
-        if self.overview_busy {
-            return Task::none();
-        }
-        let ids: Vec<String> = self
-            .library
-            .iter()
-            .filter(|g| all || !self.overview_checked(&g.id))
-            .map(|g| g.id.clone())
-            .collect();
-        if ids.is_empty() {
-            return Task::none();
-        }
-        self.overview_busy = true;
-        Task::run(overview_stream(core, ids), |m| m)
-    }
-
-    fn request_images(&mut self, urls: Vec<String>) -> Task<Message> {
-        let (Some(core), Some(account)) = (self.core.clone(), self.account.as_ref()) else {
-            return Task::none();
-        };
-        let user_id = account.user_id.clone();
-        let wanted: Vec<String> = urls
-            .into_iter()
-            .filter(|u| !u.is_empty() && self.images_requested.insert(u.clone()))
-            .collect();
-        Task::batch(wanted.into_iter().map(|url| {
-            let (core, user_id, key) = (core.clone(), user_id.clone(), url.clone());
-            Task::perform(
-                async move {
-                    let _permit = core.downloads.acquire().await.ok()?;
-                    library::image(&core.http, &core.dirs, &user_id, &url)
-                        .await
-                        .ok()
-                },
-                move |bytes| Message::Image(key.clone(), bytes),
-            )
-        }))
-    }
-
-    fn set_library(&mut self, cache: LibraryCache) -> Task<Message> {
-        self.fetched_at = Some(cache.fetched_at);
-        self.library = cache.games;
-        let Some(core) = self.core.clone() else {
-            return Task::none();
-        };
-        let user_id = cache.user_id;
-        let missing: Vec<LibraryGame> = self
-            .library
-            .iter()
-            .filter(|g| !self.covers.contains_key(&g.id))
-            .cloned()
-            .collect();
-        let covers = Task::batch(missing.into_iter().map(|game| {
-            let (core, user_id) = (core.clone(), user_id.clone());
-            let id = game.id.clone();
-            Task::perform(
-                async move {
-                    let _permit = core.downloads.acquire().await.ok()?;
-                    library::cover(&core.http, &core.dirs, &user_id, &game)
-                        .await
-                        .ok()
-                        .flatten()
-                },
-                move |bytes| Message::Cover(id.clone(), bytes),
-            )
-        }));
-        let all = self.library.iter().map(|g| g.id.clone()).collect();
-        Task::batch([
-            covers,
-            self.scan_overview(false),
-            self.refresh_playtime(all),
-        ])
-    }
-
     pub fn refresh_record(&mut self, game_id: &str) {
         let Some(core) = &self.core else {
             return;
@@ -953,7 +613,7 @@ async fn boot() -> Result<Boot, String> {
     let account = Account::active(&db).map_err(err)?;
     let (library, overview) = match &account {
         Some(a) => (
-            library::load_cache(&dirs, &a.user_id).map_err(err)?,
+            slatty_core::library::load_cache(&dirs, &a.user_id).map_err(err)?,
             overview::load(&dirs, &a.user_id).unwrap_or_default(),
         ),
         None => (None, HashMap::new()),
@@ -996,24 +656,5 @@ async fn boot() -> Result<Boot, String> {
         playtime,
         overview,
         jobs,
-    })
-}
-
-fn overview_stream(core: Core, ids: Vec<String>) -> impl Stream<Item = Message> {
-    iced::stream::channel(16, async move |mut output| {
-        let tokens = tokens(&core).await;
-        if let Ok(tokens) = tokens {
-            let (http, tokens) = (&core.http, &tokens);
-            let mut results = iced::futures::stream::iter(ids)
-                .map(|id| async move {
-                    let r = overview::fetch(http, tokens, &id).await.map_err(err);
-                    (id, r)
-                })
-                .buffer_unordered(4);
-            while let Some((id, r)) = results.next().await {
-                let _ = output.send(Message::OverviewFetched(id, r)).await;
-            }
-        }
-        let _ = output.send(Message::OverviewDone).await;
     })
 }
