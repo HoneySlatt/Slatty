@@ -84,12 +84,11 @@ async fn zlib_json<T: serde::de::DeserializeOwned>(
     url: &str,
     context: &'static str,
 ) -> Result<T> {
-    let resp = http::send(
+    let raw = http::bytes(
         http.get(url).bearer_auth(tokens.access_token.expose()),
         context,
     )
     .await?;
-    let raw = resp.bytes().await.map_err(|e| Error::network(context, e))?;
     galaxy::decode_zlib_json(&raw, context)
 }
 

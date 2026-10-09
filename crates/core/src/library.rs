@@ -194,12 +194,7 @@ pub async fn cover(
     if let Ok(bytes) = tokio::fs::read(&path).await {
         return Ok(Some(bytes));
     }
-    let resp = http::send(http.get(url), "downloading a cover").await?;
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| Error::network("downloading a cover", e))?
-        .to_vec();
+    let bytes = http::bytes(http.get(url), "downloading a cover").await?;
     fsutil::write_atomic(&path, &bytes)?;
     Ok(Some(bytes))
 }
@@ -213,12 +208,7 @@ pub async fn image(http: &Client, dirs: &Dirs, user_id: &str, url: &str) -> Resu
     if let Ok(bytes) = tokio::fs::read(&path).await {
         return Ok(bytes);
     }
-    let resp = http::send(http.get(url), "downloading an image").await?;
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| Error::network("downloading an image", e))?
-        .to_vec();
+    let bytes = http::bytes(http.get(url), "downloading an image").await?;
     fsutil::write_atomic(&path, &bytes)?;
     Ok(bytes)
 }

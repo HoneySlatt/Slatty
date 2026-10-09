@@ -134,11 +134,7 @@ pub async fn game_client(
     let link = link.ok_or_else(|| {
         Error::Unsupported("this game has no Galaxy build, hence no Galaxy client".into())
     })?;
-    let resp = http::send(http.get(link.as_str()), "fetching build metadata").await?;
-    let raw = resp
-        .bytes()
-        .await
-        .map_err(|e| Error::network("fetching build metadata", e))?;
+    let raw = http::bytes(http.get(link.as_str()), "fetching build metadata").await?;
     let meta: Value = decode_meta(&raw)?;
     match (meta["clientId"].as_str(), meta["clientSecret"].as_str()) {
         (Some(id), Some(secret)) => Ok((id.to_string(), Secret::new(secret))),

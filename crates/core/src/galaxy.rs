@@ -180,11 +180,7 @@ pub async fn builds(http: &Client, tokens: &Tokens, game_id: &str) -> Result<Vec
 }
 
 pub async fn meta(http: &Client, build: &Build) -> Result<Meta> {
-    let resp = http::send(http.get(build.link.as_str()), "fetching build metadata").await?;
-    let raw = resp
-        .bytes()
-        .await
-        .map_err(|e| Error::network("fetching build metadata", e))?;
+    let raw = http::bytes(http.get(build.link.as_str()), "fetching build metadata").await?;
     decode_zlib_json(&raw, "build metadata")
 }
 
@@ -466,15 +462,11 @@ pub async fn dependencies(http: &Client, tokens: &Tokens) -> Result<Vec<Dependen
         "reading the dependency repository",
     )
     .await?;
-    let resp = http::send(
+    let raw = http::bytes(
         http.get(repo.repository_manifest.as_str()),
         "reading the dependency list",
     )
     .await?;
-    let raw = resp
-        .bytes()
-        .await
-        .map_err(|e| Error::network("reading the dependency list", e))?;
     Ok(decode_zlib_json::<Manifest>(&raw, "dependency list")?.depots)
 }
 
@@ -547,11 +539,7 @@ impl ContentSource for GogContent {
             "{CDN}/content-system/v2/{kind}/{}",
             galaxy_path(&depot.manifest)
         );
-        let resp = http::send(self.http.get(url), "fetching a depot manifest").await?;
-        let raw = resp
-            .bytes()
-            .await
-            .map_err(|e| Error::network("fetching a depot manifest", e))?;
+        let raw = http::bytes(self.http.get(url), "fetching a depot manifest").await?;
         parse_depot_items(&raw)
     }
 

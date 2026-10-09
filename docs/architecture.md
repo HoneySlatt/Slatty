@@ -20,7 +20,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `auth` | Sign-in URL, code exchange, token refresh, game-scoped tokens |
 | `account` | Active account, cross-process locked refresh, keyring storage via `credentials` |
 | `credentials` | System keyring (Secret Service through the `keyring` crate) |
-| `http` | Shared HTTP client; errors are stripped of URLs so query-string secrets never reach logs |
+| `http` | Shared HTTP client; reads that fail on the way (dropped connection, timeout, rate limit, server error) are sent again twice; errors are stripped of URLs so query-string secrets never reach logs |
 | `db` | SQLite state database with versioned migrations |
 | `library` | Galaxy library and gamesdb metadata, per-account cache, covers, key art and images |
 | `gameinfo` | `goggame-<id>.info` parsing, case-insensitive Windows path resolution |

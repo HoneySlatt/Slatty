@@ -98,16 +98,11 @@ impl CloudTransport for GogCloud {
     }
 
     async fn download(&self, name: &str) -> Result<Vec<u8>> {
-        let resp = http::send(
+        http::bytes(
             self.request(reqwest::Method::GET, self.url(name)),
             "downloading a cloud save",
         )
-        .await?;
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| Error::network("downloading a cloud save", e))?;
-        Ok(bytes.to_vec())
+        .await
     }
 
     async fn upload(&self, name: &str, data: &[u8], modified: DateTime<Utc>) -> Result<()> {
