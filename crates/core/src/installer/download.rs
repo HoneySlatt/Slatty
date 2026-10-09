@@ -149,7 +149,8 @@ impl<S: ContentSource> Download<'_, S> {
                 format!("publish {} as {}", partial.display(), target.display()),
                 e,
             )
-        })
+        })?;
+        fsutil::sync_filesystem(target)
     }
 
     /// Checks an installed game in place; with `repair`, re-downloads only the bad files.
@@ -260,6 +261,9 @@ impl<S: ContentSource> Download<'_, S> {
             return Err(e);
         }
         let mut bad = bad.into_inner().unwrap();
+        if download && !bad.is_empty() {
+            fsutil::sync_filesystem(dir)?;
+        }
         bad.sort();
         Ok(Checked {
             bad,
@@ -327,8 +331,6 @@ impl<S: ContentSource> Download<'_, S> {
             }
             on_bytes(data.len() as u64);
         }
-        out.sync_all()
-            .map_err(|e| Error::io(format!("sync {}", tmp.display()), e))?;
         drop(out);
         if file.is_executable() {
             let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));

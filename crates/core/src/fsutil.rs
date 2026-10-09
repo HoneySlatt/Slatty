@@ -21,6 +21,14 @@ pub fn temp_sibling(path: &Path) -> PathBuf {
     path.with_file_name(format!(".{name}.slatty-tmp-{}", std::process::id()))
 }
 
+/// Flushes everything written to the filesystem holding `path`: one call after many files is far
+/// cheaper than syncing each of them.
+pub fn sync_filesystem(path: &Path) -> Result<()> {
+    let dir =
+        std::fs::File::open(path).map_err(|e| Error::io(format!("open {}", path.display()), e))?;
+    nix::unistd::syncfs(&dir).map_err(|e| Error::io(format!("sync {}", path.display()), e.into()))
+}
+
 /// Writes to a sibling temp file, fsyncs, then renames over `path`.
 pub fn write_atomic(path: &Path, data: &[u8]) -> Result<()> {
     let parent = path.parent().ok_or_else(|| {

@@ -102,7 +102,8 @@ the next launch records it.
      the new chunk offsets, and chunks whose MD5 matches are copied from it and checked again
      instead of downloaded;
    - each chunk is checked against its compressed and decompressed MD5;
-   - files are written to a temporary name, then renamed.
+   - files are written to a temporary name, then renamed; the filesystem is synced once when every
+     file is in place, rather than file by file.
 4. The partial folder is renamed to the game folder.
 5. An install record (build, language, file list) is saved, and the game is registered with a
    prefix under `~/.local/share/slatty/prefixes/<id>`.
