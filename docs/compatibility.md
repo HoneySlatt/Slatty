@@ -53,5 +53,6 @@ Proton-CachyOS.
 - A game-folder dependency.
 - Cloud deletions.
 - An achievement earned in game and reported through Comet.
+- Reporting a session's play time to GOG.
 - A game that needs the Galaxy dummy service. The registration itself was checked under
   UMU-Proton 10.0-4 in a throwaway prefix.

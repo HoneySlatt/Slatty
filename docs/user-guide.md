@@ -65,8 +65,10 @@ Hovering a cover shows its title, a settings button and a play (or install) butt
 opens the game page.
 
 **The game page** shows the key art, Play (Install when the game is not installed), the favorite
-button, play time and last session, cloud save status and achievement progress. Play time counts
-only sessions started by SlattyLauncher. The tools open in panels:
+button, play time and last session, cloud save status and achievement progress. Play time is the
+total GOG records, so it includes GOG Galaxy and other launchers that report sessions. "Last played"
+only knows sessions started by SlattyLauncher: GOG does not expose that date. The tools open in
+panels:
 
 | Where | Panel |
 |---|---|
@@ -146,6 +148,8 @@ A launch goes through these steps:
 4. The game runs. SlattyLauncher waits until **every** game process has exited, not only the
    launcher.
 5. Cloud saves are uploaded, Comet stops, and newly recorded achievements are listed.
+6. The session is added to your play time on GOG, as GOG Galaxy does. Sessions shorter than a
+   minute are not sent (GOG ignores them). Offline, it is sent after the next session.
 
 Ctrl+C asks the game to quit; a second Ctrl+C forces it. Options:
 

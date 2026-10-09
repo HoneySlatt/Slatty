@@ -96,6 +96,10 @@ pub enum PlayEvent {
     },
     CloudUploaded(CloudSummary),
     CloudUploadSkipped(String),
+    /// Minutes of play sent to GOG (this session and any earlier one not sent yet).
+    PlaytimeReported(i64),
+    /// Play time not sent now; it is retried after the next session.
+    PlaytimeNotReported(String),
     Unlocked(Vec<String>),
     NoNewAchievement,
     AchievementsUnknown,
@@ -274,6 +278,14 @@ pub async fn play(
         }
     }
 
+    if outcome.clean {
+        match report_playtime(db, dirs, http, user_id.as_deref()).await {
+            Ok(0) => {}
+            Ok(minutes) => emit(PlayEvent::PlaytimeReported(minutes)),
+            Err(e) => emit(PlayEvent::PlaytimeNotReported(e.to_string())),
+        }
+    }
+
     if let Some(before) = before {
         emit(
             match (before, achievements_now(db, dirs, http, &install).await) {
@@ -347,6 +359,22 @@ async fn cloud_sync(
     let outcomes =
         cloud::sync_game(db, dirs, http, &tokens, install, SyncOptions::default()).await?;
     Ok(outcomes.map(|o| CloudSummary::from_outcomes(&o)))
+}
+
+async fn report_playtime(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    user_id: Option<&str>,
+) -> Result<i64> {
+    let Some(user_id) = user_id else {
+        return Ok(0);
+    };
+    if crate::playtime::unreported(db, user_id)?.is_empty() {
+        return Ok(0);
+    }
+    let tokens = tokens(db, dirs, http).await?;
+    crate::playtime::report_pending(db, http, &tokens).await
 }
 
 async fn tokens(db: &Db, dirs: &Dirs, http: &Client) -> Result<Tokens> {

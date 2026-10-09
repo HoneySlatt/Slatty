@@ -1,5 +1,6 @@
-//! What GOG offers for each owned game (achievements, cloud saves), gathered in the background
-//! and cached per account so the library can be filtered and summarised offline.
+//! What GOG offers and records for each owned game (achievements, cloud saves, play time),
+//! gathered in the background and cached per account so the library can be filtered, sorted and
+//! summarised offline.
 
 use std::collections::HashMap;
 
@@ -18,34 +19,45 @@ pub struct GameOverview {
     /// Unlocked and total achievements; `None` when the game has none.
     pub achievements: Option<(usize, usize)>,
     pub cloud_saves: bool,
+    /// Minutes of play recorded by GOG.
+    #[serde(default)]
+    pub playtime_minutes: Option<u64>,
 }
 
-impl GameOverview {
-    pub fn from_achievements(list: &[achievements::Achievement], cloud_saves: bool) -> Self {
-        GameOverview {
-            achievements: (!list.is_empty()).then(|| {
-                (
-                    list.iter().filter(|a| a.date_unlocked.is_some()).count(),
-                    list.len(),
-                )
-            }),
-            cloud_saves,
-        }
-    }
+/// Unlocked and total achievements of a list; `None` when it is empty.
+pub fn counts(list: &[achievements::Achievement]) -> Option<(usize, usize)> {
+    (!list.is_empty()).then(|| {
+        (
+            list.iter().filter(|a| a.date_unlocked.is_some()).count(),
+            list.len(),
+        )
+    })
 }
 
-/// Reads achievements and cloud save support of one game. A game without a Galaxy build has
-/// neither.
+/// Reads play time, achievements and cloud save support of one game. A game without a Galaxy
+/// build has no achievements or cloud saves.
 pub async fn fetch(http: &Client, tokens: &Tokens, game_id: &str) -> Result<GameOverview> {
+    let playtime_minutes = crate::playtime::total_minutes(http, tokens, game_id)
+        .await
+        .ok();
     let (client_id, secret) = match locations::game_client(http, tokens, game_id).await {
         Ok(c) => c,
-        Err(Error::Unsupported(_)) => return Ok(GameOverview::default()),
+        Err(Error::Unsupported(_)) => {
+            return Ok(GameOverview {
+                playtime_minutes,
+                ..Default::default()
+            });
+        }
         Err(e) => return Err(e),
     };
     let cloud_saves = locations::fetch(http, &client_id).await?.is_some();
     let token = auth::game_access_token(http, tokens, &client_id, &secret).await?;
     let list = achievements::fetch(http, &tokens.user_id, &client_id, &token).await?;
-    Ok(GameOverview::from_achievements(&list, cloud_saves))
+    Ok(GameOverview {
+        achievements: counts(&list),
+        cloud_saves,
+        playtime_minutes,
+    })
 }
 
 fn cache_file(dirs: &Dirs, user_id: &str) -> std::path::PathBuf {
@@ -79,6 +91,7 @@ mod tests {
             GameOverview {
                 achievements: Some((2, 5)),
                 cloud_saves: true,
+                playtime_minutes: Some(90),
             },
         )]);
         save(&dirs, "0", &all).unwrap();

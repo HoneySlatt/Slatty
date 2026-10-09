@@ -166,6 +166,7 @@ fn shelves_filters_and_sort_select_games() {
         GameOverview {
             achievements: Some((1, 10)),
             cloud_saves: false,
+            ..Default::default()
         },
     );
     app.overview.insert(
@@ -173,6 +174,7 @@ fn shelves_filters_and_sort_select_games() {
         GameOverview {
             achievements: None,
             cloud_saves: true,
+            ..Default::default()
         },
     );
     app.filters = Filters {
@@ -338,6 +340,7 @@ fn achievements_tab_lists_games_by_completion() {
             GameOverview {
                 achievements: Some((done, total)),
                 cloud_saves: false,
+                ..Default::default()
             },
         );
     }
@@ -612,4 +615,33 @@ fn achievements_tab_opens_a_dedicated_page_per_game() {
     );
     let _ = app.update(Message::ShowPage(Page::Achievements));
     assert_eq!(app.achievements_game, None);
+}
+
+#[test]
+fn play_time_comes_from_gog_even_for_games_played_elsewhere() {
+    let mut app = library_app();
+    open(&mut app, "5", None);
+    app.overview.insert(
+        "5".into(),
+        GameOverview {
+            playtime_minutes: Some(3175),
+            ..Default::default()
+        },
+    );
+    let mut ui = render(&app);
+    assert!(ui.find("52 h 55 m").is_ok());
+    assert!(
+        ui.find("Never").is_err(),
+        "GOG does not tell when it was last played"
+    );
+    drop(ui);
+
+    app.playtime.insert(
+        "5".into(),
+        Playtime {
+            seconds: 4000 * 60,
+            last_played: 1_791_500_000,
+        },
+    );
+    assert_eq!(app.played_seconds("5"), 4000 * 60, "the larger total wins");
 }

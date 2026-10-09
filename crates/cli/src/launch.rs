@@ -93,6 +93,10 @@ fn print_event(game_id: &str, event: PlayEvent) {
                 "Cloud saves not uploaded ({why}); local saves are kept. Retry with `slatty cloud sync {game_id}`."
             )
         }
+        PlayEvent::PlaytimeReported(m) => println!("Play time sent to GOG: {m} min."),
+        PlayEvent::PlaytimeNotReported(why) => {
+            println!("Play time not sent to GOG ({why}); it will be sent after the next session.")
+        }
         PlayEvent::Unlocked(names) => {
             for n in names {
                 println!("Achievement unlocked on GOG: {n}");

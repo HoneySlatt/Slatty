@@ -328,7 +328,10 @@ impl App {
             }
             Sort::MostPlayed => {
                 games.sort_by_key(|g| {
-                    (std::cmp::Reverse(played(g).seconds), g.title.to_lowercase())
+                    (
+                        std::cmp::Reverse(self.played_seconds(&g.id)),
+                        g.title.to_lowercase(),
+                    )
                 });
             }
         }
@@ -901,6 +904,10 @@ pub fn describe_play_event(e: &PlayEvent) -> String {
         PlayEvent::CloudUploaded(s) => describe_cloud("Cloud after playing", s),
         PlayEvent::CloudUploadSkipped(why) => {
             format!("Cloud not synced ({why}); local saves are kept.")
+        }
+        PlayEvent::PlaytimeReported(m) => format!("Play time sent to GOG: {m} min."),
+        PlayEvent::PlaytimeNotReported(why) => {
+            format!("Play time not sent to GOG ({why}); it will be sent after the next session.")
         }
         PlayEvent::Unlocked(names) => {
             format!("Achievements recorded on GOG: {}", names.join(", "))

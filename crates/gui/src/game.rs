@@ -216,9 +216,10 @@ impl App {
         row![
             stat(
                 Icon::Clock,
-                played
-                    .filter(|p| p.seconds > 0)
-                    .map_or("—".into(), |p| duration(p.seconds)),
+                match self.played_seconds(&g.id) {
+                    s if s >= 60 => duration(s),
+                    _ => "—".into(),
+                },
                 "Time played",
             ),
             container(Space::new())
@@ -227,7 +228,7 @@ impl App {
                 .style(theme::divider),
             stat(
                 Icon::Calendar,
-                played.map_or("Never".into(), |p| relative_day(p.last_played)),
+                played.map_or("—".into(), |p| relative_day(p.last_played)),
                 "Last played",
             ),
         ]

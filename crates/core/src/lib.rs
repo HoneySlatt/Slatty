@@ -20,6 +20,7 @@ pub mod maintenance;
 pub mod overview;
 pub mod paths;
 pub mod play;
+pub mod playtime;
 pub mod runner;
 pub mod secret;
 pub mod session;

@@ -317,6 +317,7 @@ pub enum Message {
     ScanOverview,
     OverviewFetched(String, Result<GameOverview, String>),
     OverviewDone,
+    PlaytimesFetched(Vec<(String, u64)>),
     Play(String),
     Playing(PlayMsg),
     StopGame,
@@ -587,6 +588,12 @@ impl App {
             }
             Message::OverviewFetched(_, Err(_)) => {}
             Message::OverviewDone => self.overview_busy = false,
+            Message::PlaytimesFetched(times) => {
+                for (id, minutes) in times {
+                    self.overview.entry(id).or_default().playtime_minutes = Some(minutes);
+                }
+                self.save_overview();
+            }
             Message::Play(game_id) => {
                 let Some(core) = self.core.clone() else {
                     return Task::none();
@@ -623,12 +630,15 @@ impl App {
                 if let Some(core) = &self.core {
                     self.playtime = session::playtime(&core.db).unwrap_or_default();
                 }
+                let playtime = self.refresh_playtime(vec![game.clone()]);
                 if self.selected.as_deref() == Some(game.as_str()) {
                     return Task::batch([
+                        playtime,
                         Task::done(Message::LoadAchievements(game.clone())),
                         Task::done(Message::Cloud(game, CloudRequest::Check)),
                     ]);
                 }
+                return playtime;
             }
             Message::StopGame => {
                 if let Some(p) = &self.play {
@@ -812,6 +822,7 @@ impl App {
                 .cloned()
                 .collect();
             tasks.push(self.request_images(art));
+            tasks.push(self.refresh_playtime(vec![id.clone()]));
         }
         if !self.achievements.contains_key(&id) {
             tasks.push(Task::done(Message::LoadAchievements(id.clone())));
@@ -890,12 +901,58 @@ impl App {
 
     /// Keeps the cached overview in step with a freshly read achievement list.
     fn achievements_loaded(&mut self, game_id: &str, list: &[Achievement]) {
-        let cloud_saves = self.overview.get(game_id).is_some_and(|o| o.cloud_saves);
-        let fresh = GameOverview::from_achievements(list, cloud_saves);
+        let fresh = GameOverview {
+            achievements: overview::counts(list),
+            ..self.overview.get(game_id).copied().unwrap_or_default()
+        };
         if self.overview.get(game_id) != Some(&fresh) {
             self.overview.insert(game_id.to_string(), fresh);
             self.save_overview();
         }
+    }
+
+    /// Reads play time recorded by GOG for these games.
+    fn refresh_playtime(&self, ids: Vec<String>) -> Task<Message> {
+        let Some(core) = self.core.clone() else {
+            return Task::none();
+        };
+        if ids.is_empty() || self.account.is_none() {
+            return Task::none();
+        }
+        Task::perform(
+            async move {
+                let Ok(tokens) = async {
+                    let mut account = Account::load(&core.db, &core.dirs).await?;
+                    account.tokens(&core.http).await.cloned()
+                }
+                .await
+                else {
+                    return Vec::new();
+                };
+                let (http, tokens) = (&core.http, &tokens);
+                iced::futures::stream::iter(ids)
+                    .map(|id| async move {
+                        let minutes = slatty_core::playtime::total_minutes(http, tokens, &id).await;
+                        minutes.ok().map(|m| (id, m))
+                    })
+                    .buffer_unordered(6)
+                    .filter_map(|r| async move { r })
+                    .collect()
+                    .await
+            },
+            Message::PlaytimesFetched,
+        )
+    }
+
+    /// Seconds played: GOG's total, or the sessions slatty recorded if they add up to more.
+    pub fn played_seconds(&self, game_id: &str) -> i64 {
+        let remote = self
+            .overview
+            .get(game_id)
+            .and_then(|o| o.playtime_minutes)
+            .map_or(0, |m| m as i64 * 60);
+        let local = self.playtime.get(game_id).map_or(0, |p| p.seconds);
+        remote.max(local)
     }
 
     fn save_overview(&mut self) {
@@ -984,7 +1041,12 @@ impl App {
                 move |bytes| Message::Cover(id.clone(), bytes),
             )
         }));
-        Task::batch([covers, self.scan_overview(false)])
+        let all = self.library.iter().map(|g| g.id.clone()).collect();
+        Task::batch([
+            covers,
+            self.scan_overview(false),
+            self.refresh_playtime(all),
+        ])
     }
 
     pub fn refresh_record(&mut self, game_id: &str) {
