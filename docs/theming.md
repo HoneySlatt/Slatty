@@ -12,8 +12,8 @@ file in your desktop's text editor, and **Reload** applies it without restarting
 
 ## Built-in themes
 
-**Settings → Appearance → Theme** offers seven complete colour sets: Slatty (the default),
-Carbonfox, Everforest, Rosé Pine, Pastel Glow, Gruvbox Dark and Gruvbox Light. The theme file
+**Settings → Appearance → Theme** offers six complete colour sets: Slatty (the default),
+Carbonfox, Everforest, Gruvbox Dark, and two light ones, Pastel Glow and Gruvbox Light. The theme file
 is read on top of the one picked: a key it sets wins, the others come from the built-in theme. To
 start a file from a built-in theme, pick it, then **Create theme file**.
 
