@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use iced::Task;
 use iced::futures::Stream;
-use slatty_core::install::Install;
+use slatty_core::install::{Install, Platform};
 use slatty_core::installer::{
     self, DlcChoice, DlcSelection, InstallEvent, InstallJob, InstallRequest, Progress,
 };
@@ -21,6 +21,9 @@ use crate::{App, Core, Message, err};
 #[derive(Debug, Clone)]
 pub struct PlanInfo {
     pub title: String,
+    /// The build being planned, and those the game has.
+    pub platform: Platform,
+    pub platforms: Vec<Platform>,
     pub version: String,
     /// The build to install, among the versions GOG offers.
     pub build_id: String,
@@ -95,6 +98,8 @@ pub enum Cancelling {
 #[derive(Debug, Clone)]
 pub enum InstallMsg {
     Prepare(String, Option<String>),
+    /// The Windows or the Linux build.
+    Platform(String, Platform),
     /// Another build to install.
     Version(String, String),
     Planned(String, Result<PlanInfo, String>),
@@ -140,14 +145,17 @@ impl App {
                     }
                     _ => None,
                 };
-                return self.prepare(core, game_id, language, build);
+                return self.prepare(core, game_id, language, build, None);
+            }
+            InstallMsg::Platform(game_id, platform) => {
+                return self.prepare(core, game_id, None, None, Some(platform));
             }
             InstallMsg::Version(game_id, build) => {
                 let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
                     return Task::none();
                 };
                 let language = Some(info.language.clone());
-                return self.prepare(core, game_id, language, Some(build));
+                return self.prepare(core, game_id, language, Some(build), None);
             }
             InstallMsg::Planned(game_id, result) => {
                 let auto = self.auto_resume.take_if(|id| *id == game_id).is_some();
@@ -177,9 +185,13 @@ impl App {
                 let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
                     return Task::none();
                 };
-                let Some(proton) = info.proton.clone() else {
-                    self.notify_error("Choose a Proton version first.".into());
-                    return Task::none();
+                let proton = match (info.platform, info.proton.clone()) {
+                    (Platform::Linux, _) => PathBuf::new(),
+                    (Platform::Windows, Some(proton)) => proton,
+                    (Platform::Windows, None) => {
+                        self.notify_error("Choose a Proton version first.".into());
+                        return Task::none();
+                    }
                 };
                 let root = PathBuf::from(info.root.trim());
                 if !root.is_absolute() {
@@ -190,6 +202,7 @@ impl App {
                     game_id: game_id.clone(),
                     language: Some(info.language.clone()),
                     build: Some(info.build_id.clone()),
+                    platform: info.platform,
                     root,
                     proton,
                     dlcs: DlcSelection::Only(
@@ -370,27 +383,74 @@ impl App {
 }
 
 impl App {
-    /// Plans the install again, keeping the folder and Proton already chosen.
+    /// Plans the install again, keeping the folder, Proton and platform already chosen.
     fn prepare(
         &mut self,
         core: Core,
         game_id: String,
         language: Option<String>,
         build: Option<String>,
+        platform: Option<Platform>,
     ) -> Task<Message> {
-        let (root, proton) = match self.install_views.get(&game_id) {
-            Some(InstallView::Ready(info)) => {
-                (PathBuf::from(info.root.trim()), info.proton.clone())
-            }
-            _ => (PathBuf::from(&self.library_root), self.proton.clone()),
+        let platforms = self.platforms(&game_id);
+        let (root, proton, current) = match self.install_views.get(&game_id) {
+            Some(InstallView::Ready(info)) => (
+                PathBuf::from(info.root.trim()),
+                info.proton.clone(),
+                Some(info.platform),
+            ),
+            _ => (PathBuf::from(&self.library_root), self.proton.clone(), None),
         };
+        let platform = platform.or(current).unwrap_or_else(|| {
+            if platforms.contains(&self.default_platform) {
+                self.default_platform
+            } else {
+                platforms[0]
+            }
+        });
         self.install_views
             .insert(game_id.clone(), InstallView::Planning);
         let id = game_id.clone();
-        Task::perform(plan(core, id, language, build, root, proton), move |r| {
+        let choice = Choice {
+            language,
+            build,
+            platform,
+            platforms,
+            root,
+            proton,
+        };
+        Task::perform(plan(core, id, choice), move |r| {
             Message::Install(InstallMsg::Planned(game_id, r))
         })
     }
+
+    /// The builds GOG lists for a game: Windows, Linux or both. Windows when it lists neither.
+    pub fn platforms(&self, game_id: &str) -> Vec<Platform> {
+        let os = self
+            .library
+            .iter()
+            .find(|g| g.id == game_id)
+            .map(|g| g.os.as_slice())
+            .unwrap_or_default();
+        let mut platforms = Vec::new();
+        if os.iter().any(|o| o == "windows") || !os.iter().any(|o| o == "linux") {
+            platforms.push(Platform::Windows);
+        }
+        if os.iter().any(|o| o == "linux") {
+            platforms.push(Platform::Linux);
+        }
+        platforms
+    }
+}
+
+/// What the install dialog asks GOG to plan.
+struct Choice {
+    language: Option<String>,
+    build: Option<String>,
+    platform: Platform,
+    platforms: Vec<Platform>,
+    root: PathBuf,
+    proton: Option<PathBuf>,
 }
 
 /// A build of a game, named for a pick list: its version, date and branch.
@@ -437,29 +497,35 @@ pub fn versions(builds: &[slatty_core::galaxy::Build]) -> Vec<Version> {
         .collect()
 }
 
-async fn plan(
-    core: Core,
-    game_id: String,
-    language: Option<String>,
-    build: Option<String>,
-    root: PathBuf,
-    proton: Option<PathBuf>,
-) -> Result<PlanInfo, String> {
+async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, String> {
     let tokens = tokens(&core).await?;
     let job = InstallJob::load(&core.db, &game_id).map_err(err)?;
-    let (language, build, root, dlcs) = match &job {
+    // An interrupted install resumes as it started.
+    let (platform, language, build, root, dlcs) = match &job {
         Some(j) => (
+            if installer::linux::is_linux_build(&j.build_id) {
+                Platform::Linux
+            } else {
+                Platform::Windows
+            },
             Some(j.language.clone()),
             Some(j.build_id.clone()),
             j.root.clone(),
             DlcSelection::Only(j.dlcs.clone()),
         ),
-        None => (language, build, root, DlcSelection::AllOwned),
+        None => (
+            choice.platform,
+            choice.language,
+            choice.build,
+            choice.root,
+            DlcSelection::AllOwned,
+        ),
     };
     let plan = installer::plan_for(
         &core.http,
         &tokens,
         &game_id,
+        platform,
         language.as_deref(),
         build.as_deref(),
         &dlcs,
@@ -468,9 +534,11 @@ async fn plan(
     .map_err(err)?;
     let free = free_space(root.display().to_string()).await;
     Ok(PlanInfo {
+        platform: plan.platform,
+        platforms: choice.platforms,
+        proton: choice.proton,
         root: root.display().to_string(),
         free,
-        proton,
         directory: plan.directory_name().map_err(err)?,
         title: plan.title,
         versions: versions(&plan.builds),

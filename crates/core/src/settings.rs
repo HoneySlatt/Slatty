@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::db::Db;
 use crate::error::Result;
+use crate::install::Platform;
 
 const LIBRARY_ROOT: &str = "library_root";
 const DEFAULT_PROTON: &str = "default_proton";
@@ -10,6 +11,7 @@ const INTERFACE_FONT: &str = "interface_font";
 const INTERFACE_THEME: &str = "interface_theme";
 const COVER_WIDTH: &str = "cover_width";
 const LIBRARY_SORT: &str = "library_sort";
+const DEFAULT_PLATFORM: &str = "default_platform";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -29,6 +31,22 @@ pub fn default_proton(db: &Db) -> Result<Option<PathBuf>> {
 
 pub fn set_default_proton(db: &Db, path: &Path) -> Result<()> {
     db.set_setting(DEFAULT_PROTON, Some(&path.to_string_lossy()))
+}
+
+/// Build installed when a game has both: Windows until chosen.
+pub fn default_platform(db: &Db) -> Result<Platform> {
+    Ok(match db.setting(DEFAULT_PLATFORM)?.as_deref() {
+        Some("linux") => Platform::Linux,
+        _ => Platform::Windows,
+    })
+}
+
+pub fn set_default_platform(db: &Db, platform: Platform) -> Result<()> {
+    let value = match platform {
+        Platform::Linux => "linux",
+        Platform::Windows => "windows",
+    };
+    db.set_setting(DEFAULT_PLATFORM, Some(value))
 }
 
 /// Font family the interface uses; `None` for the system's default.

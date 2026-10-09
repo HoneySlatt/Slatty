@@ -481,6 +481,8 @@ fn games_known_only_by_play_time_are_read_again() {
 fn fake_plan() -> crate::install::PlanInfo {
     crate::install::PlanInfo {
         title: "[FAKE] Game 5".into(),
+        platform: Platform::Windows,
+        platforms: vec![Platform::Windows],
         version: "1.0".into(),
         build_id: "b1".into(),
         versions: Vec::new(),
@@ -1992,4 +1994,79 @@ fn game_settings_open_over_the_library_too() {
     assert_eq!(app.selected, None, "still on the library");
     let _ = app.update(Message::CloseDialog);
     assert_eq!(app.dialog, None);
+}
+
+#[test]
+fn a_linux_build_can_be_chosen_and_needs_no_proton() {
+    let mut app = library_app();
+    app.library.iter_mut().find(|g| g.id == "5").unwrap().os =
+        vec!["windows".into(), "linux".into(), "osx".into()];
+    assert_eq!(app.platforms("5"), vec![Platform::Windows, Platform::Linux]);
+    assert_eq!(app.platforms("3"), vec![Platform::Windows]);
+    open(&mut app, "5", Some(Panel::Install));
+    let both = vec![Platform::Windows, Platform::Linux];
+    app.install_views.insert(
+        "5".into(),
+        InstallView::Ready(crate::install::PlanInfo {
+            platforms: both.clone(),
+            proton: None,
+            ..fake_plan()
+        }),
+    );
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Proton").is_ok());
+        assert!(ui.find("Choose a Proton build to start.").is_ok());
+    }
+    // Another platform is planned again.
+    let _ = app.update(Message::Install(InstallMsg::Platform(
+        "5".into(),
+        Platform::Linux,
+    )));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Planning)
+    ));
+    app.install_views.insert(
+        "5".into(),
+        InstallView::Ready(crate::install::PlanInfo {
+            platform: Platform::Linux,
+            platforms: both,
+            proton: None,
+            ..fake_plan()
+        }),
+    );
+    let messages: Vec<Message> = {
+        let mut ui = render(&app);
+        assert!(ui.find("Proton").is_err(), "a Linux build runs without");
+        assert!(ui.find("Game version").is_err());
+        assert!(
+            ui.find(
+                "GOG keeps no cloud saves for Linux builds, and they do not report achievements."
+            )
+            .is_ok()
+        );
+        snapshot(&mut ui, "install-linux");
+        ui.click("Start install").unwrap();
+        ui.into_messages().collect()
+    };
+    assert!(
+        matches!(&messages[..], [Message::Install(InstallMsg::Start(id))] if id == "5"),
+        "{messages:?}"
+    );
+}
+
+#[test]
+fn the_default_platform_is_kept() {
+    use crate::settings::{PlatformChoice, SettingsMsg};
+    let mut app = library_app();
+    let _ = app.update(Message::Settings(SettingsMsg::Platform(PlatformChoice(
+        Platform::Linux,
+    ))));
+    assert_eq!(app.default_platform, Platform::Linux);
+    let db = app.core.as_ref().unwrap().db.clone();
+    assert_eq!(
+        slatty_core::settings::default_platform(&db).unwrap(),
+        Platform::Linux
+    );
 }

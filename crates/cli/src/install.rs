@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Result, bail};
 use clap::Args;
 use slatty_core::account::Account;
+use slatty_core::install::Platform;
 use slatty_core::installer::{
     self, DlcChoice, DlcSelection, InstallEvent, InstallJob, InstallRequest,
 };
@@ -20,10 +21,13 @@ pub struct InstallArgs {
     /// Language code offered by the build, e.g. fr-FR (defaults to English)
     #[arg(long)]
     language: Option<String>,
+    /// Build to install (defaults to the setting: Windows until changed in the app)
+    #[arg(long, value_enum)]
+    platform: Option<PlatformArg>,
     /// Folder that receives the game folder (remembered as the default)
     #[arg(long)]
     dir: Option<PathBuf>,
-    /// Proton build used to run the game (remembered as the default)
+    /// Proton build used to run a Windows build (remembered as the default)
     #[arg(long)]
     proton: Option<PathBuf>,
     /// Show what would be installed without downloading
@@ -41,6 +45,12 @@ pub struct InstallArgs {
     /// Install only these owned DLC (product ids, see --info)
     #[arg(long, num_args = 1.., value_name = "DLC_ID")]
     dlc: Vec<String>,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum PlatformArg {
+    Windows,
+    Linux,
 }
 
 impl InstallArgs {
@@ -69,12 +79,18 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     }
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
+    let platform = match args.platform {
+        Some(PlatformArg::Windows) => Platform::Windows,
+        Some(PlatformArg::Linux) => Platform::Linux,
+        None => settings::default_platform(&ctx.db)?,
+    };
 
     if args.info {
         let plan = installer::plan_for(
             &ctx.http,
             &tokens,
             &args.game_id,
+            platform,
             args.language.as_deref(),
             None,
             &args.dlc_selection(),
@@ -119,27 +135,32 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         }
         None => settings::library_root(&ctx.db)?,
     };
-    let proton = match args.proton {
-        Some(p) => {
-            let p = std::path::absolute(&p)?;
-            settings::set_default_proton(&ctx.db, &p)?;
-            p
+    let proton = if platform == Platform::Linux {
+        PathBuf::new()
+    } else {
+        let proton = match args.proton {
+            Some(p) => {
+                let p = std::path::absolute(&p)?;
+                settings::set_default_proton(&ctx.db, &p)?;
+                p
+            }
+            None => match settings::default_proton(&ctx.db)? {
+                Some(p) => p,
+                None => bail!(
+                    "choose a Proton build once with --proton <dir containing `proton`>, e.g. one of:\n{}",
+                    settings::proton_candidates()
+                        .iter()
+                        .map(|p| format!("  {}", p.display()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ),
+            },
+        };
+        if !proton.join("proton").is_file() {
+            bail!("{} does not contain a `proton` script", proton.display());
         }
-        None => match settings::default_proton(&ctx.db)? {
-            Some(p) => p,
-            None => bail!(
-                "choose a Proton build once with --proton <dir containing `proton`>, e.g. one of:\n{}",
-                settings::proton_candidates()
-                    .iter()
-                    .map(|p| format!("  {}", p.display()))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
-        },
+        proton
     };
-    if !proton.join("proton").is_file() {
-        bail!("{} does not contain a `proton` script", proton.display());
-    }
 
     let cancel = CancellationToken::new();
     let on_ctrl_c = cancel.clone();
@@ -212,6 +233,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         dlcs,
         language: args.language,
         build: None,
+        platform,
         root,
         proton,
         restart: args.restart,

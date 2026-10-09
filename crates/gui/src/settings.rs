@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use iced::Task;
+use slatty_core::install::Platform;
 use slatty_core::settings;
 
 use crate::{App, Message, theme};
@@ -70,6 +71,26 @@ impl fmt::Display for FontChoice {
     }
 }
 
+/// Windows or Linux, named for a pick list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlatformChoice(pub Platform);
+
+impl PlatformChoice {
+    pub const ALL: [PlatformChoice; 2] = [
+        PlatformChoice(Platform::Windows),
+        PlatformChoice(Platform::Linux),
+    ];
+}
+
+impl fmt::Display for PlatformChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self.0 {
+            Platform::Windows => "Windows",
+            Platform::Linux => "Linux (native)",
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum SettingsMsg {
     RootInput(String),
@@ -89,6 +110,8 @@ pub enum SettingsMsg {
     CoverSize(CoverSize),
     /// A built-in theme, under the theme file.
     Preset(crate::presets::Preset),
+    /// Build installed when a game has both.
+    Platform(PlatformChoice),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
 }
@@ -162,6 +185,12 @@ impl App {
                     .spawn();
                 if let Err(e) = opened {
                     self.notify_error(format!("Could not open the theme file: {e}"));
+                }
+            }
+            SettingsMsg::Platform(choice) => {
+                self.default_platform = choice.0;
+                if let Err(e) = settings::set_default_platform(&core.db, choice.0) {
+                    self.notify_error(e.to_string());
                 }
             }
             SettingsMsg::CoverSize(size) => {

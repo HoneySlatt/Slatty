@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
@@ -8,8 +9,8 @@ use crate::auth::Tokens;
 use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::galaxy::GogContent;
-use crate::install::Install;
-use crate::installer::{self, DlcSelection, Download, InstallJob, InstallRecord, Progress};
+use crate::install::{Install, Platform};
+use crate::installer::{self, DlcSelection, Download, InstallJob, InstallRecord, Progress, linux};
 use crate::paths::Dirs;
 use crate::session;
 
@@ -75,7 +76,7 @@ pub fn uninstall(
     let root = &install.path;
     for rel in files {
         let path = root.join(rel);
-        if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+        if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file() || m.is_symlink()) {
             std::fs::remove_file(&path)
                 .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
             report.removed_files += 1;
@@ -143,12 +144,25 @@ pub async fn check(
         http,
         tokens,
         game_id,
+        install.platform,
         Some(&record.language),
         Some(&record.build_id),
         &dlcs,
     )
     .await
     .map_err(installed_build_gone)?;
+    if plan.platform == Platform::Linux {
+        let source = linux_source(http, tokens, dirs, &plan);
+        let set = linux::LinuxSet::new(&plan.linux)?;
+        return linux::LinuxDownload {
+            source: &source,
+            cancel,
+            progress,
+            free_space: &installer::free_space,
+        }
+        .check_installed(&set, &install.path, repair)
+        .await;
+    }
     let source = GogContent::new(http.clone(), tokens.clone(), dirs);
     let set = installer::collect_files(&source, &plan.depots).await?;
     Download {
@@ -159,6 +173,23 @@ pub async fn check(
     }
     .check_installed(&set, &install.path, repair)
     .await
+}
+
+fn linux_source(
+    http: &Client,
+    tokens: &Tokens,
+    dirs: &Dirs,
+    plan: &installer::InstallPlan,
+) -> linux::GogInstallers {
+    linux::GogInstallers::new(
+        http.clone(),
+        tokens.clone(),
+        Some(dirs),
+        plan.linux
+            .iter()
+            .map(|p| p.installer.downlink.clone())
+            .collect(),
+    )
 }
 
 pub(crate) const UPDATING: &str = "updating";
@@ -188,10 +219,18 @@ pub async fn check_update(
     tokens: &Tokens,
     game_id: &str,
 ) -> Result<Option<UpdateCheck>> {
-    let (_, record) = installed_by_slatty(db, dirs, game_id)?;
+    let (install, record) = installed_by_slatty(db, dirs, game_id)?;
     let dlcs = DlcSelection::Only(record.dlcs.clone());
-    let plan =
-        installer::plan_for(http, tokens, game_id, Some(&record.language), None, &dlcs).await?;
+    let plan = installer::plan_for(
+        http,
+        tokens,
+        game_id,
+        install.platform,
+        Some(&record.language),
+        None,
+        &dlcs,
+    )
+    .await?;
     Ok(
         (plan.build.build_id != record.build_id).then(|| UpdateCheck {
             installed_version: record.version.clone(),
@@ -209,12 +248,13 @@ pub async fn content_options(
     tokens: &Tokens,
     game_id: &str,
 ) -> Result<installer::InstallPlan> {
-    let (_, record) = installed_by_slatty(db, dirs, game_id)?;
+    let (install, record) = installed_by_slatty(db, dirs, game_id)?;
     let dlcs = DlcSelection::Only(record.dlcs.clone());
     installer::plan_for(
         http,
         tokens,
         game_id,
+        install.platform,
         Some(&record.language),
         Some(&record.build_id),
         &dlcs,
@@ -297,6 +337,7 @@ pub async fn reconfigure(
         http,
         tokens,
         game_id,
+        install.platform,
         Some(&language),
         build.as_deref(),
         &DlcSelection::Only(dlcs),
@@ -335,6 +376,82 @@ pub async fn reconfigure(
         dlcs: selected.clone(),
     }
     .save(db)?;
+    let (applied, files) = if plan.platform == Platform::Linux {
+        let source = linux_source(http, tokens, dirs, &plan);
+        let set = linux::LinuxSet::new(&plan.linux)?;
+        let dl = linux::LinuxDownload {
+            source: &source,
+            cancel,
+            progress,
+            free_space: &installer::free_space,
+        };
+        let applied = async {
+            let checked = dl.check_installed(&set, &install.path, true).await?;
+            let kept: HashSet<&Path> = set
+                .files
+                .iter()
+                .chain(&set.links)
+                .map(|f| f.path.as_path())
+                .collect();
+            let removed = remove_obsolete(&record, &install.path, |rel| kept.contains(rel))?;
+            Ok::<_, Error>(UpdateReport {
+                downloaded: checked.bad,
+                removed,
+                ..Default::default()
+            })
+        }
+        .await;
+        (applied, set.recorded_files())
+    } else {
+        windows_reconfigure(
+            dirs, http, tokens, game_id, &plan, &record, &install, &selected, progress, cancel,
+        )
+        .await?
+    };
+    let report = match applied {
+        Err(Error::Cancelled) => {
+            if let Some(mut job) = InstallJob::load(db, game_id)? {
+                job.state = UPDATE_PAUSED.into();
+                job.save(db)?;
+            }
+            return Err(Error::Cancelled);
+        }
+        other => other?,
+    };
+    InstallRecord {
+        build_id: plan.build.build_id.clone(),
+        version: plan.build.version_name.clone(),
+        language: plan.language.clone(),
+        path: Some(install.path.clone()),
+        dlcs: selected,
+        setup_build: None,
+        files,
+    }
+    .save(dirs, game_id)?;
+    InstallJob::delete(db, game_id)?;
+    Ok(UpdateReport {
+        from_version: record.version,
+        to_version: plan.build.version_name,
+        resumed: pending.is_some(),
+        ..report
+    })
+}
+
+/// The Windows part of `reconfigure`: GOG's binary patches, then the files that still differ.
+/// Returns what was applied (or why not) and the files the game now has.
+#[allow(clippy::too_many_arguments)]
+async fn windows_reconfigure(
+    dirs: &Dirs,
+    http: &Client,
+    tokens: &Tokens,
+    game_id: &str,
+    plan: &installer::InstallPlan,
+    record: &InstallRecord,
+    install: &Install,
+    selected: &[String],
+    progress: &(dyn Fn(Progress) + Send + Sync),
+    cancel: CancellationToken,
+) -> Result<(Result<UpdateReport>, Vec<installer::RecordedFile>)> {
     let source = GogContent::new(http.clone(), tokens.clone(), dirs);
     let set = installer::collect_files(&source, &plan.depots).await?;
     let dl = Download {
@@ -365,7 +482,7 @@ pub async fn reconfigure(
         .unwrap_or_default()
     };
     let applied = async {
-        let report = apply_update(&dl, &set, &record, &install.path, &patches).await?;
+        let report = apply_update(&dl, &set, record, &install.path, &patches).await?;
         dl.check_installed(
             &set.support_set(),
             &installer::support_dir(dirs, game_id),
@@ -375,33 +492,7 @@ pub async fn reconfigure(
         Ok::<_, Error>(report)
     }
     .await;
-    let report = match applied {
-        Err(Error::Cancelled) => {
-            if let Some(mut job) = InstallJob::load(db, game_id)? {
-                job.state = UPDATE_PAUSED.into();
-                job.save(db)?;
-            }
-            return Err(Error::Cancelled);
-        }
-        other => other?,
-    };
-    InstallRecord {
-        build_id: plan.build.build_id.clone(),
-        version: plan.build.version_name.clone(),
-        language: plan.language.clone(),
-        path: Some(install.path.clone()),
-        dlcs: selected,
-        setup_build: None,
-        files: installer::recorded_files(&set),
-    }
-    .save(dirs, game_id)?;
-    InstallJob::delete(db, game_id)?;
-    Ok(UpdateReport {
-        from_version: record.version,
-        to_version: plan.build.version_name,
-        resumed: pending.is_some(),
-        ..report
-    })
+    Ok((applied, installer::recorded_files(&set)))
 }
 
 pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
@@ -413,19 +504,40 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
 ) -> Result<UpdateReport> {
     let patched = crate::patches::apply_all(dl.source, patches, set, old, dir, &dl.cancel).await?;
     let checked = dl.check_installed(set, dir, true).await?;
-    let kept: std::collections::HashSet<String> = set
+    // Windows sees differently cased paths as one file.
+    let kept: HashSet<String> = set
         .files
         .iter()
         .map(|(p, _)| p.to_string_lossy().to_lowercase())
         .collect();
+    let removed = remove_obsolete(old, dir, |rel| {
+        kept.contains(&rel.to_string_lossy().to_lowercase())
+    })?;
+    Ok(UpdateReport {
+        downloaded: checked.bad,
+        reused_bytes: checked.reused_bytes,
+        patched: patched.files,
+        patch_bytes: patched.delta_bytes,
+        removed,
+        ..Default::default()
+    })
+}
+
+/// Deletes the files slatty installed before that the game no longer has, and the folders they
+/// leave empty.
+fn remove_obsolete(
+    old: &InstallRecord,
+    dir: &Path,
+    kept: impl Fn(&Path) -> bool,
+) -> Result<Vec<PathBuf>> {
     let mut removed = Vec::new();
     for f in &old.files {
         let rel = installer::safe_relative(&f.path)?;
-        if kept.contains(&rel.to_string_lossy().to_lowercase()) {
+        if kept(&rel) {
             continue;
         }
         let path = dir.join(&rel);
-        if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+        if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file() || m.is_symlink()) {
             std::fs::remove_file(&path)
                 .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
             removed.push(rel.clone());
@@ -438,14 +550,7 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
             }
         }
     }
-    Ok(UpdateReport {
-        downloaded: checked.bad,
-        reused_bytes: checked.reused_bytes,
-        patched: patched.files,
-        patch_bytes: patched.delta_bytes,
-        removed,
-        ..Default::default()
-    })
+    Ok(removed)
 }
 
 fn remove_empty_dirs(dir: &Path) -> Result<bool> {

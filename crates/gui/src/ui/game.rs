@@ -7,6 +7,7 @@ use iced::widget::{
     space, stack, tooltip,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
+use slatty_core::install::Platform;
 use slatty_core::installer::Progress;
 use slatty_core::library::LibraryGame;
 
@@ -307,7 +308,11 @@ impl App {
     }
 
     pub(super) fn cloud_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let installed = self.installs.contains_key(&g.id);
+        // Nothing to manage for a Linux build: GOG keeps no cloud saves for them.
+        let installed = self
+            .installs
+            .get(&g.id)
+            .is_some_and(|i| i.platform == Platform::Windows);
         let (ic, color, status) = self.cloud_status(g);
         // The whole card opens the cloud panel; "Manage" shows when the card has room for it
         // (a drawer narrows the page).
@@ -371,6 +376,17 @@ impl App {
             .installs
             .get(&g.id)
             .is_some_and(slatty_core::runner::prefix_ready);
+        if self
+            .installs
+            .get(&g.id)
+            .is_some_and(|i| i.platform == Platform::Linux)
+        {
+            return (
+                Icon::X,
+                tokens().muted,
+                "Not available for Linux builds".into(),
+            );
+        }
         if self.installs.contains_key(&g.id) {
             match self.cloud.get(&g.id) {
                 Some(c) if c.busy => (Icon::RefreshCw, tokens().muted, "Checking…".to_string()),

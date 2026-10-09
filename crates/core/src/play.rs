@@ -13,7 +13,7 @@ use crate::db::Db;
 use crate::doctor::find_in_path;
 use crate::error::{Error, Result};
 use crate::galaxy_service;
-use crate::install::Install;
+use crate::install::{Install, Platform};
 use crate::paths::Dirs;
 use crate::runner;
 use crate::session::{self, SessionHandle, SessionOutcome, SupervisorEvent};
@@ -133,6 +133,9 @@ pub async fn play(
         ));
     }
     let spec = runner::launch_spec(&install)?;
+    // GOG keeps no cloud saves for Linux builds, and they lack the Galaxy SDK that Comet talks to.
+    let native = install.platform == Platform::Linux;
+    let (cloud, use_comet) = (req.cloud && !native, req.comet && !native);
     let user_id = Account::active(db)?.map(|a| a.user_id);
 
     if let Some(init) = runner::prefix_init_spec(&install)? {
@@ -186,7 +189,7 @@ pub async fn play(
         }
     }
 
-    if req.comet
+    if use_comet
         && install
             .runner
             .prefix()
@@ -211,7 +214,7 @@ pub async fn play(
         }
     }
 
-    if req.cloud {
+    if cloud {
         match cloud_sync(db, dirs, http, &install).await {
             Ok(Some(summary)) if summary.is_clean() => emit(PlayEvent::CloudChecked(summary)),
             Ok(Some(summary)) => {
@@ -225,7 +228,7 @@ pub async fn play(
         }
     }
 
-    let comet = if req.comet {
+    let comet = if use_comet {
         match start_comet(db, dirs, http, &install).await {
             Ok(started) => {
                 emit(PlayEvent::CometReady);
@@ -266,7 +269,7 @@ pub async fn play(
         None => None,
     };
 
-    if req.cloud {
+    if cloud {
         if !outcome.clean {
             emit(PlayEvent::CloudUploadSkipped(
                 "the end of the session is uncertain".into(),

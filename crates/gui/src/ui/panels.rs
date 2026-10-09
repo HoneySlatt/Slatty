@@ -261,7 +261,7 @@ pub(super) fn dlc_row<'a>(
 
 pub(super) fn runner_label(install: &Install) -> String {
     match &install.runner {
-        Runner::Native => "Native".into(),
+        Runner::Native => "Native Linux build".into(),
         Runner::Umu { proton, .. } => format!(
             "Proton (umu): {}",
             proton

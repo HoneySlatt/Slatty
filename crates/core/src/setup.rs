@@ -63,11 +63,12 @@ pub fn language_name(code: &str) -> &'static str {
         "it" => "Italian",
         "pl" => "Polish",
         "ru" => "Russian",
-        "pt" => "Portuguese",
-        "ja" => "Japanese",
+        // GOG's offline installers use its own codes for some.
+        "pt" | "br" => "Portuguese",
+        "ja" | "jp" => "Japanese",
         "ko" => "Korean",
-        "zh" => "Chinese",
-        "cs" => "Czech",
+        "zh" | "cn" => "Chinese",
+        "cs" | "cz" => "Czech",
         "hu" => "Hungarian",
         "nl" => "Dutch",
         "tr" => "Turkish",
@@ -192,10 +193,12 @@ pub fn redist_dir(dirs: &Dirs) -> PathBuf {
     dirs.data.join("redist")
 }
 
-/// True when the installed build still needs its setup.
+/// True when the installed build still needs its setup. Linux builds have none.
 pub fn pending(dirs: &Dirs, game_id: &str) -> Result<bool> {
-    Ok(InstallRecord::load(dirs, game_id)?
-        .is_some_and(|r| r.setup_build.as_deref() != Some(&r.build_id)))
+    Ok(InstallRecord::load(dirs, game_id)?.is_some_and(|r| {
+        r.setup_build.as_deref() != Some(&r.build_id)
+            && !installer::linux::is_linux_build(&r.build_id)
+    }))
 }
 
 pub struct Preview {
@@ -245,6 +248,7 @@ async fn resolve(
         http,
         tokens,
         &install.game_id,
+        install.platform,
         Some(&record.language),
         Some(&record.build_id),
         &DlcSelection::Only(record.dlcs.clone()),

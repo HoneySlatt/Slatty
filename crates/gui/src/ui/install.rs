@@ -1,11 +1,13 @@
 //! Installing a game: the drawer of the game page, and the dialog the library opens over its grid.
-//! Both show what will be downloaded, where, in which language, with which Proton.
+//! Both show what will be downloaded, for which platform, where, in which language, with which
+//! Proton.
 
 use crate::theme::text;
 use iced::widget::{
     Column, Space, button, column, container, pick_list, row, scrollable, space, text_input,
 };
 use iced::{Alignment, Element, Length, Padding};
+use slatty_core::install::Platform;
 use slatty_core::library::LibraryGame;
 
 use super::format::*;
@@ -14,18 +16,20 @@ use super::note;
 use super::panels::dlc_row;
 use crate::icons::{Icon, icon};
 use crate::install::{InstallMsg, InstallView, PlanInfo};
-use crate::settings::ProtonChoice;
+use crate::settings::{PlatformChoice, ProtonChoice};
 use crate::theme::{self, semibold, tokens};
 use crate::{App, Message};
 
 /// The parts of the install choices, laid out differently by the drawer and the dialog.
 struct Choices<'a> {
     short_of_space: Option<Element<'a, Message>>,
+    platform: Element<'a, Message>,
     folder: Element<'a, Message>,
     language: Element<'a, Message>,
     dlcs: Option<Element<'a, Message>>,
-    proton: Element<'a, Message>,
-    version: Element<'a, Message>,
+    /// For a Windows build only: GOG offers a single version of a Linux build.
+    proton: Option<Element<'a, Message>>,
+    version: Option<Element<'a, Message>>,
     redistributables: Option<Element<'a, Message>>,
 }
 
@@ -72,16 +76,20 @@ impl App {
         let body: Element<'a, Message> = match info {
             Some(info) => {
                 let c = self.choices(g, info);
+                let language = section("Language", c.language).width(Length::Fill);
                 let mut body = column![
                     sizes(info, true),
+                    section("Platform", c.platform),
                     section("Install in", c.folder),
-                    row![
-                        section("Language", c.language).width(Length::Fill),
-                        section("Proton", c.proton).width(Length::Fill),
-                    ]
-                    .spacing(20),
-                    section("Game version", c.version),
+                    match c.proton {
+                        Some(proton) =>
+                            row![language, section("Proton", proton).width(Length::Fill)]
+                                .spacing(20)
+                                .into(),
+                        None => Element::from(language),
+                    },
                 ]
+                .push(c.version.map(|v| section("Game version", v)))
                 .spacing(22);
                 if let Some(warning) = c.short_of_space {
                     body = body.push(warning);
@@ -144,18 +152,21 @@ impl App {
             .push(sizes(info, false))
             .push(c.short_of_space)
             .push(gap())
+            .push(section("Platform", c.platform))
+            .push(gap())
             .push(section("Install in", c.folder))
             .push(gap())
             .push(section("Language", c.language));
         if let Some(dlcs) = c.dlcs {
             items = items.push(gap()).push(section("DLC", dlcs));
         }
-        items = items
-            .push(gap())
-            .push(section("Proton", c.proton))
-            .push(gap())
-            .push(section("Game version", c.version))
-            .push(c.redistributables);
+        if let Some(proton) = c.proton {
+            items = items.push(gap()).push(section("Proton", proton));
+        }
+        if let Some(version) = c.version {
+            items = items.push(gap()).push(section("Game version", version));
+        }
+        items = items.push(c.redistributables);
         scrollable(container(items).padding(Padding::ZERO.right(14)))
             .style(theme::scroller)
             .height(Length::Fill)
@@ -248,22 +259,58 @@ impl App {
             .into()
         });
 
+        let chosen = PlatformChoice(info.platform);
+        let choice: Element<'a, Message> = if info.resumable {
+            note(format!(
+                "{chosen} (an interrupted install keeps its platform)"
+            ))
+        } else if info.platforms.len() <= 1 {
+            note(format!("{chosen} (the only build GOG offers)"))
+        } else {
+            let id = g.id.clone();
+            pick_list(
+                info.platforms
+                    .iter()
+                    .map(|p| PlatformChoice(*p))
+                    .collect::<Vec<_>>(),
+                Some(chosen),
+                move |c| Message::Install(InstallMsg::Platform(id.clone(), c.0)),
+            )
+            .style(theme::select)
+            .font(theme::font())
+            .padding([10, 14])
+            .width(Length::Fill)
+            .into()
+        };
+        let platform = match info.platform {
+            Platform::Windows => choice,
+            Platform::Linux => column![
+                choice,
+                note("GOG keeps no cloud saves for Linux builds, and they do not report achievements.")
+            ]
+            .spacing(10)
+            .into(),
+        };
+
+        let windows = info.platform == Platform::Windows;
         let id = g.id.clone();
-        let proton = pick_list(
-            self.proton_choices
-                .iter()
-                .cloned()
-                .map(ProtonChoice)
-                .collect::<Vec<_>>(),
-            info.proton.clone().map(ProtonChoice),
-            move |c| Message::Install(InstallMsg::Proton(id.clone(), c)),
-        )
-        .placeholder("No Proton build found (Steam or compatibilitytools.d)")
-        .style(theme::select)
-        .font(theme::font())
-        .padding([10, 14])
-        .width(Length::Fill)
-        .into();
+        let proton = windows.then(|| {
+            pick_list(
+                self.proton_choices
+                    .iter()
+                    .cloned()
+                    .map(ProtonChoice)
+                    .collect::<Vec<_>>(),
+                info.proton.clone().map(ProtonChoice),
+                move |c| Message::Install(InstallMsg::Proton(id.clone(), c)),
+            )
+            .placeholder("No Proton build found (Steam or compatibilitytools.d)")
+            .style(theme::select)
+            .font(theme::font())
+            .padding([10, 14])
+            .width(Length::Fill)
+            .into()
+        });
 
         // The newest version unless another is chosen; an interrupted install keeps its own.
         let current = info
@@ -271,19 +318,21 @@ impl App {
             .iter()
             .find(|v| v.build_id == info.build_id)
             .cloned();
-        let version = if info.resumable || info.versions.len() <= 1 {
-            note(current.map_or_else(|| info.version.clone(), |v| v.label))
-        } else {
-            let id = g.id.clone();
-            pick_list(info.versions.clone(), current, move |v| {
-                Message::Install(InstallMsg::Version(id.clone(), v.build_id))
-            })
-            .style(theme::select)
-            .font(theme::font())
-            .padding([10, 14])
-            .width(Length::Fill)
-            .into()
-        };
+        let version = windows.then(|| {
+            if info.resumable || info.versions.len() <= 1 {
+                note(current.map_or_else(|| info.version.clone(), |v| v.label))
+            } else {
+                let id = g.id.clone();
+                pick_list(info.versions.clone(), current, move |v| {
+                    Message::Install(InstallMsg::Version(id.clone(), v.build_id))
+                })
+                .style(theme::select)
+                .font(theme::font())
+                .padding([10, 14])
+                .width(Length::Fill)
+                .into()
+            }
+        });
 
         let redistributables = (!info.dependencies.is_empty()).then(|| {
             note(format!(
@@ -294,6 +343,7 @@ impl App {
 
         Choices {
             short_of_space,
+            platform,
             folder,
             language,
             dlcs,
@@ -327,7 +377,7 @@ impl App {
         .padding(if wide { [16, 0] } else { [14, 56] })
         .width(width)
         .on_press_maybe(
-            (!busy && info.proton.is_some())
+            (!busy && (info.platform == Platform::Linux || info.proton.is_some()))
                 .then(|| Message::Install(InstallMsg::Start(g.id.clone()))),
         )
         .style(theme::primary);
@@ -345,7 +395,7 @@ impl App {
             Some(note(format!(
                 "{title} is downloading; this one can start once it is done."
             )))
-        } else if info.proton.is_none() {
+        } else if info.platform == Platform::Windows && info.proton.is_none() {
             Some(note("Choose a Proton build to start."))
         } else {
             None

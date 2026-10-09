@@ -4,11 +4,13 @@ use crate::theme::text;
 use iced::widget::{Space, button, column, container, pick_list, row, scrollable, text_input};
 use iced::{Alignment, Element, Length, Padding};
 
-use super::card;
 use super::format::*;
 use super::widgets::logo;
+use super::{card, note};
 use crate::icons::{Icon, icon};
-use crate::settings::{COVER_SIZES, CoverSize, FontChoice, ProtonChoice, SettingsMsg};
+use crate::settings::{
+    COVER_SIZES, CoverSize, FontChoice, PlatformChoice, ProtonChoice, SettingsMsg,
+};
 use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Message};
 
@@ -92,6 +94,21 @@ impl App {
                         .padding([8, 16])
                         .on_press(Message::Settings(SettingsMsg::BrowseRoot))
                         .style(theme::tonal),
+                    ]
+                    .spacing(10)
+                    .align_y(Alignment::Center)
+                    .into(),
+                    row![
+                        label("Default platform"),
+                        pick_list(
+                            PlatformChoice::ALL,
+                            Some(PlatformChoice(self.default_platform)),
+                            |c| Message::Settings(SettingsMsg::Platform(c))
+                        )
+                        .style(theme::select)
+                        .font(theme::font())
+                        .padding([8, 16]),
+                        note("For games GOG offers on both."),
                     ]
                     .spacing(10)
                     .align_y(Alignment::Center)

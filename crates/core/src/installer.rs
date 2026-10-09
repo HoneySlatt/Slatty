@@ -1,9 +1,12 @@
-//! Installing a Windows build from GOG's content system.
+//! Installing a game: a Windows build from GOG's content system, or a Linux build from GOG's
+//! offline installer.
 
 mod download;
 mod job;
+pub mod linux;
 mod plan;
 mod record;
+pub mod zip;
 
 pub use download::*;
 pub use job::*;
@@ -32,7 +35,10 @@ pub struct InstallRequest {
     pub language: Option<String>,
     /// A build GOG offers for the game; the newest public one when `None`.
     pub build: Option<String>,
+    /// An interrupted install resumes on its own platform whatever this says.
+    pub platform: Platform,
     pub root: PathBuf,
+    /// Unused for a Linux build.
     pub proton: PathBuf,
     pub dlcs: DlcSelection,
     pub restart: bool,
@@ -85,21 +91,36 @@ pub async fn install(
         InstallJob::delete(db, &job.game_id)?;
     }
     let job = previous.filter(|_| !req.restart);
-    let (language, build_id, root, dlcs) = match &job {
+    let (platform, language, build_id, root, dlcs) = match &job {
         Some(j) => (
+            if linux::is_linux_build(&j.build_id) {
+                Platform::Linux
+            } else {
+                Platform::Windows
+            },
             Some(j.language.as_str()),
             Some(j.build_id.as_str()),
             j.root.clone(),
             DlcSelection::Only(j.dlcs.clone()),
         ),
         None => (
+            req.platform,
             req.language.as_deref(),
             req.build.as_deref(),
             req.root.clone(),
             req.dlcs.clone(),
         ),
     };
-    let plan = plan_for(http, tokens, &req.game_id, language, build_id, &dlcs).await?;
+    let plan = plan_for(
+        http,
+        tokens,
+        &req.game_id,
+        platform,
+        language,
+        build_id,
+        &dlcs,
+    )
+    .await?;
     let directory = plan.directory_name()?;
     let target = root.join(&directory);
     let partial = partial_dir(&root, &directory);
@@ -125,17 +146,44 @@ pub async fn install(
     };
     job.save(db)?;
 
+    let progress = |p| emit(InstallEvent::Progress(p));
+    let resumed_published = published_unregistered(job_resumed, &partial, &target);
+    // What was written: the game's files, GOG's support files, links left out.
     let result = async {
+        if plan.platform == Platform::Linux {
+            let source = linux::GogInstallers::new(
+                http.clone(),
+                tokens.clone(),
+                Some(dirs),
+                plan.linux
+                    .iter()
+                    .map(|p| p.installer.downlink.clone())
+                    .collect(),
+            );
+            let set = linux::LinuxSet::new(&plan.linux)?;
+            let dl = linux::LinuxDownload {
+                source: &source,
+                cancel,
+                progress: &progress,
+                free_space: &free_space,
+            };
+            let skipped = if resumed_published {
+                dl.check_installed(&set, &target, true).await?;
+                0
+            } else {
+                dl.run(&set, &partial, &target).await?
+            };
+            return Ok::<_, Error>((set.recorded_files(), 0, skipped));
+        }
         let source = galaxy::GogContent::new(http.clone(), tokens.clone(), dirs);
         let set = collect_files(&source, &plan.depots).await?;
-        let progress = |p| emit(InstallEvent::Progress(p));
         let dl = Download {
             source: &source,
             cancel,
             progress: &progress,
             free_space: &free_space,
         };
-        if published_unregistered(job_resumed, &partial, &target) {
+        if resumed_published {
             // Interrupted between publishing the folder and registering the game: its files are
             // checked where they now are.
             dl.check_installed(&set, &target, true).await?;
@@ -144,11 +192,11 @@ pub async fn install(
         }
         dl.check_installed(&set.support_set(), &support_dir(dirs, &req.game_id), true)
             .await?;
-        Ok::<FileSet, Error>(set)
+        Ok((recorded_files(&set), set.support.len(), set.skipped_links))
     }
     .await;
-    let set = match result {
-        Ok(set) => set,
+    let (files, support_files, skipped_links) = match result {
+        Ok(written) => written,
         Err(e) => {
             job.state = if matches!(e, Error::Cancelled) {
                 PAUSED.into()
@@ -167,28 +215,32 @@ pub async fn install(
         path: Some(target.clone()),
         dlcs: plan.selected_dlcs(),
         setup_build: None,
-        files: recorded_files(&set),
+        files,
     }
     .save(dirs, &req.game_id)?;
 
+    let runner = match plan.platform {
+        Platform::Linux => Runner::Native,
+        Platform::Windows => Runner::Umu {
+            proton: req.proton,
+            prefix: dirs.data.join("prefixes").join(&req.game_id),
+        },
+    };
     let install = Install {
         umu_id: None,
         game_id: req.game_id.clone(),
         title: plan.title.clone(),
-        platform: Platform::Windows,
+        platform: plan.platform,
         path: target.clone(),
         client_id: plan.meta.client_id.clone(),
-        runner: Runner::Umu {
-            proton: req.proton,
-            prefix: dirs.data.join("prefixes").join(&req.game_id),
-        },
+        runner,
     };
     install.save(db)?;
     InstallJob::delete(db, &req.game_id)?;
     emit(InstallEvent::Finished {
         path: target,
-        support_files: set.support.len(),
-        skipped_links: set.skipped_links,
+        support_files,
+        skipped_links,
         dependencies: plan.meta.dependencies.clone(),
     });
     Ok(install)

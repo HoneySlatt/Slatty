@@ -3,9 +3,11 @@
 use std::collections::HashSet;
 use std::path::{Component, Path};
 
+use super::linux::{self, Part};
 use crate::auth::Tokens;
 use crate::error::{Error, Result};
 use crate::galaxy::{self, Build, Depot, Meta};
+use crate::install::Platform;
 
 #[derive(Debug, Clone)]
 pub struct InstallPlan {
@@ -23,6 +25,9 @@ pub struct InstallPlan {
     pub disk_size: u64,
     /// Every build GOG offers for the game, newest first; filled by `plan_for`.
     pub builds: Vec<Build>,
+    pub platform: Platform,
+    /// For a Linux build: the game's installer, then the chosen DLC's.
+    pub linux: Vec<Part>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,22 +138,7 @@ impl InstallPlan {
                 }
             })
             .collect();
-        for dlc in &mut dlcs {
-            dlc.selected = dlc.owned
-                && match selection {
-                    DlcSelection::AllOwned => true,
-                    DlcSelection::Only(ids) => ids.contains(&dlc.id),
-                };
-        }
-        if let DlcSelection::Only(ids) = selection
-            && let Some(missing) = ids
-                .iter()
-                .find(|id| !dlcs.iter().any(|d| d.selected && &d.id == *id))
-        {
-            return Err(Error::Refused(format!(
-                "DLC {missing} is not owned or not part of this game"
-            )));
-        }
+        select(&mut dlcs, selection)?;
         let depots: Vec<Depot> = meta
             .depots
             .iter()
@@ -177,6 +167,8 @@ impl InstallPlan {
             dlcs,
             dependencies: Vec::new(),
             builds: Vec::new(),
+            platform: Platform::Windows,
+            linux: Vec::new(),
         })
     }
 
@@ -194,10 +186,14 @@ pub async fn plan_for(
     http: &reqwest::Client,
     tokens: &Tokens,
     game_id: &str,
+    platform: Platform,
     language: Option<&str>,
     build_id: Option<&str>,
     dlcs: &DlcSelection,
 ) -> Result<InstallPlan> {
+    if platform == Platform::Linux {
+        return plan_linux(http, tokens, game_id, language, build_id, dlcs).await;
+    }
     let builds = galaxy::builds(http, tokens, game_id).await?;
     let build = match build_id {
         Some(id) => builds.iter().find(|b| b.build_id == id).ok_or_else(|| {
@@ -236,4 +232,188 @@ pub async fn plan_for(
         }
     }
     Ok(plan)
+}
+
+/// Marks the owned DLC to install; a DLC asked for by id must be owned and part of the game.
+fn select(dlcs: &mut [DlcChoice], selection: &DlcSelection) -> Result<()> {
+    for dlc in dlcs.iter_mut() {
+        dlc.selected = dlc.owned
+            && match selection {
+                DlcSelection::AllOwned => true,
+                DlcSelection::Only(ids) => ids.contains(&dlc.id),
+            };
+    }
+    if let DlcSelection::Only(ids) = selection
+        && let Some(missing) = ids
+            .iter()
+            .find(|id| !dlcs.iter().any(|d| d.selected && &d.id == *id))
+    {
+        return Err(Error::Refused(format!(
+            "DLC {missing} is not owned or not part of this game"
+        )));
+    }
+    Ok(())
+}
+
+/// GOG's Linux installer of the game in one language, and those of its owned DLC. Their zip
+/// directories are read now: the installers' sizes say little of the size on disk.
+async fn plan_linux(
+    http: &reqwest::Client,
+    tokens: &Tokens,
+    game_id: &str,
+    language: Option<&str>,
+    build_id: Option<&str>,
+    selection: &DlcSelection,
+) -> Result<InstallPlan> {
+    let offer = linux::offer(http, tokens, game_id).await?;
+    let mut languages: Vec<String> = Vec::new();
+    for i in &offer.installers {
+        if !languages
+            .iter()
+            .any(|l| l.eq_ignore_ascii_case(&i.language))
+        {
+            languages.push(i.language.clone());
+        }
+    }
+    let language = match language {
+        Some(wanted) => languages
+            .iter()
+            .find(|l| l.eq_ignore_ascii_case(wanted))
+            .cloned()
+            .ok_or_else(|| {
+                Error::NotFound(format!(
+                    "language `{wanted}` not offered for Linux; available: {}",
+                    languages.join(", ")
+                ))
+            })?,
+        None => languages
+            .iter()
+            .find(|l| *l == "en")
+            .or(languages.first())
+            .cloned()
+            .ok_or_else(|| Error::Unsupported("GOG offers no Linux build of this game".into()))?,
+    };
+    let base = linux::pick(&offer.installers, &language)
+        .expect("a language comes from an installer")
+        .clone();
+    let build = Build {
+        build_id: format!("{}{}", linux::BUILD_PREFIX, base.version),
+        version_name: base.version.clone(),
+        link: String::new(),
+        branch: None,
+        generation: 0,
+        date_published: None,
+    };
+    if let Some(id) = build_id
+        && id != build.build_id
+    {
+        return Err(Error::NotFound(format!(
+            "build {id} is no longer offered; restart the install"
+        )));
+    }
+    let owned = if offer.dlcs.is_empty() {
+        HashSet::new()
+    } else {
+        galaxy::owned_products(http, tokens).await?
+    };
+    let mut dlcs: Vec<DlcChoice> = offer
+        .dlcs
+        .iter()
+        .map(|(id, name, _)| DlcChoice {
+            id: id.clone(),
+            name: name.clone(),
+            owned: owned.contains(id),
+            selected: false,
+            download_size: 0,
+            disk_size: 0,
+        })
+        .collect();
+    select(&mut dlcs, selection)?;
+    // The game's installer, then the owned DLC's: GOG gives no link for a DLC not owned.
+    let mut installers = vec![base];
+    for (id, _, list) in &offer.dlcs {
+        if owned.contains(id) {
+            installers.push(linux::pick(list, &language).expect("never empty").clone());
+        }
+    }
+    let source = linux::GogInstallers::new(
+        http.clone(),
+        tokens.clone(),
+        None,
+        installers.iter().map(|i| i.downlink.clone()).collect(),
+    );
+    let entries = futures::future::try_join_all(
+        (0..installers.len()).map(|i| linux::read_entries(&source, i)),
+    )
+    .await?;
+    let mut parts: Vec<Part> = installers
+        .into_iter()
+        .zip(entries)
+        .map(|(installer, entries)| Part { installer, entries })
+        .collect();
+    for d in &mut dlcs {
+        if let Some(p) = parts.iter().find(|p| p.installer.product_id == d.id) {
+            d.download_size = p.download_size();
+            d.disk_size = p.disk_size();
+        }
+    }
+    parts.retain(|p| {
+        p.installer.product_id == game_id
+            || dlcs
+                .iter()
+                .any(|d| d.selected && d.id == p.installer.product_id)
+    });
+    Ok(InstallPlan {
+        game_id: game_id.to_string(),
+        title: offer.title.clone(),
+        download_size: parts.iter().map(Part::download_size).sum(),
+        disk_size: parts.iter().map(Part::disk_size).sum(),
+        meta: Meta {
+            version: None,
+            base_product_id: game_id.to_string(),
+            client_id: None,
+            install_directory: folder_name(&offer.title),
+            depots: Vec::new(),
+            dependencies: Vec::new(),
+            products: Vec::new(),
+            script_interpreter: false,
+        },
+        builds: vec![build.clone()],
+        build,
+        language,
+        languages,
+        depots: Vec::new(),
+        dlcs,
+        dependencies: Vec::new(),
+        platform: Platform::Linux,
+        linux: parts,
+    })
+}
+
+/// A folder name from a title: without the characters file systems or shells mind.
+fn folder_name(title: &str) -> String {
+    title
+        .chars()
+        .filter(|c| {
+            !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') && !c.is_control()
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim_matches('.')
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn folder_names_drop_what_file_systems_mind() {
+        assert_eq!(super::folder_name("Hollow Knight"), "Hollow Knight");
+        assert_eq!(
+            super::folder_name("The Witcher 3: Wild Hunt"),
+            "The Witcher 3 Wild Hunt"
+        );
+        assert_eq!(super::folder_name("../AC/DC?"), "ACDC");
+    }
 }

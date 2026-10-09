@@ -87,11 +87,11 @@ panels:
 
 | Where | Panel |
 |---|---|
-| Sliders button (top right) | Game settings, in a drawer beside the page: folder, Proton build (used from the next launch), game version (switch to an older or newer build), language and DLC |
+| Sliders button (top right) | Game settings, in a drawer beside the page: folder, Proton build (used from the next launch; the platform for a Linux build), game version (switch to an older or newer build), language and DLC |
 | ⋮ button (top right) | Manage, in a drawer beside the page: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
 | Cloud saves card | A drawer beside the page: status, save folder, what a sync would do (upload, download, compare, unchanged, deleted on one side), Check, Sync now, conflict choices |
 | Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page (over it in a narrow window) |
-| Install button | A drawer beside the page: version, download and disk size, free space, folder, language, DLC, Proton, game version (the newest unless another is chosen), start, discard |
+| Install button | A drawer beside the page: version, download and disk size, free space, platform (Windows or Linux), folder, language, DLC, Proton and game version (Windows builds; the newest unless another is chosen), start, discard |
 
 Once started, a download shows on the game page itself, with its progress, its percentage and its
 speed over the last seconds. The big button pauses it (then resumes it), and **Cancel** deletes it
@@ -121,14 +121,30 @@ have achievements and cloud saves from GOG in the background and keeps the answe
 ## Installing games
 
 SlattyLauncher installs the **Windows** build of a game from GOG's Galaxy content system and runs it
-through Proton.
+through Proton, or its **native Linux** build when GOG offers one.
+
+**Windows or Linux.** For a game GOG offers on both, the Install panel has a **Platform** menu. It
+starts on the default platform from Settings, Windows until you change it. On the command line, use
+`--platform linux` or `--platform windows`. A Linux build:
+
+- comes from GOG's offline Linux installer. Only the game's own files are read out of it, one by
+  one, so nothing else is downloaded and no copy of the installer is kept. Each file is checked
+  against the installer's CRC-32 before it is kept;
+- runs natively through its `start.sh`, without Proton or a Wine prefix;
+- has no cloud saves: GOG lists save folders for Windows and macOS builds only;
+- reports no achievements: GOG's Linux builds do not include the Galaxy SDK that Comet talks to;
+- comes in the single version GOG offers, so there is no **Game version** choice. Its DLC are
+  their own Linux installers, installed into the game folder.
+
+An interrupted install resumes on the platform it started with.
 
 ```sh
 slatty install <game-id> --info
 ```
 
 `--info` shows the version, the download and disk size, the languages offered and the
-redistributables the game declares. It downloads nothing.
+redistributables the game declares. It downloads nothing (for a Linux build, it reads the list of
+files from the installer).
 
 ```sh
 slatty install <game-id> --proton ~/.local/share/Steam/compatibilitytools.d/<Proton build> --dir ~/Games/GOG
@@ -154,7 +170,7 @@ How an install behaves:
 - **Staged download.** Files go to a hidden `.<Game>.slatty-partial` folder next to the
   destination. The game folder appears only once every file has been verified.
 - **Integrity checks.** Every chunk is checked twice against GOG's checksums, before and after
-  decompression.
+  decompression. A Linux build's files are checked against the installer's CRC-32.
 - **Pause and resume.** Ctrl+C (or Pause in the interface) stops the download. Running the same
   command again resumes it: files already on disk are re-checked and kept when correct.
 - **Safety refusals.** Missing disk space, an existing destination folder, or a file path that
@@ -344,6 +360,8 @@ The interface's **Settings** tab holds the account (log out), the library refres
 - **Default installation path:** where new games are installed unless the Install panel says
   otherwise. Type it, or pick a folder with **Browse**; it is saved as soon as it is an absolute
   path.
+- **Default platform:** the build installed for a game GOG offers on both Windows and Linux,
+  Windows until changed. Each install can choose the other one.
 - **Default Proton:** the build new installs start with. The menus list custom builds from
   `~/.local/share/Steam/compatibilitytools.d`, Valve's builds (Proton Experimental, stable,
   Hotfix) that Steam downloaded in any of its libraries, and those umu downloaded. Valve's builds

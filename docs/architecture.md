@@ -26,7 +26,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `gameinfo` | `goggame-<id>.info` parsing, case-insensitive Windows path resolution |
 | `install` | Installed-game records, Proton build of each game |
 | `galaxy` | Content system: builds, build metadata, depot manifests, secure links, chunks from the fastest CDN endpoint |
-| `installer` | Install plans, staged verified downloads, resumable jobs, install records |
+| `installer` | Install plans, staged verified downloads, resumable jobs, install records; `installer::linux` and `installer::zip` read Linux builds file by file from GOG's offline installers |
 | `maintenance` | Verify, repair, uninstall, updates and content changes |
 | `patches` | GOG's binary patches between builds: lookup, delta download, xdelta3 application |
 | `runner` | Launch commands for umu/Proton, Wine and native games; prefix creation |
@@ -116,6 +116,29 @@ session left without an end (crash) still blocks changes until the next launch r
 4. The partial folder is renamed to the game folder.
 5. An install record (build, language, file list) is saved, and the game is registered with a
    prefix under `~/.local/share/slatty/prefixes/<id>`.
+
+A Linux build takes another path (`installer::linux`), since GOG's content system has no Linux
+builds (`Unsupported OS`):
+
+1. `plan_for` with `Platform::Linux` reads the game's and its DLC's Linux installers from
+   `api.gog.com/products/<id>?expand=downloads,expanded_dlcs`, and picks one per product for the
+   language. Its build id is `linux:<version>`: that is how a job tells its platform, with no
+   column of its own.
+2. Each installer is a MojoSetup shell script followed by a zip. Its download link comes from the
+   API's `downlink`. The CDN serves byte ranges but not suffix ranges, so the exact size comes from
+   the `Content-Range` of the first byte (the API's size is rounded). `installer::zip` finds the
+   zip's directory in the last 64 KiB, with ZIP64 when present, and shifts every offset by the
+   length of the script before it. The plan reads these directories, for the size on disk.
+3. Only entries under `data/noarch/` are kept; a DLC's file replaces the game's at the same path.
+   `LinuxDownload` fetches each file with its own ranged request (eight at once), inflates it off
+   the async threads in 1 MiB batches, checks size and CRC-32, writes it under a temporary name,
+   then renames it. A dropped connection or an expired link (refused with 401, 403 or 410) is
+   tried again, without counting the progress twice. Links pointing out of the game folder are
+   never made.
+4. The staged folder, its publication, the record and the job are those of a Windows build. The
+   game is registered with `Runner::Native` and starts through `start.sh`. Post-install setup,
+   cloud sync and Comet are skipped. Verify, repair, updates and DLC or language changes compare
+   the files with the current installers the same way.
 
 An interrupted install keeps its job in the database, and resumes with the same build, language and
 folder. Its state tells a pause on request (`paused`, resumed when asked) from a cut-off

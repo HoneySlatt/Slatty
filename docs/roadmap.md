@@ -27,6 +27,8 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   - settings.
 - **Installation.**
   - Galaxy generation 2 Windows builds: base game, one language.
+  - Native Linux builds from GOG's offline installers, read file by file; a default platform in
+    Settings and a choice per install.
   - Staged and verified downloads, pause and resume.
   - Wine prefix created at first launch.
 - **Maintenance.** Verify, repair, uninstall.
@@ -46,7 +48,6 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 - **Gamepad navigation.** A couch mode.
 - **Translations of the interface.** It is in English for now.
 - **More runners.** System Wine, per-game Proton choice, managed Proton downloads.
-- **Native Linux builds.** GOG's offline installers.
 - **Packaging.** A Nix package, then other distributions.
 - **Windows host support.** The core avoids Linux-only assumptions outside the session supervisor
   and the runners.

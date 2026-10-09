@@ -41,10 +41,18 @@ impl App {
             "Folder",
             text(install.path.display().to_string()).size(15).into(),
         )];
+        // A native build runs without Proton.
+        let native = install.runner == Runner::Native;
         sections.push(section(
             Icon::SlidersHorizontal,
-            "Proton",
+            if native { "Platform" } else { "Proton" },
             match &install.runner {
+                Runner::Native => column![
+                    text(runner_label(install)).size(15),
+                    note("GOG keeps no cloud saves for Linux builds, and they do not report achievements."),
+                ]
+                .spacing(10)
+                .into(),
                 Runner::Umu { proton, .. } => {
                     let id = g.id.clone();
                     column![

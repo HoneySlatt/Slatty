@@ -35,7 +35,7 @@ use slatty_core::account::{Account, AccountInfo};
 use slatty_core::achievements::Achievement;
 use slatty_core::db::Db;
 use slatty_core::http::HttpClient;
-use slatty_core::install::Install;
+use slatty_core::install::{Install, Platform};
 use slatty_core::installer::{InstallJob, InstallRecord};
 use slatty_core::library::{LibraryCache, LibraryGame};
 use slatty_core::overview::{self, GameOverview};
@@ -205,6 +205,8 @@ pub struct App {
     pub install_views: HashMap<String, InstallView>,
     pub maintenance: HashMap<String, MaintenanceView>,
     pub library_root: String,
+    /// Build installed when a game has both, unless changed in its install dialog.
+    pub default_platform: Platform,
     pub proton: Option<PathBuf>,
     pub proton_choices: Vec<PathBuf>,
     /// Work that closing the window would interrupt, waiting for the user's choice.
@@ -270,6 +272,7 @@ impl Default for App {
             install_views: HashMap::new(),
             maintenance: HashMap::new(),
             library_root: String::new(),
+            default_platform: Platform::Windows,
             proton: None,
             proton_choices: Vec::new(),
             quit_confirm: None,
@@ -359,6 +362,7 @@ pub struct Boot {
     records: HashMap<String, InstallSummary>,
     interrupted: Vec<String>,
     library_root: PathBuf,
+    default_platform: Platform,
     proton: Option<PathBuf>,
     proton_choices: Vec<PathBuf>,
     favorites: Vec<String>,
@@ -446,6 +450,7 @@ impl App {
                 self.library_root = boot.library_root.display().to_string();
                 self.proton = boot.proton;
                 self.proton_choices = boot.proton_choices;
+                self.default_platform = boot.default_platform;
                 self.installs = boot
                     .installs
                     .into_iter()
@@ -708,7 +713,13 @@ impl App {
         if !self.achievements.contains_key(&id) {
             tasks.push(Task::done(Message::LoadAchievements(id.clone())));
         }
-        if self.installs.contains_key(&id) && !self.cloud.contains_key(&id) {
+        // GOG keeps no cloud saves for Linux builds.
+        if self
+            .installs
+            .get(&id)
+            .is_some_and(|i| i.platform == Platform::Windows)
+            && !self.cloud.contains_key(&id)
+        {
             tasks.push(Task::done(Message::Cloud(id, CloudRequest::Check)));
         }
         if let Some(p) = panel {
@@ -812,6 +823,7 @@ async fn boot() -> Result<Boot, String> {
         .collect();
     let library_root = slatty_core::settings::library_root(&db).map_err(err)?;
     let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
+    let default_platform = slatty_core::settings::default_platform(&db).map_err(err)?;
     // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
     let proton_choices = slatty_core::settings::proton_candidates();
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
@@ -843,6 +855,7 @@ async fn boot() -> Result<Boot, String> {
         library_root,
         proton,
         proton_choices,
+        default_platform,
         favorites,
         playtime,
         overview,

@@ -17,6 +17,7 @@ Proton-CachyOS.
 | 2026-10-08 | Session refresh | OK | Access token lasts about one hour; the refresh token is not rotated and the previous one stays valid |
 | 2026-10-08 | Library | OK | full gamesdb metadata; listing from cache |
 | 2026-10-09 | Install plan (`slatty install --info`) | OK | Tomb Raider, DOOM (2016), Horizon Zero Dawn, Cyberpunk 2077: builds and metadata read |
+| 2026-10-10 | Linux install plan (`slatty install --platform linux --info`) | OK | Hollow Knight 1.5.12620: GOG's content system answers `Unsupported OS` for Linux, the offline installer is served in byte ranges (not suffix ranges); its zip starts 795 171 bytes in, after the script; 1 785 game files, 1.13 GiB to download, 4.88 GiB on disk |
 | 2026-10-09 | Manual achievement unlock | OK | Hollow Knight, `--unlock NEGLECT`; read back from GOG with its date |
 | 2026-10-09 | Update check (`slatty update`) | OK | Undertale reported up to date |
 | 2026-10-09 | Owned DLC detection (`slatty install --info`) | OK | Cyberpunk 2077: Phantom Liberty owned and selected; free REDmod listed as not owned (not added to the account). The Witcher 3 GOTY: no separate DLC |
