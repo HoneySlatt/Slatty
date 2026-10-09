@@ -208,6 +208,26 @@ fn fake_plan() -> crate::installs::PlanInfo {
         folder: "/games/Game 5".into(),
         dependencies: vec!["MSVC2017".into()],
         resumable: false,
+        dlcs: vec![
+            fake_dlc("21", "[FAKE] Owned DLC", true, true),
+            fake_dlc("22", "[FAKE] Other DLC", false, false),
+        ],
+    }
+}
+
+fn fake_dlc(
+    id: &str,
+    name: &str,
+    owned: bool,
+    selected: bool,
+) -> slatty_core::installer::DlcChoice {
+    slatty_core::installer::DlcChoice {
+        id: id.into(),
+        name: name.into(),
+        owned,
+        selected,
+        download_size: 1 << 30,
+        disk_size: 2 << 30,
     }
 }
 
@@ -305,6 +325,67 @@ fn update_button_appears_only_when_an_update_exists() {
     ui.click("Update now").unwrap();
     assert!(
         ui.into_messages()
-            .any(|m| matches!(m, Message::Maintenance(MaintenanceMsg::Update(id)) if id == "3"))
+            .any(|m| matches!(m, Message::Maintenance(MaintenanceMsg::Apply(id, slatty_core::maintenance::Change::Update)) if id == "3"))
     );
+}
+
+#[test]
+fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
+    use crate::installs::{InstallMsg, InstallView};
+    let mut app = library_app();
+    app.selected = Some("5".into());
+    app.proton = Some("/proton/GE-Proton".into());
+    app.install_views
+        .insert("5".into(), InstallView::Ready(fake_plan()));
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    assert!(ui.find("Download 4.00 GiB · on disk 7.00 GiB").is_ok());
+    assert!(ui.find("[FAKE] Other DLC (2.00 GiB) — not owned").is_ok());
+    snapshot(&mut ui, "install-dlc");
+    ui.click("[FAKE] Owned DLC (2.00 GiB)").unwrap();
+    let messages: Vec<Message> = ui.into_messages().collect();
+    assert!(
+        matches!(messages.as_slice(), [Message::Install(InstallMsg::ToggleDlc(g, d))] if g == "5" && d == "21")
+    );
+    for m in messages {
+        let _ = app.update(m);
+    }
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    assert!(ui.find("Download 3.00 GiB · on disk 5.00 GiB").is_ok());
+}
+
+#[test]
+fn content_panel_applies_dlc_changes_only_when_something_changed() {
+    use crate::installs::{ContentInfo, MaintenanceMsg};
+    use slatty_core::maintenance::Change;
+    let mut app = library_app();
+    app.selected = Some("3".into());
+    let content = ContentInfo {
+        language: "en-US".into(),
+        languages: vec!["en-US".into(), "fr-FR".into()],
+        chosen_language: "en-US".into(),
+        dlcs: vec![fake_dlc("21", "[FAKE] Owned DLC", true, true)],
+        chosen_dlcs: vec!["21".into()],
+    };
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ContentLoaded(
+        "3".into(),
+        Ok(content),
+    )));
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let _ = ui.click("Apply DLC changes");
+    assert!(
+        ui.into_messages().next().is_none(),
+        "no change, button disabled"
+    );
+
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ToggleContentDlc(
+        "3".into(),
+        "21".into(),
+    )));
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    snapshot(&mut ui, "content-panel");
+    ui.click("Apply DLC changes").unwrap();
+    assert!(ui.into_messages().any(|m| matches!(
+        m,
+        Message::Maintenance(MaintenanceMsg::Apply(id, Change::Dlcs(d))) if id == "3" && d.is_empty()
+    )));
 }

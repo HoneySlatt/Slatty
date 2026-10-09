@@ -62,6 +62,9 @@ CREATE TABLE install_jobs (
     updated_at INTEGER NOT NULL
 );
 "#,
+    r#"
+ALTER TABLE install_jobs ADD COLUMN dlcs TEXT NOT NULL DEFAULT '';
+"#,
 ];
 
 pub struct Db {

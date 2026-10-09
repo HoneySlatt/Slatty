@@ -28,10 +28,10 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   - Wine prefix created at first launch.
 - **Maintenance.** Verify, repair, uninstall.
 - **Updates.** Detect a newer build; update in place, file by file, resumable.
+- **DLC and languages.** Owned DLC installed by default; add, remove or switch language later.
 
 ## In progress
 
-- **DLC and languages.** Install owned DLC; switch the language of an installed game.
 - **GOG installer scripts.** Apply what the "support" files do (registry entries, for example) so the
   games that need them run.
 

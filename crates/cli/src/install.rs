@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Result, bail};
 use clap::Args;
 use slatty_core::account::Account;
-use slatty_core::installer::{self, InstallEvent, InstallJob, InstallRequest};
+use slatty_core::installer::{
+    self, DlcChoice, DlcSelection, InstallEvent, InstallJob, InstallRequest,
+};
 use slatty_core::settings;
 use tokio_util::sync::CancellationToken;
 
@@ -30,6 +32,24 @@ pub struct InstallArgs {
     /// Discard an interrupted install of this game and start over
     #[arg(long)]
     restart: bool,
+    /// Install only the base game (by default every owned DLC is installed)
+    #[arg(long, conflicts_with = "dlc")]
+    no_dlc: bool,
+    /// Install only these owned DLC (product ids, see --info)
+    #[arg(long, num_args = 1.., value_name = "DLC_ID")]
+    dlc: Vec<String>,
+}
+
+impl InstallArgs {
+    fn dlc_selection(&self) -> DlcSelection {
+        if self.no_dlc {
+            DlcSelection::Only(Vec::new())
+        } else if self.dlc.is_empty() {
+            DlcSelection::AllOwned
+        } else {
+            DlcSelection::Only(self.dlc.clone())
+        }
+    }
 }
 
 pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
@@ -43,6 +63,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             &args.game_id,
             args.language.as_deref(),
             None,
+            &args.dlc_selection(),
         )
         .await?;
         println!(
@@ -60,6 +81,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             size(plan.disk_size)
         );
         println!("Folder name: {}", plan.directory_name()?);
+        print_dlcs(&plan.dlcs);
         if !plan.meta.dependencies.is_empty() {
             println!(
                 "Redistributables not installed by slatty: {}",
@@ -69,6 +91,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         return Ok(());
     }
 
+    let dlcs = args.dlc_selection();
     let root = match args.dir {
         Some(d) => {
             let d = std::path::absolute(&d)?;
@@ -167,6 +190,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     };
     let req = InstallRequest {
         game_id: args.game_id.clone(),
+        dlcs,
         language: args.language,
         root,
         proton,
@@ -217,5 +241,26 @@ pub fn size(bytes: u64) -> String {
         b if b >= 1 << 30 => format!("{:.2} GiB", b as f64 / (1u64 << 30) as f64),
         b if b >= 1 << 20 => format!("{:.1} MiB", b as f64 / (1u64 << 20) as f64),
         b => format!("{} KiB", b >> 10),
+    }
+}
+
+pub fn print_dlcs(dlcs: &[DlcChoice]) {
+    if dlcs.is_empty() {
+        return;
+    }
+    println!("DLC:");
+    for d in dlcs {
+        let state = match (d.owned, d.selected) {
+            (true, true) => "selected",
+            (true, false) => "owned",
+            (false, _) => "not owned",
+        };
+        println!(
+            "  {:>12}  {:<40} {:<10} {}",
+            d.id,
+            d.name,
+            state,
+            size(d.disk_size)
+        );
     }
 }

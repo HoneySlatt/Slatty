@@ -1,20 +1,20 @@
 use iced::widget::{
-    Column, button, column, container, grid, image, pick_list, progress_bar, row, scrollable, text,
-    text_input,
+    Column, button, checkbox, column, container, grid, image, pick_list, progress_bar, row,
+    scrollable, text, text_input,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::achievements::Achievement;
 use slatty_core::cloud::plan::Warning;
 use slatty_core::cloud::sync::Prefer;
 use slatty_core::install::Install;
+use slatty_core::installer::{DlcChoice, Progress};
 use slatty_core::library::LibraryGame;
+use slatty_core::maintenance::Change;
 use slatty_core::play::{CloudSummary, PlayEvent};
 use slatty_core::runner::Runner;
 
-use slatty_core::installer::Progress;
-
 use crate::installs::{
-    InstallMsg, InstallView, MaintenanceMsg, ProtonChoice, SettingsMsg, human_size,
+    ContentInfo, InstallMsg, InstallView, MaintenanceMsg, ProtonChoice, SettingsMsg, human_size,
 };
 use crate::{AchievementChange, App, CloudRequest, Loadable, Message, PendingChange};
 
@@ -282,8 +282,8 @@ impl App {
                 items.push(
                     text(format!(
                         "Download {} · on disk {}",
-                        human_size(info.download_size),
-                        human_size(info.disk_size)
+                        human_size(info.total_download()),
+                        human_size(info.total_disk())
                     ))
                     .size(13)
                     .into(),
@@ -319,6 +319,12 @@ impl App {
                         .align_y(Alignment::Center)
                         .into(),
                     );
+                }
+                for d in &info.dlcs {
+                    items.push(dlc_row(d, d.selected, !info.resumable, {
+                        let (id, dlc) = (g.id.clone(), d.id.clone());
+                        move |_| Message::Install(InstallMsg::ToggleDlc(id.clone(), dlc.clone()))
+                    }));
                 }
                 if !info.dependencies.is_empty() {
                     items.push(
@@ -503,6 +509,7 @@ impl App {
                     "Check for update",
                     MaintenanceMsg::CheckUpdate(g.id.clone())
                 ),
+                action("Language & DLC…", MaintenanceMsg::LoadContent(g.id.clone())),
                 action("Uninstall…", MaintenanceMsg::AskUninstall(g.id.clone())),
             ]
             .spacing(8)
@@ -512,15 +519,18 @@ impl App {
         if view.is_some_and(|v| v.update_available) {
             items.push(
                 button(text("Update now"))
-                    .on_press_maybe(
-                        (!busy).then(|| Message::Maintenance(MaintenanceMsg::Update(g.id.clone()))),
-                    )
+                    .on_press_maybe((!busy).then(|| {
+                        Message::Maintenance(MaintenanceMsg::Apply(g.id.clone(), Change::Update))
+                    }))
                     .style(button::success)
                     .into(),
             );
         }
         if let Some(v) = view {
             items.extend(v.lines.iter().map(|l| text(l).size(13).into()));
+            if let Some(c) = &v.content {
+                items.push(self.content_panel(&g.id, c, busy));
+            }
             if v.confirm_uninstall && !v.busy {
                 items.push(
                     container(
@@ -555,6 +565,89 @@ impl App {
         section("Maintenance", items)
     }
 
+    fn content_panel<'a>(
+        &'a self,
+        game_id: &'a str,
+        c: &'a ContentInfo,
+        busy: bool,
+    ) -> Element<'a, Message> {
+        let mut col = Column::new().spacing(6);
+        if c.languages.len() > 1 {
+            let id = game_id.to_string();
+            col = col.push(
+                row![
+                    text("Language").size(13),
+                    pick_list(
+                        c.languages.clone(),
+                        Some(c.chosen_language.clone()),
+                        move |l| {
+                            Message::Maintenance(MaintenanceMsg::ChooseLanguage(id.clone(), l))
+                        }
+                    ),
+                    button(text("Switch language"))
+                        .on_press_maybe(
+                            (!busy && !c.chosen_language.eq_ignore_ascii_case(&c.language)).then(
+                                || {
+                                    Message::Maintenance(MaintenanceMsg::Apply(
+                                        game_id.to_string(),
+                                        Change::Language(c.chosen_language.clone()),
+                                    ))
+                                }
+                            )
+                        )
+                        .style(button::secondary),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            );
+        }
+        if c.dlcs.is_empty() {
+            col = col.push(text("This game has no DLC.").size(13));
+        } else {
+            for d in &c.dlcs {
+                let (id, dlc) = (game_id.to_string(), d.id.clone());
+                col = col.push(dlc_row(d, c.chosen_dlcs.contains(&d.id), true, move |_| {
+                    Message::Maintenance(MaintenanceMsg::ToggleContentDlc(id.clone(), dlc.clone()))
+                }));
+            }
+            col = col.push(
+                button(text("Apply DLC changes"))
+                    .on_press_maybe((!busy && c.dlcs_changed()).then(|| {
+                        Message::Maintenance(MaintenanceMsg::Apply(
+                            game_id.to_string(),
+                            Change::Dlcs(c.chosen_dlcs.clone()),
+                        ))
+                    }))
+                    .style(button::secondary),
+            );
+        }
+        container(col)
+            .padding(8)
+            .width(Length::Fill)
+            .style(container::bordered_box)
+            .into()
+    }
+}
+
+/// One DLC line: owned DLC can be ticked, others are shown as not owned.
+fn dlc_row<'a>(
+    d: &'a DlcChoice,
+    checked: bool,
+    editable: bool,
+    on_toggle: impl Fn(bool) -> Message + 'a,
+) -> Element<'a, Message> {
+    let label = format!("{} ({})", d.name, human_size(d.disk_size));
+    if !d.owned {
+        return text(format!("{label} — not owned")).size(13).into();
+    }
+    checkbox(checked)
+        .label(label)
+        .text_size(13)
+        .on_toggle_maybe(editable.then_some(on_toggle))
+        .into()
+}
+
+impl App {
     fn achievements_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let mut items: Vec<Element<'_, Message>> = Vec::new();
         match self.achievements.get(&g.id) {

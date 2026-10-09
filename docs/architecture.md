@@ -53,7 +53,8 @@ refresh token is not rotated on refresh.
 ### Install
 
 1. `plan_for` picks the public Windows build of generation 2 and reads its metadata. It keeps the
-   base game's depots for one language.
+   depots of the base game and of the chosen owned DLC (all owned by default) for one language. DLC
+   ownership comes from `embed.gog.com/user/data/games`.
 2. `collect_files` reads the depot manifests. It rejects unsafe paths, merges paths that differ only
    by case, and skips "support" files and links.
 3. `Download::run` checks disk space, then fills `.<Game>.slatty-partial`:
@@ -67,10 +68,15 @@ refresh token is not rotated on refresh.
 An interrupted install keeps its job in the database, and resumes with the same build, language and
 folder.
 
-### Update
+### Update, language and DLC changes
 
-`maintenance::update` plans the newest public build for the installed language and records an
-"updating" job. Then:
+`maintenance::reconfigure` handles three changes the same way:
+
+- a newer build (`Change::Update`);
+- another language;
+- another set of DLC, the last two staying on the installed build.
+
+It records an "updating" job with the target build, language and DLC. Then:
 
 1. The new file list is checked in place with the same fill routine as installs and repairs: only
    files that are missing or differ are downloaded, each written to a temporary name and renamed.

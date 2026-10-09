@@ -1,6 +1,7 @@
 //! Galaxy content system, generation 2. Formats and endpoints follow heroic-gogdl
 //! (GPL-3.0, https://github.com/Heroic-Games-Launcher/heroic-gogdl).
 
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::io::Read;
 
@@ -78,6 +79,9 @@ pub struct DepotFile {
     pub md5: Option<String>,
     #[serde(rename = "sfcRef")]
     pub sfc_ref: Option<Value>,
+    /// Product (game or DLC) whose depot lists this file; set after parsing.
+    #[serde(skip)]
+    pub product_id: String,
 }
 
 impl DepotFile {
@@ -145,7 +149,11 @@ pub trait ContentSource: Send + Sync {
     fn depot_manifest(&self, manifest: &str)
     -> impl Future<Output = Result<Vec<DepotItem>>> + Send;
     /// Compressed chunk bytes, exactly as stored on the CDN.
-    fn chunk(&self, compressed_md5: &str) -> impl Future<Output = Result<Vec<u8>>> + Send;
+    fn chunk(
+        &self,
+        product_id: &str,
+        compressed_md5: &str,
+    ) -> impl Future<Output = Result<Vec<u8>>> + Send;
 }
 
 pub async fn builds(http: &Client, tokens: &Tokens, game_id: &str) -> Result<Vec<Build>> {
@@ -178,48 +186,56 @@ struct Endpoint {
     parameters: serde_json::Map<String, Value>,
 }
 
-/// CDN access for one product. Secure links expire; they are refreshed on 401/403.
+/// CDN access for a game and its DLC. Each product has its own download links, fetched on first
+/// use; links expire and are refreshed on 401/403.
 pub struct GogContent {
     http: Client,
     tokens: Tokens,
-    product_id: String,
-    endpoints: tokio::sync::RwLock<Vec<Endpoint>>,
+    endpoints: tokio::sync::RwLock<HashMap<String, Vec<Endpoint>>>,
 }
 
 impl GogContent {
-    pub async fn new(http: Client, tokens: Tokens, product_id: &str) -> Result<Self> {
-        let endpoints = secure_link(&http, &tokens, product_id).await?;
-        Ok(Self {
+    pub fn new(http: Client, tokens: Tokens) -> Self {
+        Self {
             http,
             tokens,
-            product_id: product_id.to_string(),
-            endpoints: tokio::sync::RwLock::new(endpoints),
-        })
+            endpoints: tokio::sync::RwLock::new(HashMap::new()),
+        }
     }
 
-    async fn chunk_url(&self, compressed_md5: &str, index: usize) -> Option<String> {
-        let endpoints = self.endpoints.read().await;
-        let e = endpoints.get(index)?;
-        let mut params = e.parameters.clone();
-        let path = params
-            .get("path")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string();
-        params.insert(
-            "path".into(),
-            Value::String(format!("{path}/{}", galaxy_path(compressed_md5))),
-        );
-        let mut url = e.url_format.clone();
-        for (k, v) in &params {
-            let value = match v {
-                Value::String(s) => s.clone(),
-                other => other.to_string(),
-            };
-            url = url.replace(&format!("{{{k}}}"), &value);
+    async fn endpoints_for(&self, product_id: &str, refresh: bool) -> Result<Vec<Endpoint>> {
+        if !refresh && let Some(e) = self.endpoints.read().await.get(product_id) {
+            return Ok(e.clone());
         }
-        Some(url)
+        let fresh = secure_link(&self.http, &self.tokens, product_id).await?;
+        self.endpoints
+            .write()
+            .await
+            .insert(product_id.to_string(), fresh.clone());
+        Ok(fresh)
     }
+}
+
+fn chunk_url(endpoint: &Endpoint, compressed_md5: &str) -> String {
+    let mut params = endpoint.parameters.clone();
+    let path = params
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    params.insert(
+        "path".into(),
+        Value::String(format!("{path}/{}", galaxy_path(compressed_md5))),
+    );
+    let mut url = endpoint.url_format.clone();
+    for (k, v) in &params {
+        let value = match v {
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+        url = url.replace(&format!("{{{k}}}"), &value);
+    }
+    url
 }
 
 async fn secure_link(http: &Client, tokens: &Tokens, product_id: &str) -> Result<Vec<Endpoint>> {
@@ -241,6 +257,26 @@ async fn secure_link(http: &Client, tokens: &Tokens, product_id: &str) -> Result
     Ok(links.urls)
 }
 
+/// Product ids (games and DLC) the account owns.
+pub async fn owned_products(http: &Client, tokens: &Tokens) -> Result<HashSet<String>> {
+    #[derive(Deserialize)]
+    struct Owned {
+        owned: Vec<Value>,
+    }
+    let req = http
+        .get("https://embed.gog.com/user/data/games")
+        .bearer_auth(tokens.access_token.expose());
+    let owned: Owned = http::json(req, "listing owned products").await?;
+    Ok(owned
+        .owned
+        .into_iter()
+        .map(|v| match v {
+            Value::String(s) => s,
+            other => other.to_string(),
+        })
+        .collect())
+}
+
 impl ContentSource for GogContent {
     async fn depot_manifest(&self, manifest: &str) -> Result<Vec<DepotItem>> {
         let url = format!("{CDN}/content-system/v2/meta/{}", galaxy_path(manifest));
@@ -252,13 +288,11 @@ impl ContentSource for GogContent {
         parse_depot_items(&raw)
     }
 
-    async fn chunk(&self, compressed_md5: &str) -> Result<Vec<u8>> {
+    async fn chunk(&self, product_id: &str, compressed_md5: &str) -> Result<Vec<u8>> {
+        let mut endpoints = self.endpoints_for(product_id, false).await?;
         let mut last = None;
         for attempt in 0..6 {
-            let count = self.endpoints.read().await.len();
-            let Some(url) = self.chunk_url(compressed_md5, attempt % count.max(1)).await else {
-                break;
-            };
+            let url = chunk_url(&endpoints[attempt % endpoints.len()], compressed_md5);
             match http::send(self.http.get(url), "downloading a chunk").await {
                 Ok(resp) => match resp.bytes().await {
                     Ok(b) => return Ok(b.to_vec()),
@@ -267,8 +301,7 @@ impl ContentSource for GogContent {
                 Err(Error::Http {
                     status: 401 | 403, ..
                 }) => {
-                    *self.endpoints.write().await =
-                        secure_link(&self.http, &self.tokens, &self.product_id).await?;
+                    endpoints = self.endpoints_for(product_id, true).await?;
                     last = Some(Error::Http {
                         context: "downloading a chunk",
                         status: 403,

@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::Args;
 use slatty_core::account::Account;
 use slatty_core::installer::Progress;
-use slatty_core::maintenance;
+use slatty_core::maintenance::{self, Change};
 use tokio_util::sync::CancellationToken;
 
 use crate::Ctx;
@@ -175,6 +175,15 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
         }
         return Ok(());
     }
+    apply_change(ctx, &tokens, &game_id, Change::Update).await
+}
+
+async fn apply_change(
+    ctx: &Ctx,
+    tokens: &slatty_core::auth::Tokens,
+    game_id: &str,
+    change: Change,
+) -> Result<()> {
     let cancel = CancellationToken::new();
     let on_ctrl_c = cancel.clone();
     tokio::spawn(async move {
@@ -190,13 +199,18 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
             println!("  files {}/{}", p.files_done, p.files_total);
         }
     };
-    match maintenance::update(
-        &ctx.db, &ctx.dirs, &ctx.http, &tokens, &game_id, &progress, cancel,
+    match maintenance::reconfigure(
+        &ctx.db, &ctx.dirs, &ctx.http, tokens, game_id, change, &progress, cancel,
     )
     .await
     {
         Ok(r) => {
-            println!("Updated {} -> {}.", r.from_version, r.to_version);
+            if r.resumed {
+                println!(
+                    "An unfinished change was completed first; run the command again for the new one."
+                );
+            }
+            println!("Now at {} (was {}).", r.to_version, r.from_version);
             println!(
                 "{} file(s) downloaded, {} removed.",
                 r.downloaded.len(),
@@ -205,11 +219,56 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
             Ok(())
         }
         Err(slatty_core::Error::Cancelled) => {
-            println!(
-                "Paused. The game cannot be launched until `slatty update {game_id}` completes."
-            );
+            println!("Paused. The game cannot be launched until the same command completes.");
             Ok(())
         }
         Err(e) => Err(e.into()),
     }
+}
+
+#[derive(Args)]
+pub struct ContentArgs {
+    game_id: String,
+    /// Switch the game to this language (as listed without options)
+    #[arg(long, conflicts_with_all = ["add_dlc", "remove_dlc"])]
+    language: Option<String>,
+    /// Install these owned DLC
+    #[arg(long, num_args = 1.., value_name = "DLC_ID")]
+    add_dlc: Vec<String>,
+    /// Remove these DLC
+    #[arg(long, num_args = 1.., value_name = "DLC_ID")]
+    remove_dlc: Vec<String>,
+}
+
+pub async fn content(ctx: &Ctx, args: ContentArgs) -> Result<()> {
+    let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
+    let tokens = account.tokens(&ctx.http).await?.clone();
+    if let Some(language) = args.language {
+        return apply_change(ctx, &tokens, &args.game_id, Change::Language(language)).await;
+    }
+    if !args.add_dlc.is_empty() || !args.remove_dlc.is_empty() {
+        let record = slatty_core::installer::InstallRecord::load(&ctx.dirs, &args.game_id)?
+            .ok_or_else(|| anyhow::anyhow!("{} was not installed by slatty", args.game_id))?;
+        let mut dlcs: Vec<String> = record
+            .dlcs
+            .into_iter()
+            .filter(|d| !args.remove_dlc.contains(d))
+            .collect();
+        for d in args.add_dlc {
+            if !dlcs.contains(&d) {
+                dlcs.push(d);
+            }
+        }
+        return apply_change(ctx, &tokens, &args.game_id, Change::Dlcs(dlcs)).await;
+    }
+    let plan =
+        maintenance::content_options(&ctx.db, &ctx.dirs, &ctx.http, &tokens, &args.game_id).await?;
+    println!("{} — version {}", plan.title, plan.build.version_name);
+    println!(
+        "Language: {} (offered: {})",
+        plan.language,
+        plan.languages.join(", ")
+    );
+    crate::install::print_dlcs(&plan.dlcs);
+    Ok(())
 }

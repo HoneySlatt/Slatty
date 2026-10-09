@@ -45,6 +45,8 @@ enum Command {
     Verify(maintenance::VerifyArgs),
     /// Check for and apply game updates
     Update(maintenance::UpdateArgs),
+    /// Show or change the language and DLC of an installed game
+    Content(maintenance::ContentArgs),
     /// Launch a game and follow its session until every process has exited
     Launch(launch::LaunchArgs),
     /// Cloud saves
@@ -108,6 +110,7 @@ async fn run() -> Result<()> {
         Command::Uninstall(args) => maintenance::uninstall(&ctx, args),
         Command::Verify(args) => maintenance::verify(&ctx, args).await,
         Command::Update(args) => maintenance::update(&ctx, args).await,
+        Command::Content(args) => maintenance::content(&ctx, args).await,
         Command::Launch(args) => launch::run(&ctx, args).await,
         Command::Cloud(cmd) => cloud::run(&ctx, cmd).await,
         Command::Achievements(args) => achievements::run(&ctx, args).await,

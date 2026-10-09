@@ -70,6 +70,10 @@ slatty install <game-id> --proton ~/.local/share/Steam/compatibilitytools.d/<Pro
 `--proton` and `--dir` are remembered, so later installs need only the game id. The default folder
 is `~/Games/GOG`. Use `--language fr-FR` (or any language listed by `--info`) for another language.
 
+**DLC.** Every owned DLC is installed by default, as Galaxy does. Use `--no-dlc` for the base game
+only, or `--dlc <id>…` to pick. `--info` lists the DLC of the build, with their size and whether you
+own them.
+
 How an install behaves:
 
 - **Staged download.** Files go to a hidden `.<Game>.slatty-partial` folder next to the
@@ -88,7 +92,6 @@ What is not installed yet:
   ships many of them.
 - **GOG installer scripts** ("support" files): most games do not need them, a few expect registry
   entries they create.
-- **DLC.**
 
 ## Playing
 
@@ -179,6 +182,23 @@ it. The command resumes with the same build and only downloads what is still mis
 is downloaded whole, even when only part of it changed.
 
 The interface offers **Check for update** and **Update now** in the game's Maintenance section.
+
+## Language and DLC after installing
+
+```sh
+slatty content <game-id>                      # current language, offered languages, DLC
+slatty content <game-id> --language fr-FR
+slatty content <game-id> --add-dlc <id>
+slatty content <game-id> --remove-dlc <id>
+```
+
+These changes work like updates:
+
+- only the files that differ are downloaded;
+- only files that SlattyLauncher installed and that are no longer needed are removed.
+
+They stay on the installed build. If GOG no longer offers that build, update the game first. In the
+interface, use **Language & DLC…** in the Maintenance section.
 
 ## Maintenance
 

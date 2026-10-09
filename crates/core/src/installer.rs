@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
@@ -35,13 +35,46 @@ pub struct InstallPlan {
     pub language: String,
     pub languages: Vec<String>,
     pub depots: Vec<Depot>,
+    pub dlcs: Vec<DlcChoice>,
     pub download_size: u64,
     pub disk_size: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DlcChoice {
+    pub id: String,
+    pub name: String,
+    pub owned: bool,
+    pub selected: bool,
+    /// For the chosen language.
+    pub download_size: u64,
+    pub disk_size: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DlcSelection {
+    AllOwned,
+    Only(Vec<String>),
+}
+
 impl InstallPlan {
-    /// Selects the base game's depots for one language. DLC depots are left out.
-    pub fn new(game_id: &str, build: Build, meta: Meta, language: Option<&str>) -> Result<Self> {
+    pub fn selected_dlcs(&self) -> Vec<String> {
+        self.dlcs
+            .iter()
+            .filter(|d| d.selected)
+            .map(|d| d.id.clone())
+            .collect()
+    }
+
+    /// Selects the depots of the base game and of the chosen owned DLC for one language.
+    pub fn new(
+        game_id: &str,
+        build: Build,
+        meta: Meta,
+        language: Option<&str>,
+        owned: &HashSet<String>,
+        selection: &DlcSelection,
+    ) -> Result<Self> {
         if build.generation != 2 || meta.version == Some(1) {
             return Err(Error::Unsupported(
                 "only generation 2 (Galaxy) builds are supported".into(),
@@ -82,18 +115,61 @@ impl InstallPlan {
                 .cloned()
                 .unwrap_or_else(|| "*".into()),
         };
-        let depots: Vec<Depot> = base
-            .into_iter()
-            .filter(|d| {
-                d.languages
-                    .iter()
-                    .any(|l| l == "*" || l.eq_ignore_ascii_case(&language))
-            })
-            .cloned()
-            .collect();
-        if depots.is_empty() {
+        let speaks = |d: &&Depot| {
+            d.languages
+                .iter()
+                .any(|l| l == "*" || l.eq_ignore_ascii_case(&language))
+        };
+        if !base.iter().any(speaks) {
             return Err(Error::NotFound("no depot for this language".into()));
         }
+        let mut dlcs: Vec<DlcChoice> = meta
+            .products
+            .iter()
+            .filter(|p| p.product_id != game_id)
+            .filter(|p| meta.depots.iter().any(|d| d.product_id == p.product_id))
+            .map(|p| {
+                let depots = || {
+                    meta.depots
+                        .iter()
+                        .filter(|d| d.product_id == p.product_id)
+                        .filter(speaks)
+                };
+                DlcChoice {
+                    id: p.product_id.clone(),
+                    name: p.name.clone(),
+                    owned: owned.contains(&p.product_id),
+                    selected: false,
+                    download_size: depots().map(|d| d.compressed_size).sum(),
+                    disk_size: depots().map(|d| d.size).sum(),
+                }
+            })
+            .collect();
+        for dlc in &mut dlcs {
+            dlc.selected = dlc.owned
+                && match selection {
+                    DlcSelection::AllOwned => true,
+                    DlcSelection::Only(ids) => ids.contains(&dlc.id),
+                };
+        }
+        if let DlcSelection::Only(ids) = selection
+            && let Some(missing) = ids
+                .iter()
+                .find(|id| !dlcs.iter().any(|d| d.selected && &d.id == *id))
+        {
+            return Err(Error::Refused(format!(
+                "DLC {missing} is not owned or not part of this game"
+            )));
+        }
+        let depots: Vec<Depot> = meta
+            .depots
+            .iter()
+            .filter(|d| {
+                d.product_id == game_id || dlcs.iter().any(|c| c.selected && c.id == d.product_id)
+            })
+            .filter(speaks)
+            .cloned()
+            .collect();
         let title = meta
             .products
             .iter()
@@ -110,6 +186,7 @@ impl InstallPlan {
             language,
             languages,
             depots,
+            dlcs,
         })
     }
 
@@ -165,7 +242,8 @@ pub async fn collect_files<S: ContentSource>(source: &S, depots: &[Depot]) -> Re
     for depot in depots {
         for item in source.depot_manifest(&depot.manifest).await? {
             match item {
-                DepotItem::DepotFile(f) => {
+                DepotItem::DepotFile(mut f) => {
+                    f.product_id = depot.product_id.clone();
                     if f.is_support() {
                         set.skipped_support += 1;
                         continue;
@@ -363,11 +441,12 @@ impl<S: ContentSource> Download<'_, S> {
         let mut chunks = futures::stream::iter(0..file.chunks.len())
             .map(|i| {
                 let c = file.chunks[i].clone();
+                let product = file.product_id.clone();
                 async move {
                     if self.cancel.is_cancelled() {
                         return Err(Error::Cancelled);
                     }
-                    let raw = self.source.chunk(&c.compressed_md5).await?;
+                    let raw = self.source.chunk(&product, &c.compressed_md5).await?;
                     tokio::task::spawn_blocking(move || unpack_chunk(&raw, &c))
                         .await
                         .expect("chunk task panicked")
@@ -456,16 +535,17 @@ pub struct InstallJob {
     pub root: PathBuf,
     pub directory: String,
     pub state: String,
+    pub dlcs: Vec<String>,
 }
 
 impl InstallJob {
     pub fn save(&self, db: &Db) -> Result<()> {
         db.conn().execute(
-            "INSERT INTO install_jobs (game_id, build_id, language, root, directory, state, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO install_jobs (game_id, build_id, language, root, directory, state, updated_at, dlcs)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(game_id) DO UPDATE SET build_id = excluded.build_id, language = excluded.language,
                 root = excluded.root, directory = excluded.directory, state = excluded.state,
-                updated_at = excluded.updated_at",
+                updated_at = excluded.updated_at, dlcs = excluded.dlcs",
             params![
                 self.game_id,
                 self.build_id,
@@ -473,7 +553,8 @@ impl InstallJob {
                 self.root.to_string_lossy(),
                 self.directory,
                 self.state,
-                Utc::now().timestamp()
+                Utc::now().timestamp(),
+                self.dlcs.join(",")
             ],
         )?;
         Ok(())
@@ -483,7 +564,7 @@ impl InstallJob {
         Ok(db
             .conn()
             .query_row(
-                "SELECT game_id, build_id, language, root, directory, state FROM install_jobs WHERE game_id = ?1",
+                "SELECT game_id, build_id, language, root, directory, state, dlcs FROM install_jobs WHERE game_id = ?1",
                 [game_id],
                 |r| {
                     Ok(InstallJob {
@@ -493,6 +574,12 @@ impl InstallJob {
                         root: PathBuf::from(r.get::<_, String>(3)?),
                         directory: r.get(4)?,
                         state: r.get(5)?,
+                        dlcs: r
+                            .get::<_, String>(6)?
+                            .split(',')
+                            .filter(|s| !s.is_empty())
+                            .map(String::from)
+                            .collect(),
                     })
                 },
             )
@@ -526,6 +613,7 @@ pub async fn plan_for(
     game_id: &str,
     language: Option<&str>,
     build_id: Option<&str>,
+    dlcs: &DlcSelection,
 ) -> Result<InstallPlan> {
     let builds = galaxy::builds(http, tokens, game_id).await?;
     let build = match build_id {
@@ -542,7 +630,13 @@ pub async fn plan_for(
     }
     .clone();
     let meta = galaxy::meta(http, &build).await?;
-    InstallPlan::new(game_id, build, meta, language)
+    let has_dlc = meta.products.iter().any(|p| p.product_id != game_id);
+    let owned = if has_dlc {
+        galaxy::owned_products(http, tokens).await?
+    } else {
+        HashSet::new()
+    };
+    InstallPlan::new(game_id, build, meta, language, &owned, dlcs)
 }
 
 pub struct InstallRequest {
@@ -550,6 +644,7 @@ pub struct InstallRequest {
     pub language: Option<String>,
     pub root: PathBuf,
     pub proton: PathBuf,
+    pub dlcs: DlcSelection,
     pub restart: bool,
 }
 
@@ -582,6 +677,8 @@ pub struct InstallRecord {
     pub language: String,
     #[serde(default)]
     pub path: Option<PathBuf>,
+    #[serde(default)]
+    pub dlcs: Vec<String>,
     pub files: Vec<RecordedFile>,
 }
 
@@ -649,15 +746,21 @@ pub async fn install(
         InstallJob::delete(db, &job.game_id)?;
     }
     let job = previous.filter(|_| !req.restart);
-    let (language, build_id, root) = match &job {
+    let (language, build_id, root, dlcs) = match &job {
         Some(j) => (
             Some(j.language.as_str()),
             Some(j.build_id.as_str()),
             j.root.clone(),
+            DlcSelection::Only(j.dlcs.clone()),
         ),
-        None => (req.language.as_deref(), None, req.root.clone()),
+        None => (
+            req.language.as_deref(),
+            None,
+            req.root.clone(),
+            req.dlcs.clone(),
+        ),
     };
-    let plan = plan_for(http, tokens, &req.game_id, language, build_id).await?;
+    let plan = plan_for(http, tokens, &req.game_id, language, build_id, &dlcs).await?;
     let directory = plan.directory_name()?;
     let target = root.join(&directory);
     let partial = partial_dir(&root, &directory);
@@ -678,11 +781,12 @@ pub async fn install(
         root: root.clone(),
         directory: directory.clone(),
         state: "downloading".into(),
+        dlcs: plan.selected_dlcs(),
     };
     job.save(db)?;
 
     let result = async {
-        let source = galaxy::GogContent::new(http.clone(), tokens.clone(), &req.game_id).await?;
+        let source = galaxy::GogContent::new(http.clone(), tokens.clone());
         let set = collect_files(&source, &plan.depots).await?;
         let progress = |p| emit(InstallEvent::Progress(p));
         Download {
@@ -714,6 +818,7 @@ pub async fn install(
         version: plan.build.version_name.clone(),
         language: plan.language.clone(),
         path: Some(target.clone()),
+        dlcs: plan.selected_dlcs(),
         files: recorded_files(&set),
     }
     .save(dirs, &req.game_id)?;

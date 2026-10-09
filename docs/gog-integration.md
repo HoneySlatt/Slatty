@@ -31,6 +31,7 @@ known to work, which is why the final address is pasted back by the user.
 | Owned products | `GET https://galaxy-library.gog.com/users/{user_id}/releases` (paged with `page_token`) | Heroic | Verified |
 | Metadata and artwork | `GET https://gamesdb.gog.com/platforms/gog/external_releases/{id}` | Heroic | Verified |
 | Fallback title | `GET https://api.gog.com/products/{id}` | gogapidocs | Implemented |
+| Owned products, used for DLC | `GET https://embed.gog.com/user/data/games` (`owned`: product ids) | heroic-gogdl | Verified |
 
 ## Installation (Galaxy content system, generation 2)
 
@@ -42,7 +43,8 @@ known to work, which is why the final address is pasted back by the user.
 | Download links | `GET https://content-system.gog.com/products/{id}/secure_link?_version=2&generation=2&path=/` | heroic-gogdl | Verified |
 | Chunks | The link's `url_format` with `path` extended by `/{ab}/{cd}/{compressedMd5}` | heroic-gogdl | Verified |
 
-Download links expire. On 401 or 403 they are requested again.
+Each product (the game and every DLC) has its own download links; DLC chunks are fetched through the
+DLC's links. Download links expire. On 401 or 403 they are requested again.
 
 ## Cloud saves
 

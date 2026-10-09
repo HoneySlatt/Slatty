@@ -9,7 +9,7 @@ use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::galaxy::GogContent;
 use crate::install::Install;
-use crate::installer::{self, Download, InstallJob, InstallRecord, Progress};
+use crate::installer::{self, DlcSelection, Download, InstallJob, InstallRecord, Progress};
 use crate::paths::Dirs;
 use crate::session;
 
@@ -135,15 +135,18 @@ pub async fn check(
             "an update is unfinished; run the update again first".into(),
         ));
     }
+    let dlcs = DlcSelection::Only(record.dlcs.clone());
     let plan = installer::plan_for(
         http,
         tokens,
         game_id,
         Some(&record.language),
         Some(&record.build_id),
+        &dlcs,
     )
-    .await?;
-    let source = GogContent::new(http.clone(), tokens.clone(), game_id).await?;
+    .await
+    .map_err(installed_build_gone)?;
+    let source = GogContent::new(http.clone(), tokens.clone());
     let set = installer::collect_files(&source, &plan.depots).await?;
     Download {
         source: &source,
@@ -157,7 +160,7 @@ pub async fn check(
 
 const UPDATING: &str = "updating";
 
-/// Build id of an update that started but did not finish.
+/// Build id of an update, language or DLC change that started but did not finish.
 pub fn update_pending(db: &Db, game_id: &str) -> Result<Option<String>> {
     Ok(InstallJob::load(db, game_id)?
         .filter(|j| j.state == UPDATING)
@@ -171,13 +174,7 @@ pub struct UpdateCheck {
     pub available_build: String,
 }
 
-impl UpdateCheck {
-    pub fn is_available(&self, installed_build: &str) -> bool {
-        self.available_build != installed_build
-    }
-}
-
-/// The newest public build for the installed language, or `None` when already up to date.
+/// The newest public build for the installed language and DLC, or `None` when up to date.
 pub async fn check_update(
     db: &Db,
     dirs: &Dirs,
@@ -186,13 +183,54 @@ pub async fn check_update(
     game_id: &str,
 ) -> Result<Option<UpdateCheck>> {
     let (_, record) = installed_by_slatty(db, dirs, game_id)?;
-    let plan = installer::plan_for(http, tokens, game_id, Some(&record.language), None).await?;
-    let check = UpdateCheck {
-        installed_version: record.version.clone(),
-        available_version: plan.build.version_name.clone(),
-        available_build: plan.build.build_id.clone(),
-    };
-    Ok(check.is_available(&record.build_id).then_some(check))
+    let dlcs = DlcSelection::Only(record.dlcs.clone());
+    let plan =
+        installer::plan_for(http, tokens, game_id, Some(&record.language), None, &dlcs).await?;
+    Ok(
+        (plan.build.build_id != record.build_id).then(|| UpdateCheck {
+            installed_version: record.version.clone(),
+            available_version: plan.build.version_name.clone(),
+            available_build: plan.build.build_id.clone(),
+        }),
+    )
+}
+
+/// Languages and DLC that can be chosen for an installed game, on its installed build.
+pub async fn content_options(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    tokens: &Tokens,
+    game_id: &str,
+) -> Result<installer::InstallPlan> {
+    let (_, record) = installed_by_slatty(db, dirs, game_id)?;
+    let dlcs = DlcSelection::Only(record.dlcs.clone());
+    installer::plan_for(
+        http,
+        tokens,
+        game_id,
+        Some(&record.language),
+        Some(&record.build_id),
+        &dlcs,
+    )
+    .await
+    .map_err(installed_build_gone)
+}
+
+fn installed_build_gone(e: Error) -> Error {
+    match e {
+        Error::NotFound(m) if m.contains("no longer offered") => {
+            Error::Refused("the installed build is no longer offered; update the game first".into())
+        }
+        other => other,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Change {
+    Update,
+    Language(String),
+    Dlcs(Vec<String>),
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -201,35 +239,64 @@ pub struct UpdateReport {
     pub to_version: String,
     pub downloaded: Vec<PathBuf>,
     pub removed: Vec<PathBuf>,
+    /// An earlier unfinished change was completed instead of the requested one.
+    pub resumed: bool,
 }
 
-/// Brings an installed game to the newest build in place: changed and new files are downloaded
-/// and atomically replaced, files slatty installed that the new build dropped are removed, and
-/// nothing else in the folder is touched. An interrupted update resumes with the same build.
-pub async fn update(
+/// Changes an installed game in place (newer build, other language, other DLC): files that are
+/// missing or differ are downloaded and atomically replaced, files slatty installed that are no
+/// longer needed are removed, and nothing else in the folder is touched. An unfinished change is
+/// always completed first, with the build, language and DLC it started with.
+#[allow(clippy::too_many_arguments)]
+pub async fn reconfigure(
     db: &Db,
     dirs: &Dirs,
     http: &Client,
     tokens: &Tokens,
     game_id: &str,
+    change: Change,
     progress: &(dyn Fn(Progress) + Send + Sync),
     cancel: CancellationToken,
 ) -> Result<UpdateReport> {
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
-    let pinned = update_pending(db, game_id)?;
+    let pending = InstallJob::load(db, game_id)?.filter(|j| j.state == UPDATING);
+    let (build, language, dlcs) = match (&pending, &change) {
+        (Some(j), _) => (Some(j.build_id.clone()), j.language.clone(), j.dlcs.clone()),
+        (None, Change::Update) => (None, record.language.clone(), record.dlcs.clone()),
+        (None, Change::Language(l)) => (
+            Some(record.build_id.clone()),
+            l.clone(),
+            record.dlcs.clone(),
+        ),
+        (None, Change::Dlcs(d)) => (
+            Some(record.build_id.clone()),
+            record.language.clone(),
+            d.clone(),
+        ),
+    };
     let plan = installer::plan_for(
         http,
         tokens,
         game_id,
-        Some(&record.language),
-        pinned.as_deref(),
+        Some(&language),
+        build.as_deref(),
+        &DlcSelection::Only(dlcs),
     )
-    .await?;
-    if plan.build.build_id == record.build_id {
-        return Err(Error::Refused(format!(
-            "{} is already up to date",
-            install.title
-        )));
+    .await
+    .map_err(installed_build_gone)?;
+    let mut selected = plan.selected_dlcs();
+    selected.sort();
+    let mut current = record.dlcs.clone();
+    current.sort();
+    if pending.is_none()
+        && plan.build.build_id == record.build_id
+        && plan.language.eq_ignore_ascii_case(&record.language)
+        && selected == current
+    {
+        return Err(Error::Refused(match change {
+            Change::Update => format!("{} is already up to date", install.title),
+            _ => "nothing to change".into(),
+        }));
     }
     InstallJob {
         game_id: game_id.to_string(),
@@ -246,9 +313,10 @@ pub async fn update(
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default(),
         state: UPDATING.into(),
+        dlcs: selected.clone(),
     }
     .save(db)?;
-    let source = GogContent::new(http.clone(), tokens.clone(), game_id).await?;
+    let source = GogContent::new(http.clone(), tokens.clone());
     let set = installer::collect_files(&source, &plan.depots).await?;
     let dl = Download {
         source: &source,
@@ -262,6 +330,7 @@ pub async fn update(
         version: plan.build.version_name.clone(),
         language: plan.language.clone(),
         path: Some(install.path.clone()),
+        dlcs: selected,
         files: installer::recorded_files(&set),
     }
     .save(dirs, game_id)?;
@@ -269,6 +338,7 @@ pub async fn update(
     Ok(UpdateReport {
         from_version: record.version,
         to_version: plan.build.version_name,
+        resumed: pending.is_some(),
         ..report
     })
 }
@@ -413,6 +483,7 @@ mod tests {
                     version: "1".into(),
                     language: "en-US".into(),
                     path: Some(game),
+                    dlcs: vec![],
                     files: ["Game.exe", "data/a.pak"]
                         .iter()
                         .map(|p| RecordedFile {

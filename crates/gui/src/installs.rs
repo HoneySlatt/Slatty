@@ -6,7 +6,10 @@ use iced::Task;
 use iced::futures::{SinkExt, Stream};
 use slatty_core::account::Account;
 use slatty_core::install::Install;
-use slatty_core::installer::{self, InstallEvent, InstallJob, InstallRequest, Progress};
+use slatty_core::installer::{
+    self, DlcChoice, DlcSelection, InstallEvent, InstallJob, InstallRequest, Progress,
+};
+use slatty_core::maintenance::Change;
 use slatty_core::settings;
 use tokio_util::sync::CancellationToken;
 
@@ -23,6 +26,29 @@ pub struct PlanInfo {
     pub folder: PathBuf,
     pub dependencies: Vec<String>,
     pub resumable: bool,
+    pub dlcs: Vec<DlcChoice>,
+}
+
+impl PlanInfo {
+    pub fn total_download(&self) -> u64 {
+        self.download_size
+            + self
+                .dlcs
+                .iter()
+                .filter(|d| d.selected)
+                .map(|d| d.download_size)
+                .sum::<u64>()
+    }
+
+    pub fn total_disk(&self) -> u64 {
+        self.disk_size
+            + self
+                .dlcs
+                .iter()
+                .filter(|d| d.selected)
+                .map(|d| d.disk_size)
+                .sum::<u64>()
+    }
 }
 
 pub enum InstallView {
@@ -45,6 +71,7 @@ pub enum InstallMsg {
     /// `Err(None)` means paused by the user.
     Done(String, Result<Install, Option<String>>),
     Pause(String),
+    ToggleDlc(String, String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,6 +144,13 @@ impl App {
                     language: Some(info.language.clone()),
                     root: PathBuf::from(&self.library_root),
                     proton,
+                    dlcs: DlcSelection::Only(
+                        info.dlcs
+                            .iter()
+                            .filter(|d| d.selected)
+                            .map(|d| d.id.clone())
+                            .collect(),
+                    ),
                     restart: false,
                 };
                 let cancel = CancellationToken::new();
@@ -139,6 +173,14 @@ impl App {
                 }
             }
             InstallMsg::Event(_, _) => {}
+            InstallMsg::ToggleDlc(game_id, dlc) => {
+                if let Some(InstallView::Ready(info)) = self.install_views.get_mut(&game_id)
+                    && !info.resumable
+                    && let Some(d) = info.dlcs.iter_mut().find(|d| d.id == dlc && d.owned)
+                {
+                    d.selected = !d.selected;
+                }
+            }
             InstallMsg::Pause(game_id) => {
                 if let Some(InstallView::Running { cancel, .. }) = self.install_views.get(&game_id)
                 {
@@ -194,13 +236,14 @@ async fn plan(
     let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
     let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
     let job = InstallJob::load(&core.db, &game_id).map_err(err)?;
-    let (language, build, root) = match &job {
+    let (language, build, root, dlcs) = match &job {
         Some(j) => (
             Some(j.language.clone()),
             Some(j.build_id.clone()),
             j.root.clone(),
+            DlcSelection::Only(j.dlcs.clone()),
         ),
-        None => (language, None, root),
+        None => (language, None, root, DlcSelection::AllOwned),
     };
     let plan = installer::plan_for(
         &core.http,
@@ -208,6 +251,7 @@ async fn plan(
         &game_id,
         language.as_deref(),
         build.as_deref(),
+        &dlcs,
     )
     .await
     .map_err(err)?;
@@ -217,10 +261,23 @@ async fn plan(
         version: plan.build.version_name,
         language: plan.language,
         languages: plan.languages,
-        download_size: plan.download_size,
-        disk_size: plan.disk_size,
+        download_size: plan.download_size
+            - plan
+                .dlcs
+                .iter()
+                .filter(|d| d.selected)
+                .map(|d| d.download_size)
+                .sum::<u64>(),
+        disk_size: plan.disk_size
+            - plan
+                .dlcs
+                .iter()
+                .filter(|d| d.selected)
+                .map(|d| d.disk_size)
+                .sum::<u64>(),
         dependencies: plan.meta.dependencies,
         resumable: job.is_some(),
+        dlcs: plan.dlcs,
     })
 }
 
@@ -282,9 +339,9 @@ fn install_stream(
 
 pub fn human_size(bytes: u64) -> String {
     match bytes {
-        b if b >= 1 << 30 => format!("{:.2} Gio", b as f64 / (1u64 << 30) as f64),
-        b if b >= 1 << 20 => format!("{:.1} Mio", b as f64 / (1u64 << 20) as f64),
-        b => format!("{} Kio", b >> 10),
+        b if b >= 1 << 30 => format!("{:.2} GiB", b as f64 / (1u64 << 30) as f64),
+        b if b >= 1 << 20 => format!("{:.1} MiB", b as f64 / (1u64 << 20) as f64),
+        b => format!("{} KiB", b >> 10),
     }
 }
 
@@ -294,6 +351,35 @@ pub struct MaintenanceView {
     pub lines: Vec<String>,
     pub confirm_uninstall: bool,
     pub update_available: bool,
+    pub content: Option<ContentInfo>,
+}
+
+/// Language and DLC choices of an installed game, being edited.
+#[derive(Debug, Clone)]
+pub struct ContentInfo {
+    pub language: String,
+    pub languages: Vec<String>,
+    pub chosen_language: String,
+    pub dlcs: Vec<DlcChoice>,
+    pub chosen_dlcs: Vec<String>,
+}
+
+impl ContentInfo {
+    pub fn installed_dlcs(&self) -> Vec<String> {
+        self.dlcs
+            .iter()
+            .filter(|d| d.selected)
+            .map(|d| d.id.clone())
+            .collect()
+    }
+
+    pub fn dlcs_changed(&self) -> bool {
+        let mut a = self.installed_dlcs();
+        let mut b = self.chosen_dlcs.clone();
+        a.sort();
+        b.sort();
+        a != b
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -306,8 +392,12 @@ pub enum MaintenanceMsg {
     Uninstalled(String, Result<Vec<String>, String>),
     CheckUpdate(String),
     UpdateChecked(String, Result<Option<String>, String>),
-    Update(String),
+    Apply(String, Change),
     Updated(String, Result<String, String>),
+    LoadContent(String),
+    ContentLoaded(String, Result<ContentInfo, String>),
+    ChooseLanguage(String, String),
+    ToggleContentDlc(String, String),
 }
 
 impl App {
@@ -488,7 +578,7 @@ impl App {
                     Err(e) => format!("Error: {e}"),
                 }];
             }
-            MaintenanceMsg::Update(game_id) => {
+            MaintenanceMsg::Apply(game_id, change) => {
                 if self
                     .play
                     .as_ref()
@@ -500,27 +590,33 @@ impl App {
                 let view = self.maintenance.entry(game_id.clone()).or_default();
                 view.busy = true;
                 view.update_available = false;
+                view.content = None;
                 view.lines =
-                    vec!["Updating… the game cannot be launched until this finishes.".into()];
+                    vec!["Applying… the game cannot be launched until this finishes.".into()];
                 let id = game_id.clone();
                 return Task::perform(
                     async move {
                         let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
                         let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
-                        slatty_core::maintenance::update(
+                        slatty_core::maintenance::reconfigure(
                             &core.db,
                             &core.dirs,
                             &core.http,
                             &tokens,
                             &id,
+                            change,
                             &|_| {},
                             CancellationToken::new(),
                         )
                         .await
                         .map(|r| {
                             format!(
-                                "Updated {} → {}: {} file(s) downloaded, {} removed.",
-                                r.from_version,
+                                "{}Now at {}: {} file(s) downloaded, {} removed.",
+                                if r.resumed {
+                                    "An unfinished change was completed first. "
+                                } else {
+                                    ""
+                                },
                                 r.to_version,
                                 r.downloaded.len(),
                                 r.removed.len()
@@ -530,6 +626,69 @@ impl App {
                     },
                     move |r| Message::Maintenance(MaintenanceMsg::Updated(game_id.clone(), r)),
                 );
+            }
+            MaintenanceMsg::LoadContent(game_id) => {
+                let view = self.maintenance.entry(game_id.clone()).or_default();
+                view.busy = true;
+                view.lines = vec!["Reading languages and DLC…".into()];
+                let id = game_id.clone();
+                return Task::perform(
+                    async move {
+                        let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
+                        let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
+                        let plan = slatty_core::maintenance::content_options(
+                            &core.db, &core.dirs, &core.http, &tokens, &id,
+                        )
+                        .await
+                        .map_err(err)?;
+                        let chosen_dlcs = plan.selected_dlcs();
+                        Ok(ContentInfo {
+                            chosen_language: plan.language.clone(),
+                            language: plan.language,
+                            languages: plan.languages,
+                            dlcs: plan.dlcs,
+                            chosen_dlcs,
+                        })
+                    },
+                    move |r| {
+                        Message::Maintenance(MaintenanceMsg::ContentLoaded(game_id.clone(), r))
+                    },
+                );
+            }
+            MaintenanceMsg::ContentLoaded(game_id, result) => {
+                let view = self.maintenance.entry(game_id).or_default();
+                view.busy = false;
+                match result {
+                    Ok(info) => {
+                        view.lines.clear();
+                        view.content = Some(info);
+                    }
+                    Err(e) => view.lines = vec![format!("Error: {e}")],
+                }
+            }
+            MaintenanceMsg::ChooseLanguage(game_id, language) => {
+                if let Some(c) = self
+                    .maintenance
+                    .get_mut(&game_id)
+                    .and_then(|v| v.content.as_mut())
+                {
+                    c.chosen_language = language;
+                }
+            }
+            MaintenanceMsg::ToggleContentDlc(game_id, dlc) => {
+                if let Some(c) = self
+                    .maintenance
+                    .get_mut(&game_id)
+                    .and_then(|v| v.content.as_mut())
+                    && c.dlcs.iter().any(|d| d.id == dlc && d.owned)
+                {
+                    match c.chosen_dlcs.iter().position(|d| *d == dlc) {
+                        Some(i) => {
+                            c.chosen_dlcs.remove(i);
+                        }
+                        None => c.chosen_dlcs.push(dlc),
+                    }
+                }
             }
             MaintenanceMsg::Updated(game_id, result) => {
                 let view = self.maintenance.entry(game_id).or_default();

@@ -23,6 +23,7 @@ struct MemoryContent {
     fetched: AtomicUsize,
     fail_on: Mutex<Option<String>>,
     corrupt: Mutex<Option<String>>,
+    products: Mutex<std::collections::HashSet<String>>,
 }
 
 impl MemoryContent {
@@ -49,6 +50,7 @@ impl MemoryContent {
             flags: flags.iter().map(|f| f.to_string()).collect(),
             md5: None,
             sfc_ref: None,
+            product_id: String::new(),
         })
     }
 }
@@ -61,8 +63,9 @@ impl ContentSource for MemoryContent {
         })
     }
 
-    async fn chunk(&self, compressed_md5: &str) -> Result<Vec<u8>> {
+    async fn chunk(&self, product_id: &str, compressed_md5: &str) -> Result<Vec<u8>> {
         self.fetched.fetch_add(1, Ordering::SeqCst);
+        self.products.lock().unwrap().insert(product_id.to_string());
         if self.fail_on.lock().unwrap().as_deref() == Some(compressed_md5) {
             return Err(Error::Http {
                 context: "test network",
@@ -344,31 +347,60 @@ fn depot(product: &str, langs: &[&str], size: u64) -> Depot {
 }
 
 #[test]
-fn plan_selects_base_depots_for_one_language() {
-    let m = meta(vec![
+fn plan_selects_depots_for_one_language_and_owned_dlc() {
+    let mut m = meta(vec![
         depot("1", &["*"], 100),
         depot("1", &["en-US"], 10),
         depot("1", &["fr-FR"], 20),
         depot("2", &["*"], 999),
+        depot("3", &["*"], 7),
     ]);
-    let p = InstallPlan::new("1", build(), m.clone(), None).unwrap();
-    assert_eq!(p.language, "en-US");
-    assert_eq!(p.disk_size, 110);
-    let fr = InstallPlan::new("1", build(), m.clone(), Some("FR-fr")).unwrap();
-    assert_eq!(fr.disk_size, 120);
-    assert!(InstallPlan::new("1", build(), m, Some("de-DE")).is_err());
+    m.products.push(Product {
+        product_id: "2".into(),
+        name: "[FAKE] Owned DLC".into(),
+    });
+    m.products.push(Product {
+        product_id: "3".into(),
+        name: "[FAKE] Other DLC".into(),
+    });
+    let owned: HashSet<String> = ["1", "2"].map(String::from).into();
+    let plan = |lang: Option<&str>, sel: DlcSelection| {
+        InstallPlan::new("1", build(), m.clone(), lang, &owned, &sel)
+    };
+
+    let all = plan(None, DlcSelection::AllOwned).unwrap();
+    assert_eq!(all.language, "en-US");
+    assert_eq!(all.disk_size, 110 + 999);
+    assert_eq!(all.selected_dlcs(), vec!["2"]);
+    assert!(
+        all.dlcs
+            .iter()
+            .any(|d| d.id == "3" && !d.owned && !d.selected)
+    );
+
+    let base_only = plan(Some("FR-fr"), DlcSelection::Only(vec![])).unwrap();
+    assert_eq!(base_only.disk_size, 120);
+    assert!(
+        plan(None, DlcSelection::Only(vec!["3".into()])).is_err(),
+        "unowned DLC is refused"
+    );
+    assert!(plan(Some("de-DE"), DlcSelection::AllOwned).is_err());
 }
 
 #[test]
 fn plan_refuses_unsafe_install_directory() {
     let mut m = meta(vec![depot("1", &["*"], 1)]);
     m.install_directory = "../outside".into();
-    assert!(
-        InstallPlan::new("1", build(), m, None)
-            .unwrap()
-            .directory_name()
-            .is_err()
-    );
+    let plan = InstallPlan::new(
+        "1",
+        build(),
+        m,
+        None,
+        &HashSet::new(),
+        &DlcSelection::AllOwned,
+    )
+    .unwrap();
+    assert!(plan.directory_name().is_err());
 }
 
 #[tokio::test]
@@ -436,6 +468,7 @@ async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
         version: "1.0".into(),
         language: "en-US".into(),
         path: Some(game.clone()),
+        dlcs: vec![],
         files: recorded_files(&old_set),
     };
 
@@ -488,4 +521,58 @@ async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
         b"keep me"
     );
     assert!(!game.join("goggame-1.info").exists());
+}
+
+#[tokio::test]
+async fn dlc_files_come_from_their_product_and_removing_the_dlc_deletes_only_them() {
+    let mut env = Env::new("dlc");
+    let dlc_items = vec![
+        env.source
+            .file("dlc\\expansion.pak", b"[FAKE] expansion data", &[]),
+        env.source.file("goggame-2.info", b"{}", &[]),
+    ];
+    env.source.manifests.insert("dlc".into(), dlc_items);
+    let base = env.depots[0].clone();
+    let dlc = Depot {
+        product_id: "2".into(),
+        manifest: "dlc".into(),
+        ..base.clone()
+    };
+    env.depots = vec![base.clone(), dlc];
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    let game = env.target();
+    assert!(game.join("dlc/expansion.pak").exists());
+    let products = env.source.products.lock().unwrap().clone();
+    assert_eq!(products, ["1", "2"].map(String::from).into());
+
+    let with_dlc = collect_files(&env.source, &env.depots).await.unwrap();
+    let record = InstallRecord {
+        build_id: "b1".into(),
+        version: "1.0".into(),
+        language: "en-US".into(),
+        path: Some(game.clone()),
+        dlcs: vec!["2".into()],
+        files: recorded_files(&with_dlc),
+    };
+    let base_only = collect_files(&env.source, &[base]).await.unwrap();
+    let free_space = |_: &Path| Ok(PLENTY);
+    let dl = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    };
+    let report = crate::maintenance::apply_update(&dl, &base_only, &record, &game)
+        .await
+        .unwrap();
+    assert!(report.downloaded.is_empty());
+    assert_eq!(
+        report.removed,
+        vec![
+            PathBuf::from("dlc/expansion.pak"),
+            PathBuf::from("goggame-2.info")
+        ]
+    );
+    assert!(!game.join("dlc").exists(), "emptied DLC folder removed");
+    assert!(game.join("Game.exe").exists());
 }
