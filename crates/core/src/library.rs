@@ -199,12 +199,16 @@ pub async fn cover(
     Ok(Some(bytes))
 }
 
+/// Where an image downloaded from `url` is cached for the account.
+pub fn image_path(dirs: &Dirs, user_id: &str, url: &str) -> std::path::PathBuf {
+    dirs.account_cache(user_id)
+        .join("images")
+        .join(fsutil::sha256_hex(url.as_bytes()))
+}
+
 /// Bytes of any GOG image (key art, logo, achievement icon), cached per account by URL.
 pub async fn image(http: &Client, dirs: &Dirs, user_id: &str, url: &str) -> Result<Vec<u8>> {
-    let path = dirs
-        .account_cache(user_id)
-        .join("images")
-        .join(fsutil::sha256_hex(url.as_bytes()));
+    let path = image_path(dirs, user_id, url);
     if let Ok(bytes) = tokio::fs::read(&path).await {
         return Ok(bytes);
     }

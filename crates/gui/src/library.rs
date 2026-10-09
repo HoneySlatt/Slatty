@@ -254,7 +254,11 @@ impl App {
             Task::perform(
                 async move {
                     let _permit = core.downloads.acquire().await.ok()?;
-                    library::image(&core.http, &core.dirs, &user_id, &url)
+                    let bytes = library::image(&core.http, &core.dirs, &user_id, &url)
+                        .await
+                        .ok()?;
+                    let cached = library::image_path(&core.dirs, &user_id, &url);
+                    tokio::task::spawn_blocking(move || fit_image(bytes, &cached))
                         .await
                         .ok()
                 },
@@ -366,4 +370,80 @@ fn overview_stream(core: Core, ids: Vec<String>) -> impl Stream<Item = Message> 
         }
         let _ = output.send(Message::OverviewDone).await;
     })
+}
+
+/// Widest image kept: key art is drawn at most window-wide.
+const IMAGE_MAX_WIDTH: u32 = 2560;
+
+/// Scales a larger image down to `IMAGE_MAX_WIDTH` and caches the result in its place, so it is
+/// decoded quickly and fills less graphics memory. Some of GOG's key art is 7184 pixels wide:
+/// about 100 MB once decoded, for a page at most a screen wide.
+fn fit_image(bytes: Vec<u8>, cached: &std::path::Path) -> Vec<u8> {
+    let reader = || {
+        image::ImageReader::new(std::io::Cursor::new(&bytes))
+            .with_guessed_format()
+            .ok()
+    };
+    let Some((width, _)) = reader().and_then(|r| r.into_dimensions().ok()) else {
+        return bytes;
+    };
+    if width <= IMAGE_MAX_WIDTH {
+        return bytes;
+    }
+    let Some(full) = reader().and_then(|r| r.decode().ok()) else {
+        return bytes;
+    };
+    // Area averaging: quick, and smooth when shrinking.
+    let fitted = full.thumbnail(IMAGE_MAX_WIDTH, u32::MAX);
+    let mut out = Vec::new();
+    // Key art is JPEG; anything with transparency stays lossless.
+    let written = if fitted.color().has_alpha() {
+        fitted.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+    } else {
+        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90);
+        fitted.to_rgb8().write_with_encoder(encoder)
+    };
+    if written.is_err() {
+        return bytes;
+    }
+    // The original is downloaded again only if this copy goes away.
+    let _ = slatty_core::fsutil::write_atomic(cached, &out);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn jpeg(width: u32, height: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        image::RgbImage::new(width, height)
+            .write_to(
+                &mut std::io::Cursor::new(&mut out),
+                image::ImageFormat::Jpeg,
+            )
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn oversized_images_are_scaled_down_once_in_the_cache() {
+        let dir = std::env::temp_dir().join(format!("slatty-fit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cached = dir.join("art");
+
+        let small = jpeg(1920, 1080);
+        assert_eq!(fit_image(small.clone(), &cached), small, "kept as it is");
+        assert!(!cached.exists());
+
+        let fitted = fit_image(jpeg(5120, 1340), &cached);
+        let size = image::load_from_memory(&fitted).unwrap();
+        assert_eq!((size.width(), size.height()), (2560, 670));
+        assert_eq!(
+            std::fs::read(&cached).unwrap(),
+            fitted,
+            "the cache holds the small copy"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

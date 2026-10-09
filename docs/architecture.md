@@ -53,7 +53,7 @@ live under `ui/`.
 | Module | Responsibility |
 |---|---|
 | `login` | Browser sign-in, sign-out, avatar |
-| `library` | Library sync, covers and images, favorites, shelf, sort and filters, per-game overview and play time |
+| `library` | Library sync, covers and images (key art wider than 2560 pixels is scaled down once, in the cache), favorites, shelf, sort and filters, per-game overview and play time |
 | `play` | Launching a game and following its session |
 | `cloud` | Cloud save check, sync and conflict choices |
 | `achievements` | Loading achievements, confirmed manual changes |
