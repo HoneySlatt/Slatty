@@ -18,7 +18,7 @@ use super::{inner, note, round_button};
 use crate::icons::{Icon, icon};
 use crate::install::{InstallMsg, InstallView};
 use crate::maintenance::{ContentInfo, MaintenanceMsg};
-use crate::theme::{self, BOLD, MUTED, SEMIBOLD, TEXT};
+use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, CloudRequest, Loadable, Message, Panel};
 
 impl App {
@@ -41,7 +41,7 @@ impl App {
                 row![
                     column![
                         text(title).size(24).font(BOLD),
-                        text(&g.title).size(14).color(MUTED)
+                        text(&g.title).size(14).color(tokens().muted)
                     ]
                     .spacing(2)
                     .width(Length::Fill),
@@ -126,7 +126,7 @@ impl App {
                     let id = g.id.clone();
                     items.push(
                         row![
-                            text("Install in").size(14).color(MUTED),
+                            text("Install in").size(14).color(tokens().muted),
                             text_input("/home/…/Games/GOG", &info.root)
                                 .on_input(move |v| {
                                     Message::Install(InstallMsg::RootInput(id.clone(), v))
@@ -134,9 +134,12 @@ impl App {
                                 .style(theme::field)
                                 .padding([8, 12]),
                             button(
-                                row![icon(Icon::FolderOpen, 16.0, TEXT), text("Browse").size(14)]
-                                    .spacing(8)
-                                    .align_y(Alignment::Center)
+                                row![
+                                    icon(Icon::FolderOpen, 16.0, tokens().text),
+                                    text("Browse").size(14)
+                                ]
+                                .spacing(8)
+                                .align_y(Alignment::Center)
                             )
                             .padding([8, 16])
                             .on_press(Message::Install(InstallMsg::Browse(g.id.clone())))
@@ -157,7 +160,7 @@ impl App {
                     let id = g.id.clone();
                     items.push(
                         row![
-                            text("Language").size(14).color(MUTED),
+                            text("Language").size(14).color(tokens().muted),
                             pick_list(
                                 info.languages.clone(),
                                 Some(info.language.clone()),
@@ -383,7 +386,7 @@ impl App {
             let id = game_id.to_string();
             col = col.push(
                 row![
-                    text("Language").size(14).color(MUTED),
+                    text("Language").size(14).color(tokens().muted),
                     pick_list(
                         c.languages.clone(),
                         Some(c.chosen_language.clone()),

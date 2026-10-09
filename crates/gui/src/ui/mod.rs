@@ -15,7 +15,7 @@ use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 
 use crate::icons::{Icon, icon};
-use crate::theme::{self, ACCENT, BOLD, MUTED, SEMIBOLD, TEXT};
+use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, Message, Page};
 
 impl App {
@@ -26,7 +26,9 @@ impl App {
                 .into();
         }
         if self.core.is_none() {
-            return container(text("Loading…").color(MUTED)).padding(40).into();
+            return container(text("Loading…").color(tokens().muted))
+                .padding(40)
+                .into();
         }
         let Some(account) = &self.account else {
             return self.with_notice(self.login_view());
@@ -81,9 +83,9 @@ impl App {
                     },
                     18.0,
                     if n.error {
-                        theme::DANGER
+                        theme::tokens().danger
                     } else {
-                        theme::SUCCESS
+                        theme::tokens().success
                     }
                 ),
                 text(&n.text).size(14).width(Length::Fill),
@@ -119,7 +121,7 @@ impl App {
         .style(theme::pill);
         let search = container(
             row![
-                icon(Icon::Search, 18.0, MUTED),
+                icon(Icon::Search, 18.0, tokens().muted),
                 text_input("Search a game", &self.search)
                     .on_input(Message::Search)
                     .style(theme::input)
@@ -169,7 +171,11 @@ impl App {
 }
 
 pub(super) fn logo<'a>() -> Element<'a, Message> {
-    text("slatty").size(30).font(BOLD).color(ACCENT).into()
+    text("slatty")
+        .size(30)
+        .font(BOLD)
+        .color(tokens().accent)
+        .into()
 }
 
 /// A titled block of the settings page or of a panel.
@@ -188,7 +194,7 @@ pub(super) fn card<'a>(title: &'a str, items: Vec<Element<'a, Message>>) -> Elem
 }
 
 pub(super) fn round_button<'a>(ic: Icon, msg: Message) -> Element<'a, Message> {
-    button(container(icon(ic, 20.0, TEXT)).center(24))
+    button(container(icon(ic, 20.0, tokens().text)).center(24))
         .padding(10)
         .on_press(msg)
         .style(theme::icon_button)
@@ -196,12 +202,12 @@ pub(super) fn round_button<'a>(ic: Icon, msg: Message) -> Element<'a, Message> {
 }
 
 fn note<'a>(s: impl text::IntoFragment<'a>) -> Element<'a, Message> {
-    text(s).size(14).color(MUTED).into()
+    text(s).size(14).color(tokens().muted).into()
 }
 
 fn inner(_: &iced::Theme) -> container::Style {
     container::Style {
-        background: Some(iced::Background::Color(theme::SURFACE_HIGH)),
+        background: Some(iced::Background::Color(theme::tokens().surface_high)),
         border: iced::border::rounded(14),
         ..Default::default()
     }
@@ -211,8 +217,8 @@ fn inner(_: &iced::Theme) -> container::Style {
 fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a, Message> {
     let items = work.iter().map(|w| {
         row![
-            icon(Icon::TriangleAlert, 18.0, theme::WARNING),
-            text(w).size(14).color(MUTED).width(Length::Fill)
+            icon(Icon::TriangleAlert, 18.0, theme::tokens().warning),
+            text(w).size(14).color(tokens().muted).width(Length::Fill)
         ]
         .spacing(12)
         .into()

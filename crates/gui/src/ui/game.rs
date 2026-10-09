@@ -12,7 +12,7 @@ use super::{logo, round_button};
 use crate::achievements::latest_unlocked;
 use crate::icons::{Icon, icon};
 use crate::install::InstallView;
-use crate::theme::{self, ACCENT, BOLD, MUTED, ON_ACCENT, SEMIBOLD, TEXT};
+use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, CloudStatus, Loadable, Message, Panel};
 
 impl App {
@@ -106,7 +106,11 @@ impl App {
         let running = self.play.as_ref().filter(|p| p.running);
         let this_running = running.is_some_and(|p| p.game_id == g.id);
         let big = |ic: Icon, label: String, msg: Option<Message>, danger: bool| {
-            let color = if msg.is_some() { ON_ACCENT } else { MUTED };
+            let color = if msg.is_some() {
+                tokens().on_accent
+            } else {
+                tokens().muted
+            };
             button(
                 container(
                     row![icon(ic, 22.0, color), text(label).size(20).font(BOLD)]
@@ -160,7 +164,11 @@ impl App {
                     Icon::Heart
                 },
                 24.0,
-                if favorite { ACCENT } else { TEXT },
+                if favorite {
+                    tokens().accent
+                } else {
+                    tokens().text
+                },
             ))
             .center(30),
         )
@@ -180,7 +188,7 @@ impl App {
         row![
             text(p.log.last().map(String::as_str).unwrap_or_default())
                 .size(14)
-                .color(MUTED)
+                .color(tokens().muted)
                 .width(Length::Fill),
             button(text("Details").size(14))
                 .on_press(Message::OpenPanel(Panel::Session))
@@ -194,12 +202,12 @@ impl App {
         let played = self.playtime.get(&g.id);
         let stat = |ic: Icon, value: String, label: &'a str| {
             row![
-                container(icon(ic, 20.0, TEXT))
+                container(icon(ic, 20.0, tokens().text))
                     .center(44)
                     .style(theme::circle),
                 column![
                     text(value).size(18).font(SEMIBOLD),
-                    text(label).size(13).color(MUTED)
+                    text(label).size(13).color(tokens().muted)
                 ]
                 .spacing(2),
             ]
@@ -235,48 +243,55 @@ impl App {
         let installed = self.installs.contains_key(&g.id);
         let (ic, color, status) = if installed {
             match self.cloud.get(&g.id) {
-                Some(c) if c.busy => (Icon::RefreshCw, MUTED, "Checking…".to_string()),
+                Some(c) if c.busy => (Icon::RefreshCw, tokens().muted, "Checking…".to_string()),
                 Some(c) => match &c.status {
-                    Some(CloudStatus::UpToDate) => {
-                        (Icon::CircleCheck, theme::SUCCESS, "Up to date".into())
-                    }
+                    Some(CloudStatus::UpToDate) => (
+                        Icon::CircleCheck,
+                        theme::tokens().success,
+                        "Up to date".into(),
+                    ),
                     Some(CloudStatus::Pending(n)) => (
                         Icon::RefreshCw,
-                        theme::WARNING,
+                        theme::tokens().warning,
                         format!("{n} file(s) to sync"),
                     ),
                     Some(CloudStatus::Conflict) => (
                         Icon::TriangleAlert,
-                        theme::DANGER,
+                        theme::tokens().danger,
                         "Conflict: choose a version".into(),
                     ),
                     Some(CloudStatus::NoCloud) => {
-                        (Icon::X, MUTED, "Not supported by this game".into())
+                        (Icon::X, tokens().muted, "Not supported by this game".into())
                     }
                     Some(CloudStatus::Problem) | None => (
                         Icon::TriangleAlert,
-                        theme::WARNING,
+                        theme::tokens().warning,
                         "Needs attention".into(),
                     ),
                 },
-                None => (Icon::RefreshCw, MUTED, "Not checked yet".into()),
+                None => (Icon::RefreshCw, tokens().muted, "Not checked yet".into()),
             }
         } else {
             match self.overview.get(&g.id) {
-                Some(o) if o.cloud_saves => (Icon::Cloud, MUTED, "Synced once installed".into()),
-                Some(_) => (Icon::X, MUTED, "Not supported by this game".into()),
-                None => (Icon::Cloud, MUTED, "Synced once installed".into()),
+                Some(o) if o.cloud_saves => {
+                    (Icon::Cloud, tokens().muted, "Synced once installed".into())
+                }
+                Some(_) => (Icon::X, tokens().muted, "Not supported by this game".into()),
+                None => (Icon::Cloud, tokens().muted, "Synced once installed".into()),
             }
         };
         let mut content = row![
-            container(icon(Icon::Cloud, 22.0, TEXT))
+            container(icon(Icon::Cloud, 22.0, tokens().text))
                 .center(48)
                 .style(theme::circle),
             column![
                 text("Cloud saves").size(15).font(SEMIBOLD),
-                row![icon(ic, 16.0, color), text(status).size(14).color(MUTED)]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
+                row![
+                    icon(ic, 16.0, color),
+                    text(status).size(14).color(tokens().muted)
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
             ]
             .spacing(4)
             .width(Length::Fill),
@@ -288,7 +303,7 @@ impl App {
                 button(
                     row![
                         text("Manage").size(15),
-                        icon(Icon::ArrowRight, 16.0, ACCENT)
+                        icon(Icon::ArrowRight, 16.0, tokens().accent)
                     ]
                     .spacing(6)
                     .align_y(Alignment::Center),
@@ -305,15 +320,18 @@ impl App {
     }
 
     pub(super) fn achievements_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let trophy = container(icon(Icon::Trophy, 22.0, TEXT))
+        let trophy = container(icon(Icon::Trophy, 22.0, tokens().text))
             .center(48)
             .style(theme::circle);
         let body: Element<'_, Message> = match self.achievements.get(&g.id) {
-            None | Some(Loadable::Loading) => {
-                text("Loading achievements…").size(14).color(MUTED).into()
-            }
+            None | Some(Loadable::Loading) => text("Loading achievements…")
+                .size(14)
+                .color(tokens().muted)
+                .into(),
             Some(Loadable::Failed(e)) => column![
-                text(format!("Unavailable: {e}")).size(13).color(MUTED),
+                text(format!("Unavailable: {e}"))
+                    .size(13)
+                    .color(tokens().muted),
                 button(text("Retry").size(14))
                     .on_press(Message::LoadAchievements(g.id.clone()))
                     .style(theme::link),
@@ -323,7 +341,7 @@ impl App {
             Some(Loadable::Ready(list)) if list.is_empty() => {
                 text("This game has no achievements.")
                     .size(14)
-                    .color(MUTED)
+                    .color(tokens().muted)
                     .into()
             }
             Some(Loadable::Ready(list)) => {
@@ -336,7 +354,7 @@ impl App {
                             self.achievement_icon(&a.image_url_unlocked, 52.0),
                             text(&a.name)
                                 .size(13)
-                                .color(MUTED)
+                                .color(tokens().muted)
                                 .align_x(Alignment::Center)
                         ]
                         .spacing(8)
@@ -352,7 +370,9 @@ impl App {
                             .size(15)
                             .font(SEMIBOLD),
                         space().width(Length::Fill),
-                        text(format!("{:.0}%", share * 100.0)).size(14).color(MUTED),
+                        text(format!("{:.0}%", share * 100.0))
+                            .size(14)
+                            .color(tokens().muted),
                     ]
                     .spacing(24)
                     .align_y(Alignment::Center),
@@ -384,9 +404,12 @@ impl App {
             return Space::new().into();
         };
         let item = |ic: Icon, label: String| {
-            row![icon(ic, 18.0, MUTED), text(label).size(14).color(MUTED)]
-                .spacing(10)
-                .align_y(Alignment::Center)
+            row![
+                icon(ic, 18.0, tokens().muted),
+                text(label).size(14).color(tokens().muted)
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center)
         };
         let content = match self.records.get(&g.id) {
             Some(r) => row![

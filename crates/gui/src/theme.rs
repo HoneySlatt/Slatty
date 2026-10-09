@@ -1,19 +1,65 @@
-//! Colours and widget styles of the interface.
+//! The interface's look: every colour comes from [`Tokens`], and the widget styles below are built
+//! from them only. A custom theme is another `Tokens`; views never name a colour themselves.
+
+use std::sync::OnceLock;
 
 use iced::widget::{button, container, pick_list, progress_bar, scrollable, slider, text_input};
 use iced::{Background, Border, Color, Font, Shadow, Theme, border, color, font};
 
-pub const BACKGROUND: Color = color!(0x14131d);
-pub const SURFACE: Color = color!(0x1e1c2a);
-pub const SURFACE_HIGH: Color = color!(0x2a2739);
-pub const OUTLINE: Color = color!(0x353146);
-pub const ACCENT: Color = color!(0xc4b1fa);
-pub const ON_ACCENT: Color = color!(0x1b1530);
-pub const TEXT: Color = color!(0xf2f0fa);
-pub const MUTED: Color = color!(0xa19db5);
-pub const SUCCESS: Color = color!(0x4ade80);
-pub const WARNING: Color = color!(0xfbbf24);
-pub const DANGER: Color = color!(0xf87171);
+/// Colours of the interface. The defaults are SlattyLauncher's own look.
+#[derive(Debug, Clone)]
+pub struct Tokens {
+    pub background: Color,
+    pub surface: Color,
+    pub surface_high: Color,
+    pub outline: Color,
+    pub accent: Color,
+    pub accent_hover: Color,
+    /// Text and icons drawn on the accent colour.
+    pub on_accent: Color,
+    pub text: Color,
+    pub muted: Color,
+    pub success: Color,
+    pub warning: Color,
+    pub danger: Color,
+    pub danger_hover: Color,
+    /// Background of error notices.
+    pub error_surface: Color,
+    /// Darkens the page behind dialogs.
+    pub scrim: Color,
+}
+
+impl Default for Tokens {
+    fn default() -> Self {
+        Tokens {
+            background: color!(0x14131d),
+            surface: color!(0x1e1c2a),
+            surface_high: color!(0x2a2739),
+            outline: color!(0x353146),
+            accent: color!(0xc4b1fa),
+            accent_hover: color!(0xd3c4fc),
+            on_accent: color!(0x1b1530),
+            text: color!(0xf2f0fa),
+            muted: color!(0xa19db5),
+            success: color!(0x4ade80),
+            warning: color!(0xfbbf24),
+            danger: color!(0xf87171),
+            danger_hover: color!(0xfca5a5),
+            error_surface: color!(0x3b1d24),
+            scrim: Color {
+                a: 0.7,
+                ..color!(0x05040a)
+            },
+        }
+    }
+}
+
+static TOKENS: OnceLock<Tokens> = OnceLock::new();
+
+/// The tokens in use, fixed for the life of the process.
+pub fn tokens() -> &'static Tokens {
+    TOKENS.get_or_init(Tokens::default)
+}
 
 pub const BOLD: Font = Font {
     weight: font::Weight::Bold,
@@ -28,12 +74,12 @@ pub fn theme() -> Theme {
     Theme::custom(
         "Slatty",
         iced::theme::Palette {
-            background: BACKGROUND,
-            text: TEXT,
-            primary: ACCENT,
-            success: SUCCESS,
-            warning: WARNING,
-            danger: DANGER,
+            background: tokens().background,
+            text: tokens().text,
+            primary: tokens().accent,
+            success: tokens().success,
+            warning: tokens().warning,
+            danger: tokens().danger,
         },
     )
 }
@@ -55,11 +101,11 @@ fn base(background: Option<Color>, text: Color, radius: f32) -> button::Style {
 /// A tab or filter of a segmented bar.
 pub fn segment(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_, status| match (active, status) {
-        (true, _) => base(Some(ACCENT), ON_ACCENT, 999.0),
+        (true, _) => base(Some(tokens().accent), tokens().on_accent, 999.0),
         (false, button::Status::Hovered | button::Status::Pressed) => {
-            base(Some(SURFACE_HIGH), TEXT, 999.0)
+            base(Some(tokens().surface_high), tokens().text, 999.0)
         }
-        (false, _) => base(None, MUTED, 999.0),
+        (false, _) => base(None, tokens().muted, 999.0),
     }
 }
 
@@ -67,37 +113,41 @@ pub fn segment(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style
 pub fn primary(_: &Theme, status: button::Status) -> button::Style {
     match status {
         button::Status::Hovered | button::Status::Pressed => {
-            base(Some(color!(0xd3c4fc)), ON_ACCENT, 18.0)
+            base(Some(tokens().accent_hover), tokens().on_accent, 18.0)
         }
-        button::Status::Disabled => base(Some(SURFACE_HIGH), MUTED, 18.0),
-        button::Status::Active => base(Some(ACCENT), ON_ACCENT, 18.0),
+        button::Status::Disabled => base(Some(tokens().surface_high), tokens().muted, 18.0),
+        button::Status::Active => base(Some(tokens().accent), tokens().on_accent, 18.0),
     }
 }
 
 pub fn danger(_: &Theme, status: button::Status) -> button::Style {
     match status {
-        button::Status::Disabled => base(Some(SURFACE_HIGH), MUTED, 14.0),
+        button::Status::Disabled => base(Some(tokens().surface_high), tokens().muted, 14.0),
         button::Status::Hovered | button::Status::Pressed => {
-            base(Some(color!(0xfca5a5)), ON_ACCENT, 14.0)
+            base(Some(tokens().danger_hover), tokens().on_accent, 14.0)
         }
-        button::Status::Active => base(Some(DANGER), ON_ACCENT, 14.0),
+        button::Status::Active => base(Some(tokens().danger), tokens().on_accent, 14.0),
     }
 }
 
 /// Secondary actions: a filled surface that lightens on hover.
 pub fn tonal(_: &Theme, status: button::Status) -> button::Style {
     match status {
-        button::Status::Disabled => base(Some(SURFACE), OUTLINE, 14.0),
-        button::Status::Hovered | button::Status::Pressed => base(Some(OUTLINE), TEXT, 14.0),
-        button::Status::Active => base(Some(SURFACE_HIGH), TEXT, 14.0),
+        button::Status::Disabled => base(Some(tokens().surface), tokens().outline, 14.0),
+        button::Status::Hovered | button::Status::Pressed => {
+            base(Some(tokens().outline), tokens().text, 14.0)
+        }
+        button::Status::Active => base(Some(tokens().surface_high), tokens().text, 14.0),
     }
 }
 
 /// Round icon buttons of the headers.
 pub fn icon_button(_: &Theme, status: button::Status) -> button::Style {
     match status {
-        button::Status::Hovered | button::Status::Pressed => base(Some(OUTLINE), TEXT, 999.0),
-        _ => base(Some(SURFACE_HIGH), TEXT, 999.0),
+        button::Status::Hovered | button::Status::Pressed => {
+            base(Some(tokens().outline), tokens().text, 999.0)
+        }
+        _ => base(Some(tokens().surface_high), tokens().text, 999.0),
     }
 }
 
@@ -106,8 +156,8 @@ pub fn link(_: &Theme, status: button::Status) -> button::Style {
     base(
         None,
         match status {
-            button::Status::Hovered | button::Status::Pressed => TEXT,
-            _ => ACCENT,
+            button::Status::Hovered | button::Status::Pressed => tokens().text,
+            _ => tokens().accent,
         },
         8.0,
     )
@@ -116,38 +166,40 @@ pub fn link(_: &Theme, status: button::Status) -> button::Style {
 /// Clickable areas that look like their content (cards, covers, rows).
 pub fn plain(_: &Theme, status: button::Status) -> button::Style {
     match status {
-        button::Status::Hovered | button::Status::Pressed => base(None, TEXT, 16.0),
-        _ => base(None, TEXT, 16.0),
+        button::Status::Hovered | button::Status::Pressed => base(None, tokens().text, 16.0),
+        _ => base(None, tokens().text, 16.0),
     }
 }
 
 pub fn row_button(_: &Theme, status: button::Status) -> button::Style {
     match status {
-        button::Status::Hovered | button::Status::Pressed => base(Some(SURFACE_HIGH), TEXT, 16.0),
-        _ => base(Some(SURFACE), TEXT, 16.0),
+        button::Status::Hovered | button::Status::Pressed => {
+            base(Some(tokens().surface_high), tokens().text, 16.0)
+        }
+        _ => base(Some(tokens().surface), tokens().text, 16.0),
     }
 }
 
 pub fn card(_: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(SURFACE)),
+        background: Some(Background::Color(tokens().surface)),
         border: round(20.0),
-        text_color: Some(TEXT),
+        text_color: Some(tokens().text),
         ..Default::default()
     }
 }
 
 pub fn pill(_: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(SURFACE)),
-        border: round(999.0).color(OUTLINE).width(1.0),
+        background: Some(Background::Color(tokens().surface)),
+        border: round(999.0).color(tokens().outline).width(1.0),
         ..Default::default()
     }
 }
 
 pub fn circle(_: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(SURFACE_HIGH)),
+        background: Some(Background::Color(tokens().surface_high)),
         border: round(999.0),
         ..Default::default()
     }
@@ -155,9 +207,9 @@ pub fn circle(_: &Theme) -> container::Style {
 
 pub fn avatar(_: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(OUTLINE)),
+        background: Some(Background::Color(tokens().outline)),
         border: round(999.0),
-        text_color: Some(TEXT),
+        text_color: Some(tokens().text),
         ..Default::default()
     }
 }
@@ -167,36 +219,33 @@ pub fn cover_overlay(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color {
             a: 0.82,
-            ..BACKGROUND
+            ..tokens().background
         })),
         border: border::rounded(border::bottom(12.0)),
-        text_color: Some(TEXT),
+        text_color: Some(tokens().text),
         ..Default::default()
     }
 }
 
 pub fn cover_frame(_: &Theme) -> container::Style {
     container::Style {
-        border: round(12.0).color(ACCENT).width(2.0),
+        border: round(12.0).color(tokens().accent).width(2.0),
         ..Default::default()
     }
 }
 
 pub fn placeholder(_: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(SURFACE_HIGH)),
+        background: Some(Background::Color(tokens().surface_high)),
         border: round(12.0),
-        text_color: Some(MUTED),
+        text_color: Some(tokens().muted),
         ..Default::default()
     }
 }
 
 pub fn backdrop(_: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(Color {
-            a: 0.7,
-            ..color!(0x05040a)
-        })),
+        background: Some(Background::Color(tokens().scrim)),
         ..Default::default()
     }
 }
@@ -204,19 +253,19 @@ pub fn backdrop(_: &Theme) -> container::Style {
 pub fn notice(error: bool) -> impl Fn(&Theme) -> container::Style {
     move |_| container::Style {
         background: Some(Background::Color(if error {
-            color!(0x3b1d24)
+            tokens().error_surface
         } else {
-            SURFACE_HIGH
+            tokens().surface_high
         })),
         border: round(14.0),
-        text_color: Some(TEXT),
+        text_color: Some(tokens().text),
         ..Default::default()
     }
 }
 
 pub fn divider(_: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(OUTLINE)),
+        background: Some(Background::Color(tokens().outline)),
         ..Default::default()
     }
 }
@@ -225,44 +274,50 @@ pub fn input(_: &Theme, _: text_input::Status) -> text_input::Style {
     text_input::Style {
         background: Background::Color(Color::TRANSPARENT),
         border: Border::default(),
-        icon: MUTED,
-        placeholder: MUTED,
-        value: TEXT,
-        selection: Color { a: 0.4, ..ACCENT },
+        icon: tokens().muted,
+        placeholder: tokens().muted,
+        value: tokens().text,
+        selection: Color {
+            a: 0.4,
+            ..tokens().accent
+        },
     }
 }
 
 pub fn field(_: &Theme, status: text_input::Status) -> text_input::Style {
     text_input::Style {
-        background: Background::Color(SURFACE_HIGH),
+        background: Background::Color(tokens().surface_high),
         border: round(12.0).width(1.0).color(match status {
-            text_input::Status::Focused { .. } => ACCENT,
-            _ => OUTLINE,
+            text_input::Status::Focused { .. } => tokens().accent,
+            _ => tokens().outline,
         }),
-        icon: MUTED,
-        placeholder: MUTED,
-        value: TEXT,
-        selection: Color { a: 0.4, ..ACCENT },
+        icon: tokens().muted,
+        placeholder: tokens().muted,
+        value: tokens().text,
+        selection: Color {
+            a: 0.4,
+            ..tokens().accent
+        },
     }
 }
 
 pub fn select(_: &Theme, status: pick_list::Status) -> pick_list::Style {
     pick_list::Style {
-        text_color: TEXT,
-        placeholder_color: MUTED,
-        handle_color: MUTED,
+        text_color: tokens().text,
+        placeholder_color: tokens().muted,
+        handle_color: tokens().muted,
         background: Background::Color(match status {
-            pick_list::Status::Hovered | pick_list::Status::Opened { .. } => SURFACE_HIGH,
-            _ => SURFACE,
+            pick_list::Status::Hovered | pick_list::Status::Opened { .. } => tokens().surface_high,
+            _ => tokens().surface,
         }),
-        border: round(999.0).color(OUTLINE).width(1.0),
+        border: round(999.0).color(tokens().outline).width(1.0),
     }
 }
 
 pub fn progress(_: &Theme) -> progress_bar::Style {
     progress_bar::Style {
-        background: Background::Color(SURFACE_HIGH),
-        bar: Background::Color(ACCENT),
+        background: Background::Color(tokens().surface_high),
+        bar: Background::Color(tokens().accent),
         border: round(999.0),
     }
 }
@@ -270,13 +325,16 @@ pub fn progress(_: &Theme) -> progress_bar::Style {
 pub fn size_slider(_: &Theme, _: slider::Status) -> slider::Style {
     slider::Style {
         rail: slider::Rail {
-            backgrounds: (Background::Color(ACCENT), Background::Color(SURFACE_HIGH)),
+            backgrounds: (
+                Background::Color(tokens().accent),
+                Background::Color(tokens().surface_high),
+            ),
             width: 4.0,
             border: round(999.0),
         },
         handle: slider::Handle {
             shape: slider::HandleShape::Circle { radius: 8.0 },
-            background: Background::Color(ACCENT),
+            background: Background::Color(tokens().accent),
             border_width: 0.0,
             border_color: Color::TRANSPARENT,
         },
@@ -288,7 +346,7 @@ pub fn scroller(theme: &Theme, status: scrollable::Status) -> scrollable::Style 
     for rail in [&mut style.vertical_rail, &mut style.horizontal_rail] {
         rail.background = None;
         rail.border = round(999.0);
-        rail.scroller.background = Background::Color(OUTLINE);
+        rail.scroller.background = Background::Color(tokens().outline);
         rail.scroller.border = round(999.0);
     }
     style

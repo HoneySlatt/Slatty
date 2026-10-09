@@ -13,7 +13,7 @@ use super::format::*;
 use crate::icons::{Icon, icon};
 use crate::install::InstallMsg;
 use crate::maintenance::MaintenanceMsg;
-use crate::theme::{self, ACCENT, MUTED, ON_ACCENT, SEMIBOLD, TEXT};
+use crate::theme::{self, SEMIBOLD, tokens};
 use crate::{App, Filters, Interrupted, Message, Panel, Shelf, Sort};
 
 impl App {
@@ -38,7 +38,11 @@ impl App {
         let filter_button = button(icon(
             Icon::ListFilter,
             18.0,
-            if self.filters.any() { ON_ACCENT } else { TEXT },
+            if self.filters.any() {
+                tokens().on_accent
+            } else {
+                tokens().text
+            },
         ))
         .padding(11)
         .on_press(Message::ToggleFilters)
@@ -49,14 +53,16 @@ impl App {
         });
         let toolbar = row![
             shelves,
-            text(format!("{} games", games.len())).size(14).color(MUTED),
+            text(format!("{} games", games.len()))
+                .size(14)
+                .color(tokens().muted),
             space().width(Length::Fill),
             pick_list(Sort::ALL, Some(self.sort), Message::SortBy)
                 .style(theme::select)
                 .padding([9, 18])
                 .text_size(14),
             Space::new().width(4),
-            icon(Icon::LayoutGrid, 20.0, MUTED),
+            icon(Icon::LayoutGrid, 20.0, tokens().muted),
             slider(110.0..=240.0, self.card_width, Message::CardWidth)
                 .width(150)
                 .style(theme::size_slider),
@@ -84,7 +90,7 @@ impl App {
                 } else {
                     "No game matches."
                 })
-                .color(MUTED),
+                .color(tokens().muted),
             )
             .padding(20)
             .into()
@@ -145,10 +151,10 @@ impl App {
                 ),
             };
             row![
-                icon(Icon::TriangleAlert, 18.0, theme::WARNING),
+                icon(Icon::TriangleAlert, 18.0, theme::tokens().warning),
                 column![
                     text(title).size(15).font(SEMIBOLD),
-                    text(status).size(13).color(MUTED)
+                    text(status).size(13).color(tokens().muted)
                 ]
                 .spacing(2)
                 .width(Length::Fill),
@@ -190,7 +196,7 @@ impl App {
         if (f.achievements || f.cloud_saves)
             && let Some(status) = self.overview_status()
         {
-            items = items.push(text(status).size(13).color(MUTED));
+            items = items.push(text(status).size(13).color(tokens().muted));
         }
         container(items)
             .padding([12, 18])
@@ -220,17 +226,17 @@ impl App {
             .style(theme::plain);
         let installed = self.installs.contains_key(&g.id);
         let action = if installed {
-            button(icon(Icon::Play, 16.0, ON_ACCENT))
+            button(icon(Icon::Play, 16.0, tokens().on_accent))
                 .padding([8, 14])
                 .on_press_maybe(self.can_play(&g.id).then(|| Message::Play(g.id.clone())))
                 .style(theme::primary)
         } else {
-            button(icon(Icon::Download, 16.0, ON_ACCENT))
+            button(icon(Icon::Download, 16.0, tokens().on_accent))
                 .padding([8, 14])
                 .on_press(Message::SelectWith(g.id.clone(), Panel::Install))
                 .style(theme::primary)
         };
-        let settings = button(icon(Icon::SlidersHorizontal, 16.0, TEXT))
+        let settings = button(icon(Icon::SlidersHorizontal, 16.0, tokens().text))
             .padding(8)
             .on_press(Message::SelectWith(
                 g.id.clone(),
@@ -267,7 +273,7 @@ impl App {
 pub(super) fn download_banner<'a>(id: &str, title: &str, p: Progress) -> Element<'a, Message> {
     button(
         row![
-            icon(Icon::Download, 16.0, ACCENT),
+            icon(Icon::Download, 16.0, tokens().accent),
             text(format!("Downloading {title}"))
                 .size(14)
                 .width(Length::Fill),

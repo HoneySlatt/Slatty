@@ -9,7 +9,7 @@ use slatty_core::library::LibraryGame;
 
 use super::{inner, note, round_button};
 use crate::icons::{Icon, icon};
-use crate::theme::{self, ACCENT, BOLD, MUTED, SEMIBOLD, TEXT};
+use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{AchievementChange, App, Loadable, Message, Page, PendingChange};
 
 impl App {
@@ -41,14 +41,17 @@ impl App {
                     "{unlocked} / {total} unlocked · {perfect} completed · {scanning}"
                 ))
                 .size(14)
-                .color(MUTED),
+                .color(tokens().muted),
             ]
             .spacing(4)
             .width(Length::Fill),
             button(
-                row![icon(Icon::RefreshCw, 16.0, TEXT), text("Refresh").size(14)]
-                    .spacing(8)
-                    .align_y(Alignment::Center)
+                row![
+                    icon(Icon::RefreshCw, 16.0, tokens().text),
+                    text("Refresh").size(14)
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center)
             )
             .padding([10, 16])
             .on_press_maybe((!self.overview_busy).then_some(Message::ScanOverview))
@@ -90,7 +93,7 @@ impl App {
                             .align_x(Alignment::End),
                         text(format!("{:.0}%", share * 100.0))
                             .size(14)
-                            .color(MUTED)
+                            .color(tokens().muted)
                             .width(50)
                             .align_x(Alignment::End),
                     ]
@@ -124,7 +127,7 @@ impl App {
             button(
                 row![
                     text("Game page").size(14),
-                    icon(Icon::ArrowRight, 16.0, ACCENT)
+                    icon(Icon::ArrowRight, 16.0, tokens().accent)
                 ]
                 .spacing(6)
                 .align_y(Alignment::Center)
@@ -148,9 +151,11 @@ impl App {
                 .into(),
         };
         let body: Element<'_, Message> = match self.achievements.get(&g.id) {
-            None | Some(Loadable::Loading) => text("Loading achievements…").color(MUTED).into(),
+            None | Some(Loadable::Loading) => {
+                text("Loading achievements…").color(tokens().muted).into()
+            }
             Some(Loadable::Failed(e)) => column![
-                text(format!("Unavailable: {e}")).color(MUTED),
+                text(format!("Unavailable: {e}")).color(tokens().muted),
                 button(text("Retry").size(14))
                     .on_press(Message::LoadAchievements(g.id.clone()))
                     .style(theme::link),
@@ -172,7 +177,9 @@ impl App {
                             text(format!("{done} / {} unlocked", list.len()))
                                 .size(15)
                                 .font(SEMIBOLD),
-                            text(format!("{:.0}%", share * 100.0)).size(14).color(MUTED),
+                            text(format!("{:.0}%", share * 100.0))
+                                .size(14)
+                                .color(tokens().muted),
                         ]
                         .spacing(16),
                         progress_bar(0.0..=1.0, share)
@@ -218,7 +225,7 @@ impl App {
                 .height(size)
                 .border_radius(10)
                 .into(),
-            None => container(icon(Icon::Trophy, size / 2.5, MUTED))
+            None => container(icon(Icon::Trophy, size / 2.5, tokens().muted))
                 .center(size)
                 .style(theme::placeholder)
                 .into(),
@@ -253,17 +260,17 @@ impl App {
             })
             .size(15)
             .font(SEMIBOLD)
-            .color(if done { TEXT } else { MUTED })
+            .color(if done { tokens().text } else { tokens().muted })
         ]
         .spacing(2)
         .width(Length::Fill);
         if shown && !a.description.is_empty() {
-            details = details.push(text(&a.description).size(13).color(MUTED));
+            details = details.push(text(&a.description).size(13).color(tokens().muted));
         }
         details = details.push(
             text(format!("{:.1}% of players", a.rarity))
                 .size(12)
-                .color(MUTED),
+                .color(tokens().muted),
         );
         row![
             self.achievement_icon(url, 48.0),

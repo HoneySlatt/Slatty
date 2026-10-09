@@ -6,7 +6,7 @@ use iced::{Alignment, Element, Length, Padding};
 use super::format::*;
 use super::{card, logo};
 use crate::settings::{ProtonChoice, SettingsMsg};
-use crate::theme::{self, BOLD, MUTED, SEMIBOLD};
+use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, Message};
 
 impl App {
@@ -19,7 +19,7 @@ impl App {
             .map(ProtonChoice)
             .collect();
         let selected = self.proton.clone().map(ProtonChoice);
-        let label = |t| text(t).size(15).width(180).color(MUTED);
+        let label = |t| text(t).size(15).width(180).color(tokens().muted);
         let cache_note = match self.fetched_at {
             Some(ts) => format!("Last refreshed {}", local_time(ts)),
             None => "Never refreshed".into(),
@@ -107,7 +107,7 @@ impl App {
                         env!("CARGO_PKG_VERSION")
                     ))
                     .size(14)
-                    .color(MUTED)
+                    .color(tokens().muted)
                     .into(),
                 ],
             ),
@@ -130,7 +130,7 @@ impl App {
                  Once signed in, the browser shows an almost blank page on embed.gog.com: \
                  copy that page's full address and paste it below."
             )
-            .color(MUTED),
+            .color(tokens().muted),
             button(text("Open the GOG sign-in page").font(SEMIBOLD))
                 .padding([12, 22])
                 .on_press(Message::OpenLoginPage)
