@@ -147,6 +147,10 @@ impl App {
                         "Resuming an interrupted install ({}).",
                         language_name(&info.language)
                     )));
+                } else if info.language == "*" {
+                    items.push(note(
+                        "Language: one download holds every language; choose it in the game.",
+                    ));
                 } else if info.languages.len() <= 1 {
                     items.push(note(format!(
                         "Language: {} (the only one GOG offers)",
@@ -429,10 +433,12 @@ impl App {
                 ]
                 .spacing(12),
             );
-            col = col.push(note(
+            col = col.push(note(if c.language == "*" {
+                "One download holds every language; choose it in the game's own options."
+            } else {
                 "GOG offers this game in this language only. Games that hold several languages \
-                 in one download let you choose in their own options.",
-            ));
+                 in one download let you choose in their own options."
+            }));
         } else {
             let id = game_id.to_string();
             col = col.push(

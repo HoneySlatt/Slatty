@@ -731,3 +731,24 @@ fn discarding_an_unfinished_install_removes_only_its_partial_folder() {
     assert_eq!(discard(&db, &dirs, "1").unwrap(), None);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn a_build_without_language_packs_can_be_planned_again() {
+    let m = meta(vec![depot("1", &["*"], 100)]);
+    let plan = |lang: Option<&str>| {
+        InstallPlan::new(
+            "1",
+            build(),
+            m.clone(),
+            lang,
+            &HashSet::new(),
+            &DlcSelection::AllOwned,
+        )
+    };
+    let first = plan(None).unwrap();
+    assert_eq!(first.language, "*");
+    assert!(first.languages.is_empty());
+    let again = plan(Some(&first.language)).unwrap();
+    assert_eq!(again.disk_size, 100);
+    assert!(plan(Some("fr-FR")).is_err());
+}

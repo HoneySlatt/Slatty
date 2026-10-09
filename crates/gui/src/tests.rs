@@ -1358,3 +1358,22 @@ fn cancelling_a_download_asks_then_deletes_it() {
     assert_eq!(app.panel, None);
     assert!(app.interrupted.is_empty());
 }
+
+#[test]
+fn a_build_without_language_packs_says_the_game_chooses() {
+    let mut app = library_app();
+    open(&mut app, "5", Some(Panel::Install));
+    app.install_views.insert(
+        "5".into(),
+        InstallView::Ready(crate::install::PlanInfo {
+            language: "*".into(),
+            languages: Vec::new(),
+            ..fake_plan()
+        }),
+    );
+    let mut ui = render(&app);
+    assert!(
+        ui.find("Language: one download holds every language; choose it in the game.")
+            .is_ok()
+    );
+}

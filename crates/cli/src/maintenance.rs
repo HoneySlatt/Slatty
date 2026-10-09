@@ -288,11 +288,7 @@ pub async fn content(ctx: &Ctx, args: ContentArgs) -> Result<()> {
     let plan =
         maintenance::content_options(&ctx.db, &ctx.dirs, &ctx.http, &tokens, &args.game_id).await?;
     println!("{} — version {}", plan.title, plan.build.version_name);
-    println!(
-        "Language: {} (offered: {})",
-        plan.language,
-        plan.languages.join(", ")
-    );
+    crate::install::print_language(&plan);
     crate::install::print_dlcs(&plan.dlcs);
     Ok(())
 }

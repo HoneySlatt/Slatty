@@ -81,6 +81,9 @@ impl InstallPlan {
             }
         }
         let language = match language {
+            // A build without language packs (every depot is `*`) is planned as `*`; its install,
+            // resumed job or update asks for `*` again.
+            Some("*") if languages.is_empty() => "*".to_string(),
             Some(wanted) => languages
                 .iter()
                 .find(|l| l.eq_ignore_ascii_case(wanted))

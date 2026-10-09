@@ -64,6 +64,8 @@ impl std::fmt::Display for Language {
 /// "French" for "fr-FR"; the code itself when it is not known.
 pub fn language_name(code: &str) -> String {
     let name = match code.to_ascii_lowercase().as_str() {
+        // Builds without language packs: the game holds its languages and offers them itself.
+        "*" => "Chosen in the game",
         "en-us" | "en" => "English",
         "en-gb" => "English (UK)",
         "fr-fr" | "fr" => "French",

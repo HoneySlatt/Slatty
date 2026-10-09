@@ -84,11 +84,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             "{} — version {} (build {})",
             plan.title, plan.build.version_name, plan.build.build_id
         );
-        println!(
-            "Language: {} (offered: {})",
-            plan.language,
-            plan.languages.join(", ")
-        );
+        print_language(&plan);
         println!(
             "Download: {}, on disk: {}",
             size(plan.download_size),
@@ -264,6 +260,18 @@ pub fn size(bytes: u64) -> String {
         b if b >= 1 << 30 => format!("{:.2} GiB", b as f64 / (1u64 << 30) as f64),
         b if b >= 1 << 20 => format!("{:.1} MiB", b as f64 / (1u64 << 20) as f64),
         b => format!("{} KiB", b >> 10),
+    }
+}
+
+pub fn print_language(plan: &slatty_core::installer::InstallPlan) {
+    if plan.language == "*" {
+        println!("Language: every language in one download, chosen in the game");
+    } else {
+        println!(
+            "Language: {} (offered: {})",
+            plan.language,
+            plan.languages.join(", ")
+        );
     }
 }
 
