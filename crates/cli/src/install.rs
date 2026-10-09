@@ -211,6 +211,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         game_id: args.game_id.clone(),
         dlcs,
         language: args.language,
+        build: None,
         root,
         proton,
         restart: args.restart,

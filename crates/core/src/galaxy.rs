@@ -27,6 +27,9 @@ pub struct Build {
     pub link: String,
     pub branch: Option<String>,
     pub generation: u32,
+    /// When GOG published the build, as GOG writes it (`2026-03-27T06:59:13+0000`).
+    #[serde(default)]
+    pub date_published: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -21,6 +21,8 @@ pub struct InstallPlan {
     pub dependencies: Vec<galaxy::Dependency>,
     pub download_size: u64,
     pub disk_size: u64,
+    /// Every build GOG offers for the game, newest first; filled by `plan_for`.
+    pub builds: Vec<Build>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -174,6 +176,7 @@ impl InstallPlan {
             depots,
             dlcs,
             dependencies: Vec::new(),
+            builds: Vec::new(),
         })
     }
 
@@ -217,6 +220,7 @@ pub async fn plan_for(
         HashSet::new()
     };
     let mut plan = InstallPlan::new(game_id, build, meta, language, &owned, dlcs)?;
+    plan.builds = builds;
     if !plan.meta.dependencies.is_empty() {
         let repository = galaxy::dependencies(http, tokens).await?;
         plan.dependencies = plan

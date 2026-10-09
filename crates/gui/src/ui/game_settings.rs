@@ -68,6 +68,11 @@ impl App {
         let busy = self.maintenance_busy(&g.id);
         match view.and_then(|v| v.content.as_ref()) {
             Some(c) => {
+                sections.push(section(
+                    Icon::RefreshCw,
+                    "Game version",
+                    version(&g.id, c, busy),
+                ));
                 sections.push(section(Icon::Globe, "Language", language(&g.id, c, busy)));
                 sections.push(section(Icon::Puzzle, "DLC", dlcs(&g.id, c, busy)));
             }
@@ -181,6 +186,39 @@ fn dlcs<'a>(game_id: &'a str, c: &'a ContentInfo, busy: bool) -> Element<'a, Mes
             }))
             .style(theme::tonal),
     )
+    .spacing(10)
+    .into()
+}
+
+/// The installed build, and any other GOG offers: older to go back, newer to update.
+fn version<'a>(game_id: &'a str, c: &'a ContentInfo, busy: bool) -> Element<'a, Message> {
+    let installed = c.versions.iter().find(|v| v.build_id == c.build_id);
+    if c.versions.len() <= 1 {
+        return text(installed.map_or("", |v| v.label.as_str()))
+            .size(15)
+            .into();
+    }
+    let id = game_id.to_string();
+    column![
+        pick_list(
+            c.versions.clone(),
+            c.versions.iter().find(|v| v.build_id == c.chosen_build).cloned(),
+            move |v| Message::Maintenance(MaintenanceMsg::ChooseVersion(id.clone(), v.build_id)),
+        )
+        .style(theme::select)
+        .padding([10, 14])
+        .width(Length::Fill),
+        button(text("Switch version").size(14))
+            .padding([10, 16])
+            .on_press_maybe((!busy && c.chosen_build != c.build_id).then(|| {
+                Message::Maintenance(MaintenanceMsg::Apply(
+                    game_id.to_string(),
+                    Change::Build(c.chosen_build.clone()),
+                ))
+            }))
+            .style(theme::tonal),
+        note("Only the files that differ are downloaded. Saves made with a newer version may not load in an older one."),
+    ]
     .spacing(10)
     .into()
 }

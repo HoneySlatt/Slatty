@@ -348,6 +348,7 @@ fn build() -> Build {
         link: String::new(),
         branch: None,
         generation: 2,
+        date_published: None,
     }
 }
 

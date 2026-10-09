@@ -81,11 +81,11 @@ panels:
 
 | Where | Panel |
 |---|---|
-| Sliders button (top right) | Game settings, in a drawer beside the page: folder, Proton build (used from the next launch), language and DLC |
+| Sliders button (top right) | Game settings, in a drawer beside the page: folder, Proton build (used from the next launch), game version (switch to an older or newer build), language and DLC |
 | ⋮ button (top right) | Manage, in a drawer beside the page: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
 | Cloud saves card | A drawer beside the page: status, save folder, what a sync would do (upload, download, compare, unchanged, deleted on one side), Check, Sync now, conflict choices |
 | Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page (over it in a narrow window) |
-| Install button | A drawer beside the page: version, download and disk size, free space, folder, language, DLC, Proton, start, discard |
+| Install button | A drawer beside the page: version, download and disk size, free space, folder, language, DLC, Proton, game version (the newest unless another is chosen), start, discard |
 
 Once started, a download shows on the game page itself, with its progress, its percentage and its
 speed over the last seconds. The big button pauses it (then resumes it), and **Cancel** deletes it

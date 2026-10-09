@@ -235,6 +235,8 @@ fn installed_build_gone(e: Error) -> Error {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
     Update,
+    /// Another build GOG offers, older or newer, with the installed language and DLC.
+    Build(String),
     Language(String),
     Dlcs(Vec<String>),
 }
@@ -275,6 +277,11 @@ pub async fn reconfigure(
     let (build, language, dlcs) = match (&pending, &change) {
         (Some(j), _) => (Some(j.build_id.clone()), j.language.clone(), j.dlcs.clone()),
         (None, Change::Update) => (None, record.language.clone(), record.dlcs.clone()),
+        (None, Change::Build(b)) => (
+            Some(b.clone()),
+            record.language.clone(),
+            record.dlcs.clone(),
+        ),
         (None, Change::Language(l)) => (
             Some(record.build_id.clone()),
             l.clone(),

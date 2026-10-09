@@ -473,6 +473,8 @@ fn fake_plan() -> crate::install::PlanInfo {
     crate::install::PlanInfo {
         title: "[FAKE] Game 5".into(),
         version: "1.0".into(),
+        build_id: "b1".into(),
+        versions: Vec::new(),
         language: "en-US".into(),
         languages: vec!["en-US".into(), "fr-FR".into()],
         download_size: 3 << 30,
@@ -749,6 +751,9 @@ fn game_settings_panel_applies_dlc_changes_only_when_something_changed() {
     let mut app = library_app();
     open(&mut app, "3", Some(Panel::GameSettings));
     let content = ContentInfo {
+        build_id: "b1".into(),
+        chosen_build: "b1".into(),
+        versions: Vec::new(),
         language: "en-US".into(),
         languages: vec!["en-US".into(), "fr-FR".into()],
         chosen_language: "en-US".into(),
@@ -1241,6 +1246,9 @@ fn game_settings_show_the_language_and_switch_it_when_gog_offers_others() {
     let mut app = library_app();
     open(&mut app, "3", Some(Panel::GameSettings));
     let content = |languages: &[&str]| ContentInfo {
+        build_id: "b1".into(),
+        chosen_build: "b1".into(),
+        versions: Vec::new(),
         language: "en-US".into(),
         languages: languages.iter().map(|l| l.to_string()).collect(),
         chosen_language: "en-US".into(),
@@ -1492,6 +1500,9 @@ fn game_settings_list_only_owned_dlc() {
     let mut app = library_app();
     open(&mut app, "3", Some(Panel::GameSettings));
     let content = |dlcs| ContentInfo {
+        build_id: "b1".into(),
+        chosen_build: "b1".into(),
+        versions: Vec::new(),
         language: "en-US".into(),
         languages: vec!["en-US".into()],
         chosen_language: "en-US".into(),
@@ -1657,4 +1668,92 @@ fn cloud_drawer_shows_the_folder_and_what_a_sync_would_do() {
             .find("Last sync: 2 file(s) uploaded, 0 downloaded.")
             .is_ok()
     );
+}
+
+fn fake_versions() -> Vec<crate::install::Version> {
+    crate::install::versions(&[
+        slatty_core::galaxy::Build {
+            build_id: "b2".into(),
+            version_name: "1.1".into(),
+            link: String::new(),
+            branch: None,
+            generation: 2,
+            date_published: Some("2026-03-27T06:59:13+0000".into()),
+        },
+        slatty_core::galaxy::Build {
+            build_id: "b1".into(),
+            version_name: "1.0".into(),
+            link: String::new(),
+            branch: None,
+            generation: 2,
+            date_published: Some("2025-08-28T07:29:12+0000".into()),
+        },
+    ])
+}
+
+#[test]
+fn versions_are_named_with_their_date_and_the_latest_marked() {
+    let labels: Vec<String> = fake_versions().into_iter().map(|v| v.label).collect();
+    assert_eq!(labels, ["1.1 · 27 Mar 2026 (latest)", "1.0 · 28 Aug 2025"]);
+}
+
+#[test]
+fn another_version_can_be_chosen_before_install_and_after() {
+    use crate::maintenance::ContentInfo;
+    use slatty_core::maintenance::Change;
+    let mut app = library_app();
+    open(&mut app, "5", Some(Panel::Install));
+    app.install_views.insert(
+        "5".into(),
+        InstallView::Ready(crate::install::PlanInfo {
+            build_id: "b2".into(),
+            versions: fake_versions(),
+            ..fake_plan()
+        }),
+    );
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Game version").is_ok());
+        snapshot(&mut ui, "install-version");
+    }
+    let _ = app.update(Message::Install(InstallMsg::Version(
+        "5".into(),
+        "b1".into(),
+    )));
+    assert!(
+        matches!(app.install_views.get("5"), Some(InstallView::Planning)),
+        "planned again for that version"
+    );
+
+    // Installed: switching asks for that build.
+    open(&mut app, "3", Some(Panel::GameSettings));
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ContentLoaded(
+        "3".into(),
+        Ok(ContentInfo {
+            build_id: "b2".into(),
+            chosen_build: "b2".into(),
+            versions: fake_versions(),
+            language: "en-US".into(),
+            languages: vec!["en-US".into()],
+            chosen_language: "en-US".into(),
+            dlcs: Vec::new(),
+            chosen_dlcs: Vec::new(),
+        }),
+    )));
+    {
+        let mut ui = render(&app);
+        let _ = ui.click("Switch version");
+        assert!(ui.into_messages().next().is_none(), "nothing chosen yet");
+    }
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ChooseVersion(
+        "3".into(),
+        "b1".into(),
+    )));
+    let mut ui = render(&app);
+    snapshot(&mut ui, "game-settings-version");
+    ui.click("Switch version").unwrap();
+    assert!(ui.into_messages().any(|m| matches!(
+        m,
+        Message::Maintenance(MaintenanceMsg::Apply(id, Change::Build(b))) if id == "3" && b == "b1"
+    )));
 }

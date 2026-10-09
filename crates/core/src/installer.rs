@@ -30,6 +30,8 @@ pub fn support_dir(dirs: &Dirs, game_id: &str) -> PathBuf {
 pub struct InstallRequest {
     pub game_id: String,
     pub language: Option<String>,
+    /// A build GOG offers for the game; the newest public one when `None`.
+    pub build: Option<String>,
     pub root: PathBuf,
     pub proton: PathBuf,
     pub dlcs: DlcSelection,
@@ -92,7 +94,7 @@ pub async fn install(
         ),
         None => (
             req.language.as_deref(),
-            None,
+            req.build.as_deref(),
             req.root.clone(),
             req.dlcs.clone(),
         ),

@@ -44,6 +44,10 @@ impl MaintenanceView {
 /// Language and DLC choices of an installed game, being edited.
 #[derive(Debug, Clone)]
 pub struct ContentInfo {
+    /// The installed build, the one chosen, and the versions GOG offers.
+    pub build_id: String,
+    pub chosen_build: String,
+    pub versions: Vec<crate::install::Version>,
     pub language: String,
     pub languages: Vec<String>,
     pub chosen_language: String,
@@ -88,6 +92,7 @@ pub enum MaintenanceMsg {
     LoadContent(String),
     ContentLoaded(String, Result<ContentInfo, String>),
     ChooseLanguage(String, String),
+    ChooseVersion(String, String),
     ToggleContentDlc(String, String),
 }
 
@@ -345,6 +350,9 @@ impl App {
                         .map_err(err)?;
                         let chosen_dlcs = plan.selected_dlcs();
                         Ok(ContentInfo {
+                            build_id: plan.build.build_id.clone(),
+                            chosen_build: plan.build.build_id.clone(),
+                            versions: crate::install::versions(&plan.builds),
                             chosen_language: plan.language.clone(),
                             language: plan.language,
                             languages: plan.languages,
@@ -373,6 +381,15 @@ impl App {
                     .and_then(|v| v.content.as_mut())
                 {
                     c.chosen_language = language;
+                }
+            }
+            MaintenanceMsg::ChooseVersion(game_id, build) => {
+                if let Some(c) = self
+                    .maintenance
+                    .get_mut(&game_id)
+                    .and_then(|v| v.content.as_mut())
+                {
+                    c.chosen_build = build;
                 }
             }
             MaintenanceMsg::ToggleContentDlc(game_id, dlc) => {

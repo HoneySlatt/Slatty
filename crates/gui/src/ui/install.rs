@@ -186,6 +186,27 @@ impl App {
             .width(Length::Fill)
             .into(),
         ));
+
+        // The newest version unless another is chosen; an interrupted install keeps its own.
+        items = items.push(Space::new().height(12));
+        let current = info
+            .versions
+            .iter()
+            .find(|v| v.build_id == info.build_id)
+            .cloned();
+        let version: Element<'a, Message> = if info.resumable || info.versions.len() <= 1 {
+            note(current.map_or_else(|| info.version.clone(), |v| v.label))
+        } else {
+            let id = g.id.clone();
+            pick_list(info.versions.clone(), current, move |v| {
+                Message::Install(InstallMsg::Version(id.clone(), v.build_id))
+            })
+            .style(theme::select)
+            .padding([10, 14])
+            .width(Length::Fill)
+            .into()
+        };
+        items = items.push(section("Game version", version));
         if !info.dependencies.is_empty() {
             items = items.push(note(format!(
                 "Redistributables set up at first launch: {}",

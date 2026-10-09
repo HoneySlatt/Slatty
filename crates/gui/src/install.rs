@@ -22,6 +22,9 @@ use crate::{App, Core, Message, err};
 pub struct PlanInfo {
     pub title: String,
     pub version: String,
+    /// The build to install, among the versions GOG offers.
+    pub build_id: String,
+    pub versions: Vec<Version>,
     pub language: String,
     pub languages: Vec<String>,
     pub download_size: u64,
@@ -64,6 +67,8 @@ impl PlanInfo {
     }
 }
 
+// One per game at most: the size of a plan does not matter.
+#[allow(clippy::large_enum_variant)]
 pub enum InstallView {
     Planning,
     Ready(PlanInfo),
@@ -90,6 +95,8 @@ pub enum Cancelling {
 #[derive(Debug, Clone)]
 pub enum InstallMsg {
     Prepare(String, Option<String>),
+    /// Another build to install.
+    Version(String, String),
     Planned(String, Result<PlanInfo, String>),
     Start(String),
     Progress(String, Progress),
@@ -126,18 +133,21 @@ impl App {
         };
         match msg {
             InstallMsg::Prepare(game_id, language) => {
-                let (root, proton) = match self.install_views.get(&game_id) {
-                    Some(InstallView::Ready(info)) => {
-                        (PathBuf::from(info.root.trim()), info.proton.clone())
+                // Another language keeps the version chosen, if any.
+                let build = match self.install_views.get(&game_id) {
+                    Some(InstallView::Ready(info)) if language.is_some() => {
+                        Some(info.build_id.clone())
                     }
-                    _ => (PathBuf::from(&self.library_root), self.proton.clone()),
+                    _ => None,
                 };
-                self.install_views
-                    .insert(game_id.clone(), InstallView::Planning);
-                let id = game_id.clone();
-                return Task::perform(plan(core, id, language, root, proton), move |r| {
-                    Message::Install(InstallMsg::Planned(game_id, r))
-                });
+                return self.prepare(core, game_id, language, build);
+            }
+            InstallMsg::Version(game_id, build) => {
+                let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
+                    return Task::none();
+                };
+                let language = Some(info.language.clone());
+                return self.prepare(core, game_id, language, Some(build));
             }
             InstallMsg::Planned(game_id, result) => {
                 let auto = self.auto_resume.take_if(|id| *id == game_id).is_some();
@@ -179,6 +189,7 @@ impl App {
                 let req = InstallRequest {
                     game_id: game_id.clone(),
                     language: Some(info.language.clone()),
+                    build: Some(info.build_id.clone()),
                     root,
                     proton,
                     dlcs: DlcSelection::Only(
@@ -356,10 +367,79 @@ impl App {
     }
 }
 
+impl App {
+    /// Plans the install again, keeping the folder and Proton already chosen.
+    fn prepare(
+        &mut self,
+        core: Core,
+        game_id: String,
+        language: Option<String>,
+        build: Option<String>,
+    ) -> Task<Message> {
+        let (root, proton) = match self.install_views.get(&game_id) {
+            Some(InstallView::Ready(info)) => {
+                (PathBuf::from(info.root.trim()), info.proton.clone())
+            }
+            _ => (PathBuf::from(&self.library_root), self.proton.clone()),
+        };
+        self.install_views
+            .insert(game_id.clone(), InstallView::Planning);
+        let id = game_id.clone();
+        Task::perform(plan(core, id, language, build, root, proton), move |r| {
+            Message::Install(InstallMsg::Planned(game_id, r))
+        })
+    }
+}
+
+/// A build of a game, named for a pick list: its version, date and branch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Version {
+    pub build_id: String,
+    pub label: String,
+}
+
+impl std::fmt::Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+/// The builds GOG offers, newest first, the newest public one marked as the latest.
+pub fn versions(builds: &[slatty_core::galaxy::Build]) -> Vec<Version> {
+    let latest = builds
+        .iter()
+        .find(|b| b.branch.is_none())
+        .map(|b| &b.build_id);
+    builds
+        .iter()
+        .map(|b| {
+            let mut label = b.version_name.clone();
+            if let Some(date) = b
+                .date_published
+                .as_deref()
+                .and_then(|d| chrono::DateTime::parse_from_str(d, "%Y-%m-%dT%H:%M:%S%z").ok())
+            {
+                label += &format!(" · {}", date.format("%-d %b %Y"));
+            }
+            if let Some(branch) = &b.branch {
+                label += &format!(" · {branch} branch");
+            }
+            if Some(&b.build_id) == latest {
+                label += " (latest)";
+            }
+            Version {
+                build_id: b.build_id.clone(),
+                label,
+            }
+        })
+        .collect()
+}
+
 async fn plan(
     core: Core,
     game_id: String,
     language: Option<String>,
+    build: Option<String>,
     root: PathBuf,
     proton: Option<PathBuf>,
 ) -> Result<PlanInfo, String> {
@@ -372,7 +452,7 @@ async fn plan(
             j.root.clone(),
             DlcSelection::Only(j.dlcs.clone()),
         ),
-        None => (language, None, root, DlcSelection::AllOwned),
+        None => (language, build, root, DlcSelection::AllOwned),
     };
     let plan = installer::plan_for(
         &core.http,
@@ -391,6 +471,8 @@ async fn plan(
         proton,
         directory: plan.directory_name().map_err(err)?,
         title: plan.title,
+        versions: versions(&plan.builds),
+        build_id: plan.build.build_id,
         version: plan.build.version_name,
         language: plan.language,
         languages: plan.languages,
