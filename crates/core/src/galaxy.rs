@@ -219,7 +219,6 @@ pub struct GogContent {
     dirs: Dirs,
     tokens: tokio::sync::Mutex<Tokens>,
     endpoints: tokio::sync::RwLock<HashMap<String, Vec<Endpoint>>>,
-    speeds: std::sync::Mutex<speeds::Speeds>,
 }
 
 impl GogContent {
@@ -229,7 +228,6 @@ impl GogContent {
             dirs: dirs.clone(),
             tokens: tokio::sync::Mutex::new(tokens),
             endpoints: tokio::sync::RwLock::new(HashMap::new()),
-            speeds: std::sync::Mutex::default(),
         }
     }
 
@@ -252,10 +250,6 @@ impl GogContent {
         Ok(fresh)
     }
 
-    fn speeds(&self) -> std::sync::MutexGuard<'_, speeds::Speeds> {
-        self.speeds.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
     async fn access(&self) -> Result<Tokens> {
         let mut tokens = self.tokens.lock().await;
         if tokens.is_expired() {
@@ -263,6 +257,13 @@ impl GogContent {
         }
         Ok(tokens.clone())
     }
+}
+
+/// Shared by every download of the process, so each operation does not measure again.
+fn endpoint_speeds() -> std::sync::MutexGuard<'static, speeds::Speeds> {
+    static SPEEDS: std::sync::LazyLock<std::sync::Mutex<speeds::Speeds>> =
+        std::sync::LazyLock::new(Default::default);
+    SPEEDS.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 fn chunk_url(endpoint: &Endpoint, compressed_md5: &str) -> String {
@@ -475,7 +476,7 @@ impl ContentSource for GogContent {
         for attempt in 0..6 {
             let keys: Vec<String> = endpoints.iter().map(Endpoint::key).collect();
             let names: Vec<&str> = keys.iter().map(String::as_str).collect();
-            let i = self.speeds().pick(&names, &failed_here);
+            let i = endpoint_speeds().pick(&names, &failed_here);
             let url = chunk_url(&endpoints[i], compressed_md5);
             let started = std::time::Instant::now();
             let result = match http::send(self.http.get(url), "downloading a chunk").await {
@@ -487,7 +488,7 @@ impl ContentSource for GogContent {
             };
             match result {
                 Ok(b) => {
-                    self.speeds().record(names[i], b.len(), started.elapsed());
+                    endpoint_speeds().record(names[i], b.len(), started.elapsed());
                     return Ok(b.to_vec());
                 }
                 Err(Error::Http {
@@ -500,7 +501,7 @@ impl ContentSource for GogContent {
                     });
                 }
                 Err(e) => {
-                    self.speeds().failed(names[i]);
+                    endpoint_speeds().failed(names[i]);
                     failed_here.push(i);
                     last = Some(e);
                 }
