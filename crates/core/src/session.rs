@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -310,4 +311,56 @@ pub fn mark_interrupted(db: &Db, id: i64) -> Result<()> {
         [id],
     )?;
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Playtime {
+    /// Total length of the sessions that recorded their end.
+    pub seconds: i64,
+    pub last_played: i64,
+}
+
+/// Play time per game, from the sessions SlattyLauncher supervised.
+pub fn playtime(db: &Db) -> Result<HashMap<String, Playtime>> {
+    let conn = db.conn();
+    let mut stmt = conn.prepare(
+        "SELECT game_id, SUM(COALESCE(ended_at - started_at, 0)), MAX(COALESCE(ended_at, started_at))
+         FROM sessions GROUP BY game_id",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            Playtime {
+                seconds: r.get(1)?,
+                last_played: r.get(2)?,
+            },
+        ))
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn playtime_sums_ended_sessions_and_keeps_the_latest_one() {
+        let db = Db::in_memory().unwrap();
+        db.conn()
+            .execute_batch(
+                "INSERT INTO sessions (game_id, started_at, ended_at, state) VALUES
+                   ('1', 100, 160, 'ended'), ('1', 1000, 1300, 'ended'),
+                   ('1', 2000, NULL, 'interrupted'), ('2', 50, 80, 'lost');",
+            )
+            .unwrap();
+        let p = playtime(&db).unwrap();
+        assert_eq!(
+            p["1"],
+            Playtime {
+                seconds: 360,
+                last_played: 2000
+            }
+        );
+        assert_eq!(p["2"].seconds, 30);
+    }
 }

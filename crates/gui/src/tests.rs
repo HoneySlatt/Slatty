@@ -31,6 +31,8 @@ fn fake_game(id: &str, title: &str) -> LibraryGame {
         title: format!("[FAKE] {title}"),
         cover: None,
         icon: None,
+        background: None,
+        logo: None,
         os: vec!["windows".into()],
         metadata: MetadataSource::Missing,
     }
@@ -133,6 +135,8 @@ fn fake_achievement(key: &str, unlocked: bool) -> slatty_core::achievements::Ach
         visible: true,
         date_unlocked: unlocked.then(|| "2026-10-09T10:00:00+0000".into()),
         rarity: 0.0,
+        image_url_unlocked: String::new(),
+        image_url_locked: String::new(),
     }
 }
 

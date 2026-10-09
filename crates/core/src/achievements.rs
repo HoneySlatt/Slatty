@@ -20,6 +20,10 @@ pub struct Achievement {
     /// Share of GOG players who unlocked it, in percent.
     #[serde(default)]
     pub rarity: f32,
+    #[serde(default)]
+    pub image_url_unlocked: String,
+    #[serde(default)]
+    pub image_url_locked: String,
 }
 
 #[derive(Deserialize)]
@@ -134,6 +138,8 @@ mod tests {
             visible: true,
             date_unlocked: unlocked.then(|| "2026-10-08T20:00:00+0000".into()),
             rarity: 0.0,
+            image_url_unlocked: String::new(),
+            image_url_locked: String::new(),
         }
     }
 

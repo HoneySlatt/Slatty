@@ -29,6 +29,11 @@ pub struct LibraryGame {
     pub title: String,
     pub cover: Option<String>,
     pub icon: Option<String>,
+    /// Wide key art, shown behind the game page.
+    #[serde(default)]
+    pub background: Option<String>,
+    #[serde(default)]
+    pub logo: Option<String>,
     pub os: Vec<String>,
     pub metadata: MetadataSource,
 }
@@ -143,6 +148,8 @@ fn from_gamesdb(id: &str, v: &Value) -> Option<LibraryGame> {
         title,
         cover: image("vertical_cover", "jpg").or_else(|| image("cover", "jpg")),
         icon: image("square_icon", "png").or_else(|| image("icon", "png")),
+        background: image("background", "jpg"),
+        logo: image("logo", "png"),
         os,
         metadata: MetadataSource::Gamesdb,
     })
@@ -164,6 +171,8 @@ async fn from_product(http: &Client, id: &str) -> LibraryGame {
         title: title.unwrap_or_else(|| format!("GOG product {id}")),
         cover: None,
         icon: None,
+        background: None,
+        logo: None,
         os: Vec::new(),
     }
 }
@@ -193,6 +202,25 @@ pub async fn cover(
         .to_vec();
     fsutil::write_atomic(&path, &bytes)?;
     Ok(Some(bytes))
+}
+
+/// Bytes of any GOG image (key art, logo, achievement icon), cached per account by URL.
+pub async fn image(http: &Client, dirs: &Dirs, user_id: &str, url: &str) -> Result<Vec<u8>> {
+    let path = dirs
+        .account_cache(user_id)
+        .join("images")
+        .join(fsutil::sha256_hex(url.as_bytes()));
+    if let Ok(bytes) = tokio::fs::read(&path).await {
+        return Ok(bytes);
+    }
+    let resp = http::send(http.get(url), "downloading an image").await?;
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| Error::network("downloading an image", e))?
+        .to_vec();
+    fsutil::write_atomic(&path, &bytes)?;
+    Ok(bytes)
 }
 
 fn cache_file(dirs: &Dirs, user_id: &str) -> std::path::PathBuf {

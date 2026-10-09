@@ -5,6 +5,7 @@ use crate::error::Result;
 
 const LIBRARY_ROOT: &str = "library_root";
 const DEFAULT_PROTON: &str = "default_proton";
+const FAVORITES: &str = "favorites";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -24,6 +25,23 @@ pub fn default_proton(db: &Db) -> Result<Option<PathBuf>> {
 
 pub fn set_default_proton(db: &Db, path: &Path) -> Result<()> {
     db.set_setting(DEFAULT_PROTON, Some(&path.to_string_lossy()))
+}
+
+/// Game ids marked as favorites.
+pub fn favorites(db: &Db) -> Result<Vec<String>> {
+    Ok(db
+        .setting(FAVORITES)?
+        .map(|v| {
+            v.split(',')
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+pub fn set_favorites(db: &Db, ids: &[String]) -> Result<()> {
+    db.set_setting(FAVORITES, Some(&ids.join(",")))
 }
 
 /// Proton builds already on disk (Steam compatibility tools folder).
