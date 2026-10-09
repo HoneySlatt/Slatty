@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use iced::Task;
 use slatty_core::settings;
 
-use crate::{App, Message};
+use crate::{App, Message, theme};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtonChoice(pub PathBuf);
@@ -30,6 +30,11 @@ pub enum SettingsMsg {
     BrowseRoot,
     BrowsedRoot(Option<PathBuf>),
     Proton(ProtonChoice),
+    /// Writes the default theme to the theme file, to start a custom one from.
+    CreateTheme,
+    /// Opens the theme file in the desktop's editor.
+    EditTheme,
+    ReloadTheme,
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
 }
@@ -82,6 +87,38 @@ impl App {
                     Err(e) => self.notify_error(e.to_string()),
                 }
             }
+            SettingsMsg::CreateTheme => {
+                let path = theme::file(&core.dirs.config);
+                if !path.exists() {
+                    let written = slatty_core::fsutil::write_atomic(
+                        &path,
+                        theme::Tokens::default().to_toml().as_bytes(),
+                    );
+                    if let Err(e) = written {
+                        self.notify_error(e.to_string());
+                    }
+                }
+            }
+            SettingsMsg::EditTheme => {
+                let opened = std::process::Command::new("xdg-open")
+                    .arg(theme::file(&core.dirs.config))
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+                if let Err(e) = opened {
+                    self.notify_error(format!("Could not open the theme file: {e}"));
+                }
+            }
+            SettingsMsg::ReloadTheme => match theme::load(&theme::file(&core.dirs.config)) {
+                Ok(()) => {
+                    self.notice = Some(crate::Notice {
+                        error: false,
+                        text: "Theme reloaded.".into(),
+                    });
+                }
+                Err(e) => self.notify_error(format!("Theme file not used: {e}")),
+            },
             SettingsMsg::GameProton(game_id, choice) => {
                 match slatty_core::install::set_proton(&core.db, &game_id, &choice.0) {
                     Ok(install) => {

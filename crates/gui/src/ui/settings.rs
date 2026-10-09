@@ -1,6 +1,8 @@
 //! Settings tab and the sign-in screen.
 
-use iced::widget::{button, column, container, pick_list, row, scrollable, text, text_input};
+use iced::widget::{
+    Space, button, column, container, pick_list, row, scrollable, text, text_input,
+};
 use iced::{Alignment, Element, Length, Padding};
 
 use super::card;
@@ -108,6 +110,7 @@ impl App {
                     .into(),
                 ],
             ),
+            card("Appearance", vec![self.appearance()]),
             card(
                 "About",
                 vec![
@@ -171,5 +174,52 @@ impl App {
         .spacing(18)
         .max_width(720);
         container(content).padding(60).center_x(Length::Fill).into()
+    }
+}
+
+impl App {
+    /// The theme file: where it is, and the way to create, edit and apply it.
+    fn appearance(&self) -> Element<'_, Message> {
+        let Some(core) = &self.core else {
+            return Space::new().into();
+        };
+        let path = crate::theme::file(&core.dirs.config);
+        let exists = path.exists();
+        let action = |label, msg| {
+            button(text(label).size(14))
+                .padding([8, 16])
+                .on_press(Message::Settings(msg))
+                .style(theme::tonal)
+        };
+        let buttons = if exists {
+            row![
+                action("Edit", SettingsMsg::EditTheme),
+                action("Reload", SettingsMsg::ReloadTheme),
+            ]
+        } else {
+            row![action("Create theme file", SettingsMsg::CreateTheme)]
+        };
+        column![
+            row![
+                text("Theme file").size(15).width(210).color(tokens().muted),
+                text(path.display().to_string())
+                    .size(14)
+                    .width(Length::Fill),
+                buttons.spacing(8),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+            text(if exists {
+                "Colours, corners and the page transition come from this file. Edit it, then \
+                 Reload to see the change."
+            } else {
+                "The default look is in use. Create the theme file to change colours, corners and \
+                 the page transition."
+            })
+            .size(13)
+            .color(tokens().muted),
+        ]
+        .spacing(10)
+        .into()
     }
 }

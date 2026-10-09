@@ -1,8 +1,11 @@
 //! The interface's look: every colour comes from [`Tokens`], and the widget styles below are built
 //! from them only. A custom theme is another `Tokens`; views never name a colour themselves.
 
-use std::sync::OnceLock;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, RwLock};
 use std::time::Duration;
+
+use serde::Deserialize;
 
 use iced::widget::{button, container, pick_list, progress_bar, scrollable, slider, text_input};
 use iced::{Background, Border, Color, Font, Shadow, Theme, border, color, font};
@@ -66,11 +69,214 @@ impl Default for Tokens {
     }
 }
 
-static TOKENS: OnceLock<Tokens> = OnceLock::new();
+static TOKENS: LazyLock<RwLock<Arc<Tokens>>> =
+    LazyLock::new(|| RwLock::new(Arc::new(Tokens::default())));
 
-/// The tokens in use, fixed for the life of the process.
-pub fn tokens() -> &'static Tokens {
-    TOKENS.get_or_init(Tokens::default)
+/// The tokens in use: the defaults, or those of the theme file once loaded.
+pub fn tokens() -> Arc<Tokens> {
+    TOKENS.read().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// The theme file the interface reads at start and on Reload.
+pub fn file(config_dir: &Path) -> PathBuf {
+    config_dir.join("theme.toml")
+}
+
+/// Reads the theme file, if there is one, and uses it from the next frame. Keys left out keep
+/// their default; a mistake keeps the look in use and is described.
+pub fn load(path: &Path) -> Result<(), String> {
+    let tokens = match std::fs::read_to_string(path) {
+        Ok(text) => Tokens::from_toml(&text).map_err(|e| format!("{}: {e}", path.display()))?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Tokens::default(),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    *TOKENS.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(tokens);
+    Ok(())
+}
+
+/// The theme file as written by the user: three tables, every key optional.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ThemeFile {
+    colors: ColorsFile,
+    shape: ShapeFile,
+    motion: MotionFile,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ColorsFile {
+    background: Option<Hex>,
+    surface: Option<Hex>,
+    surface_high: Option<Hex>,
+    outline: Option<Hex>,
+    accent: Option<Hex>,
+    accent_hover: Option<Hex>,
+    on_accent: Option<Hex>,
+    text: Option<Hex>,
+    muted: Option<Hex>,
+    success: Option<Hex>,
+    warning: Option<Hex>,
+    danger: Option<Hex>,
+    danger_hover: Option<Hex>,
+    error_surface: Option<Hex>,
+    scrim: Option<Hex>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ShapeFile {
+    radius: Option<f32>,
+    cover_radius: Option<f32>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct MotionFile {
+    transition_ms: Option<u64>,
+    transition_rise: Option<f32>,
+}
+
+/// `#rrggbb`, or `#rrggbbaa` with transparency.
+#[derive(Debug, Clone, Copy)]
+struct Hex(Color);
+
+impl<'de> Deserialize<'de> for Hex {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        parse_hex(&s).map(Hex).ok_or_else(|| {
+            serde::de::Error::custom(format!("`{s}` is not a colour like #c4b1fa or #05040ab3"))
+        })
+    }
+}
+
+fn parse_hex(s: &str) -> Option<Color> {
+    let digits = s.strip_prefix('#')?;
+    if !matches!(digits.len(), 6 | 8) || !digits.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&digits[i..i + 2], 16).ok();
+    let alpha = if digits.len() == 8 { byte(6)? } else { 255 };
+    Some(Color::from_rgba8(
+        byte(0)?,
+        byte(2)?,
+        byte(4)?,
+        alpha as f32 / 255.0,
+    ))
+}
+
+fn hex(c: Color) -> String {
+    let [r, g, b, a] = c.into_rgba8();
+    if a == 255 {
+        format!("#{r:02x}{g:02x}{b:02x}")
+    } else {
+        format!("#{r:02x}{g:02x}{b:02x}{a:02x}")
+    }
+}
+
+impl Tokens {
+    /// The defaults, overridden by the keys the file sets.
+    fn from_toml(text: &str) -> Result<Tokens, String> {
+        let file: ThemeFile = toml::from_str(text).map_err(|e| e.message().to_string())?;
+        let mut t = Tokens::default();
+        let c = file.colors;
+        for (slot, value) in [
+            (&mut t.background, c.background),
+            (&mut t.surface, c.surface),
+            (&mut t.surface_high, c.surface_high),
+            (&mut t.outline, c.outline),
+            (&mut t.accent, c.accent),
+            (&mut t.accent_hover, c.accent_hover),
+            (&mut t.on_accent, c.on_accent),
+            (&mut t.text, c.text),
+            (&mut t.muted, c.muted),
+            (&mut t.success, c.success),
+            (&mut t.warning, c.warning),
+            (&mut t.danger, c.danger),
+            (&mut t.danger_hover, c.danger_hover),
+            (&mut t.error_surface, c.error_surface),
+            (&mut t.scrim, c.scrim),
+        ] {
+            if let Some(Hex(color)) = value {
+                *slot = color;
+            }
+        }
+        if let Some(r) = file.shape.radius {
+            t.radius = r.max(0.0);
+        }
+        if let Some(r) = file.shape.cover_radius {
+            t.cover_radius = r.max(0.0);
+        }
+        if let Some(ms) = file.motion.transition_ms {
+            t.transition = Duration::from_millis(ms);
+        }
+        if let Some(rise) = file.motion.transition_rise {
+            t.transition_rise = rise;
+        }
+        Ok(t)
+    }
+
+    /// The whole theme as a file, to start a custom one from.
+    pub fn to_toml(&self) -> String {
+        let colors = [
+            ("background", self.background, "Window background"),
+            ("surface", self.surface, "Cards, drawers"),
+            (
+                "surface_high",
+                self.surface_high,
+                "Fields, hovered controls",
+            ),
+            ("outline", self.outline, "Borders, dividers"),
+            ("accent", self.accent, "Primary buttons, selection"),
+            ("accent_hover", self.accent_hover, ""),
+            ("on_accent", self.on_accent, "Text on the accent colour"),
+            ("text", self.text, ""),
+            ("muted", self.muted, "Secondary text"),
+            ("success", self.success, ""),
+            ("warning", self.warning, ""),
+            ("danger", self.danger, ""),
+            ("danger_hover", self.danger_hover, ""),
+            (
+                "error_surface",
+                self.error_surface,
+                "Background of error notices",
+            ),
+            (
+                "scrim",
+                self.scrim,
+                "Darkens the page behind dialogs (#rrggbbaa)",
+            ),
+        ];
+        let mut out = String::from(
+            "# SlattyLauncher theme. Every key is optional: one left out keeps its default.\n\
+             # Settings → Appearance → Reload applies changes without restarting.\n\n[colors]\n",
+        );
+        for (key, color, note) in colors {
+            let line = format!("{key} = \"{}\"", hex(color));
+            if note.is_empty() {
+                out += &format!("{line}\n");
+            } else {
+                out += &format!("{line:<28}# {note}\n");
+            }
+        }
+        let noted = |line: String, note: &str| format!("{line:<28}# {note}\n");
+        out += "\n[shape]\n";
+        out += &noted(format!("radius = {}", self.radius), "Corners of controls");
+        out += &noted(
+            format!("cover_radius = {}", self.cover_radius),
+            "Corners of game covers",
+        );
+        out += "\n[motion]\n";
+        out += &noted(
+            format!("transition_ms = {}", self.transition.as_millis()),
+            "Page transition; 0 turns it off",
+        );
+        out += &noted(
+            format!("transition_rise = {}", self.transition_rise),
+            "How far a new page rises, in pixels",
+        );
+        out
+    }
 }
 
 pub const BOLD: Font = Font {
@@ -515,4 +721,56 @@ pub fn scroller(theme: &Theme, status: scrollable::Status) -> scrollable::Style 
         rail.scroller.border = round(999.0);
     }
     style
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_theme_file_overrides_only_what_it_sets() {
+        let t = Tokens::from_toml(
+            "[colors]\naccent = \"#ff8800\"\nscrim = \"#00000080\"\n\n[shape]\nradius = 0\n\n\
+             [motion]\ntransition_ms = 0\n",
+        )
+        .unwrap();
+        assert_eq!(t.accent, Color::from_rgb8(0xff, 0x88, 0x00));
+        assert!((t.scrim.a - 128.0 / 255.0).abs() < 1e-6);
+        assert_eq!(t.radius, 0.0);
+        assert_eq!(t.transition, Duration::ZERO);
+        let d = Tokens::default();
+        assert_eq!(
+            (t.background, t.cover_radius),
+            (d.background, d.cover_radius)
+        );
+    }
+
+    #[test]
+    fn mistakes_are_named() {
+        let bad_colour = Tokens::from_toml("[colors]\naccent = \"orange\"\n").unwrap_err();
+        assert!(
+            bad_colour.contains("`orange` is not a colour"),
+            "{bad_colour}"
+        );
+        let typo = Tokens::from_toml("[colors]\naccnet = \"#ffffff\"\n").unwrap_err();
+        assert!(typo.contains("accnet"), "{typo}");
+    }
+
+    #[test]
+    fn the_written_file_reads_back_as_the_defaults() {
+        let d = Tokens::default();
+        let t = Tokens::from_toml(&d.to_toml()).unwrap();
+        for (a, b) in [
+            (t.background, d.background),
+            (t.accent, d.accent),
+            (t.muted, d.muted),
+            (t.scrim, d.scrim),
+        ] {
+            assert_eq!(a.into_rgba8(), b.into_rgba8());
+        }
+        assert_eq!(
+            (t.radius, t.cover_radius, t.transition, t.transition_rise),
+            (d.radius, d.cover_radius, d.transition, d.transition_rise)
+        );
+    }
 }

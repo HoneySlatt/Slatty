@@ -84,6 +84,7 @@ The [user guide](docs/user-guide.md) covers every command.
 - [User guide](docs/user-guide.md): commands, interface, where data is stored, troubleshooting
 - [Cloud saves](docs/cloud-saves.md): how sync works and how your saves are protected
 - [Architecture](docs/architecture.md): crates, modules and main flows
+- [Theming](docs/theming.md): colours, corners and motion from a file
 - [GOG integration](docs/gog-integration.md): every service used, its source and what is verified
 - [Compatibility](docs/compatibility.md): results of real tests
 - [Testing](docs/testing.md): automated tests and manual checks against GOG

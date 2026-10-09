@@ -1782,3 +1782,28 @@ fn a_second_install_says_why_it_waits() {
     let _ = ui.click("Start install");
     assert!(ui.into_messages().next().is_none());
 }
+
+#[test]
+fn the_theme_file_can_be_created_from_settings() {
+    use crate::settings::SettingsMsg;
+    let mut app = library_app();
+    app.page = Page::Settings;
+    let path = crate::theme::file(&app.core.as_ref().unwrap().dirs.config);
+    let _ = std::fs::remove_file(&path);
+    {
+        let mut ui = render(&app);
+        ui.click("Create theme file").unwrap();
+        for m in ui.into_messages().collect::<Vec<_>>() {
+            let _ = app.update(m);
+        }
+    }
+    let written = std::fs::read_to_string(&path).unwrap();
+    assert!(written.contains("[colors]") && written.contains("accent = \"#c4b1fa\""));
+    let mut ui = render(&app);
+    assert!(ui.find("Edit").is_ok() && ui.find("Reload").is_ok());
+    snapshot(&mut ui, "settings-appearance");
+    drop(ui);
+    // Reloading the defaults just written changes nothing for the other tests.
+    let _ = app.update(Message::Settings(SettingsMsg::ReloadTheme));
+    assert!(app.notice.as_ref().is_some_and(|n| !n.error));
+}

@@ -53,6 +53,12 @@ fn main() -> iced::Result {
         .with_env_filter(tracing_subscriber::EnvFilter::from_env("SLATTY_LOG"))
         .with_writer(std::io::stderr)
         .init();
+    // Before the first frame, so the window never shows another look first.
+    if let Ok(dirs) = Dirs::from_system()
+        && let Err(e) = theme::load(&theme::file(&dirs.config))
+    {
+        let _ = THEME_ERROR.set(e);
+    }
     iced::application(App::boot, App::update, App::view)
         .title("SlattyLauncher")
         .subscription(App::subscription)
@@ -65,6 +71,9 @@ fn main() -> iced::Result {
         .exit_on_close_request(false)
         .run()
 }
+
+/// Why the theme file could not be used at start, shown once the window is up.
+static THEME_ERROR: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 #[derive(Clone)]
 pub struct Core {
@@ -427,6 +436,9 @@ impl App {
                             boot.interrupted.join(", ")
                         ),
                     });
+                }
+                if let Some(e) = THEME_ERROR.get() {
+                    self.notify_error(format!("Theme file not used: {e}"));
                 }
                 let avatar = self.fetch_avatar();
                 let resume = self.resume_interrupted();
