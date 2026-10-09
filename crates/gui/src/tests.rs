@@ -659,3 +659,47 @@ fn play_time_comes_from_gog_even_for_games_played_elsewhere() {
         "only GOG's total counts"
     );
 }
+
+#[test]
+fn closing_asks_first_only_when_something_is_running() {
+    let mut app = library_app();
+    let _ = app.update(Message::CloseRequested);
+    assert!(app.quit_confirm.is_none(), "nothing running: quits at once");
+
+    let cancel = tokio_util::sync::CancellationToken::new();
+    app.install_views.insert(
+        "5".into(),
+        InstallView::Running {
+            title: "[FAKE] Game 5".into(),
+            progress: slatty_core::installer::Progress {
+                files_done: 1,
+                files_total: 4,
+                bytes_done: 1 << 30,
+                bytes_total: 2 << 30,
+            },
+            cancel: cancel.clone(),
+        },
+    );
+    let _ = app.update(Message::CloseRequested);
+    let mut ui = render(&app);
+    assert!(
+        ui.find(
+            "Downloading [FAKE] Game 5 (50 %). Quitting pauses it; it resumes where it stopped."
+        )
+        .is_ok()
+    );
+    snapshot(&mut ui, "quit-confirm");
+    ui.click("Keep running").unwrap();
+    for m in ui.into_messages() {
+        let _ = app.update(m);
+    }
+    assert!(app.quit_confirm.is_none());
+    assert!(!cancel.is_cancelled());
+
+    let _ = app.update(Message::CloseRequested);
+    let _ = app.update(Message::ConfirmQuit);
+    assert!(
+        cancel.is_cancelled(),
+        "the download is paused before quitting"
+    );
+}

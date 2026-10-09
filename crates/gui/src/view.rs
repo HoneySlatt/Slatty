@@ -1,6 +1,6 @@
 use iced::widget::{
-    Column, Space, button, checkbox, column, container, grid, hover, image, pick_list,
-    progress_bar, row, scrollable, slider, space, text, text_input,
+    Column, Space, button, center, checkbox, column, container, grid, hover, image, mouse_area,
+    opaque, pick_list, progress_bar, row, scrollable, slider, space, stack, text, text_input,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::achievements::Achievement;
@@ -57,9 +57,13 @@ impl App {
             .into(),
         };
         let page = self.with_notice(container(body).padding(Padding::new(24.0).top(16.0)).into());
-        match (self.panel, self.selected_game()) {
+        let page = match (self.panel, self.selected_game()) {
             (Some(panel), Some(game)) => self.with_panel(page, panel, game),
             _ => page,
+        };
+        match &self.quit_confirm {
+            Some(work) => quit_dialog(page, work),
+            None => page,
         }
     }
 
@@ -915,4 +919,50 @@ pub fn describe_play_event(e: &PlayEvent) -> String {
         PlayEvent::NoNewAchievement => "No new achievement recorded on GOG.".into(),
         PlayEvent::AchievementsUnknown => "Could not read achievements back from GOG.".into(),
     }
+}
+
+/// Asks before closing the window while something is still running.
+fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a, Message> {
+    let items = work.iter().map(|w| {
+        row![
+            icon(Icon::TriangleAlert, 18.0, theme::WARNING),
+            text(w).size(14).color(MUTED).width(Length::Fill)
+        ]
+        .spacing(12)
+        .into()
+    });
+    let dialog = container(
+        column![
+            text("Quit SlattyLauncher?").size(24).font(BOLD),
+            Column::with_children(items).spacing(10),
+            row![
+                space().width(Length::Fill),
+                button(text("Keep running").size(14))
+                    .padding([10, 18])
+                    .on_press(Message::CancelQuit)
+                    .style(theme::tonal),
+                button(text("Quit anyway").size(14))
+                    .padding([10, 18])
+                    .on_press(Message::ConfirmQuit)
+                    .style(theme::danger),
+            ]
+            .spacing(10),
+        ]
+        .spacing(18),
+    )
+    .padding(26)
+    .max_width(560)
+    .style(theme::card);
+    stack![
+        page,
+        mouse_area(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(theme::backdrop)
+        )
+        .on_press(Message::CancelQuit),
+        center(opaque(dialog)),
+    ]
+    .into()
 }

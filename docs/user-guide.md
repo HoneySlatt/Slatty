@@ -80,6 +80,10 @@ panels:
 
 Escape closes the panel, then the game page.
 
+Closing the window while something runs (a download, an update or repair, a cloud sync, a game)
+asks first and says what would be interrupted. Quitting pauses a download; it resumes where it
+stopped.
+
 **Achievements** lists every game with achievements, by completion. Clicking a game opens its own
 achievements page in the same tab, where you can unlock or clear them. SlattyLauncher reads which games
 have achievements and cloud saves from GOG in the background and keeps the answer in

@@ -47,6 +47,7 @@ fn main() -> iced::Result {
         .subscription(App::subscription)
         .theme(App::theme)
         .window_size((1440.0, 900.0))
+        .exit_on_close_request(false)
         .run()
 }
 
@@ -210,6 +211,8 @@ pub struct App {
     pub library_root: String,
     pub proton: Option<PathBuf>,
     pub proton_choices: Vec<PathBuf>,
+    /// Work that closing the window would interrupt, waiting for the user's choice.
+    pub quit_confirm: Option<Vec<String>>,
 }
 
 impl Default for App {
@@ -253,6 +256,7 @@ impl Default for App {
             library_root: String::new(),
             proton: None,
             proton_choices: Vec::new(),
+            quit_confirm: None,
         }
     }
 }
@@ -333,6 +337,9 @@ pub enum Message {
     Maintenance(MaintenanceMsg),
     Settings(SettingsMsg),
     DismissNotice,
+    CloseRequested,
+    ConfirmQuit,
+    CancelQuit,
     Key(keyboard::Event),
 }
 
@@ -381,7 +388,10 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        keyboard::listen().map(Message::Key)
+        Subscription::batch([
+            keyboard::listen().map(Message::Key),
+            iced::window::close_requests().map(|_| Message::CloseRequested),
+        ])
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -786,6 +796,22 @@ impl App {
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::DismissNotice => self.notice = None,
+            Message::CloseRequested => {
+                let running = self.running_work();
+                if running.is_empty() {
+                    return iced::exit();
+                }
+                self.quit_confirm = Some(running);
+            }
+            Message::CancelQuit => self.quit_confirm = None,
+            Message::ConfirmQuit => {
+                for view in self.install_views.values() {
+                    if let InstallView::Running { cancel, .. } = view {
+                        cancel.cancel();
+                    }
+                }
+                return iced::exit();
+            }
             Message::Key(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                 use keyboard::key::Named;
                 match key {
@@ -804,9 +830,52 @@ impl App {
 
     /// Escape: closes the panel, else the game page, else the per-game achievements page.
     fn go_back(&mut self) {
+        if self.quit_confirm.take().is_some() {
+            return;
+        }
         if self.panel.take().is_none() && self.selected.take().is_none() {
             self.achievements_game = None;
         }
+    }
+
+    fn title_of(&self, game_id: &str) -> String {
+        self.library
+            .iter()
+            .find(|g| g.id == game_id)
+            .map(|g| g.title.clone())
+            .or_else(|| self.installs.get(game_id).map(|i| i.title.clone()))
+            .unwrap_or_else(|| game_id.to_string())
+    }
+
+    /// What closing the window would interrupt, described for the user.
+    pub fn running_work(&self) -> Vec<String> {
+        let mut work = Vec::new();
+        if let Some((_, title, p)) = self.installing() {
+            work.push(format!(
+                "Downloading {title} ({:.0} %). Quitting pauses it; it resumes where it stopped.",
+                view::fraction(p) * 100.0
+            ));
+        }
+        for (id, m) in &self.maintenance {
+            if m.busy {
+                work.push(format!(
+                    "An operation on {} is running. An interrupted update must be finished before playing.",
+                    self.title_of(id)
+                ));
+            }
+        }
+        for (id, c) in &self.cloud {
+            if c.busy {
+                work.push(format!("Cloud saves of {} are syncing.", self.title_of(id)));
+            }
+        }
+        if let Some(p) = self.play.as_ref().filter(|p| p.running) {
+            work.push(format!(
+                "{} is running. It keeps running, but its cloud saves will not be uploaded and its play time will not be sent to GOG.",
+                self.title_of(&p.game_id)
+            ));
+        }
+        work
     }
 
     fn open_game(&mut self, id: String, panel: Option<Panel>) -> Task<Message> {
