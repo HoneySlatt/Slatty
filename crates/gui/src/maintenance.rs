@@ -233,7 +233,7 @@ impl App {
                             lines
                         })
                     },
-                    move |r| Message::Maintenance(MaintenanceMsg::Uninstalled(game_id.clone(), r)),
+                    move |r| Message::Maintenance(MaintenanceMsg::Uninstalled(game_id, r)),
                 );
             }
             MaintenanceMsg::Uninstalled(game_id, Ok(lines)) => {
@@ -275,9 +275,7 @@ impl App {
                         })
                         .map_err(err)
                     },
-                    move |r| {
-                        Message::Maintenance(MaintenanceMsg::UpdateChecked(game_id.clone(), r))
-                    },
+                    move |r| Message::Maintenance(MaintenanceMsg::UpdateChecked(game_id, r)),
                 );
             }
             MaintenanceMsg::UpdateChecked(game_id, result) => {
@@ -354,9 +352,7 @@ impl App {
                             chosen_dlcs,
                         })
                     },
-                    move |r| {
-                        Message::Maintenance(MaintenanceMsg::ContentLoaded(game_id.clone(), r))
-                    },
+                    move |r| Message::Maintenance(MaintenanceMsg::ContentLoaded(game_id, r)),
                 );
             }
             MaintenanceMsg::ContentLoaded(game_id, result) => {

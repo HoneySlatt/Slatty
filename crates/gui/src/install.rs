@@ -107,7 +107,7 @@ impl App {
                     .insert(game_id.clone(), InstallView::Planning);
                 let id = game_id.clone();
                 return Task::perform(plan(core, id, language, root), move |r| {
-                    Message::Install(InstallMsg::Planned(game_id.clone(), r))
+                    Message::Install(InstallMsg::Planned(game_id, r))
                 });
             }
             InstallMsg::Planned(game_id, result) => {
@@ -187,7 +187,7 @@ impl App {
                         .map_err(err)?
                         .map_err(err)
                     },
-                    move |r| Message::Install(InstallMsg::Discarded(game_id.clone(), r)),
+                    move |r| Message::Install(InstallMsg::Discarded(game_id, r)),
                 );
             }
             InstallMsg::Discarded(game_id, result) => {
@@ -217,7 +217,7 @@ impl App {
                         }
                         dialog.pick_folder().await.map(|f| f.path().to_path_buf())
                     },
-                    move |picked| Message::Install(InstallMsg::Browsed(game_id.clone(), picked)),
+                    move |picked| Message::Install(InstallMsg::Browsed(game_id, picked)),
                 );
             }
             InstallMsg::Browsed(game_id, Some(folder)) => {

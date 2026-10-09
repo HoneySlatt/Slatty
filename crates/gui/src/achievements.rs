@@ -37,7 +37,7 @@ impl App {
                     .await
                     .map_err(err)
             },
-            move |r| Message::Achievements(game_id.clone(), r),
+            move |r| Message::Achievements(game_id, r),
         )
     }
 
@@ -78,7 +78,7 @@ impl App {
                     .map_err(err)?;
                 Ok((list, failures))
             },
-            move |r| Message::AchievementsChanged(game_id.clone(), r),
+            move |r| Message::AchievementsChanged(game_id, r),
         )
     }
 

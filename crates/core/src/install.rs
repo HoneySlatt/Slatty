@@ -200,7 +200,7 @@ mod tests {
         );
         let db = Db::in_memory().unwrap();
         install.save(&db).unwrap();
-        assert_eq!(Install::get(&db, "42").unwrap(), Some(install.clone()));
+        assert_eq!(Install::get(&db, "42").unwrap(), Some(install));
         assert_eq!(Install::list(&db).unwrap().len(), 1);
         std::fs::remove_dir_all(root).unwrap();
     }

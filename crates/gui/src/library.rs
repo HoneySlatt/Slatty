@@ -244,7 +244,7 @@ impl App {
                         .await
                         .ok()
                 },
-                move |bytes| Message::Image(key.clone(), bytes),
+                move |bytes| Message::Image(key, bytes),
             )
         }))
     }
@@ -273,7 +273,7 @@ impl App {
                         .ok()
                         .flatten()
                 },
-                move |bytes| Message::Cover(id.clone(), bytes),
+                move |bytes| Message::Cover(id, bytes),
             )
         }));
         let all = self.library.iter().map(|g| g.id.clone()).collect();
