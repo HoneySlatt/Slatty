@@ -244,7 +244,16 @@ impl App {
                 .then(|| Message::Install(InstallMsg::Start(g.id.clone()))),
         )
         .style(theme::primary);
-        let mut actions = column![start].spacing(10);
+        let mut actions = column![].spacing(10);
+        // Say why Start is unavailable.
+        if let Some((_, title, _)) = self.installing() {
+            actions = actions.push(note(format!(
+                "{title} is downloading; this one can start once it is done."
+            )));
+        } else if info.proton.is_none() {
+            actions = actions.push(note("Choose a Proton build to start."));
+        }
+        actions = actions.push(start);
         if info.resumable {
             actions = actions.push(
                 button(container(text("Discard download").size(14)).center_x(Length::Fill))

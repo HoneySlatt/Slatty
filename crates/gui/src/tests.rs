@@ -1757,3 +1757,28 @@ fn another_version_can_be_chosen_before_install_and_after() {
         Message::Maintenance(MaintenanceMsg::Apply(id, Change::Build(b))) if id == "3" && b == "b1"
     )));
 }
+
+#[test]
+fn a_second_install_says_why_it_waits() {
+    let mut app = library_app();
+    app.install_views.insert(
+        "5".into(),
+        InstallView::Running {
+            title: "[FAKE] Game 5".into(),
+            progress: Default::default(),
+            cancel: tokio_util::sync::CancellationToken::new(),
+            cancelling: crate::install::Cancelling::No,
+            rate: Default::default(),
+        },
+    );
+    open(&mut app, "6", Some(Panel::Install));
+    app.install_views
+        .insert("6".into(), InstallView::Ready(fake_plan()));
+    let mut ui = render(&app);
+    assert!(
+        ui.find("[FAKE] Game 5 is downloading; this one can start once it is done.")
+            .is_ok()
+    );
+    let _ = ui.click("Start install");
+    assert!(ui.into_messages().next().is_none());
+}
