@@ -129,7 +129,7 @@ pub async fn check(
     repair: bool,
     progress: &(dyn Fn(Progress) + Send + Sync),
     cancel: CancellationToken,
-) -> Result<Vec<PathBuf>> {
+) -> Result<installer::Checked> {
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
     if update_pending(db, game_id)?.is_some() {
         return Err(Error::Refused(
@@ -239,6 +239,8 @@ pub struct UpdateReport {
     pub from_version: String,
     pub to_version: String,
     pub downloaded: Vec<PathBuf>,
+    /// Bytes of changed files copied from their installed version instead of downloaded.
+    pub reused_bytes: u64,
     pub removed: Vec<PathBuf>,
     /// An earlier unfinished change was completed instead of the requested one.
     pub resumed: bool,
@@ -357,7 +359,7 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
     old: &InstallRecord,
     dir: &Path,
 ) -> Result<UpdateReport> {
-    let downloaded = dl.check_installed(set, dir, true).await?;
+    let checked = dl.check_installed(set, dir, true).await?;
     let kept: std::collections::HashSet<String> = set
         .files
         .iter()
@@ -384,7 +386,8 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
         }
     }
     Ok(UpdateReport {
-        downloaded,
+        downloaded: checked.bad,
+        reused_bytes: checked.reused_bytes,
         removed,
         ..Default::default()
     })

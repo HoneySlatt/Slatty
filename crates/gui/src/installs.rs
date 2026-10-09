@@ -471,6 +471,7 @@ impl App {
                             CancellationToken::new(),
                         )
                         .await
+                        .map(|c| c.bad)
                         .map_err(err)
                     },
                     move |r| {
@@ -641,7 +642,7 @@ impl App {
                         .await
                         .map(|r| {
                             format!(
-                                "{}Now at {}: {} file(s) downloaded, {} removed.",
+                                "{}Now at {}: {} file(s) downloaded, {} removed.{}",
                                 if r.resumed {
                                     "An unfinished change was completed first. "
                                 } else {
@@ -649,7 +650,15 @@ impl App {
                                 },
                                 r.to_version,
                                 r.downloaded.len(),
-                                r.removed.len()
+                                r.removed.len(),
+                                if r.reused_bytes > 0 {
+                                    format!(
+                                        " {} reused from installed files.",
+                                        human_size(r.reused_bytes)
+                                    )
+                                } else {
+                                    String::new()
+                                }
                             )
                         })
                         .map_err(err)

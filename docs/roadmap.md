@@ -27,7 +27,8 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   - Staged and verified downloads, pause and resume.
   - Wine prefix created at first launch.
 - **Maintenance.** Verify, repair, uninstall.
-- **Updates.** Detect a newer build; update in place, file by file, resumable.
+- **Updates.** Detect a newer build; update in place, file by file, resumable. Unchanged chunks
+  of changed files are copied locally instead of downloaded.
 - **DLC and languages.** Owned DLC installed by default; add, remove or switch language later.
 - **Post-install setup.** GOG script interpreter or setup programs, game-folder dependencies, shared
   redistributables.
@@ -36,7 +37,8 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 
 ## Next
 
-- **Smaller updates.** Reuse unchanged chunks of changed files, or GOG's binary patches.
+- **Binary patches.** GOG publishes xdelta3 patches between some builds (`products/{id}/patches`,
+  used by heroic-gogdl), smaller than whole chunks. Applying them needs an xdelta3 decoder.
 
 ## Planned
 

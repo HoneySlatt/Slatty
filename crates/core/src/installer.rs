@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{FileExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
@@ -294,6 +294,15 @@ pub struct Progress {
     pub bytes_total: u64,
 }
 
+/// Result of checking files in place.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Checked {
+    /// Files that were missing or wrong (and, when repairing, were replaced).
+    pub bad: Vec<PathBuf>,
+    /// Bytes of replaced files copied from their previous version instead of downloaded.
+    pub reused_bytes: u64,
+}
+
 pub struct Download<'a, S> {
     pub source: &'a S,
     pub cancel: CancellationToken,
@@ -331,17 +340,17 @@ impl<S: ContentSource> Download<'_, S> {
         set: &FileSet,
         dir: &Path,
         repair: bool,
-    ) -> Result<Vec<PathBuf>> {
+    ) -> Result<Checked> {
         if repair {
             self.check_space(set, dir)?;
         }
-        let bad = self.fill(set, dir, repair).await?;
+        let checked = self.fill(set, dir, repair).await?;
         if repair {
             for d in &set.dirs {
                 crate::paths::ensure_dir(&dir.join(d))?;
             }
         }
-        Ok(bad)
+        Ok(checked)
     }
 
     fn check_space(&self, set: &FileSet, dir: &Path) -> Result<()> {
@@ -369,8 +378,9 @@ impl<S: ContentSource> Download<'_, S> {
 
     /// Verifies every file under `dir`; returns those that were missing or wrong.
     /// With `download`, they are fetched again (atomically replaced).
-    async fn fill(&self, set: &FileSet, dir: &Path, download: bool) -> Result<Vec<PathBuf>> {
+    async fn fill(&self, set: &FileSet, dir: &Path, download: bool) -> Result<Checked> {
         let bad: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+        let reused = AtomicU64::new(0);
         let total = Progress {
             files_total: set.files.len(),
             bytes_total: set.disk_size(),
@@ -396,6 +406,7 @@ impl<S: ContentSource> Download<'_, S> {
                 let dest = dir.join(rel);
                 let first_error = &first_error;
                 let bad = &bad;
+                let reused = &reused;
                 async move {
                     if self.cancel.is_cancelled() {
                         first_error.lock().unwrap().get_or_insert(Error::Cancelled);
@@ -414,7 +425,8 @@ impl<S: ContentSource> Download<'_, S> {
                         }
                         bad.lock().unwrap().push(rel.clone());
                         if download {
-                            self.download_file(&dest, file, &|n| report(0, n)).await?;
+                            let local = self.download_file(&dest, file, &|n| report(0, n)).await?;
+                            reused.fetch_add(local, Ordering::Relaxed);
                         }
                         report(1, if download { 0 } else { file.size() });
                         Ok::<(), Error>(())
@@ -431,15 +443,19 @@ impl<S: ContentSource> Download<'_, S> {
         }
         let mut bad = bad.into_inner().unwrap();
         bad.sort();
-        Ok(bad)
+        Ok(Checked {
+            bad,
+            reused_bytes: reused.into_inner(),
+        })
     }
 
+    /// Writes `file` at `dest` atomically; returns the bytes taken from the file already there.
     async fn download_file(
         &self,
         dest: &Path,
         file: &DepotFile,
         on_bytes: &(dyn Fn(u64) + Sync),
-    ) -> Result<()> {
+    ) -> Result<u64> {
         if let Some(parent) = dest.parent() {
             crate::paths::ensure_dir(parent)?;
         }
@@ -449,27 +465,48 @@ impl<S: ContentSource> Download<'_, S> {
                 .map(|n| n.to_string_lossy())
                 .unwrap_or_default()
         ));
+        let local = tokio::task::spawn_blocking({
+            let (dest, file) = (dest.to_path_buf(), file.clone());
+            move || local_chunks(&dest, &file)
+        })
+        .await
+        .expect("scan task panicked")?;
         let mut out = std::fs::File::create(&tmp)
             .map_err(|e| Error::io(format!("create {}", tmp.display()), e))?;
         let mut chunks = futures::stream::iter(0..file.chunks.len())
             .map(|i| {
                 let c = file.chunks[i].clone();
                 let product = file.product_id.clone();
+                let local = local.clone();
                 async move {
                     if self.cancel.is_cancelled() {
                         return Err(Error::Cancelled);
+                    }
+                    if let Some(local) = local {
+                        let c = c.clone();
+                        let data = tokio::task::spawn_blocking(move || local.read(&c))
+                            .await
+                            .expect("chunk task panicked");
+                        if let Some(data) = data {
+                            return Ok((data, true));
+                        }
                     }
                     let raw = self.source.chunk(&product, &c.compressed_md5).await?;
                     tokio::task::spawn_blocking(move || unpack_chunk(&raw, &c))
                         .await
                         .expect("chunk task panicked")
+                        .map(|data| (data, false))
                 }
             })
             .buffered(CHUNK_CONCURRENCY);
+        let mut reused = 0;
         while let Some(data) = chunks.next().await {
-            let data = data.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
+            let (data, local) = data.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
             out.write_all(&data)
                 .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
+            if local {
+                reused += data.len() as u64;
+            }
             on_bytes(data.len() as u64);
         }
         out.sync_all()
@@ -478,7 +515,9 @@ impl<S: ContentSource> Download<'_, S> {
         if file.is_executable() {
             let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
         }
-        std::fs::rename(&tmp, dest).map_err(|e| Error::io(format!("rename {}", tmp.display()), e))
+        std::fs::rename(&tmp, dest)
+            .map_err(|e| Error::io(format!("rename {}", tmp.display()), e))?;
+        Ok(reused)
     }
 }
 
@@ -500,6 +539,49 @@ fn unpack_chunk(raw: &[u8], c: &crate::galaxy::Chunk) -> Result<Vec<u8>> {
         )));
     }
     Ok(data)
+}
+
+/// Chunks of `file` already present in the file at its destination (an older version, a damaged
+/// copy), found by hashing that file at the new chunk offsets. Unchanged regions of a changed file
+/// are then copied locally instead of downloaded.
+struct LocalChunks {
+    file: std::fs::File,
+    /// Content MD5 → offset in `file`.
+    offsets: HashMap<String, u64>,
+}
+
+impl LocalChunks {
+    /// Reads a chunk back, checking it again: the file may have changed since it was scanned.
+    fn read(&self, c: &crate::galaxy::Chunk) -> Option<Vec<u8>> {
+        let offset = *self.offsets.get(&c.md5)?;
+        let mut data = vec![0; c.size as usize];
+        self.file.read_exact_at(&mut data, offset).ok()?;
+        (fsutil::hex(&Md5::digest(&data)) == c.md5).then_some(data)
+    }
+}
+
+fn local_chunks(path: &Path, file: &DepotFile) -> Result<Option<std::sync::Arc<LocalChunks>>> {
+    if !std::fs::symlink_metadata(path).is_ok_and(|m| m.is_file()) {
+        return Ok(None);
+    }
+    let mut f =
+        std::fs::File::open(path).map_err(|e| Error::io(format!("open {}", path.display()), e))?;
+    let mut offsets = HashMap::new();
+    let mut offset = 0;
+    let mut buf = Vec::new();
+    for c in &file.chunks {
+        buf.resize(c.size as usize, 0);
+        if f.read_exact(&mut buf).is_err() {
+            break;
+        }
+        offsets
+            .entry(fsutil::hex(&Md5::digest(&buf)))
+            .or_insert(offset);
+        offset += c.size;
+    }
+    let wanted: HashSet<&str> = file.chunks.iter().map(|c| c.md5.as_str()).collect();
+    offsets.retain(|md5, _| wanted.contains(md5.as_str()));
+    Ok((!offsets.is_empty()).then(|| std::sync::Arc::new(LocalChunks { file: f, offsets })))
 }
 
 /// True when `path` already holds exactly this file, checked chunk by chunk.

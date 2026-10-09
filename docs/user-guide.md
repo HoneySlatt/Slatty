@@ -183,8 +183,12 @@ An update compares each file of the new build with the one on disk:
   Anything else in the game folder is left alone.
 
 If an update is interrupted, the game cannot be launched until `slatty update <game-id>` completes
-it. The command resumes with the same build and only downloads what is still missing. A changed file
-is downloaded whole, even when only part of it changed.
+it. The command resumes with the same build and only downloads what is still missing.
+
+When a file changed only in places, the parts that did not change are copied from the installed
+file instead of downloaded. GOG cuts files into chunks (10 MiB on the games checked so far), so a
+small change still costs at least one chunk. Repairs work the same way: `slatty verify --repair`
+downloads only the damaged chunks of a damaged file.
 
 The interface offers **Check for update** and **Update now** in the game's Maintenance section.
 

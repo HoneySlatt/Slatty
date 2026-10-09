@@ -46,6 +46,10 @@ known to work, which is why the final address is pasted back by the user.
 Each product (the game and every DLC) has its own download links; DLC chunks are fetched through the
 DLC's links. Download links expire. On 401 or 403 they are requested again.
 
+Chunks hold up to 10 MiB of file data (seen on Undertale: 10 485 760 bytes, the last one slightly
+larger). The decompressed MD5 identifies a chunk's content, which is what allows reusing chunks
+already on disk.
+
 ### Dependencies and post-install setup
 
 | Use | Request | Source | Status |

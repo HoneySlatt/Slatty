@@ -60,6 +60,9 @@ refresh token is not rotated on refresh.
    by case, and skips "support" files and links.
 3. `Download::run` checks disk space, then fills `.<Game>.slatty-partial`:
    - each file is verified first and downloaded only if missing or wrong;
+   - when a file is replaced (update, repair, resumed install), the file already there is hashed at
+     the new chunk offsets, and chunks whose MD5 matches are copied from it and checked again
+     instead of downloaded;
    - each chunk is checked against its compressed and decompressed MD5;
    - files are written to a temporary name, then renamed.
 4. The partial folder is renamed to the game folder.

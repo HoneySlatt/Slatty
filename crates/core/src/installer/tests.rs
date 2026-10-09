@@ -434,7 +434,7 @@ async fn check_finds_damaged_files_and_repair_fetches_only_those() {
     };
 
     let before = env.source.fetched.load(Ordering::SeqCst);
-    let bad = dl.check_installed(&set, &game, false).await.unwrap();
+    let bad = dl.check_installed(&set, &game, false).await.unwrap().bad;
     assert_eq!(
         bad,
         vec![
@@ -449,9 +449,14 @@ async fn check_finds_damaged_files_and_repair_fetches_only_those() {
     );
 
     let repaired = dl.check_installed(&set, &game, true).await.unwrap();
-    assert_eq!(repaired, bad);
+    assert_eq!(repaired.bad, bad);
     let fetched = env.source.fetched.load(Ordering::SeqCst) - before;
-    assert_eq!(fetched, 5 + 1, "only the chunks of the two damaged files");
+    assert_eq!(
+        fetched,
+        1 + 1,
+        "only the damaged chunk of level1.pak, and the missing file"
+    );
+    assert_eq!(repaired.reused_bytes, 16, "intact chunks copied locally");
     assert_eq!(
         std::fs::read(game.join("data/level1.pak")).unwrap(),
         b"0123456789abcdefghij"
@@ -464,6 +469,7 @@ async fn check_finds_damaged_files_and_repair_fetches_only_those() {
         dl.check_installed(&set, &game, false)
             .await
             .unwrap()
+            .bad
             .is_empty()
     );
 }
@@ -524,7 +530,9 @@ async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
     );
     assert_eq!(report.removed, vec![PathBuf::from("goggame-1.info")]);
     let fetched = env.source.fetched.load(Ordering::SeqCst) - before;
-    assert_eq!(fetched, 6 + 4, "only chunks of changed and new files");
+    // level1.pak keeps its first two chunks ("0123", "4567"); level2.pak is new.
+    assert_eq!(fetched, 4 + 4, "only new chunks of changed and new files");
+    assert_eq!(report.reused_bytes, 8);
     assert_eq!(
         std::fs::read(game.join("data/level1.pak")).unwrap(),
         b"0123456789 version two"
@@ -534,6 +542,39 @@ async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
         b"keep me"
     );
     assert!(!game.join("goggame-1.info").exists());
+}
+
+#[tokio::test]
+async fn chunks_moved_inside_a_changed_file_are_reused() {
+    let mut env = Env::new("moved");
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    let game = env.target();
+    // A whole chunk inserted at the start shifts the old chunks by one chunk.
+    let items = vec![
+        env.source
+            .file("data\\level1.pak", b"NEW!0123456789abcdefghij", &[]),
+    ];
+    env.source.manifests.insert("m2".into(), items);
+    let depots = vec![Depot {
+        manifest: "m2".into(),
+        ..env.depots[0].clone()
+    }];
+    let set = collect_files(&env.source, &depots).await.unwrap();
+    let free_space = |_: &Path| Ok(PLENTY);
+    let dl = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    };
+    let before = env.source.fetched.load(Ordering::SeqCst);
+    let checked = dl.check_installed(&set, &game, true).await.unwrap();
+    assert_eq!(env.source.fetched.load(Ordering::SeqCst) - before, 1);
+    assert_eq!(checked.reused_bytes, 20);
+    assert_eq!(
+        std::fs::read(game.join("data/level1.pak")).unwrap(),
+        b"NEW!0123456789abcdefghij"
+    );
 }
 
 #[tokio::test]

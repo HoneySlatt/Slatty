@@ -85,7 +85,7 @@ pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
             println!("  files {}/{}", p.files_done, p.files_total);
         }
     };
-    let bad = maintenance::check(
+    let checked = maintenance::check(
         &ctx.db,
         &ctx.dirs,
         &ctx.http,
@@ -96,6 +96,7 @@ pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
         cancel,
     )
     .await?;
+    let bad = checked.bad;
     if bad.is_empty() {
         println!("All files are intact.");
     } else {
@@ -113,6 +114,12 @@ pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
         }
         if !args.repair {
             println!("Run with --repair to download them again.");
+        }
+        if checked.reused_bytes > 0 {
+            println!(
+                "{} of intact data copied from the damaged files instead of downloaded.",
+                crate::install::size(checked.reused_bytes)
+            );
         }
     }
     Ok(())
@@ -216,6 +223,12 @@ async fn apply_change(
                 r.downloaded.len(),
                 r.removed.len()
             );
+            if r.reused_bytes > 0 {
+                println!(
+                    "{} of unchanged data copied from the installed files instead of downloaded.",
+                    crate::install::size(r.reused_bytes)
+                );
+            }
             Ok(())
         }
         Err(slatty_core::Error::Cancelled) => {
