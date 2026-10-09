@@ -65,8 +65,19 @@ pub enum InstallView {
         title: String,
         progress: Progress,
         cancel: CancellationToken,
+        cancelling: Cancelling,
     },
     Failed(String),
+}
+
+/// Where Cancel stands on a running download: it deletes what was downloaded, so it asks first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Cancelling {
+    #[default]
+    No,
+    Asked,
+    /// Stopping; the partial download is deleted once stopped.
+    Confirmed,
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +89,9 @@ pub enum InstallMsg {
     /// `Err(None)` means paused by the user.
     Done(String, Result<Install, Option<String>>),
     Pause(String),
+    AskCancel(String),
+    KeepDownloading(String),
+    ConfirmCancel(String),
     RootInput(String, String),
     Proton(String, ProtonChoice),
     Browse(String),
@@ -163,6 +177,7 @@ impl App {
                         title,
                         progress: Progress::default(),
                         cancel: cancel.clone(),
+                        cancelling: Cancelling::No,
                     },
                 );
                 return Task::run(install_stream(core, req, cancel), |m| m);
@@ -198,6 +213,12 @@ impl App {
             }
             InstallMsg::Discarded(game_id, result) => {
                 self.install_views.remove(&game_id);
+                // Nothing is left to show in its Install panel.
+                if self.selected.as_deref() == Some(game_id.as_str())
+                    && self.panel == Some(crate::Panel::Install)
+                {
+                    self.panel = None;
+                }
                 match result {
                     Ok(()) => self.forget_interrupted(&game_id),
                     Err(e) => self.notify_error(e),
@@ -249,6 +270,29 @@ impl App {
                 {
                     cancel.cancel();
                 }
+            }
+            InstallMsg::AskCancel(game_id) => self.set_cancelling(&game_id, Cancelling::Asked),
+            InstallMsg::KeepDownloading(game_id) => self.set_cancelling(&game_id, Cancelling::No),
+            InstallMsg::ConfirmCancel(game_id) => {
+                if let Some(InstallView::Running {
+                    cancel, cancelling, ..
+                }) = self.install_views.get_mut(&game_id)
+                {
+                    *cancelling = Cancelling::Confirmed;
+                    cancel.cancel();
+                }
+            }
+            InstallMsg::Done(game_id, Err(_))
+                if matches!(
+                    self.install_views.get(&game_id),
+                    Some(InstallView::Running {
+                        cancelling: Cancelling::Confirmed,
+                        ..
+                    })
+                ) =>
+            {
+                self.install_views.remove(&game_id);
+                return self.update_install(InstallMsg::Discard(game_id));
             }
             InstallMsg::Done(game_id, Ok(install)) => {
                 self.install_views.remove(&game_id);
@@ -352,4 +396,14 @@ fn install_stream(
         },
         move |p| Message::Install(InstallMsg::Progress(id.clone(), p)),
     )
+}
+
+impl App {
+    fn set_cancelling(&mut self, game_id: &str, to: Cancelling) {
+        if let Some(InstallView::Running { cancelling, .. }) = self.install_views.get_mut(game_id)
+            && *cancelling != Cancelling::Confirmed
+        {
+            *cancelling = to;
+        }
+    }
 }

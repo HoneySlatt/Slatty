@@ -596,6 +596,7 @@ fn running_install_shows_progress_and_can_pause() {
                 bytes_total: 4 << 30,
             },
             cancel: tokio_util::sync::CancellationToken::new(),
+            cancelling: crate::install::Cancelling::No,
         },
     );
     assert!(render(&app).find("Downloading [FAKE] Game 5").is_ok());
@@ -869,6 +870,7 @@ fn closing_asks_first_only_when_something_is_running() {
                 bytes_total: 2 << 30,
             },
             cancel: cancel.clone(),
+            cancelling: crate::install::Cancelling::No,
         },
     );
     let _ = app.update(Message::CloseRequested);
@@ -1274,4 +1276,73 @@ fn the_cover_does_not_stand_in_while_the_key_art_downloads() {
         app.hero_art(&game).map(|h| h.id()),
         app.covers.get("3").map(|h| h.id())
     );
+}
+
+#[test]
+fn cancelling_a_download_asks_then_deletes_it() {
+    use crate::install::Cancelling;
+    let mut app = library_app();
+    open(&mut app, "5", Some(Panel::Install));
+    let cancel = tokio_util::sync::CancellationToken::new();
+    app.install_views.insert(
+        "5".into(),
+        InstallView::Running {
+            title: "[FAKE] Game 5".into(),
+            progress: slatty_core::installer::Progress {
+                files_done: 3,
+                files_total: 10,
+                bytes_done: 3 << 30,
+                bytes_total: 8 << 30,
+            },
+            cancel: cancel.clone(),
+            cancelling: Cancelling::No,
+        },
+    );
+    let cancelling = |app: &App| match app.install_views.get("5") {
+        Some(InstallView::Running { cancelling, .. }) => Some(*cancelling),
+        _ => None,
+    };
+    let clicked = |app: &App, label: &str| -> Vec<Message> {
+        let mut ui = render(app);
+        ui.click(label).unwrap();
+        ui.into_messages().collect()
+    };
+
+    for m in clicked(&app, "Cancel") {
+        let _ = app.update(m);
+    }
+    assert_eq!(cancelling(&app), Some(Cancelling::Asked));
+    {
+        let mut ui = render(&app);
+        assert!(
+            ui.find(
+                "Cancel the download of [FAKE] Game 5 and delete the 3.00 GiB downloaded so far?"
+            )
+            .is_ok()
+        );
+        snapshot(&mut ui, "install-cancel-confirm");
+    }
+    for m in clicked(&app, "Keep downloading") {
+        let _ = app.update(m);
+    }
+    assert_eq!(cancelling(&app), Some(Cancelling::No));
+    assert!(!cancel.is_cancelled(), "asking stops nothing");
+
+    let _ = app.update(Message::Install(InstallMsg::AskCancel("5".into())));
+    for m in clicked(&app, "Cancel download") {
+        let _ = app.update(m);
+    }
+    assert!(cancel.is_cancelled());
+    assert_eq!(cancelling(&app), Some(Cancelling::Confirmed));
+
+    // Once stopped, the partial download is deleted rather than offered for resuming.
+    let _ = app.update(Message::Install(InstallMsg::Done("5".into(), Err(None))));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Planning)
+    ));
+    let _ = app.update(Message::Install(InstallMsg::Discarded("5".into(), Ok(()))));
+    assert!(!app.install_views.contains_key("5"));
+    assert_eq!(app.panel, None);
+    assert!(app.interrupted.is_empty());
 }

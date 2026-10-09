@@ -85,7 +85,7 @@ panels:
 | ⋮ button (top right) | Manage: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
 | Cloud saves, **Manage →** | Check, sync, resolve conflicts |
 | Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page (over it in a narrow window) |
-| Install button | Version, size, folder, language, DLC, Proton, start, pause, discard |
+| Install button | Version, size, folder, language, DLC, Proton, start, pause, cancel, discard |
 
 Escape closes the panel, then the game page.
 
@@ -145,7 +145,8 @@ How an install behaves:
   would escape the game folder are refused before anything is downloaded.
 - `slatty installs` lists installed games and interrupted installs.
 - `slatty install <game-id> --cancel` abandons an interrupted install. It deletes only its hidden
-  partial folder. In the interface, use **Discard download** in the Install panel.
+  partial folder. In the interface, use **Discard download** in the Install panel, or **Cancel**
+  while it downloads: it asks first, then stops the download and deletes what was downloaded.
 
 Dependencies that ship files into the game folder are installed with the game. GOG's installer
 scripts ("support" files) are kept in `~/.local/share/slatty/support/<id>/`; they are used by the

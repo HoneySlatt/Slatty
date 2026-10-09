@@ -17,7 +17,7 @@ use super::format::*;
 use super::{inner, note, round_button};
 use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
-use crate::install::{InstallMsg, InstallView};
+use crate::install::{Cancelling, InstallMsg, InstallView};
 use crate::maintenance::{ContentInfo, MaintenanceMsg};
 use crate::settings::{ProtonChoice, SettingsMsg};
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
@@ -93,7 +93,11 @@ impl App {
                 items.push(note(format!("Failed: {e}")));
                 items.push(prepare("Retry").into());
             }
-            Some(InstallView::Running { progress, .. }) => {
+            Some(InstallView::Running {
+                progress,
+                cancelling,
+                ..
+            }) => {
                 items.push(
                     progress_bar(0.0..=1.0, fraction(*progress))
                         .girth(10)
@@ -107,13 +111,48 @@ impl App {
                     progress.files_done,
                     progress.files_total
                 )));
-                items.push(
-                    button(text("Pause").size(14))
-                        .padding([10, 18])
-                        .on_press(Message::Install(InstallMsg::Pause(g.id.clone())))
-                        .style(theme::tonal)
-                        .into(),
-                );
+                let msg = |m: fn(String) -> InstallMsg| Message::Install(m(g.id.clone()));
+                items.push(match cancelling {
+                    Cancelling::No => row![
+                        button(text("Pause").size(14))
+                            .padding([10, 18])
+                            .on_press(msg(InstallMsg::Pause))
+                            .style(theme::tonal),
+                        button(text("Cancel").size(14))
+                            .padding([10, 18])
+                            .on_press(msg(InstallMsg::AskCancel))
+                            .style(theme::tonal),
+                    ]
+                    .spacing(10)
+                    .into(),
+                    Cancelling::Asked => container(
+                        column![
+                            text(format!(
+                                "Cancel the download of {} and delete the {} downloaded so far?",
+                                g.title,
+                                human_size(progress.bytes_done)
+                            ))
+                            .size(14),
+                            row![
+                                button(text("Keep downloading").size(14))
+                                    .padding([10, 18])
+                                    .on_press(msg(InstallMsg::KeepDownloading))
+                                    .style(theme::tonal),
+                                button(text("Cancel download").size(14))
+                                    .padding([10, 18])
+                                    .on_press(msg(InstallMsg::ConfirmCancel))
+                                    .style(theme::danger),
+                            ]
+                            .spacing(10),
+                        ]
+                        .spacing(12),
+                    )
+                    .padding(16)
+                    .width(Length::Fill)
+                    .style(inner)
+                    .into(),
+                    Cancelling::Confirmed => note("Cancelling… the downloaded files are deleted."),
+                });
             }
             Some(InstallView::Ready(info)) => {
                 items.push(
