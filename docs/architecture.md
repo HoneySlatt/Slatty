@@ -96,7 +96,13 @@ the next launch records it.
    by case, and skips "support" files and links.
 3. `Download::run` checks disk space, then fills `.<Game>.slatty-partial`:
    - chunks come from the fastest of the CDN endpoints GOG lists: each is measured on a first
-     request, and one that fails is avoided for the retries of that chunk;
+     request, one that fails is avoided for the retries of that chunk, and the runner-up is
+     measured again now and then;
+   - a chunk still waiting after three times the usual request time on its endpoint is asked again
+     from another endpoint, and the first answer wins; the slow endpoint is set aside while it
+     stays slow. Only one such copy runs at a time, so a slow connection is not loaded further;
+   - two chunks per file are fetched at once and written at their offset as they arrive, so a late
+     chunk does not hold back the following ones;
    - each file is verified first and downloaded only if missing or wrong;
    - when a file is replaced (update, repair, resumed install), the file already there is hashed at
      the new chunk offsets, and chunks whose MD5 matches are copied from it and checked again

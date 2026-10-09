@@ -24,6 +24,8 @@ struct MemoryContent {
     fetched: AtomicUsize,
     fail_on: Mutex<Option<String>>,
     corrupt: Mutex<Option<String>>,
+    /// This chunk arrives late, after the ones that follow it.
+    slow: Mutex<Option<String>>,
     products: Mutex<std::collections::HashSet<String>>,
 }
 
@@ -86,6 +88,10 @@ impl ContentSource for MemoryContent {
             })?;
         if self.corrupt.lock().unwrap().as_deref() == Some(compressed_md5) {
             data[0] ^= 0xff;
+        }
+        let slow = self.slow.lock().unwrap().as_deref() == Some(compressed_md5);
+        if slow {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
         Ok(data)
     }
@@ -179,6 +185,24 @@ async fn installs_verified_files_and_publishes_atomically() {
         0o111
     );
     assert!(!env.partial().exists());
+}
+
+#[tokio::test]
+async fn chunks_arriving_out_of_order_land_at_their_place() {
+    let env = Env::new("order");
+    let level = env.source.manifests["m1"]
+        .iter()
+        .find_map(|i| match i {
+            DepotItem::DepotFile(f) if f.path.ends_with("level1.pak") => Some(f.clone()),
+            _ => None,
+        })
+        .unwrap();
+    *env.source.slow.lock().unwrap() = Some(level.chunks[0].compressed_md5.clone());
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    assert_eq!(
+        std::fs::read(env.target().join("data/level1.pak")).unwrap(),
+        b"0123456789abcdefghij"
+    );
 }
 
 #[tokio::test]

@@ -2,7 +2,7 @@
 //! is already on disk.
 
 use std::collections::{HashMap, HashSet};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::os::unix::fs::{FileExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -293,8 +293,19 @@ impl<S: ContentSource> Download<'_, S> {
         })
         .await
         .expect("scan task panicked")?;
-        let mut out = std::fs::File::create(&tmp)
+        let out = std::fs::File::create(&tmp)
             .map_err(|e| Error::io(format!("create {}", tmp.display()), e))?;
+        // Chunks are written at their offset as they arrive, so one slow chunk does not hold back
+        // the ones after it.
+        let offsets: Vec<u64> = file
+            .chunks
+            .iter()
+            .scan(0, |at, c| {
+                let start = *at;
+                *at += c.size;
+                Some(start)
+            })
+            .collect();
         let mut chunks = futures::stream::iter(0..file.chunks.len())
             .map(|i| {
                 let c = file.chunks[i].clone();
@@ -310,21 +321,21 @@ impl<S: ContentSource> Download<'_, S> {
                             .await
                             .expect("chunk task panicked");
                         if let Some(data) = data {
-                            return Ok((data, true));
+                            return Ok((i, data, true));
                         }
                     }
                     let raw = self.source.chunk(&product, &c.compressed_md5).await?;
                     tokio::task::spawn_blocking(move || unpack_chunk(&raw, &c))
                         .await
                         .expect("chunk task panicked")
-                        .map(|data| (data, false))
+                        .map(|data| (i, data, false))
                 }
             })
-            .buffered(CHUNK_CONCURRENCY);
+            .buffer_unordered(CHUNK_CONCURRENCY);
         let mut reused = 0;
         while let Some(data) = chunks.next().await {
-            let (data, local) = data.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
-            out.write_all(&data)
+            let (i, data, local) = data.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
+            out.write_all_at(&data, offsets[i])
                 .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
             if local {
                 reused += data.len() as u64;

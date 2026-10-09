@@ -250,12 +250,98 @@ impl GogContent {
         Ok(fresh)
     }
 
+    /// Asks `endpoints[i]` for a chunk; when it is late, asks a copy from another endpoint and
+    /// keeps the first answer. Returns the endpoint that answered, its result and its duration.
+    async fn fetch_hedged(
+        &self,
+        endpoints: &[Endpoint],
+        names: &[&str],
+        i: usize,
+        avoid: &[usize],
+        compressed_md5: &str,
+    ) -> (usize, Result<Vec<u8>>, std::time::Duration) {
+        let started = std::time::Instant::now();
+        let first = self.fetch(&endpoints[i], compressed_md5);
+        tokio::pin!(first);
+        let Some(wait) = endpoint_speeds().hedge_after(names[i]) else {
+            return (i, first.await, started.elapsed());
+        };
+        tokio::select! {
+            r = &mut first => return (i, r, started.elapsed()),
+            () = tokio::time::sleep(wait) => {}
+        }
+        let Some(_slot) = CopySlot::take() else {
+            return (i, first.await, started.elapsed());
+        };
+        let stalled: Vec<usize> = avoid.iter().copied().chain([i]).collect();
+        let j = endpoint_speeds().pick(names, &stalled);
+        let copy_started = std::time::Instant::now();
+        let copy = self.fetch(&endpoints[j], compressed_md5);
+        tokio::pin!(copy);
+        // The first success wins; an error counts only once the other request has failed too.
+        tokio::select! {
+            r = &mut first => {
+                if r.is_ok() {
+                    endpoint_speeds().abandoned(names[j]);
+                    return (i, r, started.elapsed());
+                }
+                let c = (&mut copy).await;
+                if c.is_ok() {
+                    endpoint_speeds().failed(names[i]);
+                    (j, c, copy_started.elapsed())
+                } else {
+                    endpoint_speeds().failed(names[j]);
+                    (i, r, started.elapsed())
+                }
+            }
+            c = &mut copy => {
+                if let Ok(b) = &c {
+                    endpoint_speeds().outrun(names[i], b.len(), started.elapsed());
+                    return (j, c, copy_started.elapsed());
+                }
+                endpoint_speeds().failed(names[j]);
+                (i, (&mut first).await, started.elapsed())
+            }
+        }
+    }
+
+    async fn fetch(&self, endpoint: &Endpoint, compressed_md5: &str) -> Result<Vec<u8>> {
+        let url = chunk_url(endpoint, compressed_md5);
+        let resp = http::send(self.http.get(url), "downloading a chunk").await?;
+        resp.bytes()
+            .await
+            .map(|b| b.to_vec())
+            .map_err(|e| Error::network("downloading a chunk", e))
+    }
+
     async fn access(&self) -> Result<Tokens> {
         let mut tokens = self.tokens.lock().await;
         if tokens.is_expired() {
             *tokens = crate::account::fresh(&self.http, &self.dirs, &tokens, false).await?;
         }
         Ok(tokens.clone())
+    }
+}
+
+/// At most one chunk copy in flight for the whole process: when the connection itself slows down,
+/// every request turns late, and copying them all would only add load.
+struct CopySlot;
+
+static COPY_IN_FLIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+impl CopySlot {
+    fn take() -> Option<CopySlot> {
+        use std::sync::atomic::Ordering;
+        COPY_IN_FLIGHT
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| CopySlot)
+    }
+}
+
+impl Drop for CopySlot {
+    fn drop(&mut self) {
+        COPY_IN_FLIGHT.store(false, std::sync::atomic::Ordering::Release);
     }
 }
 
@@ -477,23 +563,24 @@ impl ContentSource for GogContent {
             let keys: Vec<String> = endpoints.iter().map(Endpoint::key).collect();
             let names: Vec<&str> = keys.iter().map(String::as_str).collect();
             let i = endpoint_speeds().pick(&names, &failed_here);
-            let url = chunk_url(&endpoints[i], compressed_md5);
-            let started = std::time::Instant::now();
-            let result = match http::send(self.http.get(url), "downloading a chunk").await {
-                Ok(resp) => resp
-                    .bytes()
-                    .await
-                    .map_err(|e| Error::network("downloading a chunk", e)),
-                Err(e) => Err(e),
-            };
+            let (served, result, took) = self
+                .fetch_hedged(&endpoints, &names, i, &failed_here, compressed_md5)
+                .await;
             match result {
                 Ok(b) => {
-                    endpoint_speeds().record(names[i], b.len(), started.elapsed());
-                    return Ok(b.to_vec());
+                    tracing::debug!(
+                        endpoint = names[served],
+                        secs = took.as_secs_f64(),
+                        hedged = served != i,
+                        "chunk"
+                    );
+                    endpoint_speeds().record(names[served], b.len(), took);
+                    return Ok(b);
                 }
                 Err(Error::Http {
                     status: 401 | 403, ..
                 }) => {
+                    endpoint_speeds().abandoned(names[served]);
                     endpoints = self.endpoints_for(product_id, true).await?;
                     last = Some(Error::Http {
                         context: "downloading a chunk",
@@ -501,8 +588,8 @@ impl ContentSource for GogContent {
                     });
                 }
                 Err(e) => {
-                    endpoint_speeds().failed(names[i]);
-                    failed_here.push(i);
+                    endpoint_speeds().failed(names[served]);
+                    failed_here.push(served);
                     last = Some(e);
                 }
             }
