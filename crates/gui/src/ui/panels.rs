@@ -512,7 +512,7 @@ impl App {
             .into(),
         ];
         items.extend(self.pending_confirmation(&g.id));
-        items.extend(list.iter().map(|a| self.achievement_row(&g.id, a)));
+        items.extend(list.iter().map(|a| self.achievement_row(&g.id, a, 48.0)));
         Column::with_children(items).spacing(12).into()
     }
 

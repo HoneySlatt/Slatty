@@ -15,6 +15,8 @@ use crate::{AchievementChange, App, Loadable, Message, Page, PendingChange};
 
 /// Height of a game card on the Achievements tab.
 const TILE_HEIGHT: f32 = 186.0;
+/// Height of an achievement on a game's achievements page.
+const ACHIEVEMENT_HEIGHT: f32 = 112.0;
 
 impl App {
     pub(super) fn achievements_page(&self) -> Element<'_, Message> {
@@ -135,13 +137,13 @@ impl App {
         let cover: Element<'_, Message> = match self.covers.get(&g.id) {
             Some(h) => image(h.clone())
                 .content_fit(ContentFit::Cover)
-                .width(72)
-                .height(96)
-                .border_radius(10)
+                .width(84)
+                .height(112)
+                .border_radius(tokens().cover_radius)
                 .into(),
             None => container(Space::new())
-                .width(72)
-                .height(96)
+                .width(84)
+                .height(112)
                 .style(theme::placeholder)
                 .into(),
         };
@@ -167,49 +169,56 @@ impl App {
                 let summary = row![
                     cover,
                     column![
-                        text(&g.title).size(30).font(BOLD),
+                        text(&g.title).size(34).font(BOLD),
                         row![
                             text(format!("{done} / {} unlocked", list.len()))
-                                .size(15)
+                                .size(16)
                                 .font(SEMIBOLD),
                             text(format!("{:.0}%", share * 100.0))
-                                .size(14)
+                                .size(15)
                                 .color(tokens().muted),
                         ]
                         .spacing(16),
                         progress_bar(0.0..=1.0, share)
-                            .girth(8)
+                            .girth(10)
                             .style(theme::progress),
                     ]
                     .spacing(10)
                     .width(Length::Fill),
                     unlock_all_button(&g.id, list),
                 ]
-                .spacing(20)
+                .spacing(22)
                 .align_y(Alignment::Center);
-                let mut rows = Column::new().spacing(8);
-                rows = rows.extend(self.pending_confirmation(&g.id));
-                rows = rows.extend(list.iter().map(|a| {
-                    container(self.achievement_row(&g.id, a))
-                        .padding([12, 16])
-                        .width(Length::Fill)
-                        .style(theme::card)
-                        .into()
-                }));
+                let cards: Vec<Element<'_, Message>> = list
+                    .iter()
+                    .map(|a| {
+                        container(self.achievement_row(&g.id, a, 64.0))
+                            .padding([14, 18])
+                            .width(Length::Fill)
+                            .height(ACHIEVEMENT_HEIGHT)
+                            .align_y(Alignment::Center)
+                            .style(theme::block)
+                            .into()
+                    })
+                    .collect();
+                let mut list_view = Column::new().spacing(14);
+                list_view = list_view.extend(self.pending_confirmation(&g.id));
+                list_view =
+                    list_view.push(grid(cards).fluid(1100).spacing(14).height(Length::Shrink));
                 column![
                     summary,
-                    scrollable(rows)
+                    scrollable(list_view)
                         .spacing(8)
                         .style(theme::scroller)
                         .height(Length::Fill)
                 ]
-                .spacing(20)
+                .spacing(22)
                 .into()
             }
         };
         column![header, body]
             .spacing(18)
-            .padding(Padding::ZERO.top(10))
+            .padding(Padding::ZERO.top(4))
             .into()
     }
 
@@ -218,7 +227,7 @@ impl App {
             Some(h) => image(h.clone())
                 .width(size)
                 .height(size)
-                .border_radius(10)
+                .border_radius(tokens().cover_radius)
                 .into(),
             None => container(icon(Icon::Trophy, size / 2.5, tokens().muted))
                 .center(size)
@@ -239,6 +248,7 @@ impl App {
         &'a self,
         game_id: &'a str,
         a: &'a Achievement,
+        icon_size: f32,
     ) -> Element<'a, Message> {
         let done = a.date_unlocked.is_some();
         let shown = a.visible || done;
@@ -253,32 +263,32 @@ impl App {
             } else {
                 "Hidden achievement"
             })
-            .size(15)
+            .size(16)
             .font(SEMIBOLD)
             .color(if done { tokens().text } else { tokens().muted })
         ]
-        .spacing(2)
+        .spacing(3)
         .width(Length::Fill);
         if shown && !a.description.is_empty() {
-            details = details.push(text(&a.description).size(13).color(tokens().muted));
+            details = details.push(text(&a.description).size(14).color(tokens().muted));
         }
         details = details.push(
             text(format!("{:.1}% of players", a.rarity))
-                .size(12)
+                .size(13)
                 .color(tokens().muted),
         );
         row![
-            self.achievement_icon(url, 48.0),
+            self.achievement_icon(url, icon_size),
             details,
-            button(text(if done { "Clear" } else { "Unlock" }).size(13))
-                .padding([6, 12])
+            button(text(if done { "Clear" } else { "Unlock" }).size(14))
+                .padding([8, 18])
                 .on_press(Message::AskAchievementChange(
                     game_id.to_string(),
                     vec![change(a, !done)],
                 ))
                 .style(theme::tonal),
         ]
-        .spacing(14)
+        .spacing(18)
         .align_y(Alignment::Center)
         .into()
     }
@@ -341,7 +351,7 @@ pub fn unlock_all_button<'a>(game_id: &str, list: &[Achievement]) -> Element<'a,
         .collect();
     let game_id = game_id.to_string();
     button(text("Unlock all").size(14))
-        .padding([8, 16])
+        .padding([10, 18])
         .on_press_maybe(
             (!locked.is_empty()).then(|| Message::AskAchievementChange(game_id, locked)),
         )

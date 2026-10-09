@@ -289,6 +289,17 @@ pub fn notice(error: bool) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A plain block of a list (an achievement), with the controls' corner radius.
+pub fn block(_: &Theme) -> container::Style {
+    let t = tokens();
+    container::Style {
+        background: Some(Background::Color(t.surface)),
+        border: round(t.radius),
+        text_color: Some(t.text),
+        ..Default::default()
+    }
+}
+
 /// An outlined box around a field (the search box).
 pub fn outlined(_: &Theme) -> container::Style {
     let t = tokens();
