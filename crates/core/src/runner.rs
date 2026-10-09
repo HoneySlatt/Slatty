@@ -56,14 +56,20 @@ pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
     }
 }
 
+/// Whether the game's Wine prefix has been created (always true for native games). Nothing may be
+/// written into a prefix before, or Proton would take it for created and leave it half set up.
+pub fn prefix_ready(install: &Install) -> bool {
+    install
+        .runner
+        .prefix()
+        .is_none_or(|p| p.join("drive_c/users").is_dir())
+}
+
 /// `wineboot` for a prefix that has never been created, so save folders exist before the first launch.
 pub fn prefix_init_spec(install: &Install) -> Result<Option<LaunchSpec>> {
-    let Some(prefix) = install.runner.prefix() else {
+    let Some(prefix) = install.runner.prefix().filter(|_| !prefix_ready(install)) else {
         return Ok(None);
     };
-    if prefix.join("drive_c/users").is_dir() {
-        return Ok(None);
-    }
     crate::paths::ensure_dir(prefix)?;
     windows_command(
         install,

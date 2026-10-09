@@ -473,3 +473,41 @@ async fn inspection_is_read_only_and_flags_compressed_downloads() {
     assert!(copies.join("diff.sav").exists());
     assert!(env.cloud.uploads.load(Ordering::SeqCst) == 0);
 }
+
+#[tokio::test]
+async fn nothing_is_written_into_a_prefix_proton_has_not_created_yet() {
+    use crate::auth::Tokens;
+    use crate::install::{Install, Platform};
+    use crate::runner::Runner;
+    use crate::secret::Secret;
+
+    let root = std::env::temp_dir().join(format!("slatty-cloud-noprefix-{}", std::process::id()));
+    let dirs = Dirs::under(&root.join("app"));
+    let db = Db::in_memory().unwrap();
+    let install = Install {
+        game_id: "1".into(),
+        title: "[FAKE] Game".into(),
+        platform: Platform::Windows,
+        path: root.join("game"),
+        client_id: Some("c".into()),
+        runner: Runner::Umu {
+            proton: "/p".into(),
+            prefix: root.join("pfx"),
+        },
+        umu_id: None,
+    };
+    let tokens = Tokens {
+        user_id: "u".into(),
+        access_token: Secret::new("[FAKE]"),
+        refresh_token: Secret::new("[FAKE]"),
+        expires_at: i64::MAX,
+    };
+    let http = crate::http::client().unwrap();
+    let result =
+        super::sync_game(&db, &dirs, &http, &tokens, &install, SyncOptions::default()).await;
+    assert!(matches!(result, Err(crate::Error::Refused(_))));
+    assert!(
+        !root.exists(),
+        "the prefix stays untouched for Proton to create"
+    );
+}

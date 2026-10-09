@@ -1014,3 +1014,19 @@ fn an_installed_game_can_change_its_proton() {
     }
     std::fs::remove_dir_all(other).unwrap();
 }
+
+#[test]
+fn cloud_saves_wait_for_the_first_launch_to_be_written() {
+    let mut app = library_app();
+    open(&mut app, "3", Some(Panel::Cloud));
+    let mut ui = render(&app);
+    assert!(
+        ui.find("Your cloud saves are downloaded when the game first starts, before it runs.")
+            .is_ok()
+    );
+    assert!(ui.find("Check").is_ok());
+    assert!(
+        ui.find("Sync now").is_err(),
+        "the fixture's prefix was never created"
+    );
+}

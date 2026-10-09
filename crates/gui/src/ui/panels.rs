@@ -486,24 +486,36 @@ impl App {
     pub(super) fn cloud_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let cloud = self.cloud.get(&g.id);
         let busy = cloud.is_some_and(|c| c.busy);
-        let mut items: Vec<Element<'_, Message>> = vec![
-            row![
-                button(text("Check").size(14))
-                    .padding([10, 16])
-                    .on_press_maybe(
-                        (!busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Check))
-                    )
-                    .style(theme::tonal),
+        // Before the first launch Proton has not created the prefix yet: saves can be compared, and
+        // are downloaded when the game first starts.
+        let launched = self
+            .installs
+            .get(&g.id)
+            .is_some_and(slatty_core::runner::prefix_ready);
+        let mut actions = row![
+            button(text("Check").size(14))
+                .padding([10, 16])
+                .on_press_maybe((!busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Check)))
+                .style(theme::tonal),
+        ]
+        .spacing(8);
+        if launched {
+            actions = actions.push(
                 button(text("Sync now").size(14))
                     .padding([10, 16])
                     .on_press_maybe(
-                        (!busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Sync))
+                        (!busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Sync)),
                     )
                     .style(theme::tonal),
-            ]
-            .spacing(8)
-            .into(),
-        ];
+            );
+        }
+        let mut items: Vec<Element<'_, Message>> = vec![actions.into()];
+        if !launched {
+            items.push(note(
+                "Your cloud saves are downloaded when the game first starts, \
+                 before it runs.",
+            ));
+        }
         if let Some(c) = cloud {
             if c.busy {
                 items.push(note("Working…"));

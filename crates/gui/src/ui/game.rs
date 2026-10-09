@@ -259,6 +259,10 @@ impl App {
 
     pub(super) fn cloud_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let installed = self.installs.contains_key(&g.id);
+        let launched = self
+            .installs
+            .get(&g.id)
+            .is_some_and(slatty_core::runner::prefix_ready);
         let (ic, color, status) = if installed {
             match self.cloud.get(&g.id) {
                 Some(c) if c.busy => (Icon::RefreshCw, tokens().muted, "Checking…".to_string()),
@@ -267,6 +271,11 @@ impl App {
                         Icon::CircleCheck,
                         theme::tokens().success,
                         "Up to date".into(),
+                    ),
+                    Some(CloudStatus::Pending(n)) if !launched => (
+                        Icon::Cloud,
+                        tokens().muted,
+                        format!("{n} file(s) downloaded at first launch"),
                     ),
                     Some(CloudStatus::Pending(n)) => (
                         Icon::RefreshCw,

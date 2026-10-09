@@ -165,7 +165,9 @@ A launch goes through these steps:
    failure the game still starts and the setup is retried at the next launch. `slatty setup <id>
    --dry-run` shows what it would run; `--force` runs it again.
 2. Cloud saves are synchronised. If both sides changed, the launch stops and asks you to choose
-   (see [cloud saves](#cloud-saves)). Offline, the game starts with your local saves.
+   (see [cloud saves](#cloud-saves)). Offline, the game starts with your local saves. On the
+   first launch this is where your saves from GOG's cloud arrive, right after the prefix is
+   created and before the game starts.
 3. Comet starts, so the game can report achievements. Before the first session, Comet's dummy
    `GalaxyCommunication` service is registered in the prefix; some games need it to reach Comet.
 4. The game runs. SlattyLauncher waits until **every** game process has exited, not only the

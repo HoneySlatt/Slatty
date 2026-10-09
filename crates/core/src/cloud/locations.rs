@@ -11,6 +11,7 @@ use crate::error::{Error, Result};
 use crate::gameinfo::resolve_relative;
 use crate::http;
 use crate::install::{Install, Platform};
+use crate::runner::Runner;
 use crate::secret::Secret;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -76,17 +77,24 @@ fn user_folder(install: &Install, var: &str) -> Result<PathBuf> {
         .ok_or_else(|| Error::Unsupported("no Wine prefix".into()))?;
     let users = prefix.join("drive_c/users");
     let user = std::env::var("USER").unwrap_or_default();
-    let home = ["steamuser", user.as_str()]
+    let existing = ["steamuser", user.as_str()]
         .iter()
         .filter(|u| !u.is_empty())
         .map(|u| users.join(u))
-        .find(|p| p.is_dir())
-        .ok_or_else(|| {
-            Error::NotFound(format!(
+        .find(|p| p.is_dir());
+    // Before the first launch the prefix does not exist yet: the folder is the one Proton (always
+    // `steamuser`) or Wine (the user's name) will create.
+    let home = match (existing, &install.runner) {
+        (Some(home), _) => home,
+        (None, Runner::Umu { .. }) => users.join("steamuser"),
+        (None, _) if !user.is_empty() => users.join(&user),
+        (None, _) => {
+            return Err(Error::NotFound(format!(
                 "{} has no user folder; launch the game once to create it",
                 prefix.display()
-            ))
-        })?;
+            )));
+        }
+    };
     let sub = match var {
         "SAVED_GAMES" => "Saved Games",
         "DOCUMENTS" => "Documents",
@@ -205,11 +213,16 @@ mod tests {
     }
 
     #[test]
-    fn uninitialised_prefix_is_an_error() {
+    fn before_the_first_launch_saves_go_where_proton_will_put_them() {
         let root = std::env::temp_dir().join(format!("slatty-loc-empty-{}", std::process::id()));
-        assert!(matches!(
-            resolve("<?DOCUMENTS?>/x", &install(&root)),
-            Err(Error::NotFound(_))
-        ));
+        assert_eq!(
+            resolve(
+                "<?APPLICATION_DATA_LOCAL_LOW?>/Team Cherry/Hollow Knight",
+                &install(&root)
+            )
+            .unwrap(),
+            root.join("pfx/drive_c/users/steamuser/AppData/LocalLow/Team Cherry/Hollow Knight")
+        );
+        assert!(!root.exists(), "nothing is created");
     }
 }

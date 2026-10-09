@@ -73,6 +73,13 @@ pub async fn sync_game(
     install: &Install,
     opts: SyncOptions,
 ) -> Result<Option<Vec<LocationOutcome>>> {
+    if !opts.dry_run && !crate::runner::prefix_ready(install) {
+        return Err(Error::Refused(format!(
+            "{} has not been launched yet: its cloud saves are downloaded when it first starts, \
+             once Proton has created its Wine prefix",
+            install.title
+        )));
+    }
     let Some(game_cloud) = open(http, tokens, install).await? else {
         return Ok(None);
     };

@@ -11,6 +11,9 @@ their known limits.
   `<?SAVED_GAMES?>/id Software/DOOM/base`.
 - Templates are resolved inside the game's Wine prefix (`drive_c/users/steamuser/…`), or inside the
   game folder for `<?INSTALL?>`. Path components are matched case-insensitively, like on Windows.
+- Before a game's first launch its prefix does not exist yet. Checking still works and shows what
+  will be downloaded, but nothing is written: Proton must create the prefix first, so the saves
+  arrive at the first launch, just before the game starts.
 - If GOG enables cloud saves but lists no location, the Galaxy SDK storage folder is used
   (`<?APPLICATION_DATA_LOCAL?>/GOG.com/Galaxy/Applications/<client id>/Storage/Shared/Files`).
 
