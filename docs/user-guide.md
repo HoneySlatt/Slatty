@@ -1,0 +1,230 @@
+# User guide
+
+SlattyLauncher has two front ends that share the same core:
+
+- `slatty`, a command-line tool, which also exposes diagnostics;
+- `slatty-gui`, the graphical interface.
+
+Anything done in one is visible in the other.
+
+## Contents
+
+- [Signing in](#signing-in)
+- [Library](#library)
+- [Installing games](#installing-games)
+- [Playing](#playing)
+- [Cloud saves](#cloud-saves)
+- [Achievements](#achievements)
+- [Maintenance](#maintenance)
+- [Games installed elsewhere](#games-installed-elsewhere)
+- [Settings](#settings)
+- [Where data is stored](#where-data-is-stored)
+- [Troubleshooting](#troubleshooting)
+
+## Signing in
+
+```sh
+slatty auth login
+```
+
+Your browser opens GOG's sign-in page. SlattyLauncher never sees your password. After signing in,
+the browser lands on an almost blank page on `embed.gog.com`. Copy that page's full address and
+paste it into the terminal (or into the interface, which has a Paste button).
+
+The address contains a one-time code. SlattyLauncher exchanges it for tokens and stores them in
+your system keyring, never in a plain file.
+
+| Command | Effect |
+|---|---|
+| `slatty auth status` | Shows the account and when the current access token expires |
+| `slatty auth refresh` | Renews the session now (it is renewed automatically when needed) |
+| `slatty auth logout` | Removes the tokens from the keyring; cached data and saves stay |
+
+## Library
+
+```sh
+slatty library sync           # download the library and covers
+slatty library list           # list from the cache, works offline
+slatty library list witcher   # filter by title
+```
+
+The interface shows the same library as a grid with search. A dot next to a title means the game is
+installed.
+
+## Installing games
+
+SlattyLauncher installs the **Windows** build of a game from GOG's Galaxy content system and runs it
+through Proton.
+
+```sh
+slatty install <game-id> --info
+```
+
+`--info` shows the version, the download and disk size, the languages offered and the
+redistributables the game declares. It downloads nothing.
+
+```sh
+slatty install <game-id> --proton ~/.local/share/Steam/compatibilitytools.d/<Proton build> --dir ~/Games/GOG
+```
+
+`--proton` and `--dir` are remembered, so later installs need only the game id. The default folder
+is `~/Games/GOG`. Use `--language fr-FR` (or any language listed by `--info`) for another language.
+
+How an install behaves:
+
+- **Staged download.** Files go to a hidden `.<Game>.slatty-partial` folder next to the
+  destination. The game folder appears only once every file has been verified.
+- **Integrity checks.** Every chunk is checked twice against GOG's checksums, before and after
+  decompression.
+- **Pause and resume.** Ctrl+C (or Pause in the interface) stops the download. Running the same
+  command again resumes it: files already on disk are re-checked and kept when correct.
+- **Safety refusals.** Missing disk space, an existing destination folder, or a file path that
+  would escape the game folder are refused before anything is downloaded.
+- `slatty installs` lists installed games and interrupted installs.
+
+What is not installed yet:
+
+- **Redistributables** (Visual C++ and similar): they are listed but not installed. Proton already
+  ships many of them.
+- **GOG installer scripts** ("support" files): most games do not need them, a few expect registry
+  entries they create.
+- **DLC.**
+
+## Playing
+
+```sh
+slatty launch <game-id>
+```
+
+A launch goes through these steps:
+
+1. On the first launch of a fresh install, the Wine prefix is created (`wineboot`), so that save
+   folders exist.
+2. Cloud saves are synchronised. If both sides changed, the launch stops and asks you to choose
+   (see [cloud saves](#cloud-saves)). Offline, the game starts with your local saves.
+3. Comet starts, so the game can report achievements.
+4. The game runs. SlattyLauncher waits until **every** game process has exited, not only the
+   launcher.
+5. Cloud saves are uploaded, Comet stops, and newly recorded achievements are listed.
+
+Ctrl+C asks the game to quit; a second Ctrl+C forces it. Options:
+
+- `--no-cloud` skips step 2 and step 5's upload;
+- `--no-comet` runs without achievements.
+
+Game output goes to `~/.local/state/slatty/logs/game-<id>.log`.
+
+## Cloud saves
+
+```sh
+slatty cloud status <game-id>     # what a sync would do, changes nothing
+slatty cloud sync <game-id>
+slatty cloud diff <game-id>       # compare local and cloud copies file by file
+```
+
+Sync runs automatically around each game session. When the same file changed on both sides,
+nothing is overwritten. Resolve it explicitly:
+
+```sh
+slatty cloud sync <game-id> --prefer local    # keep yours, the cloud copy is backed up
+slatty cloud sync <game-id> --prefer remote   # keep the cloud one, yours is backed up
+```
+
+Deleting a file in the cloud, or locally, needs `--allow-deletions`. It is refused whenever a folder
+looks empty or moved. Every replaced file is backed up first; the backup folder is printed.
+
+[docs/cloud-saves.md](cloud-saves.md) explains the rules in detail.
+
+## Achievements
+
+```sh
+slatty achievements <game-id>
+```
+
+This lists achievements as GOG records them, with how common each one is.
+
+When a game is launched by SlattyLauncher, unlocks made in the game are sent to GOG by Comet.
+Support depends on the game and its Galaxy SDK version; see
+[docs/compatibility.md](compatibility.md).
+
+Achievements can also be changed manually, for any game you own, installed or not:
+
+```sh
+slatty achievements <game-id> --unlock NEGLECT "Steel Soul"
+slatty achievements <game-id> --unlock-all
+slatty achievements <game-id> --clear NEGLECT
+```
+
+Achievements are matched by key, id or exact name. You are asked to confirm before anything is
+written. Manual changes appear on your public GOG profile, dated today, and are probably against
+GOG's terms of use.
+
+## Maintenance
+
+```sh
+slatty verify <game-id>              # check every file against the installed build
+slatty verify <game-id> --repair     # download damaged or missing files again
+slatty uninstall <game-id>
+slatty uninstall <game-id> --delete-prefix
+```
+
+`uninstall` works only for games installed by SlattyLauncher:
+
+- It deletes only the files it installed. Anything else in the game folder is kept and listed:
+  saves stored there, mods, configuration files.
+- The Wine prefix, where most saves live, is kept unless you pass `--delete-prefix`. Even then, its
+  `users` folder is copied to `~/.local/share/slatty/backups/prefixes/` first.
+
+The interface offers the same actions in the game's Maintenance section.
+
+## Games installed elsewhere
+
+```sh
+slatty import <folder> --runner umu --proton <Proton dir> --prefix <prefix>
+slatty import --from-heroic <game-id>
+slatty forget <game-id>
+```
+
+- `slatty import` registers a game installed by another tool, so it can be launched and synced.
+- `--from-heroic` reads Heroic's records without changing them.
+- `slatty forget` drops any game from SlattyLauncher's records without touching its files.
+
+Imported games cannot be verified or uninstalled, because SlattyLauncher does not know which files
+belong to them.
+
+## Settings
+
+The interface's **Settings** panel holds:
+
+- **Games folder:** where new games are installed.
+- **Proton:** the build used for new installs, picked from `~/.local/share/Steam/compatibilitytools.d`.
+
+`slatty install --dir` and `--proton` set the same values.
+
+## Where data is stored
+
+| Path | Content |
+|---|---|
+| System keyring, entry `slatty-launcher` / `gog:<user id>` | Session tokens |
+| `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings |
+| `~/.local/share/slatty/prefixes/<id>/` | Wine prefixes of installed games (most saves live here) |
+| `~/.local/share/slatty/manifests/<id>.json` | Files installed for each game |
+| `~/.local/share/slatty/backups/` | Copies made before any save is replaced or a prefix deleted |
+| `~/.local/share/slatty/diagnostics/` | Cloud copies downloaded by `slatty cloud diff` |
+| `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | Comet's data and configuration |
+| `~/.cache/slatty/<user id>/` | Library and covers; safe to delete |
+| `~/.local/state/slatty/logs/` | Game, prefix creation and Comet logs |
+
+Comet's log may contain game client identifiers; review it before sharing.
+
+## Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| `slatty doctor` reports the Comet port as busy | Another Comet is running, usually Heroic's. Close the game in Heroic. |
+| "secret storage unavailable" | A Secret Service keyring must be running and unlocked. |
+| A game does not start | `~/.local/state/slatty/logs/game-<id>.log`. `slatty launch-spec <id>` shows the exact command. |
+| The first launch fails while creating the prefix | `~/.local/state/slatty/logs/prefix-<id>.log` |
+| Achievements are not reported | `~/.local/state/slatty/logs/comet.log`; some games need the Galaxy dummy service, which is not supported yet. |
+| A cloud conflict blocks the launch | `slatty cloud diff <id>`, then `slatty cloud sync <id> --prefer local` or `--prefer remote`. |
+| The session was interrupted (crash, power loss) | The next launch reports it. Check `slatty cloud status <id>` before playing. |

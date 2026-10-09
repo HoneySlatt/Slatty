@@ -1,15 +1,99 @@
 # SlattyLauncher
 
-Native GOG launcher written in Rust. Linux first.
+A native GOG launcher for Linux, written in Rust with an [Iced](https://iced.rs) interface.
 
-Not affiliated with GOG. It relies on reverse-engineered Galaxy services that may change at any time.
+It signs in to your GOG account, shows your library, installs Windows games from GOG's Galaxy
+content system, runs them through Proton, keeps cloud saves in sync and reports achievements to
+GOG through [Comet](https://github.com/imLinguin/comet), all without the official GOG Galaxy
+client and without a web view.
 
+> **Status: early development.** SlattyLauncher is usable by its author but has not been released.
+> Interfaces, commands and on-disk formats may still change.
+>
+> **Not affiliated with GOG.** It relies on Galaxy services that GOG does not document for third
+> parties. They were understood by reverse engineering (see [credits](#credits)) and may change
+> or stop working at any time.
+
+## What works
+
+Every feature below has automated tests. The last column says whether it has also been checked
+against real GOG services; details are in [docs/compatibility.md](docs/compatibility.md).
+
+| Feature | Real GOG check |
+|---|---|
+| Sign-in in the system browser, tokens in the system keyring | yes |
+| Library with covers, cached for offline use | yes |
+| Install Windows builds (Galaxy depots), pause and resume, integrity checks | install yes, pause/resume not yet |
+| Launch through umu + Proton, follow the session until the last process exits | yes |
+| Cloud saves: three-way sync, conflict handling, backups | download and upload yes |
+| Achievements: list, report unlocks made in game through Comet | listing yes, in-game unlock not yet |
+| Achievements: unlock or clear manually | yes |
+| Verify, repair and uninstall installed games | verify yes, repair and uninstall not yet |
+
+Not supported yet: updates, DLC, native Linux installers, macOS and Windows hosts, GOG installer
+scripts and redistributables, the Galaxy dummy service some games need for achievements.
+See [docs/roadmap.md](docs/roadmap.md).
+
+## Requirements
+
+- Linux with Wayland or X11. Development and testing happen on NixOS with niri.
+- A Secret Service keyring (GNOME Keyring, KeePassXC, KWallet with its Secret Service bridge).
+- [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and a Proton build
+  (GE-Proton, Proton-CachyOS, …) in `~/.local/share/Steam/compatibilitytools.d`.
+- [Comet](https://github.com/imLinguin/comet) for achievements.
+
+The Nix development shell provides umu-launcher, Comet and every build dependency.
+
+## Build and run
+
+```sh
+nix develop          # or `direnv allow`
+cargo build
+slatty doctor        # checks umu, Comet, the keyring and the Comet port
+slatty-gui           # graphical interface
 ```
-nix develop
-cargo run -p slatty-cli -- doctor   # command line
-cargo run -p slatty-gui             # Iced interface
+
+`nix develop` puts `target/debug` on `PATH`, so `slatty` and `slatty-gui` are available right
+after `cargo build`. Without Nix you need Rust 1.89 or newer, `pkg-config`, the Wayland/X11 and
+Vulkan development libraries, and umu-launcher and Comet on `PATH`.
+
+## Quick start
+
+```sh
+slatty auth login                      # sign in through your browser
+slatty library sync                    # fetch your library
+slatty install <game-id> --info        # see size and languages, downloads nothing
+slatty install <game-id> --proton ~/.local/share/Steam/compatibilitytools.d/GE-Proton…
+slatty launch <game-id>
 ```
 
-See `docs/PLAN.md` for scope and `docs/compat.md` for what has actually been verified.
+Game ids are listed by `slatty library list`. The same actions are available in `slatty-gui`.
+The [user guide](docs/user-guide.md) covers every command.
 
-License: GPL-3.0-or-later.
+## Documentation
+
+- [User guide](docs/user-guide.md): commands, interface, where data is stored, troubleshooting
+- [Cloud saves](docs/cloud-saves.md): how sync works and how your saves are protected
+- [Architecture](docs/architecture.md): crates, modules and main flows
+- [GOG integration](docs/gog-integration.md): every service used, its source and what is verified
+- [Compatibility](docs/compatibility.md): results of real tests
+- [Testing](docs/testing.md): automated tests and manual checks against GOG
+- [Roadmap](docs/roadmap.md)
+- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+
+## Credits
+
+SlattyLauncher stands on the work of others:
+
+- [Comet](https://github.com/imLinguin/comet) (Apache-2.0) implements the Galaxy communication
+  service that games talk to; SlattyLauncher runs it beside each game.
+- [heroic-gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl) (GPL-3.0) is the reference
+  for Galaxy depots, cloud storage and session handling. Parts of SlattyLauncher follow its logic.
+- [Heroic Games Launcher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) showed how
+  save locations, Proton and Comet fit together.
+- [gogapidocs](https://gogapidocs.readthedocs.io) documents many GOG endpoints.
+- [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) runs Proton outside Steam.
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).
