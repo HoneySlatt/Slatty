@@ -59,8 +59,9 @@ dot says you are signed in.
 
 - the shelf menu shows **All** games, the **Installed** ones or your **Favorites**;
 - the sort menu orders by name, most recently played or most played;
-- the slider sets the cover size;
 - the filter button shows games for Windows or Linux, with achievements, or with cloud saves.
+
+The size of the covers is set in Settings → Appearance.
 
 Hovering a cover shows its title, a settings button and a play (or install) button. Clicking it
 opens the game page.
@@ -347,7 +348,7 @@ The interface's **Settings** tab holds the account (log out), the library refres
 `slatty install --dir` and `--proton` set the same values.
 
 **Appearance** picks a built-in theme (Carbonfox, Everforest, Pastel Glow, Gruvbox Dark
-or Light) and the interface font, both applied at once, and shows the theme file, `~/.config/slatty/theme.toml`: create it, edit it, and reload it to change colours,
+or Light), the size of the library covers and the interface font, all applied at once and kept, and shows the theme file, `~/.config/slatty/theme.toml`: create it, edit it, and reload it to change colours,
 corners and the page transition. See [theming](theming.md).
 
 ## Where data is stored

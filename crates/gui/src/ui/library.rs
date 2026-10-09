@@ -2,8 +2,8 @@
 
 use crate::theme::text;
 use iced::widget::{
-    Column, Space, button, checkbox, column, container, grid, hover, image, mouse_area, pick_list,
-    progress_bar, row, scrollable, slider, space,
+    Column, button, checkbox, column, container, grid, hover, image, mouse_area, pick_list,
+    progress_bar, row, scrollable, space,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::installer::Progress;
@@ -52,11 +52,6 @@ impl App {
                 .padding([9, 16])
                 .text_size(14)
                 .width(170),
-            Space::new().width(4),
-            icon(Icon::LayoutGrid, 20.0, tokens().muted),
-            slider(110.0..=240.0, self.card_width, Message::CardWidth)
-                .width(130)
-                .style(theme::size_slider),
             filter_button,
         ]
         .spacing(14)

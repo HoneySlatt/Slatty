@@ -87,6 +87,9 @@ fn main() -> iced::Result {
         .run()
 }
 
+/// Narrowest and widest covers of the library grid.
+pub const COVER_WIDTHS: (f32, f32) = (110.0, 240.0);
+
 /// Why the theme file could not be used at start, shown once the window is up.
 static THEME_ERROR: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
@@ -177,6 +180,7 @@ pub struct App {
     pub page: Page,
     pub shelf: Shelf,
     pub sort: Sort,
+    /// Width of the covers in the library grid, set in Settings.
     pub card_width: f32,
     pub filters: Filters,
     pub filters_open: bool,
@@ -357,6 +361,7 @@ pub struct Boot {
     overview: HashMap<String, GameOverview>,
     jobs: Vec<(String, Interrupted)>,
     customs: HashMap<String, slatty_core::custom::Custom>,
+    cover_width: Option<f32>,
 }
 
 impl std::fmt::Debug for Core {
@@ -446,6 +451,9 @@ impl App {
                 self.overview = boot.overview;
                 self.interrupted = boot.jobs;
                 self.customs = boot.customs;
+                if let Some(width) = boot.cover_width {
+                    self.card_width = width.clamp(COVER_WIDTHS.0, COVER_WIDTHS.1);
+                }
                 if !boot.interrupted.is_empty() {
                     self.notice = Some(Notice {
                         error: true,
@@ -771,6 +779,7 @@ async fn boot() -> Result<Boot, String> {
     let proton_choices = slatty_core::settings::proton_candidates();
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let customs = slatty_core::custom::all(&db).map_err(err)?;
+    let cover_width = slatty_core::settings::cover_width(&db).map_err(err)?;
     let playtime = session::playtime(&db).map_err(err)?;
     InstallJob::forget_finished(&db).map_err(err)?;
     let jobs = InstallJob::list(&db)
@@ -799,5 +808,6 @@ async fn boot() -> Result<Boot, String> {
         overview,
         jobs,
         customs,
+        cover_width,
     })
 }

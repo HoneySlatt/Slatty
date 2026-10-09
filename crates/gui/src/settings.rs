@@ -53,6 +53,8 @@ pub enum SettingsMsg {
     ReloadTheme,
     /// The interface font, from the families installed on the system.
     Font(FontChoice),
+    /// The cover size was let go: it is kept for the next start.
+    SaveCoverWidth,
     /// A built-in theme, under the theme file.
     Preset(crate::presets::Preset),
     /// Proton build of one installed game, used from its next launch.
@@ -128,6 +130,11 @@ impl App {
                     .spawn();
                 if let Err(e) = opened {
                     self.notify_error(format!("Could not open the theme file: {e}"));
+                }
+            }
+            SettingsMsg::SaveCoverWidth => {
+                if let Err(e) = settings::set_cover_width(&core.db, self.card_width) {
+                    self.notify_error(e.to_string());
                 }
             }
             SettingsMsg::Preset(preset) => {

@@ -1830,3 +1830,23 @@ fn the_interface_font_is_chosen_in_settings() {
     assert_eq!(slatty_core::settings::interface_font(&db).unwrap(), None);
     assert!(app.notice.is_none());
 }
+
+#[test]
+fn cover_size_is_set_in_settings_and_kept() {
+    use crate::settings::SettingsMsg;
+    let mut app = library_app();
+    let _ = app.update(Message::ShowPage(Page::Settings));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Cover size").is_ok());
+        snapshot(&mut ui, "settings-appearance");
+    }
+    let _ = app.update(Message::CardWidth(200.0));
+    let _ = app.update(Message::Settings(SettingsMsg::SaveCoverWidth));
+    let db = app.core.as_ref().unwrap().db.clone();
+    assert_eq!(
+        slatty_core::settings::cover_width(&db).unwrap(),
+        Some(200.0)
+    );
+    assert_eq!(app.card_width, 200.0);
+}

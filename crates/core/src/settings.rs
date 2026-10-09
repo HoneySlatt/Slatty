@@ -8,6 +8,7 @@ const DEFAULT_PROTON: &str = "default_proton";
 const FAVORITES: &str = "favorites";
 const INTERFACE_FONT: &str = "interface_font";
 const INTERFACE_THEME: &str = "interface_theme";
+const COVER_WIDTH: &str = "cover_width";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -36,6 +37,15 @@ pub fn interface_font(db: &Db) -> Result<Option<String>> {
 
 pub fn set_interface_font(db: &Db, family: Option<&str>) -> Result<()> {
     db.set_setting(INTERFACE_FONT, family)
+}
+
+/// Width of the covers in the library grid, in pixels.
+pub fn cover_width(db: &Db) -> Result<Option<f32>> {
+    Ok(db.setting(COVER_WIDTH)?.and_then(|v| v.parse().ok()))
+}
+
+pub fn set_cover_width(db: &Db, width: f32) -> Result<()> {
+    db.set_setting(COVER_WIDTH, Some(&width.round().to_string()))
 }
 
 /// Built-in theme the interface starts from, by name; `None` for its own.

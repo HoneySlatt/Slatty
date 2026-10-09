@@ -1,7 +1,9 @@
 //! Settings tab and the sign-in screen.
 
 use crate::theme::text;
-use iced::widget::{Space, button, column, container, pick_list, row, scrollable, text_input};
+use iced::widget::{
+    Space, button, column, container, pick_list, row, scrollable, slider, text_input,
+};
 use iced::{Alignment, Element, Length, Padding};
 
 use super::card;
@@ -228,6 +230,20 @@ impl App {
                 .width(Length::Fill),
             ]
             .spacing(10)
+            .align_y(Alignment::Center),
+            row![
+                text("Cover size").size(15).width(210).color(tokens().muted),
+                icon(Icon::LayoutGrid, 20.0, tokens().muted),
+                slider(
+                    crate::COVER_WIDTHS.0..=crate::COVER_WIDTHS.1,
+                    self.card_width,
+                    Message::CardWidth
+                )
+                .on_release(Message::Settings(SettingsMsg::SaveCoverWidth))
+                .width(Length::Fill)
+                .style(theme::size_slider),
+            ]
+            .spacing(12)
             .align_y(Alignment::Center),
             row![
                 text("Font").size(15).width(210).color(tokens().muted),
