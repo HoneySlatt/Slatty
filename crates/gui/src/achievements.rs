@@ -6,7 +6,7 @@ use slatty_core::install::Install;
 use slatty_core::overview::{self, GameOverview};
 
 use crate::work::tokens;
-use crate::{App, Core, Loadable, Message, Page, Panel, err, view};
+use crate::{App, Core, Loadable, Message, Page, Panel, err};
 
 /// Manual achievement changes waiting for the user's confirmation.
 #[derive(Debug, Clone)]
@@ -171,7 +171,7 @@ pub fn achievement_icons(list: &[Achievement], all: bool) -> Vec<String> {
             })
             .collect()
     } else {
-        view::latest_unlocked(list)
+        latest_unlocked(list)
             .iter()
             .map(|a| a.image_url_unlocked.clone())
             .collect()
@@ -191,4 +191,12 @@ async fn achievement_access(
     }
     .map_err(err)?;
     Ok((tokens.user_id, client_id, token))
+}
+
+/// Unlocked achievements, newest first.
+pub fn latest_unlocked(list: &[Achievement]) -> Vec<&Achievement> {
+    let mut done: Vec<&Achievement> = list.iter().filter(|a| a.date_unlocked.is_some()).collect();
+    done.sort_by(|a, b| b.date_unlocked.cmp(&a.date_unlocked));
+    done.truncate(3);
+    done
 }

@@ -37,8 +37,32 @@ core functions. Long operations report progress through callbacks or typed event
 | `galaxy_service` | Comet's dummy `GalaxyCommunication` service, registered in game prefixes |
 | `achievements` | Achievement list, manual unlock and clear |
 | `overview` | Per-game achievement counts and cloud save support, cached per account |
+| `playtime` | Play time read from GOG, finished sessions reported to GOG |
 | `settings` | Games folder, default Proton, favorites |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
+
+## Interface modules
+
+The interface follows Iced's state, message, update and view split. `main.rs` holds the
+application state, the `Message` enum, navigation and start-up; `update` only dispatches. Each
+feature keeps its state, message handling and background tasks in its own module, and the views
+live under `ui/`.
+
+| Module | Responsibility |
+|---|---|
+| `login` | Browser sign-in, sign-out, avatar |
+| `library` | Library sync, covers and images, favorites, shelf, sort and filters, per-game overview and play time |
+| `play` | Launching a game and following its session |
+| `cloud` | Cloud save check, sync and conflict choices |
+| `achievements` | Loading achievements, confirmed manual changes |
+| `install` | Install plan, download with progress, pause, discard |
+| `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
+| `settings` | Games folder and default Proton |
+| `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
+| `ui` | Window shell and shared widgets; `library`, `achievements`, `settings`, `game` and `panels` pages; `format` for text shown to the user |
+| `theme`, `icons` | Colours, widget styles, Lucide icons |
+
+Interface tests (`tests.rs`) drive the real views with Iced's simulator and fictitious data.
 
 ## Main flows
 

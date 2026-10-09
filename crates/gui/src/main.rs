@@ -1,6 +1,5 @@
 mod achievements;
 mod cloud;
-mod game;
 mod icons;
 mod install;
 mod library;
@@ -11,7 +10,7 @@ mod settings;
 #[cfg(test)]
 mod tests;
 mod theme;
-mod view;
+mod ui;
 mod work;
 
 use std::collections::{HashMap, HashSet};
@@ -498,7 +497,7 @@ impl App {
         if let Some((_, title, p)) = self.installing() {
             work.push(format!(
                 "Downloading {title} ({:.0} %). Quitting pauses it; it resumes where it stopped.",
-                view::fraction(p) * 100.0
+                ui::format::fraction(p) * 100.0
             ));
         }
         for (id, m) in &self.maintenance {

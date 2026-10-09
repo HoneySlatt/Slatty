@@ -6,7 +6,7 @@ use slatty_core::play::{self, PlayEvent, PlayRequest};
 use slatty_core::session;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{App, CloudRequest, Core, Message, err, view};
+use crate::{App, CloudRequest, Core, Message, err, ui};
 
 pub struct PlayState {
     pub game_id: String,
@@ -58,7 +58,7 @@ impl App {
         };
         let result = match msg {
             PlayMsg::Event(event) => {
-                p.log.push(view::describe_play_event(&event));
+                p.log.push(ui::format::describe_play_event(&event));
                 return Task::none();
             }
             PlayMsg::Done(result) => result,
