@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
+use crate::presets::Preset;
+
 use iced::widget::{button, container, pick_list, progress_bar, scrollable, slider, text_input};
 use iced::{Background, Border, Color, Font, Shadow, Theme, border, color, font};
 
@@ -82,12 +84,27 @@ pub fn file(config_dir: &Path) -> PathBuf {
     config_dir.join("theme.toml")
 }
 
-/// Reads the theme file, if there is one, and uses it from the next frame. Keys left out keep
-/// their default; a mistake keeps the look in use and is described.
+static PRESET: RwLock<Preset> = RwLock::new(Preset::Slatty);
+
+/// The built-in theme chosen in Settings, under the theme file.
+pub fn preset() -> Preset {
+    *PRESET.read().unwrap_or_else(|e| e.into_inner())
+}
+
+pub fn set_preset(preset: Preset) {
+    *PRESET.write().unwrap_or_else(|e| e.into_inner()) = preset;
+}
+
+/// Reads the theme file, if there is one, over the chosen preset, and uses the result from the
+/// next frame. Keys left out keep the preset's value; a mistake keeps the look in use and is
+/// described.
 pub fn load(path: &Path) -> Result<(), String> {
+    let base = preset().tokens();
     let tokens = match std::fs::read_to_string(path) {
-        Ok(text) => Tokens::from_toml(&text).map_err(|e| format!("{}: {e}", path.display()))?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Tokens::default(),
+        Ok(text) => {
+            Tokens::from_toml(&text, base).map_err(|e| format!("{}: {e}", path.display()))?
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => base,
         Err(e) => return Err(format!("{}: {e}", path.display())),
     };
     *TOKENS.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(tokens);
@@ -175,10 +192,10 @@ fn hex(c: Color) -> String {
 }
 
 impl Tokens {
-    /// The defaults, overridden by the keys the file sets.
-    fn from_toml(text: &str) -> Result<Tokens, String> {
+    /// `base`, overridden by the keys the file sets.
+    fn from_toml(text: &str, base: Tokens) -> Result<Tokens, String> {
         let file: ThemeFile = toml::from_str(text).map_err(|e| e.message().to_string())?;
-        let mut t = Tokens::default();
+        let mut t = base;
         let c = file.colors;
         for (slot, value) in [
             (&mut t.background, c.background),
@@ -805,6 +822,7 @@ mod tests {
         let t = Tokens::from_toml(
             "[colors]\naccent = \"#ff8800\"\nscrim = \"#00000080\"\n\n[shape]\nradius = 0\n\n\
              [motion]\ntransition_ms = 0\n",
+            Tokens::default(),
         )
         .unwrap();
         assert_eq!(t.accent, Color::from_rgb8(0xff, 0x88, 0x00));
@@ -820,19 +838,21 @@ mod tests {
 
     #[test]
     fn mistakes_are_named() {
-        let bad_colour = Tokens::from_toml("[colors]\naccent = \"orange\"\n").unwrap_err();
+        let bad_colour =
+            Tokens::from_toml("[colors]\naccent = \"orange\"\n", Tokens::default()).unwrap_err();
         assert!(
             bad_colour.contains("`orange` is not a colour"),
             "{bad_colour}"
         );
-        let typo = Tokens::from_toml("[colors]\naccnet = \"#ffffff\"\n").unwrap_err();
+        let typo =
+            Tokens::from_toml("[colors]\naccnet = \"#ffffff\"\n", Tokens::default()).unwrap_err();
         assert!(typo.contains("accnet"), "{typo}");
     }
 
     #[test]
     fn the_written_file_reads_back_as_the_defaults() {
         let d = Tokens::default();
-        let t = Tokens::from_toml(&d.to_toml()).unwrap();
+        let t = Tokens::from_toml(&d.to_toml(), Tokens::default()).unwrap();
         for (a, b) in [
             (t.background, d.background),
             (t.accent, d.accent),

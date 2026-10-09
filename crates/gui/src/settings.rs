@@ -53,6 +53,8 @@ pub enum SettingsMsg {
     ReloadTheme,
     /// The interface font, from the families installed on the system.
     Font(FontChoice),
+    /// A built-in theme, under the theme file.
+    Preset(crate::presets::Preset),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
 }
@@ -110,7 +112,7 @@ impl App {
                 if !path.exists() {
                     let written = slatty_core::fsutil::write_atomic(
                         &path,
-                        theme::Tokens::default().to_toml().as_bytes(),
+                        theme::tokens().to_toml().as_bytes(),
                     );
                     if let Err(e) = written {
                         self.notify_error(e.to_string());
@@ -126,6 +128,15 @@ impl App {
                     .spawn();
                 if let Err(e) = opened {
                     self.notify_error(format!("Could not open the theme file: {e}"));
+                }
+            }
+            SettingsMsg::Preset(preset) => {
+                if let Err(e) = settings::set_interface_theme(&core.db, preset.key()) {
+                    self.notify_error(e.to_string());
+                }
+                theme::set_preset(preset);
+                if let Err(e) = theme::load(&theme::file(&core.dirs.config)) {
+                    self.notify_error(format!("Theme file not used: {e}"));
                 }
             }
             SettingsMsg::Font(choice) => {

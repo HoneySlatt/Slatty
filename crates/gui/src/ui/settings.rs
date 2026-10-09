@@ -218,6 +218,18 @@ impl App {
             .collect();
         column![
             row![
+                text("Theme").size(15).width(210).color(tokens().muted),
+                pick_list(crate::presets::Preset::ALL, Some(theme::preset()), |p| {
+                    Message::Settings(SettingsMsg::Preset(p))
+                })
+                .style(theme::select)
+                .font(theme::font())
+                .padding([8, 16])
+                .width(Length::Fill),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+            row![
                 text("Font").size(15).width(210).color(tokens().muted),
                 pick_list(fonts, Some(current), |f| Message::Settings(
                     SettingsMsg::Font(f)

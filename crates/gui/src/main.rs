@@ -7,6 +7,7 @@ mod library;
 mod login;
 mod maintenance;
 mod play;
+mod presets;
 mod settings;
 #[cfg(test)]
 mod tests;
@@ -55,13 +56,19 @@ fn main() -> iced::Result {
         .init();
     // Before the first frame, so the window never shows another look first.
     if let Ok(dirs) = Dirs::from_system() {
+        let db = Db::open(&dirs.db_file()).ok();
+        let saved = |read: fn(&Db) -> slatty_core::Result<Option<String>>| {
+            db.as_ref().and_then(|db| read(db).ok().flatten())
+        };
+        if let Some(preset) = saved(slatty_core::settings::interface_theme)
+            .and_then(|name| presets::Preset::from_key(&name))
+        {
+            theme::set_preset(preset);
+        }
         if let Err(e) = theme::load(&theme::file(&dirs.config)) {
             let _ = THEME_ERROR.set(e);
         }
-        let family = Db::open(&dirs.db_file())
-            .ok()
-            .and_then(|db| slatty_core::settings::interface_font(&db).ok().flatten());
-        theme::set_font(family.as_deref());
+        theme::set_font(saved(slatty_core::settings::interface_font).as_deref());
     }
     let mut app = iced::application(App::boot, App::update, App::view);
     for font in theme::FONTS {

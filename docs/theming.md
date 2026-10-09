@@ -10,6 +10,15 @@ Without that file, SlattyLauncher uses its own look. **Settings → Appearance �
 writes the default theme there, every key with its value, as a starting point. **Edit** opens the
 file in your desktop's text editor, and **Reload** applies it without restarting.
 
+## Built-in themes
+
+**Settings → Appearance → Theme** offers seven complete colour sets: Slatty (the default),
+Carbonfox, Everforest, Rosé Pine, Pastel Glow, Gruvbox Dark and Gruvbox Light. The theme file
+is read on top of the one picked: a key it sets wins, the others come from the built-in theme. To
+start a file from a built-in theme, pick it, then **Create theme file**.
+
+## Font
+
 The font is chosen in the interface instead. The default is Geist, built into SlattyLauncher, so
 the look is the same on every system. **Settings → Appearance → Font** lists the font families
 installed on the system as alternatives and applies the one picked at once. A family without a semibold

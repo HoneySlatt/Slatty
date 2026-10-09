@@ -7,6 +7,7 @@ const LIBRARY_ROOT: &str = "library_root";
 const DEFAULT_PROTON: &str = "default_proton";
 const FAVORITES: &str = "favorites";
 const INTERFACE_FONT: &str = "interface_font";
+const INTERFACE_THEME: &str = "interface_theme";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -35,6 +36,15 @@ pub fn interface_font(db: &Db) -> Result<Option<String>> {
 
 pub fn set_interface_font(db: &Db, family: Option<&str>) -> Result<()> {
     db.set_setting(INTERFACE_FONT, family)
+}
+
+/// Built-in theme the interface starts from, by name; `None` for its own.
+pub fn interface_theme(db: &Db) -> Result<Option<String>> {
+    db.setting(INTERFACE_THEME)
+}
+
+pub fn set_interface_theme(db: &Db, name: &str) -> Result<()> {
+    db.set_setting(INTERFACE_THEME, Some(name))
 }
 
 /// Game ids marked as favorites.
