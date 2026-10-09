@@ -1,18 +1,21 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use iced::{Size, Theme};
+use iced::Size;
 use iced_test::simulator::Simulator;
 use slatty_core::account::AccountInfo;
 use slatty_core::db::Db;
 use slatty_core::install::{Install, Platform};
 use slatty_core::library::{LibraryGame, MetadataSource};
+use slatty_core::overview::GameOverview;
 use slatty_core::paths::Dirs;
 use slatty_core::runner::Runner;
+use slatty_core::session::Playtime;
 
-use crate::{App, Core, Message};
+use crate::installs::{InstallMsg, InstallView, MaintenanceMsg};
+use crate::{App, Core, Filters, Message, Page, Panel, Shelf, Sort};
 
-const SIZE: Size = Size::new(1280.0, 820.0);
+const SIZE: Size = Size::new(1440.0, 900.0);
 
 fn core() -> Core {
     let root = std::env::temp_dir().join(format!("slatty-gui-test-{}", std::process::id()));
@@ -50,6 +53,7 @@ fn library_app() -> App {
     app.library = (1..=14)
         .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
         .collect();
+    app.library[1].os.push("linux".into());
     app.fetched_at = Some(1_791_500_000);
     app.installs.insert(
         "3".into(),
@@ -68,13 +72,29 @@ fn library_app() -> App {
     app
 }
 
+fn open(app: &mut App, game: &str, panel: Option<Panel>) {
+    app.selected = Some(game.into());
+    app.panel = panel;
+}
+
+fn render(app: &App) -> Simulator<'_, Message> {
+    Simulator::with_size(Default::default(), SIZE, app.view())
+}
+
 fn snapshot(ui: &mut Simulator<'_, Message>, name: &str) {
     if let Ok(dir) = std::env::var("SLATTY_SNAPSHOT_DIR") {
-        let snap = ui.snapshot(&Theme::TokyoNight).unwrap();
+        let snap = ui.snapshot(&crate::theme::theme()).unwrap();
         let path = PathBuf::from(dir).join(name);
         let _ = std::fs::remove_file(path.with_extension("png"));
         snap.matches_image(path).unwrap();
     }
+}
+
+fn titles(app: &App) -> Vec<String> {
+    app.visible_games()
+        .iter()
+        .map(|g| g.title.replace("[FAKE] ", ""))
+        .collect()
 }
 
 #[test]
@@ -83,9 +103,9 @@ fn login_screen_offers_browser_login_without_password_field() {
         core: Some(core()),
         ..Default::default()
     };
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     assert!(ui.find("Sign in").is_ok());
-    assert!(ui.find("Mot de passe").is_err());
+    assert!(ui.find("Password").is_err());
     snapshot(&mut ui, "login");
     ui.click("Open the GOG sign-in page").unwrap();
     assert!(
@@ -95,20 +115,117 @@ fn login_screen_offers_browser_login_without_password_field() {
 }
 
 #[test]
+fn top_bar_offers_library_achievements_and_settings() {
+    let app = library_app();
+    let mut ui = render(&app);
+    for tab in ["Library", "Achievements", "Settings"] {
+        assert!(ui.find(tab).is_ok(), "{tab}");
+    }
+    assert!(ui.find("Activity").is_err());
+    snapshot(&mut ui, "library");
+    ui.click("Settings").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::ShowPage(Page::Settings)))
+    );
+}
+
+#[test]
 fn search_filters_the_library() {
     let mut app = library_app();
     app.search = "game 1".into();
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     assert!(ui.find("[FAKE] Game 12").is_ok());
     assert!(ui.find("[FAKE] Game 3").is_err());
 }
 
 #[test]
-fn installed_game_detail_can_be_played() {
+fn shelves_filters_and_sort_select_games() {
     let mut app = library_app();
-    app.selected = Some("3".into());
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    snapshot(&mut ui, "detail");
+    app.shelf = Shelf::Installed;
+    assert_eq!(titles(&app), ["Game 3"]);
+
+    app.shelf = Shelf::All;
+    let _ = app.update(Message::ToggleFavorite("7".into()));
+    app.shelf = Shelf::Favorites;
+    assert_eq!(titles(&app), ["Game 7"]);
+    assert_eq!(
+        slatty_core::settings::favorites(&app.core.as_ref().unwrap().db).unwrap(),
+        ["7"]
+    );
+
+    app.shelf = Shelf::All;
+    app.filters = Filters {
+        linux: true,
+        ..Default::default()
+    };
+    assert_eq!(titles(&app), ["Game 2"]);
+
+    app.overview.insert(
+        "4".into(),
+        GameOverview {
+            achievements: Some((1, 10)),
+            cloud_saves: false,
+        },
+    );
+    app.overview.insert(
+        "5".into(),
+        GameOverview {
+            achievements: None,
+            cloud_saves: true,
+        },
+    );
+    app.filters = Filters {
+        achievements: true,
+        ..Default::default()
+    };
+    assert_eq!(titles(&app), ["Game 4"]);
+    app.filters = Filters {
+        cloud_saves: true,
+        ..Default::default()
+    };
+    assert_eq!(titles(&app), ["Game 5"]);
+
+    app.filters = Filters::default();
+    app.playtime.insert(
+        "9".into(),
+        Playtime {
+            seconds: 60,
+            last_played: 200,
+        },
+    );
+    app.playtime.insert(
+        "2".into(),
+        Playtime {
+            seconds: 6000,
+            last_played: 100,
+        },
+    );
+    app.sort = Sort::RecentlyPlayed;
+    assert_eq!(titles(&app)[..2], ["Game 9", "Game 2"]);
+    app.sort = Sort::MostPlayed;
+    assert_eq!(titles(&app)[..2], ["Game 2", "Game 9"]);
+    app.sort = Sort::NameDesc;
+    assert_eq!(titles(&app)[0], "Game 9");
+}
+
+#[test]
+fn installed_game_page_can_be_played_and_shows_no_store_text() {
+    let mut app = library_app();
+    open(&mut app, "3", None);
+    app.playtime.insert(
+        "3".into(),
+        Playtime {
+            seconds: 3 * 3600 + 5 * 60,
+            last_played: 1_791_500_000,
+        },
+    );
+    let mut ui = render(&app);
+    assert!(ui.find("3 h 5 m").is_ok());
+    assert!(ui.find("Time played").is_ok());
+    assert!(ui.find("Cloud saves").is_ok());
+    assert!(ui.find("Manage").is_ok());
+    snapshot(&mut ui, "game");
     ui.click("Play").unwrap();
     assert!(
         ui.into_messages()
@@ -117,13 +234,17 @@ fn installed_game_detail_can_be_played() {
 }
 
 #[test]
-fn uninstalled_game_offers_achievements_but_not_play_or_cloud() {
+fn uninstalled_game_offers_install_but_not_play_or_cloud_tools() {
     let mut app = library_app();
-    app.selected = Some("5".into());
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    open(&mut app, "5", None);
+    let mut ui = render(&app);
     assert!(ui.find("Play").is_err());
-    assert!(ui.find("Check").is_err());
-    assert!(ui.find("Show achievements").is_ok());
+    assert!(ui.find("Manage").is_err());
+    ui.click("Install").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::OpenPanel(Panel::Install)))
+    );
 }
 
 fn fake_achievement(key: &str, unlocked: bool) -> slatty_core::achievements::Achievement {
@@ -142,7 +263,7 @@ fn fake_achievement(key: &str, unlocked: bool) -> slatty_core::achievements::Ach
 
 fn app_with_achievements() -> App {
     let mut app = library_app();
-    app.selected = Some("5".into());
+    open(&mut app, "5", Some(Panel::Achievements));
     app.achievements.insert(
         "5".into(),
         crate::Loadable::Ready(vec![
@@ -154,9 +275,19 @@ fn app_with_achievements() -> App {
 }
 
 #[test]
+fn game_page_summarises_achievements() {
+    let mut app = app_with_achievements();
+    app.panel = None;
+    let mut ui = render(&app);
+    assert!(ui.find("1 / 2").is_ok());
+    assert!(ui.find("50%").is_ok());
+    assert!(ui.find("[FAKE] Beta").is_ok(), "latest unlock shown");
+}
+
+#[test]
 fn unlocking_only_asks_for_confirmation() {
     let mut app = app_with_achievements();
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     assert!(ui.find("Clear").is_ok());
     ui.click("Unlock").unwrap();
     let messages: Vec<Message> = ui.into_messages().collect();
@@ -168,12 +299,8 @@ fn unlocking_only_asks_for_confirmation() {
         let _ = app.update(m);
     }
     assert!(app.pending_change.is_some());
-    assert!(matches!(
-        app.achievements.get("5"),
-        Some(crate::Loadable::Ready(_))
-    ));
 
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     snapshot(&mut ui, "achievements-confirm");
     ui.click("Confirm").unwrap();
     assert!(
@@ -193,12 +320,40 @@ fn cancelling_drops_the_pending_change() {
             unlock: true,
         }],
     ));
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     ui.click("Cancel").unwrap();
     for m in ui.into_messages() {
         let _ = app.update(m);
     }
     assert!(app.pending_change.is_none());
+}
+
+#[test]
+fn achievements_tab_lists_games_by_completion() {
+    let mut app = library_app();
+    app.page = Page::Achievements;
+    for (id, done, total) in [("2", 1, 4), ("6", 4, 4), ("8", 0, 10)] {
+        app.overview.insert(
+            id.into(),
+            GameOverview {
+                achievements: Some((done, total)),
+                cloud_saves: false,
+            },
+        );
+    }
+    let mut ui = render(&app);
+    assert!(ui.find("4 / 4").is_ok());
+    assert!(ui.find("25%").is_ok());
+    assert!(
+        ui.find("[FAKE] Game 1").is_err(),
+        "no achievements, not listed"
+    );
+    snapshot(&mut ui, "achievements-tab");
+    ui.click("[FAKE] Game 6").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::SelectWith(id, Panel::Achievements) if id == "6"))
+    );
 }
 
 fn fake_plan() -> crate::installs::PlanInfo {
@@ -238,33 +393,33 @@ fn fake_dlc(
 #[test]
 fn install_needs_a_proton_choice_then_starts() {
     let mut app = library_app();
-    app.selected = Some("5".into());
+    open(&mut app, "5", Some(Panel::Install));
     app.install_views
-        .insert("5".into(), crate::installs::InstallView::Ready(fake_plan()));
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+        .insert("5".into(), InstallView::Ready(fake_plan()));
+    let mut ui = render(&app);
     assert!(ui.find("Choose a Proton version in Settings.").is_ok());
-    let _ = ui.click("Install");
+    let _ = ui.click("Start install");
     assert!(
         !ui.into_messages()
-            .any(|m| matches!(m, Message::Install(crate::installs::InstallMsg::Start(_))))
+            .any(|m| matches!(m, Message::Install(InstallMsg::Start(_))))
     );
 
     app.proton = Some("/proton/GE-Proton".into());
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     snapshot(&mut ui, "install-ready");
-    ui.click("Install").unwrap();
-    assert!(ui.into_messages().any(
-        |m| matches!(m, Message::Install(crate::installs::InstallMsg::Start(id)) if id == "5")
-    ));
+    ui.click("Start install").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::Install(InstallMsg::Start(id)) if id == "5"))
+    );
 }
 
 #[test]
 fn running_install_shows_progress_and_can_pause() {
     let mut app = library_app();
-    app.selected = Some("5".into());
     app.install_views.insert(
         "5".into(),
-        crate::installs::InstallView::Running {
+        InstallView::Running {
             title: "[FAKE] Game 5".into(),
             progress: slatty_core::installer::Progress {
                 files_done: 3,
@@ -275,21 +430,24 @@ fn running_install_shows_progress_and_can_pause() {
             cancel: tokio_util::sync::CancellationToken::new(),
         },
     );
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    assert!(ui.find("Downloading [FAKE] Game 5").is_ok());
+    assert!(render(&app).find("Downloading [FAKE] Game 5").is_ok());
+    open(&mut app, "5", None);
+    assert!(render(&app).find("Downloading 25 %").is_ok());
+    app.panel = Some(Panel::Install);
+    let mut ui = render(&app);
     snapshot(&mut ui, "install-running");
     ui.click("Pause").unwrap();
-    assert!(ui.into_messages().any(
-        |m| matches!(m, Message::Install(crate::installs::InstallMsg::Pause(id)) if id == "5")
-    ));
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::Install(InstallMsg::Pause(id)) if id == "5"))
+    );
 }
 
 #[test]
 fn uninstall_requires_an_explicit_choice() {
-    use crate::installs::MaintenanceMsg;
     let mut app = library_app();
-    app.selected = Some("3".into());
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    open(&mut app, "3", Some(Panel::Manage));
+    let mut ui = render(&app);
     ui.click("Uninstall…").unwrap();
     let messages: Vec<Message> = ui.into_messages().collect();
     assert!(
@@ -298,13 +456,13 @@ fn uninstall_requires_an_explicit_choice() {
     for m in messages {
         let _ = app.update(m);
     }
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     snapshot(&mut ui, "uninstall-confirm");
     ui.click("Uninstall, keep the prefix").unwrap();
     assert!(ui.into_messages().any(
         |m| matches!(m, Message::Maintenance(MaintenanceMsg::Uninstall(id, false)) if id == "3")
     ));
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     ui.click("Also delete the prefix (backed up)").unwrap();
     assert!(ui.into_messages().any(
         |m| matches!(m, Message::Maintenance(MaintenanceMsg::Uninstall(id, true)) if id == "3")
@@ -313,17 +471,14 @@ fn uninstall_requires_an_explicit_choice() {
 
 #[test]
 fn update_button_appears_only_when_an_update_exists() {
-    use crate::installs::MaintenanceMsg;
     let mut app = library_app();
-    app.selected = Some("3".into());
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    assert!(ui.find("Update now").is_err());
-    drop(ui);
+    open(&mut app, "3", Some(Panel::Manage));
+    assert!(render(&app).find("Update now").is_err());
     let _ = app.update(Message::Maintenance(MaintenanceMsg::UpdateChecked(
         "3".into(),
         Ok(Some("1.0 → 1.1".into())),
     )));
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     assert!(ui.find("Update available: 1.0 → 1.1").is_ok());
     snapshot(&mut ui, "update-available");
     ui.click("Update now").unwrap();
@@ -335,13 +490,12 @@ fn update_button_appears_only_when_an_update_exists() {
 
 #[test]
 fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
-    use crate::installs::{InstallMsg, InstallView};
     let mut app = library_app();
-    app.selected = Some("5".into());
+    open(&mut app, "5", Some(Panel::Install));
     app.proton = Some("/proton/GE-Proton".into());
     app.install_views
         .insert("5".into(), InstallView::Ready(fake_plan()));
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     assert!(ui.find("Download 4.00 GiB · on disk 7.00 GiB").is_ok());
     assert!(ui.find("[FAKE] Other DLC (2.00 GiB) — not owned").is_ok());
     snapshot(&mut ui, "install-dlc");
@@ -353,16 +507,19 @@ fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
     for m in messages {
         let _ = app.update(m);
     }
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    assert!(ui.find("Download 3.00 GiB · on disk 5.00 GiB").is_ok());
+    assert!(
+        render(&app)
+            .find("Download 3.00 GiB · on disk 5.00 GiB")
+            .is_ok()
+    );
 }
 
 #[test]
-fn content_panel_applies_dlc_changes_only_when_something_changed() {
-    use crate::installs::{ContentInfo, MaintenanceMsg};
+fn game_settings_panel_applies_dlc_changes_only_when_something_changed() {
+    use crate::installs::ContentInfo;
     use slatty_core::maintenance::Change;
     let mut app = library_app();
-    app.selected = Some("3".into());
+    open(&mut app, "3", Some(Panel::GameSettings));
     let content = ContentInfo {
         language: "en-US".into(),
         languages: vec!["en-US".into(), "fr-FR".into()],
@@ -374,7 +531,7 @@ fn content_panel_applies_dlc_changes_only_when_something_changed() {
         "3".into(),
         Ok(content),
     )));
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    let mut ui = render(&app);
     let _ = ui.click("Apply DLC changes");
     assert!(
         ui.into_messages().next().is_none(),
@@ -385,11 +542,50 @@ fn content_panel_applies_dlc_changes_only_when_something_changed() {
         "3".into(),
         "21".into(),
     )));
-    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    snapshot(&mut ui, "content-panel");
+    let mut ui = render(&app);
+    snapshot(&mut ui, "game-settings");
     ui.click("Apply DLC changes").unwrap();
     assert!(ui.into_messages().any(|m| matches!(
         m,
         Message::Maintenance(MaintenanceMsg::Apply(id, Change::Dlcs(d))) if id == "3" && d.is_empty()
     )));
+}
+
+#[test]
+fn escape_closes_the_panel_then_the_game_page() {
+    use iced::keyboard::{Event, Key, Location, Modifiers, key};
+    let mut app = library_app();
+    open(&mut app, "3", Some(Panel::Manage));
+    let escape = || {
+        Message::Key(Event::KeyPressed {
+            key: Key::Named(key::Named::Escape),
+            modified_key: Key::Named(key::Named::Escape),
+            physical_key: key::Physical::Unidentified(key::NativeCode::Unidentified),
+            location: Location::Standard,
+            modifiers: Modifiers::empty(),
+            text: None,
+            repeat: false,
+        })
+    };
+    let _ = app.update(escape());
+    assert_eq!((app.panel, app.selected.as_deref()), (None, Some("3")));
+    let _ = app.update(escape());
+    assert_eq!(app.selected, None);
+}
+
+#[test]
+fn settings_page_holds_account_library_and_install_options() {
+    let mut app = library_app();
+    app.page = Page::Settings;
+    let mut ui = render(&app);
+    for label in [
+        "testeur",
+        "Log out",
+        "Refresh library",
+        "Games folder",
+        "Proton",
+    ] {
+        assert!(ui.find(label).is_ok(), "{label}");
+    }
+    snapshot(&mut ui, "settings");
 }

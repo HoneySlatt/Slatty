@@ -22,20 +22,21 @@ core functions. Long operations report progress through callbacks or typed event
 | `credentials` | System keyring (Secret Service through the `keyring` crate) |
 | `http` | Shared HTTP client; errors are stripped of URLs so query-string secrets never reach logs |
 | `db` | SQLite state database with versioned migrations |
-| `library` | Galaxy library and gamesdb metadata, per-account cache, covers |
+| `library` | Galaxy library and gamesdb metadata, per-account cache, covers, key art and images |
 | `gameinfo` | `goggame-<id>.info` parsing, case-insensitive Windows path resolution |
 | `install` | Installed-game records |
 | `galaxy` | Content system: builds, build metadata, depot manifests, secure links, chunks |
 | `installer` | Install plans, staged verified downloads, resumable jobs, install records |
 | `maintenance` | Verify, repair, uninstall |
 | `runner` | Launch commands for umu/Proton, Wine and native games; prefix creation |
-| `session` | Session supervisor (subreaper) and session records |
+| `session` | Session supervisor (subreaper), session records, play time |
 | `play` | Full play flow: prefix, cloud, Comet, session, upload, achievement diff |
 | `cloud` | Save locations, local scan, three-way plan, transport, sync executor, diagnostics |
 | `comet` | Supervised Comet process |
 | `galaxy_service` | Comet's dummy `GalaxyCommunication` service, registered in game prefixes |
 | `achievements` | Achievement list, manual unlock and clear |
-| `settings` | Games folder, default Proton |
+| `overview` | Per-game achievement counts and cloud save support, cached per account |
+| `settings` | Games folder, default Proton, favorites |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
 
 ## Main flows

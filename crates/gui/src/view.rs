@@ -1,24 +1,20 @@
 use iced::widget::{
-    Column, button, checkbox, column, container, grid, image, pick_list, progress_bar, row,
-    scrollable, text, text_input,
+    Column, Space, button, checkbox, column, container, grid, hover, image, pick_list,
+    progress_bar, row, scrollable, slider, space, text, text_input,
 };
-use iced::{Alignment, ContentFit, Element, Length};
+use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::achievements::Achievement;
 use slatty_core::cloud::plan::Warning;
-use slatty_core::cloud::sync::Prefer;
-use slatty_core::install::Install;
-use slatty_core::installer::{DlcChoice, Progress};
+use slatty_core::installer::Progress;
 use slatty_core::library::LibraryGame;
-use slatty_core::maintenance::Change;
 use slatty_core::play::{CloudSummary, PlayEvent};
-use slatty_core::runner::Runner;
 
-use crate::installs::{
-    ContentInfo, InstallMsg, InstallView, MaintenanceMsg, ProtonChoice, SettingsMsg, human_size,
-};
-use crate::{AchievementChange, App, CloudRequest, Loadable, Message, PendingChange};
+use crate::icons::{Icon, icon};
+use crate::installs::{ProtonChoice, SettingsMsg};
+use crate::theme::{self, ACCENT, BOLD, MUTED, ON_ACCENT, SEMIBOLD, TEXT};
+use crate::{App, Filters, Message, Page, Panel, Shelf, Sort};
 
-fn fraction(p: Progress) -> f32 {
+pub fn fraction(p: Progress) -> f32 {
     if p.bytes_total == 0 {
         0.0
     } else {
@@ -34,339 +30,292 @@ impl App {
                 .into();
         }
         if self.core.is_none() {
-            return container(text("Loading…")).padding(40).into();
+            return container(text("Loading…").color(MUTED)).padding(40).into();
         }
-        let body = match &self.account {
-            None => self.login_view(),
-            Some(_) => self.library_view(),
+        let Some(account) = &self.account else {
+            return self.with_notice(self.login_view());
         };
-        let mut page = Column::new();
-        if let Some(n) = &self.notice {
-            let style = if n.error {
-                container::danger
-            } else {
-                container::secondary
-            };
-            page = page.push(
-                container(
-                    row![
-                        text(&n.text).width(Length::Fill),
-                        button(text("Close"))
-                            .on_press(Message::DismissNotice)
-                            .style(button::text)
-                    ]
-                    .align_y(Alignment::Center)
-                    .spacing(12),
-                )
-                .padding(10)
-                .width(Length::Fill)
-                .style(style),
-            );
-        }
-        page.push(body).into()
-    }
-
-    fn login_view(&self) -> Element<'_, Message> {
-        let busy = self.login_busy;
-        let content = column![
-            text("Sign in to GOG").size(28),
-            text(
-                "Sign-in happens in your browser; SlattyLauncher never sees your password. \
-                 Once signed in, the browser shows an almost blank page on embed.gog.com: \
-                 copy that page's full address and paste it below."
-            ),
-            button(text("Open the GOG sign-in page")).on_press(Message::OpenLoginPage),
-            row![
-                text_input(
-                    "https://embed.gog.com/on_login_success?…&code=…",
-                    &self.login_input
-                )
-                .on_input(Message::LoginInput)
-                .on_submit(Message::SubmitLogin)
-                .width(Length::Fill),
-                button(text("Paste"))
-                    .on_press(Message::PasteLogin)
-                    .style(button::secondary),
-                button(text(if busy { "Signing in…" } else { "Sign in" })).on_press_maybe(
-                    (!busy && !self.login_input.is_empty()).then_some(Message::SubmitLogin)
-                ),
+        let body: Element<'_, Message> = match self.selected_game() {
+            Some(game) => self.game_page(game),
+            None => column![
+                self.top_bar(&account.username),
+                match self.page {
+                    Page::Library => self.library_page(),
+                    Page::Achievements => self.achievements_page(),
+                    Page::Settings => self.settings_page(),
+                }
             ]
-            .spacing(8),
-        ]
-        .spacing(16)
-        .max_width(720);
-        container(content).padding(40).center_x(Length::Fill).into()
+            .spacing(14)
+            .into(),
+        };
+        let page = self.with_notice(container(body).padding(Padding::new(24.0).top(16.0)).into());
+        match (self.panel, self.selected_game()) {
+            (Some(panel), Some(game)) => self.with_panel(page, panel, game),
+            _ => page,
+        }
     }
 
-    fn library_view(&self) -> Element<'_, Message> {
-        let account = self
-            .account
-            .as_ref()
-            .map(|a| a.username.as_str())
-            .unwrap_or_default();
-        let cache_note = match self.fetched_at {
-            Some(ts) => format!("cached {}", local_time(ts)),
-            None => "no cache".into(),
+    fn selected_game(&self) -> Option<&LibraryGame> {
+        let id = self.selected.as_ref()?;
+        self.library.iter().find(|g| &g.id == id)
+    }
+
+    fn with_notice<'a>(&'a self, body: Element<'a, Message>) -> Element<'a, Message> {
+        let Some(n) = &self.notice else {
+            return body;
         };
-        let top = row![
-            text_input("Search…", &self.search)
-                .on_input(Message::Search)
-                .width(Length::FillPortion(3)),
-            text(format!("{} games · {cache_note}", self.library.len()))
-                .width(Length::FillPortion(2)),
-            button(text(if self.library_busy {
-                "Refreshing…"
-            } else {
-                "Refresh"
-            }))
-            .on_press_maybe((!self.library_busy).then_some(Message::SyncLibrary))
-            .style(button::secondary),
-            text(account),
-            button(text("Settings"))
-                .on_press(Message::Settings(SettingsMsg::Toggle))
-                .style(button::text),
-            button(text("Log out"))
-                .on_press(Message::Logout)
-                .style(button::text),
+        let banner = container(
+            row![
+                icon(
+                    if n.error {
+                        Icon::TriangleAlert
+                    } else {
+                        Icon::CircleCheck
+                    },
+                    18.0,
+                    if n.error {
+                        theme::DANGER
+                    } else {
+                        theme::SUCCESS
+                    }
+                ),
+                text(&n.text).size(14).width(Length::Fill),
+                button(text("Close").size(13))
+                    .on_press(Message::DismissNotice)
+                    .style(theme::link),
+            ]
+            .align_y(Alignment::Center)
+            .spacing(12),
+        )
+        .padding([10, 16])
+        .width(Length::Fill)
+        .style(theme::notice(n.error));
+        column![container(banner).padding([8, 20]), body].into()
+    }
+
+    fn top_bar(&self, username: &str) -> Element<'_, Message> {
+        let tab = |label, page: Page| {
+            button(text(label).size(15).font(SEMIBOLD))
+                .padding([8, 22])
+                .on_press(Message::ShowPage(page))
+                .style(theme::segment(self.page == page && self.selected.is_none()))
+        };
+        let tabs = container(
+            row![
+                tab("Library", Page::Library),
+                tab("Achievements", Page::Achievements),
+                tab("Settings", Page::Settings),
+            ]
+            .spacing(4),
+        )
+        .padding(4)
+        .style(theme::pill);
+        let search = container(
+            row![
+                icon(Icon::Search, 18.0, MUTED),
+                text_input("Search a game", &self.search)
+                    .on_input(Message::Search)
+                    .style(theme::input)
+                    .size(15)
+                    .padding(0),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        )
+        .padding([10, 16])
+        .width(320)
+        .style(theme::pill);
+        let initial = username
+            .chars()
+            .next()
+            .map(|c| c.to_lowercase().to_string())
+            .unwrap_or_default();
+        let avatar = button(
+            container(text(initial).size(17).font(BOLD))
+                .center(38)
+                .style(theme::avatar),
+        )
+        .padding(0)
+        .on_press(Message::ShowPage(Page::Settings))
+        .style(theme::plain);
+        row![
+            logo(),
+            Space::new().width(18),
+            tabs,
+            space().width(Length::Fill),
+            search,
+            avatar,
         ]
-        .spacing(12)
+        .spacing(14)
+        .align_y(Alignment::Center)
+        .into()
+    }
+
+    fn library_page(&self) -> Element<'_, Message> {
+        let games = self.visible_games();
+        let shelf = |label, s: Shelf| {
+            button(text(label).size(14).font(SEMIBOLD))
+                .padding([8, 20])
+                .on_press(Message::ShowShelf(s))
+                .style(theme::segment(self.shelf == s))
+        };
+        let shelves = container(
+            row![
+                shelf("All", Shelf::All),
+                shelf("Installed", Shelf::Installed),
+                shelf("Favorites", Shelf::Favorites),
+            ]
+            .spacing(4),
+        )
+        .padding(4)
+        .style(theme::pill);
+        let filter_button = button(icon(
+            Icon::ListFilter,
+            18.0,
+            if self.filters.any() { ON_ACCENT } else { TEXT },
+        ))
+        .padding(11)
+        .on_press(Message::ToggleFilters)
+        .style(if self.filters.any() {
+            theme::segment(true)
+        } else {
+            theme::segment(false)
+        });
+        let toolbar = row![
+            shelves,
+            text(format!("{} games", games.len())).size(14).color(MUTED),
+            space().width(Length::Fill),
+            pick_list(Sort::ALL, Some(self.sort), Message::SortBy)
+                .style(theme::select)
+                .padding([9, 18])
+                .text_size(14),
+            Space::new().width(4),
+            icon(Icon::LayoutGrid, 20.0, MUTED),
+            slider(110.0..=240.0, self.card_width, Message::CardWidth)
+                .width(150)
+                .style(theme::size_slider),
+            container(filter_button).style(theme::pill),
+        ]
+        .spacing(14)
         .align_y(Alignment::Center);
-        let mut header = column![top].spacing(10);
-        if let Some((id, title, p)) = self.installing() {
-            header = header.push(
-                button(
-                    row![
-                        text(format!("Downloading {title}"))
-                            .size(13)
-                            .width(Length::Fill),
-                        progress_bar(0.0..=1.0, fraction(p)).length(240).girth(8),
-                        text(format!("{:.0} %", fraction(p) * 100.0)).size(13),
-                    ]
-                    .spacing(10)
-                    .align_y(Alignment::Center),
-                )
-                .on_press(Message::Select(id.to_string()))
-                .style(button::text),
-            );
+
+        let mut page = column![toolbar].spacing(14);
+        if self.filters_open {
+            page = page.push(self.filter_bar());
         }
-        if self.settings_open {
-            header = header.push(self.settings_panel());
+        if let Some((id, title, p)) = self.installing() {
+            page = page.push(download_banner(id, title, p));
         }
 
-        let needle = self.search.to_lowercase();
-        let cards: Vec<Element<'_, Message>> = self
-            .library
-            .iter()
-            .filter(|g| needle.is_empty() || g.title.to_lowercase().contains(&needle))
-            .map(|g| self.card(g))
-            .collect();
+        let cards: Vec<Element<'_, Message>> = games.iter().map(|g| self.card(g)).collect();
         let gallery: Element<'_, Message> = if cards.is_empty() {
-            container(text(if self.library.is_empty() {
-                "Your library is empty: click Refresh."
-            } else {
-                "No game matches the search."
-            }))
+            container(
+                text(if self.library.is_empty() {
+                    "Your library is empty: refresh it in Settings."
+                } else {
+                    "No game matches."
+                })
+                .color(MUTED),
+            )
             .padding(20)
             .into()
         } else {
             scrollable(
                 grid(cards)
-                    .fluid(190)
+                    .fluid(self.card_width)
                     .spacing(14)
-                    .height(grid::aspect_ratio(3, 5)),
+                    .height(grid::aspect_ratio(3, 4)),
             )
-            .spacing(10)
+            .spacing(8)
+            .style(theme::scroller)
             .height(Length::Fill)
             .into()
         };
-
-        let main = match self
-            .selected
-            .as_ref()
-            .and_then(|id| self.library.iter().find(|g| &g.id == id))
-        {
-            Some(game) => row![
-                container(gallery).width(Length::FillPortion(3)),
-                container(self.detail(game))
-                    .width(Length::FillPortion(2))
-                    .height(Length::Fill)
-            ]
-            .spacing(16),
-            None => row![gallery],
-        };
-        column![header, main].spacing(16).padding(16).into()
+        page.push(gallery).into()
     }
 
-    fn settings_panel(&self) -> Element<'_, Message> {
-        let choices: Vec<ProtonChoice> = self
-            .proton_choices
+    fn filter_bar(&self) -> Element<'_, Message> {
+        let f = self.filters;
+        let check = |label, on: bool, set: fn(Filters, bool) -> Filters| {
+            checkbox(on)
+                .label(label)
+                .text_size(14)
+                .on_toggle(move |v| Message::SetFilters(set(f, v)))
+        };
+        let mut items = row![
+            check("Windows", f.windows, |f, v| Filters { windows: v, ..f }),
+            check("Linux", f.linux, |f, v| Filters { linux: v, ..f }),
+            check("Has achievements", f.achievements, |f, v| Filters {
+                achievements: v,
+                ..f
+            }),
+            check("Has cloud saves", f.cloud_saves, |f, v| Filters {
+                cloud_saves: v,
+                ..f
+            }),
+        ]
+        .spacing(24)
+        .align_y(Alignment::Center);
+        if (f.achievements || f.cloud_saves) && !self.overview_complete() {
+            items = items.push(
+                text(format!(
+                    "Reading GOG data… {}/{} games",
+                    self.overview.len().min(self.library.len()),
+                    self.library.len()
+                ))
+                .size(13)
+                .color(MUTED),
+            );
+        }
+        container(items)
+            .padding([12, 18])
+            .width(Length::Fill)
+            .style(theme::card)
+            .into()
+    }
+
+    /// Games of the current shelf matching search and filters, in the chosen order.
+    pub fn visible_games(&self) -> Vec<&LibraryGame> {
+        let needle = self.search.to_lowercase();
+        let f = self.filters;
+        let mut games: Vec<&LibraryGame> = self
+            .library
             .iter()
-            .cloned()
-            .map(ProtonChoice)
+            .filter(|g| needle.is_empty() || g.title.to_lowercase().contains(&needle))
+            .filter(|g| match self.shelf {
+                Shelf::All => true,
+                Shelf::Installed => self.installs.contains_key(&g.id),
+                Shelf::Favorites => self.favorites.contains(&g.id),
+            })
+            .filter(|g| !f.windows || g.os.iter().any(|o| o == "windows"))
+            .filter(|g| !f.linux || g.os.iter().any(|o| o == "linux"))
+            .filter(|g| {
+                let o = self.overview.get(&g.id);
+                (!f.achievements || o.is_some_and(|o| o.achievements.is_some()))
+                    && (!f.cloud_saves || o.is_some_and(|o| o.cloud_saves))
+            })
             .collect();
-        let selected = self.proton.clone().map(ProtonChoice);
-        section(
-            "Settings",
-            vec![
-                row![
-                    text("Games folder").size(14).width(160),
-                    text_input("/home/…/Games/GOG", &self.library_root)
-                        .on_input(|v| Message::Settings(SettingsMsg::RootInput(v)))
-                        .on_submit(Message::Settings(SettingsMsg::SaveRoot)),
-                    button(text("Enregistrer"))
-                        .on_press(Message::Settings(SettingsMsg::SaveRoot))
-                        .style(button::secondary),
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center)
-                .into(),
-                row![
-                    text("Proton").size(14).width(160),
-                    pick_list(choices, selected, |c| Message::Settings(
-                        SettingsMsg::Proton(c)
-                    ))
-                    .placeholder("No Proton found in compatibilitytools.d"),
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center)
-                .into(),
-            ],
-        )
-    }
-
-    fn install_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let prepare = |label| {
-            button(text(label))
-                .on_press(Message::Install(InstallMsg::Prepare(g.id.clone(), None)))
-                .style(button::secondary)
-        };
-        let mut items: Vec<Element<'_, Message>> = Vec::new();
-        match self.install_views.get(&g.id) {
-            None => {
-                items.push(text("Not installed.").size(14).into());
-                items.push(prepare("Prepare install").into());
+        let played = |g: &LibraryGame| self.playtime.get(&g.id).copied().unwrap_or_default();
+        match self.sort {
+            Sort::NameAsc => games.sort_by_key(|g| g.title.to_lowercase()),
+            Sort::NameDesc => {
+                games.sort_by_key(|g| std::cmp::Reverse(g.title.to_lowercase()));
             }
-            Some(InstallView::Planning) => {
-                items.push(text("Reading build information from GOG…").into())
-            }
-            Some(InstallView::Failed(e)) => {
-                items.push(text(format!("Failed: {e}")).size(13).into());
-                items.push(prepare("Retry").into());
-            }
-            Some(InstallView::Running { progress, .. }) => {
-                items.push(
-                    progress_bar(0.0..=1.0, fraction(*progress))
-                        .girth(10)
-                        .into(),
-                );
-                items.push(
-                    text(format!(
-                        "{} / {} · fichiers {}/{}",
-                        human_size(progress.bytes_done),
-                        human_size(progress.bytes_total),
-                        progress.files_done,
-                        progress.files_total
-                    ))
-                    .size(13)
-                    .into(),
-                );
-                items.push(
-                    button(text("Pause"))
-                        .on_press(Message::Install(InstallMsg::Pause(g.id.clone())))
-                        .style(button::secondary)
-                        .into(),
-                );
-            }
-            Some(InstallView::Ready(info)) => {
-                items.push(text(format!("Version {}", info.version)).size(14).into());
-                items.push(
-                    text(format!(
-                        "Download {} · on disk {}",
-                        human_size(info.total_download()),
-                        human_size(info.total_disk())
-                    ))
-                    .size(13)
-                    .into(),
-                );
-                items.push(
-                    text(format!("Folder: {}", info.folder.display()))
-                        .size(13)
-                        .into(),
-                );
-                if info.resumable {
-                    items.push(
-                        text(format!(
-                            "Resuming an interrupted install ({}).",
-                            info.language
-                        ))
-                        .size(13)
-                        .into(),
-                    );
-                } else if info.languages.len() > 1 {
-                    let id = g.id.clone();
-                    items.push(
-                        row![
-                            text("Language").size(13),
-                            pick_list(
-                                info.languages.clone(),
-                                Some(info.language.clone()),
-                                move |l| {
-                                    Message::Install(InstallMsg::Prepare(id.clone(), Some(l)))
-                                }
-                            ),
-                        ]
-                        .spacing(8)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    );
-                }
-                for d in &info.dlcs {
-                    items.push(dlc_row(d, d.selected, !info.resumable, {
-                        let (id, dlc) = (g.id.clone(), d.id.clone());
-                        move |_| Message::Install(InstallMsg::ToggleDlc(id.clone(), dlc.clone()))
-                    }));
-                }
-                if !info.dependencies.is_empty() {
-                    items.push(
-                        text(format!(
-                            "Redistributables not installed by slatty: {}",
-                            info.dependencies.join(", ")
-                        ))
-                        .size(12)
-                        .into(),
-                    );
-                }
-                if self.proton.is_none() {
-                    items.push(text("Choose a Proton version in Settings.").size(13).into());
-                }
-                let busy = self.installing().is_some();
-                items.push(
-                    button(text(if info.resumable {
-                        "Resume install"
-                    } else {
-                        "Install"
-                    }))
-                    .on_press_maybe(
-                        (!busy && self.proton.is_some())
-                            .then(|| Message::Install(InstallMsg::Start(g.id.clone()))),
+            Sort::RecentlyPlayed => {
+                games.sort_by_key(|g| {
+                    (
+                        std::cmp::Reverse(played(g).last_played),
+                        g.title.to_lowercase(),
                     )
-                    .style(button::success)
-                    .into(),
-                );
-                if info.resumable {
-                    items.push(
-                        button(text("Discard download"))
-                            .on_press_maybe(
-                                (!busy)
-                                    .then(|| Message::Install(InstallMsg::Discard(g.id.clone()))),
-                            )
-                            .style(button::danger)
-                            .into(),
-                    );
-                }
+                });
+            }
+            Sort::MostPlayed => {
+                games.sort_by_key(|g| {
+                    (std::cmp::Reverse(played(g).seconds), g.title.to_lowercase())
+                });
             }
         }
-        section("Installation", items)
+        games
     }
 
     fn card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
@@ -375,439 +324,401 @@ impl App {
                 .content_fit(ContentFit::Cover)
                 .width(Length::Fill)
                 .height(Length::Fill)
+                .border_radius(12)
                 .into(),
-            None => container(text(&g.title).size(14))
-                .padding(8)
+            None => container(text(&g.title).size(14).font(SEMIBOLD))
+                .padding(12)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(container::secondary)
+                .style(theme::placeholder)
                 .into(),
         };
-        let installed = self.installs.contains_key(&g.id);
-        let label = row![
-            text(&g.title).size(13).width(Length::Fill),
-            text(if installed { "●" } else { "" }).size(13)
-        ];
-        let selected = self.selected.as_deref() == Some(g.id.as_str());
-        button(column![art, label].spacing(6))
+        let base = button(art)
+            .padding(0)
             .on_press(Message::Select(g.id.clone()))
-            .padding(4)
-            .style(if selected {
-                button::primary
-            } else {
-                button::text
-            })
-            .into()
-    }
-
-    fn detail<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let mut col = column![
-            row![
-                text(&g.title).size(24).width(Length::Fill),
-                button(text("Close"))
-                    .on_press(Message::CloseDetail)
-                    .style(button::text)
-            ]
-            .align_y(Alignment::Center),
-            text(format!(
-                "Platforms: {}",
-                if g.os.is_empty() {
-                    "unknown".into()
-                } else {
-                    g.os.join(", ")
-                }
-            ))
-            .size(14),
-        ]
-        .spacing(12);
-
-        let Some(install) = self.installs.get(&g.id) else {
-            col = col.push(self.install_section(g));
-            col = col.push(self.achievements_section(g));
-            return scrollable(col.padding(8)).height(Length::Fill).into();
-        };
-        col = col.push(text(format!("Folder: {}", install.path.display())).size(13));
-        col = col.push(text(runner_label(install)).size(13));
-
-        let playing = self.play.as_ref().filter(|p| p.running);
-        let this_running = playing.is_some_and(|p| p.game_id == g.id);
-        col = col.push(
-            row![
-                button(text(if this_running { "Running…" } else { "Play" }))
-                    .on_press_maybe(playing.is_none().then(|| Message::Play(g.id.clone())))
-                    .style(button::success),
-                button(text("Stop game"))
-                    .on_press_maybe(this_running.then_some(Message::StopGame))
-                    .style(button::danger),
-            ]
-            .spacing(8),
-        );
-        if let Some(p) = self.play.as_ref().filter(|p| p.game_id == g.id) {
-            col = col.push(section(
-                "Session",
-                p.log.iter().map(|l| text(l).size(13).into()).collect(),
-            ));
-        }
-
-        let cloud = self.cloud.get(&g.id);
-        let cloud_busy = cloud.is_some_and(|c| c.busy);
-        let mut cloud_items: Vec<Element<'_, Message>> = vec![
-            row![
-                button(text("Check"))
-                    .on_press_maybe(
-                        (!cloud_busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Check))
-                    )
-                    .style(button::secondary),
-                button(text("Sync"))
-                    .on_press_maybe(
-                        (!cloud_busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Sync))
-                    )
-                    .style(button::secondary),
-            ]
-            .spacing(8)
-            .into(),
-        ];
-        if let Some(c) = cloud {
-            cloud_items.extend(c.lines.iter().map(|l| text(l).size(13).into()));
-            if c.conflicts && !c.busy {
-                cloud_items.push(
-                    text(
-                        "Both versions changed. Choose the one to keep; \
-                         the other one is kept in the backups folder.",
-                    )
-                    .size(13)
-                    .into(),
-                );
-                cloud_items.push(
-                    row![
-                        button(text("Keep the local version")).on_press(Message::Cloud(
-                            g.id.clone(),
-                            CloudRequest::Keep(Prefer::Local)
-                        )),
-                        button(text("Keep the cloud version")).on_press(Message::Cloud(
-                            g.id.clone(),
-                            CloudRequest::Keep(Prefer::Remote)
-                        )),
-                    ]
-                    .spacing(8)
-                    .into(),
-                );
-            }
-        }
-        col = col.push(section("Cloud saves", cloud_items));
-        col = col.push(self.achievements_section(g));
-        col = col.push(self.maintenance_section(g));
-        scrollable(col.padding(8)).height(Length::Fill).into()
-    }
-
-    fn maintenance_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let view = self.maintenance.get(&g.id);
-        let busy = view.is_some_and(|v| v.busy)
-            || self
-                .play
-                .as_ref()
-                .is_some_and(|p| p.running && p.game_id == g.id);
-        let action = |label, msg: MaintenanceMsg| {
-            button(text(label))
-                .on_press_maybe((!busy).then(|| Message::Maintenance(msg)))
-                .style(button::secondary)
-        };
-        let mut items: Vec<Element<'_, Message>> = vec![
-            row![
-                action("Verify files", MaintenanceMsg::Check(g.id.clone(), false)),
-                action("Repair", MaintenanceMsg::Check(g.id.clone(), true)),
-                action(
-                    "Check for update",
-                    MaintenanceMsg::CheckUpdate(g.id.clone())
-                ),
-                action("Language & DLC…", MaintenanceMsg::LoadContent(g.id.clone())),
-                action("Uninstall…", MaintenanceMsg::AskUninstall(g.id.clone())),
-            ]
-            .spacing(8)
-            .wrap()
-            .into(),
-        ];
-        if view.is_some_and(|v| v.update_available) {
-            items.push(
-                button(text("Update now"))
-                    .on_press_maybe((!busy).then(|| {
-                        Message::Maintenance(MaintenanceMsg::Apply(g.id.clone(), Change::Update))
-                    }))
-                    .style(button::success)
-                    .into(),
-            );
-        }
-        if let Some(v) = view {
-            items.extend(v.lines.iter().map(|l| text(l).size(13).into()));
-            if let Some(c) = &v.content {
-                items.push(self.content_panel(&g.id, c, busy));
-            }
-            if v.confirm_uninstall && !v.busy {
-                items.push(
-                    container(
-                        column![
-                            text(
-                                "Only files installed by slatty are deleted; anything else in the folder is kept. \
-                                 The Wine prefix holds most local saves.",
-                            )
-                            .size(13),
-                            column![
-                                button(text("Uninstall, keep the prefix"))
-                                    .on_press(Message::Maintenance(MaintenanceMsg::Uninstall(g.id.clone(), false)))
-                                    .style(button::danger),
-                                button(text("Also delete the prefix (backed up)"))
-                                    .on_press(Message::Maintenance(MaintenanceMsg::Uninstall(g.id.clone(), true)))
-                                    .style(button::danger),
-                                button(text("Cancel"))
-                                    .on_press(Message::Maintenance(MaintenanceMsg::CancelUninstall(g.id.clone())))
-                                    .style(button::secondary),
-                            ]
-                            .spacing(8),
-                        ]
-                        .spacing(6),
-                    )
-                    .padding(8)
-                    .width(Length::Fill)
-                    .style(container::bordered_box)
-                    .into(),
-                );
-            }
-        }
-        section("Maintenance", items)
-    }
-
-    fn content_panel<'a>(
-        &'a self,
-        game_id: &'a str,
-        c: &'a ContentInfo,
-        busy: bool,
-    ) -> Element<'a, Message> {
-        let mut col = Column::new().spacing(6);
-        if c.languages.len() > 1 {
-            let id = game_id.to_string();
-            col = col.push(
-                row![
-                    text("Language").size(13),
-                    pick_list(
-                        c.languages.clone(),
-                        Some(c.chosen_language.clone()),
-                        move |l| {
-                            Message::Maintenance(MaintenanceMsg::ChooseLanguage(id.clone(), l))
-                        }
-                    ),
-                    button(text("Switch language"))
-                        .on_press_maybe(
-                            (!busy && !c.chosen_language.eq_ignore_ascii_case(&c.language)).then(
-                                || {
-                                    Message::Maintenance(MaintenanceMsg::Apply(
-                                        game_id.to_string(),
-                                        Change::Language(c.chosen_language.clone()),
-                                    ))
-                                }
-                            )
-                        )
-                        .style(button::secondary),
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
-            );
-        }
-        if c.dlcs.is_empty() {
-            col = col.push(text("This game has no DLC.").size(13));
+            .style(theme::plain);
+        let installed = self.installs.contains_key(&g.id);
+        let running = self.play.as_ref().is_some_and(|p| p.running);
+        let action = if installed {
+            button(icon(Icon::Play, 16.0, ON_ACCENT))
+                .padding([8, 14])
+                .on_press_maybe((!running).then(|| Message::Play(g.id.clone())))
+                .style(theme::primary)
         } else {
-            for d in &c.dlcs {
-                let (id, dlc) = (game_id.to_string(), d.id.clone());
-                col = col.push(dlc_row(d, c.chosen_dlcs.contains(&d.id), true, move |_| {
-                    Message::Maintenance(MaintenanceMsg::ToggleContentDlc(id.clone(), dlc.clone()))
-                }));
-            }
-            col = col.push(
-                button(text("Apply DLC changes"))
-                    .on_press_maybe((!busy && c.dlcs_changed()).then(|| {
-                        Message::Maintenance(MaintenanceMsg::Apply(
-                            game_id.to_string(),
-                            Change::Dlcs(c.chosen_dlcs.clone()),
-                        ))
-                    }))
-                    .style(button::secondary),
-            );
-        }
-        container(col)
+            button(icon(Icon::Download, 16.0, ON_ACCENT))
+                .padding([8, 14])
+                .on_press(Message::SelectWith(g.id.clone(), Panel::Install))
+                .style(theme::primary)
+        };
+        let settings = button(icon(Icon::SlidersHorizontal, 16.0, TEXT))
             .padding(8)
+            .on_press(Message::SelectWith(
+                g.id.clone(),
+                if installed {
+                    Panel::GameSettings
+                } else {
+                    Panel::Install
+                },
+            ))
+            .style(theme::plain);
+        let overlay = column![
+            space().height(Length::Fill),
+            container(
+                column![
+                    text(&g.title).size(13).font(SEMIBOLD),
+                    row![settings, space().width(Length::Fill), action].align_y(Alignment::Center),
+                ]
+                .spacing(4),
+            )
+            .padding([8, 10])
             .width(Length::Fill)
-            .style(container::bordered_box)
-            .into()
+            .style(theme::cover_overlay),
+        ];
+        hover(
+            base,
+            container(overlay)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(theme::cover_frame),
+        )
     }
-}
 
-/// One DLC line: owned DLC can be ticked, others are shown as not owned.
-fn dlc_row<'a>(
-    d: &'a DlcChoice,
-    checked: bool,
-    editable: bool,
-    on_toggle: impl Fn(bool) -> Message + 'a,
-) -> Element<'a, Message> {
-    let label = format!("{} ({})", d.name, human_size(d.disk_size));
-    if !d.owned {
-        return text(format!("{label} — not owned")).size(13).into();
-    }
-    checkbox(checked)
-        .label(label)
-        .text_size(13)
-        .on_toggle_maybe(editable.then_some(on_toggle))
-        .into()
-}
-
-impl App {
-    fn achievements_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let mut items: Vec<Element<'_, Message>> = Vec::new();
-        match self.achievements.get(&g.id) {
-            None => items.push(
-                button(text("Show achievements"))
-                    .on_press(Message::LoadAchievements(g.id.clone()))
-                    .style(button::secondary)
-                    .into(),
-            ),
-            Some(Loadable::Loading) => items.push(text("Loading…").into()),
-            Some(Loadable::Failed(e)) => {
-                items.push(text(format!("Indisponible : {e}")).size(13).into());
-                items.push(
-                    button(text("Retry"))
-                        .on_press(Message::LoadAchievements(g.id.clone()))
+    fn achievements_page(&self) -> Element<'_, Message> {
+        let mut games: Vec<(&LibraryGame, usize, usize)> = self
+            .library
+            .iter()
+            .filter_map(|g| {
+                let (done, total) = self.overview.get(&g.id)?.achievements?;
+                Some((g, done, total))
+            })
+            .collect();
+        games.sort_by(|a, b| {
+            let pa = a.1 as f32 / a.2 as f32;
+            let pb = b.1 as f32 / b.2 as f32;
+            pb.total_cmp(&pa)
+                .then_with(|| a.0.title.to_lowercase().cmp(&b.0.title.to_lowercase()))
+        });
+        let unlocked: usize = games.iter().map(|g| g.1).sum();
+        let total: usize = games.iter().map(|g| g.2).sum();
+        let perfect = games.iter().filter(|g| g.1 == g.2).count();
+        let scanning = if self.overview_busy || !self.overview_complete() {
+            format!(
+                "Reading GOG data… {}/{} games",
+                self.overview.len().min(self.library.len()),
+                self.library.len()
+            )
+        } else {
+            format!("{} games with achievements", games.len())
+        };
+        let header = row![
+            column![
+                text("Achievements").size(30).font(BOLD),
+                text(format!(
+                    "{unlocked} / {total} unlocked · {perfect} completed · {scanning}"
+                ))
+                .size(14)
+                .color(MUTED),
+            ]
+            .spacing(4)
+            .width(Length::Fill),
+            button(
+                row![icon(Icon::RefreshCw, 16.0, TEXT), text("Refresh").size(14)]
+                    .spacing(8)
+                    .align_y(Alignment::Center)
+            )
+            .padding([10, 16])
+            .on_press_maybe((!self.overview_busy).then_some(Message::ScanOverview))
+            .style(theme::tonal),
+        ]
+        .align_y(Alignment::Center);
+        let rows: Vec<Element<'_, Message>> = games
+            .into_iter()
+            .map(|(g, done, total)| {
+                let thumb: Element<'_, Message> = match self.covers.get(&g.id) {
+                    Some(h) => image(h.clone())
+                        .content_fit(ContentFit::Cover)
+                        .width(48)
+                        .height(64)
+                        .border_radius(8)
                         .into(),
-                );
-            }
-            Some(Loadable::Ready(list)) => {
-                let unlocked = list.iter().filter(|a| a.date_unlocked.is_some()).count();
-                let locked: Vec<AchievementChange> = list
-                    .iter()
-                    .filter(|a| a.date_unlocked.is_none())
-                    .map(|a| change(a, true))
-                    .collect();
-                items.push(
+                    None => container(Space::new())
+                        .width(48)
+                        .height(64)
+                        .style(theme::placeholder)
+                        .into(),
+                };
+                let share = done as f32 / total as f32;
+                button(
                     row![
-                        text(format!("{unlocked} / {} unlocked (GOG data)", list.len()))
+                        thumb,
+                        column![
+                            text(&g.title).size(16).font(SEMIBOLD),
+                            progress_bar(0.0..=1.0, share)
+                                .girth(8)
+                                .style(theme::progress),
+                        ]
+                        .spacing(10)
+                        .width(Length::Fill),
+                        text(format!("{done} / {total}"))
+                            .size(15)
+                            .font(SEMIBOLD)
+                            .width(90)
+                            .align_x(Alignment::End),
+                        text(format!("{:.0}%", share * 100.0))
                             .size(14)
+                            .color(MUTED)
+                            .width(50)
+                            .align_x(Alignment::End),
+                    ]
+                    .spacing(18)
+                    .align_y(Alignment::Center),
+                )
+                .padding([10, 16])
+                .width(Length::Fill)
+                .on_press(Message::SelectWith(g.id.clone(), Panel::Achievements))
+                .style(theme::row_button)
+                .into()
+            })
+            .collect();
+        column![
+            header,
+            scrollable(Column::with_children(rows).spacing(8))
+                .spacing(8)
+                .style(theme::scroller)
+                .height(Length::Fill)
+        ]
+        .spacing(20)
+        .padding(Padding::ZERO.top(10))
+        .into()
+    }
+
+    fn settings_page(&self) -> Element<'_, Message> {
+        let account = self.account.as_ref();
+        let choices: Vec<ProtonChoice> = self
+            .proton_choices
+            .iter()
+            .cloned()
+            .map(ProtonChoice)
+            .collect();
+        let selected = self.proton.clone().map(ProtonChoice);
+        let label = |t| text(t).size(15).width(180).color(MUTED);
+        let cache_note = match self.fetched_at {
+            Some(ts) => format!("Last refreshed {}", local_time(ts)),
+            None => "Never refreshed".into(),
+        };
+        let content = column![
+            text("Settings").size(30).font(BOLD),
+            card(
+                "Account",
+                vec![
+                    row![
+                        label("Signed in as"),
+                        text(account.map(|a| a.username.as_str()).unwrap_or_default())
+                            .size(15)
                             .width(Length::Fill),
-                        button(text("Unlock all"))
-                            .on_press_maybe((!locked.is_empty()).then(|| {
-                                Message::AskAchievementChange(g.id.clone(), locked.clone())
-                            }))
-                            .style(button::secondary),
+                        button(text("Log out").size(14))
+                            .padding([8, 16])
+                            .on_press(Message::Logout)
+                            .style(theme::tonal),
                     ]
                     .align_y(Alignment::Center)
                     .into(),
-                );
-                if let Some(p) = self.pending_change.as_ref().filter(|p| p.game_id == g.id) {
-                    items.push(self.confirmation(p));
-                }
-                for a in list {
-                    let done = a.date_unlocked.is_some();
-                    let name = if a.visible || done {
-                        a.name.as_str()
-                    } else {
-                        "Hidden achievement"
-                    };
-                    let action = button(text(if done { "Clear" } else { "Unlock" }).size(12))
-                        .on_press(Message::AskAchievementChange(
-                            g.id.clone(),
-                            vec![change(a, !done)],
+                ],
+            ),
+            card(
+                "Library",
+                vec![
+                    row![
+                        label("Games"),
+                        text(format!("{} owned · {cache_note}", self.library.len()))
+                            .size(15)
+                            .width(Length::Fill),
+                        button(
+                            text(if self.library_busy {
+                                "Refreshing…"
+                            } else {
+                                "Refresh library"
+                            })
+                            .size(14)
+                        )
+                        .padding([8, 16])
+                        .on_press_maybe((!self.library_busy).then_some(Message::SyncLibrary))
+                        .style(theme::tonal),
+                    ]
+                    .align_y(Alignment::Center)
+                    .into(),
+                ],
+            ),
+            card(
+                "Installs",
+                vec![
+                    row![
+                        label("Games folder"),
+                        text_input("/home/…/Games/GOG", &self.library_root)
+                            .on_input(|v| Message::Settings(SettingsMsg::RootInput(v)))
+                            .on_submit(Message::Settings(SettingsMsg::SaveRoot))
+                            .style(theme::field)
+                            .padding([8, 12]),
+                        button(text("Save").size(14))
+                            .padding([8, 16])
+                            .on_press(Message::Settings(SettingsMsg::SaveRoot))
+                            .style(theme::tonal),
+                    ]
+                    .spacing(10)
+                    .align_y(Alignment::Center)
+                    .into(),
+                    row![
+                        label("Proton"),
+                        pick_list(choices, selected, |c| Message::Settings(
+                            SettingsMsg::Proton(c)
                         ))
-                        .style(button::text);
-                    items.push(
-                        row![
-                            text(format!("{} {name}", if done { "✔" } else { "·" }))
-                                .size(13)
-                                .width(Length::Fill),
-                            action
-                        ]
-                        .align_y(Alignment::Center)
-                        .into(),
-                    );
-                }
-            }
-        }
-        section("Achievements", items)
-    }
-
-    fn confirmation<'a>(&'a self, p: &'a PendingChange) -> Element<'a, Message> {
-        let names: Vec<&str> = p.changes.iter().map(|c| c.name.as_str()).collect();
-        let verb = if p.changes.iter().all(|c| c.unlock) {
-            "Unlock"
-        } else if p.changes.iter().all(|c| !c.unlock) {
-            "Clear"
-        } else {
-            "Change"
-        };
-        container(
-            column![
-                text(format!(
-                    "{verb} {} achievement(s) without playing: {}",
-                    p.changes.len(),
-                    names.join(", ")
-                ))
-                .size(13),
-                text(
-                    "The change is written directly to your public GOG profile, \
-                     dated today. It is probably against GOG's terms.",
-                )
-                .size(12),
-                row![
-                    button(text("Confirm"))
-                        .on_press(Message::ConfirmAchievementChange)
-                        .style(button::danger),
-                    button(text("Cancel"))
-                        .on_press(Message::CancelAchievementChange)
-                        .style(button::secondary),
-                ]
-                .spacing(8),
-            ]
-            .spacing(6),
-        )
-        .padding(8)
-        .width(Length::Fill)
-        .style(container::bordered_box)
-        .into()
-    }
-}
-
-fn change(a: &Achievement, unlock: bool) -> AchievementChange {
-    AchievementChange {
-        achievement_id: a.achievement_id.clone(),
-        name: a.name.clone(),
-        unlock,
-    }
-}
-
-fn section<'a>(title: &'a str, items: Vec<Element<'a, Message>>) -> Element<'a, Message> {
-    container(
-        column![
-            text(title).size(16),
-            Column::with_children(items).spacing(4)
+                        .placeholder("No Proton found in compatibilitytools.d")
+                        .style(theme::select)
+                        .padding([8, 16]),
+                    ]
+                    .spacing(10)
+                    .align_y(Alignment::Center)
+                    .into(),
+                ],
+            ),
+            card(
+                "About",
+                vec![
+                    text(format!(
+                        "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC)",
+                        env!("CARGO_PKG_VERSION")
+                    ))
+                    .size(14)
+                    .color(MUTED)
+                    .into(),
+                ],
+            ),
         ]
-        .spacing(8),
+        .spacing(16)
+        .max_width(860);
+        scrollable(container(content).padding(Padding::ZERO.top(10)))
+            .style(theme::scroller)
+            .height(Length::Fill)
+            .into()
+    }
+
+    fn login_view(&self) -> Element<'_, Message> {
+        let busy = self.login_busy;
+        let content = column![
+            logo(),
+            text("Sign in to GOG").size(30).font(BOLD),
+            text(
+                "Sign-in happens in your browser; SlattyLauncher never sees your password. \
+                 Once signed in, the browser shows an almost blank page on embed.gog.com: \
+                 copy that page's full address and paste it below."
+            )
+            .color(MUTED),
+            button(text("Open the GOG sign-in page").font(SEMIBOLD))
+                .padding([12, 22])
+                .on_press(Message::OpenLoginPage)
+                .style(theme::primary),
+            row![
+                text_input(
+                    "https://embed.gog.com/on_login_success?…&code=…",
+                    &self.login_input
+                )
+                .on_input(Message::LoginInput)
+                .on_submit(Message::SubmitLogin)
+                .style(theme::field)
+                .padding([10, 14])
+                .width(Length::Fill),
+                button(text("Paste"))
+                    .padding([10, 16])
+                    .on_press(Message::PasteLogin)
+                    .style(theme::tonal),
+                button(text(if busy { "Signing in…" } else { "Sign in" }))
+                    .padding([10, 16])
+                    .on_press_maybe(
+                        (!busy && !self.login_input.is_empty()).then_some(Message::SubmitLogin)
+                    )
+                    .style(theme::tonal),
+            ]
+            .spacing(8),
+        ]
+        .spacing(18)
+        .max_width(720);
+        container(content).padding(60).center_x(Length::Fill).into()
+    }
+}
+
+pub fn logo<'a>() -> Element<'a, Message> {
+    text("slatty").size(30).font(BOLD).color(ACCENT).into()
+}
+
+fn download_banner<'a>(id: &str, title: &str, p: Progress) -> Element<'a, Message> {
+    button(
+        row![
+            icon(Icon::Download, 16.0, ACCENT),
+            text(format!("Downloading {title}"))
+                .size(14)
+                .width(Length::Fill),
+            progress_bar(0.0..=1.0, fraction(p))
+                .length(260)
+                .girth(8)
+                .style(theme::progress),
+            text(format!("{:.0} %", fraction(p) * 100.0)).size(14),
+        ]
+        .spacing(12)
+        .align_y(Alignment::Center),
     )
-    .padding(10)
+    .padding([10, 16])
     .width(Length::Fill)
-    .style(container::rounded_box)
+    .on_press(Message::SelectWith(id.to_string(), Panel::Install))
+    .style(theme::row_button)
     .into()
 }
 
-fn runner_label(install: &Install) -> String {
-    match &install.runner {
-        Runner::Native => "Native".into(),
-        Runner::Umu { proton, .. } => format!(
-            "Proton (umu): {}",
-            proton
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default()
-        ),
-        Runner::Wine { wine, .. } => format!("Wine: {}", wine.display()),
+/// A titled block of the settings page or of a panel.
+pub fn card<'a>(title: &'a str, items: Vec<Element<'a, Message>>) -> Element<'a, Message> {
+    container(
+        column![
+            text(title).size(17).font(SEMIBOLD),
+            Column::with_children(items).spacing(10)
+        ]
+        .spacing(14),
+    )
+    .padding(20)
+    .width(Length::Fill)
+    .style(theme::card)
+    .into()
+}
+
+/// Unlocked achievements, newest first.
+pub fn latest_unlocked(list: &[Achievement]) -> Vec<&Achievement> {
+    let mut done: Vec<&Achievement> = list.iter().filter(|a| a.date_unlocked.is_some()).collect();
+    done.sort_by(|a, b| b.date_unlocked.cmp(&a.date_unlocked));
+    done.truncate(3);
+    done
+}
+
+pub fn duration(seconds: i64) -> String {
+    let minutes = seconds / 60;
+    match (minutes / 60, minutes % 60) {
+        (0, m) => format!("{m} m"),
+        (h, m) => format!("{h} h {m} m"),
     }
 }
 
-fn local_time(ts: i64) -> String {
+/// "Today", "Yesterday", "3 days ago", or the date.
+pub fn relative_day(ts: i64) -> String {
+    use chrono::{Local, TimeZone};
+    let Some(then) = Local.timestamp_opt(ts, 0).single() else {
+        return String::new();
+    };
+    match (Local::now().date_naive() - then.date_naive()).num_days() {
+        0 => "Today".into(),
+        1 => "Yesterday".into(),
+        d @ 2..=6 => format!("{d} days ago"),
+        _ => then.format("%-d %b %Y").to_string(),
+    }
+}
+
+pub fn local_time(ts: i64) -> String {
     use chrono::TimeZone;
     chrono::Local
         .timestamp_opt(ts, 0)

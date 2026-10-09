@@ -94,6 +94,7 @@ SlattyLauncher stands on the work of others:
   service that games talk to; SlattyLauncher runs it beside each game.
 - [heroic-gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl) (GPL-3.0) is the reference
   for Galaxy depots, cloud storage and session handling. Parts of SlattyLauncher follow its logic.
+- [Lucide](https://lucide.dev) (ISC) provides the interface icons, in `crates/gui/assets/icons`.
 - [Heroic Games Launcher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) showed how
   save locations, Proton and Comet fit together.
 - [gogapidocs](https://gogapidocs.readthedocs.io) documents many GOG endpoints.

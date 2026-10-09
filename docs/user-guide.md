@@ -11,6 +11,7 @@ Anything done in one is visible in the other.
 
 - [Signing in](#signing-in)
 - [Library](#library)
+- [The interface](#the-interface)
 - [Installing games](#installing-games)
 - [Playing](#playing)
 - [Cloud saves](#cloud-saves)
@@ -48,8 +49,38 @@ slatty library list           # list from the cache, works offline
 slatty library list witcher   # filter by title
 ```
 
-The interface shows the same library as a grid with search. A dot next to a title means the game is
-installed.
+## The interface
+
+`slatty-gui` has three tabs: **Library**, **Achievements** and **Settings**. The avatar at the top
+right opens Settings.
+
+**Library** shows your games as covers. Above the grid:
+
+- **All**, **Installed**, **Favorites** choose the shelf;
+- the sort menu orders by name, most recently played or most played;
+- the slider sets the cover size;
+- the filter button shows games for Windows or Linux, with achievements, or with cloud saves.
+
+Hovering a cover shows its title, a settings button and a play (or install) button. Clicking it
+opens the game page.
+
+**The game page** shows the key art, Play (Install when the game is not installed), the favorite
+button, play time and last session, cloud save status and achievement progress. Play time counts
+only sessions started by SlattyLauncher. The tools open in panels:
+
+| Where | Panel |
+|---|---|
+| Sliders button (top right) | Game settings: folder, Proton, language and DLC |
+| ⋮ button (top right) | Manage: verify, repair, check for update, uninstall |
+| Cloud saves, **Manage →** | Check, sync, resolve conflicts |
+| Achievements card | Full list, unlock or clear |
+| Install button | Version, size, language, DLC, start, pause, discard |
+
+Escape closes the panel, then the game page.
+
+**Achievements** lists every game with achievements, by completion. SlattyLauncher reads which games
+have achievements and cloud saves from GOG in the background and keeps the answer in
+`~/.cache/slatty/<user id>/overview.json`; **Refresh** reads it again.
 
 ## Installing games
 
@@ -86,7 +117,7 @@ How an install behaves:
   would escape the game folder are refused before anything is downloaded.
 - `slatty installs` lists installed games and interrupted installs.
 - `slatty install <game-id> --cancel` abandons an interrupted install. It deletes only its hidden
-  partial folder. In the interface, use **Discard download**.
+  partial folder. In the interface, use **Discard download** in the Install panel.
 
 Dependencies that ship files into the game folder are installed with the game. GOG's installer
 scripts ("support" files) are kept in `~/.local/share/slatty/support/<id>/`; they are used by the
@@ -190,7 +221,7 @@ file instead of downloaded. GOG cuts files into chunks (10 MiB on the games chec
 small change still costs at least one chunk. Repairs work the same way: `slatty verify --repair`
 downloads only the damaged chunks of a damaged file.
 
-The interface offers **Check for update** and **Update now** in the game's Maintenance section.
+The interface offers **Check for update** and **Update now** in the game's Manage panel (⋮).
 
 ## Language and DLC after installing
 
@@ -207,7 +238,7 @@ These changes work like updates:
 - only files that SlattyLauncher installed and that are no longer needed are removed.
 
 They stay on the installed build. If GOG no longer offers that build, update the game first. In the
-interface, use **Language & DLC…** in the Maintenance section.
+interface, use the game settings panel (sliders button).
 
 ## Maintenance
 
@@ -225,7 +256,7 @@ slatty uninstall <game-id> --delete-prefix
 - The Wine prefix, where most saves live, is kept unless you pass `--delete-prefix`. Even then, its
   `users` folder is copied to `~/.local/share/slatty/backups/prefixes/` first.
 
-The interface offers the same actions in the game's Maintenance section.
+The interface offers the same actions in the game's Manage panel (⋮).
 
 ## Games installed elsewhere
 
@@ -244,7 +275,7 @@ belong to them.
 
 ## Settings
 
-The interface's **Settings** panel holds:
+The interface's **Settings** tab holds the account (log out), the library refresh, and:
 
 - **Games folder:** where new games are installed.
 - **Proton:** the build used for new installs, picked from `~/.local/share/Steam/compatibilitytools.d`.

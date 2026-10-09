@@ -92,7 +92,6 @@ impl fmt::Display for ProtonChoice {
 
 #[derive(Debug, Clone)]
 pub enum SettingsMsg {
-    Toggle,
     RootInput(String),
     SaveRoot,
     Proton(ProtonChoice),
@@ -219,7 +218,11 @@ impl App {
             }
             InstallMsg::Done(game_id, Ok(install)) => {
                 self.install_views.remove(&game_id);
-                self.installs.insert(game_id, install);
+                self.installs.insert(game_id.clone(), install);
+                self.refresh_record(&game_id);
+                if self.selected.as_deref() == Some(game_id.as_str()) {
+                    self.panel = None;
+                }
             }
             InstallMsg::Done(game_id, Err(None)) => {
                 return self.update_install(InstallMsg::Prepare(game_id, None));
@@ -236,7 +239,6 @@ impl App {
             return Task::none();
         };
         match msg {
-            SettingsMsg::Toggle => self.settings_open = !self.settings_open,
             SettingsMsg::RootInput(v) => self.library_root = v,
             SettingsMsg::SaveRoot => {
                 let path = PathBuf::from(self.library_root.trim());
@@ -558,6 +560,8 @@ impl App {
             }
             MaintenanceMsg::Uninstalled(game_id, Ok(lines)) => {
                 self.installs.remove(&game_id);
+                self.records.remove(&game_id);
+                self.panel = None;
                 self.cloud.remove(&game_id);
                 self.maintenance.remove(&game_id);
                 self.notice = Some(crate::Notice {
@@ -730,6 +734,7 @@ impl App {
                 }
             }
             MaintenanceMsg::Updated(game_id, result) => {
+                self.refresh_record(&game_id);
                 let view = self.maintenance.entry(game_id).or_default();
                 view.busy = false;
                 view.lines = vec![match result {

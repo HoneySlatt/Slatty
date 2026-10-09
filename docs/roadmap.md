@@ -13,6 +13,9 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   - Three-way cloud sync.
   - Comet integration.
   - Manual achievement management.
+- **Interface redesign.** Library, Achievements and Settings tabs; cover grid with shelves, sort,
+  size and filters; game page with key art, play time, cloud and achievement summaries, tools in
+  panels; favorites.
 - **Interface.** Iced front end covering:
   - library;
   - game detail;
