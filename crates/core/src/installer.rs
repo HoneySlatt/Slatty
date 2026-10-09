@@ -36,6 +36,8 @@ pub struct InstallPlan {
     pub languages: Vec<String>,
     pub depots: Vec<Depot>,
     pub dlcs: Vec<DlcChoice>,
+    /// Resolved from GOG's dependency repository by `plan_for`.
+    pub dependencies: Vec<galaxy::Dependency>,
     pub download_size: u64,
     pub disk_size: u64,
 }
@@ -187,6 +189,7 @@ impl InstallPlan {
             languages,
             depots,
             dlcs,
+            dependencies: Vec::new(),
         })
     }
 
@@ -204,13 +207,22 @@ impl InstallPlan {
 pub struct FileSet {
     pub files: Vec<(PathBuf, DepotFile)>,
     pub dirs: Vec<PathBuf>,
-    pub skipped_support: usize,
+    /// GOG installer support files (scripts, icons), relative to the game's support folder as
+    /// `<product id>/<path>`. They never go into the game folder.
+    pub support: Vec<(PathBuf, DepotFile)>,
     pub skipped_links: usize,
 }
 
 impl FileSet {
     pub fn disk_size(&self) -> u64 {
         self.files.iter().map(|(_, f)| f.size()).sum()
+    }
+
+    pub fn support_set(&self) -> FileSet {
+        FileSet {
+            files: self.support.clone(),
+            ..Default::default()
+        }
     }
 }
 
@@ -240,12 +252,13 @@ pub async fn collect_files<S: ContentSource>(source: &S, depots: &[Depot]) -> Re
     let mut index: HashMap<String, usize> = HashMap::new();
     let mut casing: HashMap<String, PathBuf> = HashMap::new();
     for depot in depots {
-        for item in source.depot_manifest(&depot.manifest).await? {
+        for item in source.depot_manifest(depot).await? {
             match item {
                 DepotItem::DepotFile(mut f) => {
                     f.product_id = depot.product_id.clone();
                     if f.is_support() {
-                        set.skipped_support += 1;
+                        let rel = safe_relative(&depot.product_id)?.join(safe_relative(&f.path)?);
+                        set.support.push((rel, f));
                         continue;
                     }
                     if f.chunks.is_empty() && f.sfc_ref.is_some() {
@@ -636,7 +649,27 @@ pub async fn plan_for(
     } else {
         HashSet::new()
     };
-    InstallPlan::new(game_id, build, meta, language, &owned, dlcs)
+    let mut plan = InstallPlan::new(game_id, build, meta, language, &owned, dlcs)?;
+    if !plan.meta.dependencies.is_empty() {
+        let repository = galaxy::dependencies(http, tokens).await?;
+        plan.dependencies = plan
+            .meta
+            .dependencies
+            .iter()
+            .filter_map(|id| repository.iter().find(|d| &d.dependency_id == id).cloned())
+            .collect();
+        for dep in plan.dependencies.iter().filter(|d| !d.is_shared()) {
+            plan.depots.push(dep.depot());
+            plan.download_size += dep.compressed_size;
+            plan.disk_size += dep.size;
+        }
+    }
+    Ok(plan)
+}
+
+/// Where a game's GOG support files (installer scripts) are kept.
+pub fn support_dir(dirs: &Dirs, game_id: &str) -> PathBuf {
+    dirs.data.join("support").join(game_id)
 }
 
 pub struct InstallRequest {
@@ -663,7 +696,7 @@ pub enum InstallEvent {
     Progress(Progress),
     Finished {
         path: PathBuf,
-        skipped_support: usize,
+        support_files: usize,
         skipped_links: usize,
         dependencies: Vec<String>,
     },
@@ -789,14 +822,15 @@ pub async fn install(
         let source = galaxy::GogContent::new(http.clone(), tokens.clone());
         let set = collect_files(&source, &plan.depots).await?;
         let progress = |p| emit(InstallEvent::Progress(p));
-        Download {
+        let dl = Download {
             source: &source,
             cancel,
             progress: &progress,
             free_space: &free_space,
-        }
-        .run(&set, &partial, &target)
-        .await?;
+        };
+        dl.run(&set, &partial, &target).await?;
+        dl.check_installed(&set.support_set(), &support_dir(dirs, &req.game_id), true)
+            .await?;
         Ok::<FileSet, Error>(set)
     }
     .await;
@@ -838,7 +872,7 @@ pub async fn install(
     InstallJob::delete(db, &req.game_id)?;
     emit(InstallEvent::Finished {
         path: target,
-        skipped_support: set.skipped_support,
+        support_files: set.support.len(),
         skipped_links: set.skipped_links,
         dependencies: plan.meta.dependencies.clone(),
     });

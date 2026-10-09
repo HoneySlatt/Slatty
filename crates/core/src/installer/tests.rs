@@ -56,11 +56,14 @@ impl MemoryContent {
 }
 
 impl ContentSource for MemoryContent {
-    async fn depot_manifest(&self, manifest: &str) -> Result<Vec<DepotItem>> {
-        self.manifests.get(manifest).cloned().ok_or(Error::Http {
-            context: "test manifest",
-            status: 404,
-        })
+    async fn depot_manifest(&self, depot: &Depot) -> Result<Vec<DepotItem>> {
+        self.manifests
+            .get(&depot.manifest)
+            .cloned()
+            .ok_or(Error::Http {
+                context: "test manifest",
+                status: 404,
+            })
     }
 
     async fn chunk(&self, product_id: &str, compressed_md5: &str) -> Result<Vec<u8>> {
@@ -332,7 +335,10 @@ fn meta(depots: Vec<Depot>) -> Meta {
         products: vec![Product {
             product_id: "1".into(),
             name: "[FAKE] Game".into(),
+            temp_executable: None,
+            temp_arguments: None,
         }],
+        script_interpreter: false,
     }
 }
 
@@ -358,10 +364,14 @@ fn plan_selects_depots_for_one_language_and_owned_dlc() {
     m.products.push(Product {
         product_id: "2".into(),
         name: "[FAKE] Owned DLC".into(),
+        temp_executable: None,
+        temp_arguments: None,
     });
     m.products.push(Product {
         product_id: "3".into(),
         name: "[FAKE] Other DLC".into(),
+        temp_executable: None,
+        temp_arguments: None,
     });
     let owned: HashSet<String> = ["1", "2"].map(String::from).into();
     let plan = |lang: Option<&str>, sel: DlcSelection| {
@@ -575,4 +585,49 @@ async fn dlc_files_come_from_their_product_and_removing_the_dlc_deletes_only_the
     );
     assert!(!game.join("dlc").exists(), "emptied DLC folder removed");
     assert!(game.join("Game.exe").exists());
+}
+
+#[tokio::test]
+async fn support_files_stay_out_of_the_game_folder_and_dependencies_come_from_the_store() {
+    let mut env = Env::new("support");
+    let dep_items = vec![
+        env.source
+            .file("DirectX\\dxsetup.exe", b"[FAKE] redist", &[]),
+    ];
+    env.source.manifests.insert("dep".into(), dep_items);
+    env.depots.push(Depot {
+        product_id: crate::galaxy::REDIST.into(),
+        manifest: "dep".into(),
+        ..env.depots[0].clone()
+    });
+    let set = collect_files(&env.source, &env.depots).await.unwrap();
+    assert_eq!(set.support.len(), 1);
+    assert_eq!(set.support[0].0, PathBuf::from("1/support.ico"));
+
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    assert!(!env.target().join("support.ico").exists());
+    assert!(env.target().join("DirectX/dxsetup.exe").exists());
+    assert!(
+        env.source
+            .products
+            .lock()
+            .unwrap()
+            .contains(crate::galaxy::REDIST)
+    );
+
+    let support = env.root.join("support");
+    let free_space = |_: &Path| Ok(PLENTY);
+    let dl = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    };
+    dl.check_installed(&set.support_set(), &support, true)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read(support.join("1/support.ico")).unwrap(),
+        b"icon"
+    );
 }

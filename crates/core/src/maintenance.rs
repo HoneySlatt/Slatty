@@ -113,6 +113,7 @@ pub fn uninstall(
     Install::remove(db, game_id)?;
     InstallJob::delete(db, game_id)?;
     let _ = std::fs::remove_file(InstallRecord::file(dirs, game_id));
+    let _ = std::fs::remove_dir_all(installer::support_dir(dirs, game_id));
     Ok(report)
 }
 
@@ -325,6 +326,12 @@ pub async fn reconfigure(
         free_space: &installer::free_space,
     };
     let report = apply_update(&dl, &set, &record, &install.path).await?;
+    dl.check_installed(
+        &set.support_set(),
+        &installer::support_dir(dirs, game_id),
+        true,
+    )
+    .await?;
     InstallRecord {
         build_id: plan.build.build_id.clone(),
         version: plan.build.version_name.clone(),

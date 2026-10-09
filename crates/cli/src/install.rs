@@ -82,10 +82,19 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         );
         println!("Folder name: {}", plan.directory_name()?);
         print_dlcs(&plan.dlcs);
-        if !plan.meta.dependencies.is_empty() {
+        for d in &plan.dependencies {
+            let place = if d.is_shared() {
+                "shared, installed at first launch"
+            } else {
+                "game folder"
+            };
             println!(
-                "Redistributables not installed by slatty: {}",
-                plan.meta.dependencies.join(", ")
+                "Dependency: {} ({place})",
+                if d.readable_name.is_empty() {
+                    &d.dependency_id
+                } else {
+                    &d.readable_name
+                }
             );
         }
         return Ok(());
@@ -167,15 +176,13 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         }
         InstallEvent::Finished {
             path,
-            skipped_support,
+            support_files,
             skipped_links,
             dependencies,
         } => {
             println!("Installed and verified in {}", path.display());
-            if skipped_support > 0 {
-                println!(
-                    "  {skipped_support} GOG support file(s) skipped (installer scripts, icons)"
-                );
+            if support_files > 0 {
+                println!("  {support_files} GOG support file(s) stored for the first-launch setup");
             }
             if skipped_links > 0 {
                 println!("  {skipped_links} symbolic link(s) skipped");

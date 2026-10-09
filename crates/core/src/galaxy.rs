@@ -39,6 +39,8 @@ pub struct Meta {
     pub dependencies: Vec<String>,
     #[serde(default)]
     pub products: Vec<Product>,
+    #[serde(default)]
+    pub script_interpreter: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -59,6 +61,10 @@ pub struct Depot {
 pub struct Product {
     pub product_id: String,
     pub name: String,
+    #[serde(default, rename = "temp_executable")]
+    pub temp_executable: Option<String>,
+    #[serde(default, rename = "temp_arguments")]
+    pub temp_arguments: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -146,8 +152,7 @@ pub fn parse_depot_items(raw: &[u8]) -> Result<Vec<DepotItem>> {
 
 /// Where installer data comes from; the real CDN or a test double.
 pub trait ContentSource: Send + Sync {
-    fn depot_manifest(&self, manifest: &str)
-    -> impl Future<Output = Result<Vec<DepotItem>>> + Send;
+    fn depot_manifest(&self, depot: &Depot) -> impl Future<Output = Result<Vec<DepotItem>>> + Send;
     /// Compressed chunk bytes, exactly as stored on the CDN.
     fn chunk(
         &self,
@@ -207,7 +212,11 @@ impl GogContent {
         if !refresh && let Some(e) = self.endpoints.read().await.get(product_id) {
             return Ok(e.clone());
         }
-        let fresh = secure_link(&self.http, &self.tokens, product_id).await?;
+        let fresh = if product_id == REDIST {
+            dependency_link(&self.http, &self.tokens).await?
+        } else {
+            secure_link(&self.http, &self.tokens, product_id).await?
+        };
         self.endpoints
             .write()
             .await
@@ -257,6 +266,113 @@ async fn secure_link(http: &Client, tokens: &Tokens, product_id: &str) -> Result
     Ok(links.urls)
 }
 
+/// Pseudo product id for GOG's shared dependency store (redistributables, script interpreter).
+pub const REDIST: &str = "redist";
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Dependency {
+    pub dependency_id: String,
+    pub executable: DependencyExecutable,
+    pub manifest: String,
+    #[serde(default)]
+    pub readable_name: String,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub compressed_size: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DependencyExecutable {
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub arguments: String,
+}
+
+impl Dependency {
+    /// Installed once, outside the game folder (`__redist/…`); the others ship files into the game folder.
+    pub fn is_shared(&self) -> bool {
+        self.executable.path.starts_with("__redist")
+    }
+
+    pub fn depot(&self) -> Depot {
+        Depot {
+            product_id: REDIST.into(),
+            languages: vec!["*".into()],
+            manifest: self.manifest.clone(),
+            size: self.size,
+            compressed_size: self.compressed_size,
+        }
+    }
+}
+
+/// GOG's dependency repository (generation 2).
+pub async fn dependencies(http: &Client, tokens: &Tokens) -> Result<Vec<Dependency>> {
+    #[derive(Deserialize)]
+    struct Repository {
+        repository_manifest: String,
+    }
+    #[derive(Deserialize)]
+    struct Manifest {
+        depots: Vec<Dependency>,
+    }
+    let url = format!("{CONTENT_SYSTEM}/dependencies/repository?generation=2");
+    let repo: Repository = http::json(
+        http.get(url).bearer_auth(tokens.access_token.expose()),
+        "reading the dependency repository",
+    )
+    .await?;
+    let resp = http::send(
+        http.get(repo.repository_manifest.as_str()),
+        "reading the dependency list",
+    )
+    .await?;
+    let raw = resp
+        .bytes()
+        .await
+        .map_err(|e| Error::network("reading the dependency list", e))?;
+    Ok(decode_zlib_json::<Manifest>(&raw, "dependency list")?.depots)
+}
+
+async fn dependency_link(http: &Client, tokens: &Tokens) -> Result<Vec<Endpoint>> {
+    #[derive(Deserialize)]
+    struct Link {
+        url: String,
+    }
+    #[derive(Deserialize)]
+    struct Links {
+        urls: Vec<Link>,
+    }
+    let url =
+        format!("{CONTENT_SYSTEM}/open_link?generation=2&_version=2&path=/dependencies/store/");
+    let links: Links = http::json(
+        http.get(url).bearer_auth(tokens.access_token.expose()),
+        "requesting dependency links",
+    )
+    .await?;
+    if links.urls.is_empty() {
+        return Err(Error::parse("requesting dependency links", "no endpoint"));
+    }
+    Ok(links
+        .urls
+        .into_iter()
+        .map(|l| {
+            let mut parameters = serde_json::Map::new();
+            parameters.insert(
+                "base".into(),
+                Value::String(l.url.trim_end_matches('/').to_string()),
+            );
+            parameters.insert("path".into(), Value::String(String::new()));
+            Endpoint {
+                url_format: "{base}{path}".into(),
+                parameters,
+            }
+        })
+        .collect())
+}
+
 /// Product ids (games and DLC) the account owns.
 pub async fn owned_products(http: &Client, tokens: &Tokens) -> Result<HashSet<String>> {
     #[derive(Deserialize)]
@@ -278,8 +394,16 @@ pub async fn owned_products(http: &Client, tokens: &Tokens) -> Result<HashSet<St
 }
 
 impl ContentSource for GogContent {
-    async fn depot_manifest(&self, manifest: &str) -> Result<Vec<DepotItem>> {
-        let url = format!("{CDN}/content-system/v2/meta/{}", galaxy_path(manifest));
+    async fn depot_manifest(&self, depot: &Depot) -> Result<Vec<DepotItem>> {
+        let kind = if depot.product_id == REDIST {
+            "dependencies/meta"
+        } else {
+            "meta"
+        };
+        let url = format!(
+            "{CDN}/content-system/v2/{kind}/{}",
+            galaxy_path(&depot.manifest)
+        );
         let resp = http::send(self.http.get(url), "fetching a depot manifest").await?;
         let raw = resp
             .bytes()
