@@ -65,6 +65,13 @@ dot says you are signed in.
 Hovering a cover shows its title, a settings button and a play (or install) button. Clicking it
 opens the game page.
 
+Right-click a cover to edit the game: its **Title**, its **Sorting title** (used when the library
+is sorted by name, for example "Witcher 3" for "The Witcher 3"), its **Cover** and its
+**Background** (the key art of the game page). Click a picture to choose an image file (PNG, JPEG,
+WebP, GIF, BMP or AVIF); it is copied into SlattyLauncher's data, so the original can be moved or
+deleted. Nothing changes until **Save**; **Reset to default** goes back to GOG's title and images.
+These changes are kept apart from GOG's data, so refreshing the library keeps them.
+
 **The game page** shows the key art across the window with the title, Play (Install when the game
 is not installed) and the favorite button over it; below, three cards give play time and last
 session, cloud save status, and achievement progress with the latest unlocks. Play time is the
@@ -328,9 +335,10 @@ The interface's **Settings** tab holds the account (log out), the library refres
 | Path | Content |
 |---|---|
 | System keyring, entry `slatty-launcher` / `gog:<user id>` | Session tokens |
-| `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings |
+| `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings, the titles you gave games |
 | `~/.local/share/slatty/prefixes/<id>/` | Wine prefixes of installed games (most saves live here) |
 | `~/.local/share/slatty/manifests/<id>.json` | Files installed for each game |
+| `~/.local/share/slatty/custom/<id>/` | Covers and backgrounds you chose for a game |
 | `~/.local/share/slatty/backups/` | Copies made before any save is replaced or a prefix deleted |
 | `~/.local/share/slatty/diagnostics/` | Cloud copies downloaded by `slatty cloud diff` |
 | `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | Comet's data and configuration |

@@ -1,6 +1,7 @@
 //! The interface: the window shell (top bar, notices, quit dialog) and widgets shared by pages.
 
 mod achievements;
+mod edit;
 pub mod format;
 mod game;
 mod library;
@@ -60,6 +61,10 @@ impl App {
         let page = match (self.panel, self.selected_game()) {
             (Some(panel), Some(game)) => self.with_panel(page, panel, game),
             _ => page,
+        };
+        let page = match &self.edit {
+            Some(d) => self.edit_dialog(page, d),
+            None => page,
         };
         match &self.quit_confirm {
             Some(work) => quit_dialog(page, work),

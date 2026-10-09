@@ -266,6 +266,12 @@ impl App {
     pub fn set_library(&mut self, cache: LibraryCache) -> Task<Message> {
         self.fetched_at = Some(cache.fetched_at);
         self.library = cache.games;
+        self.gog_titles = self
+            .library
+            .iter()
+            .map(|g| (g.id.clone(), g.title.clone()))
+            .collect();
+        self.apply_customs();
         let Some(core) = self.core.clone() else {
             return Task::none();
         };
@@ -321,23 +327,20 @@ impl App {
             .collect();
         let played = |g: &LibraryGame| self.playtime.get(&g.id).copied().unwrap_or_default();
         match self.sort {
-            Sort::NameAsc => games.sort_by_cached_key(|g| g.title.to_lowercase()),
+            Sort::NameAsc => games.sort_by_cached_key(|g| self.sort_name(g)),
             Sort::NameDesc => {
-                games.sort_by_cached_key(|g| std::cmp::Reverse(g.title.to_lowercase()));
+                games.sort_by_cached_key(|g| std::cmp::Reverse(self.sort_name(g)));
             }
             Sort::RecentlyPlayed => {
                 games.sort_by_cached_key(|g| {
-                    (
-                        std::cmp::Reverse(played(g).last_played),
-                        g.title.to_lowercase(),
-                    )
+                    (std::cmp::Reverse(played(g).last_played), self.sort_name(g))
                 });
             }
             Sort::MostPlayed => {
                 games.sort_by_cached_key(|g| {
                     (
                         std::cmp::Reverse(self.played_seconds(&g.id)),
-                        g.title.to_lowercase(),
+                        self.sort_name(g),
                     )
                 });
             }

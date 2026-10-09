@@ -71,6 +71,15 @@ ALTER TABLE sessions ADD COLUMN reported INTEGER NOT NULL DEFAULT 0;
     r#"
 ALTER TABLE installs ADD COLUMN umu_id TEXT;
 "#,
+    r#"
+CREATE TABLE game_custom (
+    game_id TEXT PRIMARY KEY,
+    title TEXT,
+    sort_title TEXT,
+    cover TEXT,
+    background TEXT
+);
+"#,
 ];
 
 pub struct Db {

@@ -40,6 +40,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `overview` | Per-game achievement counts and cloud save support, cached per account |
 | `playtime` | Play time read from GOG, finished sessions reported to GOG |
 | `settings` | Default installation path, default Proton, favorites |
+| `custom` | Titles, sorting titles, covers and backgrounds the user chose, apart from GOG's data; chosen images are copied into the data folder |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
 
 ## Interface modules
@@ -59,6 +60,7 @@ live under `ui/`.
 | `install` | Install plan, download with progress, pause, discard |
 | `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
 | `settings` | Default installation path, default Proton, and the Proton build of each installed game |
+| `edit` | The edit dialog opened by right-clicking a cover: draft, file picker, saving |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
 | `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages; `format` for text shown to the user |
 | `theme`, `icons` | Design tokens (`Tokens`: every colour, and the corner radii of the redesigned pages) and the widget styles built from them; Lucide icons. Views never name a colour, so a custom theme is another `Tokens` |

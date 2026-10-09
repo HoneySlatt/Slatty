@@ -4,6 +4,7 @@ pub mod auth;
 pub mod cloud;
 pub mod comet;
 pub mod credentials;
+pub mod custom;
 pub mod db;
 pub mod doctor;
 pub mod error;

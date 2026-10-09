@@ -56,6 +56,11 @@ fn library_app() -> App {
         .collect();
     app.library[1].os.push("linux".into());
     app.fetched_at = Some(1_791_500_000);
+    app.gog_titles = app
+        .library
+        .iter()
+        .map(|g| (g.id.clone(), g.title.clone()))
+        .collect();
     app.installs.insert(
         "3".into(),
         Install {
@@ -1029,4 +1034,72 @@ fn cloud_saves_wait_for_the_first_launch_to_be_written() {
         ui.find("Sync now").is_err(),
         "the fixture's prefix was never created"
     );
+}
+
+#[test]
+fn a_game_can_be_renamed_and_sorted_under_another_name() {
+    use crate::edit::EditMsg;
+    let mut app = library_app();
+    let edit = |app: &mut App, m: EditMsg| drop(app.update(Message::Edit(m)));
+    edit(&mut app, EditMsg::Open("7".into()));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Edit game").is_ok());
+        snapshot(&mut ui, "edit-game");
+    }
+    edit(&mut app, EditMsg::Title("[FAKE] Renamed".into()));
+    edit(&mut app, EditMsg::SortTitle("[FAKE] 0 first".into()));
+    edit(&mut app, EditMsg::Save);
+    assert!(app.edit.is_none());
+    assert_eq!(titles(&app)[0], "Renamed", "sorted by its sorting title");
+    assert!(render(&app).find("[FAKE] Renamed").is_ok());
+
+    let reloaded = slatty_core::custom::all(&app.core.as_ref().unwrap().db).unwrap();
+    assert_eq!(reloaded["7"].title.as_deref(), Some("[FAKE] Renamed"));
+
+    edit(&mut app, EditMsg::Open("7".into()));
+    edit(&mut app, EditMsg::Reset);
+    edit(&mut app, EditMsg::Save);
+    assert!(app.customs.is_empty());
+    assert!(titles(&app).contains(&"Game 7".to_string()));
+    assert_ne!(titles(&app)[0], "Game 7");
+}
+
+#[test]
+fn a_cover_can_be_replaced_by_an_image_file_only() {
+    use crate::edit::{Art, EditMsg};
+    let mut app = library_app();
+    let dir = std::env::temp_dir().join(format!("slatty-gui-art-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let png = dir.join("cover.png");
+    std::fs::write(&png, b"\x89PNG\r\n\x1a\n[FAKE]").unwrap();
+    let text = dir.join("notes.txt");
+    std::fs::write(&text, b"[FAKE]").unwrap();
+    let edit = |app: &mut App, m: EditMsg| drop(app.update(Message::Edit(m)));
+
+    edit(&mut app, EditMsg::Open("4".into()));
+    edit(&mut app, EditMsg::Picked(Art::Cover, Some(text)));
+    assert!(app.notice.as_ref().is_some_and(|n| n.error));
+    edit(&mut app, EditMsg::Picked(Art::Cover, Some(png.clone())));
+    edit(&mut app, EditMsg::Save);
+    let saved = app.customs["4"].cover.clone().unwrap();
+    assert!(saved.starts_with(&app.core.as_ref().unwrap().dirs.data));
+    assert!(app.cover("4").is_some(), "shown in the library");
+
+    edit(&mut app, EditMsg::Open("4".into()));
+    edit(&mut app, EditMsg::Title("[FAKE] Not kept".into()));
+    let _ = app.update(Message::Key(iced::keyboard::Event::KeyPressed {
+        key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+        modified_key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers: iced::keyboard::Modifiers::default(),
+        text: None,
+        repeat: false,
+    }));
+    assert!(app.edit.is_none(), "Escape cancels");
+    assert!(app.customs["4"].title.is_none());
+    std::fs::remove_dir_all(dir).unwrap();
 }

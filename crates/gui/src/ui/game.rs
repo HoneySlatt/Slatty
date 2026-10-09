@@ -77,13 +77,9 @@ impl App {
 
     /// The game's key art, edge to edge, with its title, Play and favorite at the bottom left.
     pub(super) fn hero<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let art = g
-            .background
-            .as_ref()
-            .and_then(|u| self.images.get(u))
-            .or_else(|| self.covers.get(&g.id));
+        let art = self.background(g).or_else(|| self.cover(&g.id));
         let base: Element<'_, Message> = match art {
-            Some(h) => image(h.clone())
+            Some(h) => image(h)
                 .content_fit(ContentFit::Cover)
                 .width(Length::Fill)
                 .height(Length::Fill)

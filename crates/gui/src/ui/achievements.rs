@@ -77,8 +77,8 @@ impl App {
     ) -> Element<'a, Message> {
         let cover_height = TILE_HEIGHT - 16.0;
         let cover_width = cover_height * 3.0 / 4.0;
-        let cover: Element<'_, Message> = match self.covers.get(&g.id) {
-            Some(h) => image(h.clone())
+        let cover: Element<'_, Message> = match self.cover(&g.id) {
+            Some(h) => image(h)
                 .content_fit(ContentFit::Cover)
                 .width(cover_width)
                 .height(cover_height)
@@ -135,8 +135,8 @@ impl App {
         ]
         .spacing(12)
         .align_y(Alignment::Center);
-        let cover: Element<'_, Message> = match self.covers.get(&g.id) {
-            Some(h) => image(h.clone())
+        let cover: Element<'_, Message> = match self.cover(&g.id) {
+            Some(h) => image(h)
                 .content_fit(ContentFit::Cover)
                 .width(84)
                 .height(112)

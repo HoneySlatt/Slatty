@@ -1,5 +1,6 @@
 mod achievements;
 mod cloud;
+mod edit;
 mod icons;
 mod install;
 mod library;
@@ -165,6 +166,10 @@ pub struct App {
     /// Work that closing the window would interrupt, waiting for the user's choice.
     pub quit_confirm: Option<Vec<String>>,
     pub interrupted: Vec<(String, Interrupted)>,
+    /// How the user renamed or illustrated games, and GOG's own titles to go back to.
+    pub customs: HashMap<String, slatty_core::custom::Custom>,
+    pub gog_titles: HashMap<String, String>,
+    pub edit: Option<edit::EditDraft>,
 }
 
 impl Default for App {
@@ -210,6 +215,9 @@ impl Default for App {
             proton_choices: Vec::new(),
             quit_confirm: None,
             interrupted: Vec::new(),
+            customs: HashMap::new(),
+            gog_titles: HashMap::new(),
+            edit: None,
         }
     }
 }
@@ -266,6 +274,7 @@ pub enum Message {
     CloseRequested,
     ConfirmQuit,
     CancelQuit,
+    Edit(edit::EditMsg),
     Key(keyboard::Event),
 }
 
@@ -283,6 +292,7 @@ pub struct Boot {
     playtime: HashMap<String, Playtime>,
     overview: HashMap<String, GameOverview>,
     jobs: Vec<(String, Interrupted)>,
+    customs: HashMap<String, slatty_core::custom::Custom>,
 }
 
 impl std::fmt::Debug for Core {
@@ -332,6 +342,7 @@ impl App {
                 self.playtime = boot.playtime;
                 self.overview = boot.overview;
                 self.interrupted = boot.jobs;
+                self.customs = boot.customs;
                 if !boot.interrupted.is_empty() {
                     self.notice = Some(Notice {
                         error: true,
@@ -424,6 +435,7 @@ impl App {
             Message::Install(msg) => return self.update_install(msg),
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
+            Message::Edit(msg) => return self.update_edit(msg),
             Message::DismissNotice => self.notice = None,
             Message::CloseRequested => {
                 let running = self.running_work();
@@ -463,6 +475,9 @@ impl App {
     /// Escape: closes the panel, else the game page, else the per-game achievements page.
     fn go_back(&mut self) {
         if self.quit_confirm.take().is_some() {
+            return;
+        }
+        if self.edit.take().is_some() {
             return;
         }
         if self.panel.take().is_none() && self.selected.take().is_none() {
@@ -630,6 +645,7 @@ async fn boot() -> Result<Boot, String> {
     let library_root = slatty_core::settings::library_root(&db).map_err(err)?;
     let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
+    let customs = slatty_core::custom::all(&db).map_err(err)?;
     let playtime = session::playtime(&db).map_err(err)?;
     let jobs = InstallJob::list(&db)
         .map_err(err)?
@@ -655,5 +671,6 @@ async fn boot() -> Result<Boot, String> {
         playtime,
         overview,
         jobs,
+        customs,
     })
 }

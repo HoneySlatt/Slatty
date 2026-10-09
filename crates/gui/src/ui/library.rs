@@ -1,7 +1,7 @@
 //! Library tab: shelves, filters, the cover grid and unfinished work.
 
 use iced::widget::{
-    Column, Space, button, checkbox, column, container, grid, hover, image, pick_list,
+    Column, Space, button, checkbox, column, container, grid, hover, image, mouse_area, pick_list,
     progress_bar, row, scrollable, slider, space, text,
 };
 use iced::{Alignment, ContentFit, Element, Length};
@@ -11,6 +11,7 @@ use slatty_core::maintenance::Change;
 
 use super::format::*;
 use super::widgets::vertical_rule;
+use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
 use crate::install::InstallMsg;
 use crate::maintenance::MaintenanceMsg;
@@ -193,8 +194,8 @@ impl App {
     }
 
     pub(super) fn card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let art: Element<'_, Message> = match self.covers.get(&g.id) {
-            Some(h) => image(h.clone())
+        let art: Element<'_, Message> = match self.cover(&g.id) {
+            Some(h) => image(h)
                 .content_fit(ContentFit::Cover)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -247,13 +248,16 @@ impl App {
             .width(Length::Fill)
             .style(theme::cover_overlay),
         ];
-        hover(
+        // A right click opens the edit dialog (title, sorting title, cover, background).
+        mouse_area(hover(
             base,
             container(overlay)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(theme::cover_frame),
-        )
+        ))
+        .on_right_press(Message::Edit(EditMsg::Open(g.id.clone())))
+        .into()
     }
 }
 
