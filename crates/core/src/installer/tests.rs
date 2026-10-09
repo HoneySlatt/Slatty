@@ -789,7 +789,10 @@ fn jobs_left_behind_by_a_registered_install_are_forgotten() {
     job("1", "downloading").save(&db).unwrap();
     job("2", crate::maintenance::UPDATING).save(&db).unwrap();
     job("3", PAUSED).save(&db).unwrap();
-    for id in ["1", "2"] {
+    job("4", crate::maintenance::UPDATE_PAUSED)
+        .save(&db)
+        .unwrap();
+    for id in ["1", "2", "4"] {
         Install {
             game_id: id.into(),
             title: "[FAKE] Game".into(),
@@ -810,8 +813,16 @@ fn jobs_left_behind_by_a_registered_install_are_forgotten() {
         .collect();
     assert_eq!(
         left,
-        ["2", "3"],
-        "updates of installed games and other installs stay"
+        ["2", "3", "4"],
+        "updates of installed games, paused or not, and other installs stay"
     );
     assert!(InstallJob::load(&db, "3").unwrap().unwrap().is_paused());
+    let paused_update = InstallJob::load(&db, "4").unwrap().unwrap();
+    assert!(paused_update.is_update() && paused_update.is_paused());
+    assert!(
+        crate::maintenance::update_pending(&db, "4")
+            .unwrap()
+            .is_some(),
+        "a paused update still holds the game back"
+    );
 }

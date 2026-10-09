@@ -111,13 +111,18 @@ pub enum Interrupted {
     Download,
     /// Paused on request: resumed only when asked.
     Paused,
-    /// An update, language or DLC change: the game cannot start until it is finished.
+    /// An update, language or DLC change cut off: the game cannot start until it is finished, which
+    /// happens by itself at the next start.
     Update,
+    /// The same, paused on request: finished only when asked.
+    UpdatePaused,
 }
 
 impl Interrupted {
     fn of(job: &InstallJob) -> Self {
-        if job.is_update() {
+        if job.is_update() && job.is_paused() {
+            Interrupted::UpdatePaused
+        } else if job.is_update() {
             Interrupted::Update
         } else if job.is_paused() {
             Interrupted::Paused
@@ -524,13 +529,9 @@ impl App {
                 self.quit_confirm = Some(running);
             }
             Message::CancelQuit => self.quit_confirm = None,
-            // A download is left as it stands: it resumes at the next start, like after a crash.
-            Message::ConfirmQuit => {
-                for cancel in self.maintenance.values().filter_map(|v| v.cancel.as_ref()) {
-                    cancel.cancel();
-                }
-                return iced::exit();
-            }
+            // Work is left as it stands: downloads and updates resume at the next start, as after a
+            // crash.
+            Message::ConfirmQuit => return iced::exit(),
             Message::Key(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                 use keyboard::key::Named;
                 match key {

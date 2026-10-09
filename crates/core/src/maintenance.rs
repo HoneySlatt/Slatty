@@ -162,6 +162,9 @@ pub async fn check(
 }
 
 pub(crate) const UPDATING: &str = "updating";
+/// An unfinished change paused on request: the game still waits for it, but it is not resumed
+/// by itself.
+pub(crate) const UPDATE_PAUSED: &str = "updating-paused";
 
 /// Build id of an update, language or DLC change that started but did not finish.
 pub fn update_pending(db: &Db, game_id: &str) -> Result<Option<String>> {
@@ -354,13 +357,27 @@ pub async fn reconfigure(
         })
         .unwrap_or_default()
     };
-    let report = apply_update(&dl, &set, &record, &install.path, &patches).await?;
-    dl.check_installed(
-        &set.support_set(),
-        &installer::support_dir(dirs, game_id),
-        true,
-    )
-    .await?;
+    let applied = async {
+        let report = apply_update(&dl, &set, &record, &install.path, &patches).await?;
+        dl.check_installed(
+            &set.support_set(),
+            &installer::support_dir(dirs, game_id),
+            true,
+        )
+        .await?;
+        Ok::<_, Error>(report)
+    }
+    .await;
+    let report = match applied {
+        Err(Error::Cancelled) => {
+            if let Some(mut job) = InstallJob::load(db, game_id)? {
+                job.state = UPDATE_PAUSED.into();
+                job.save(db)?;
+            }
+            return Err(Error::Cancelled);
+        }
+        other => other?,
+    };
     InstallRecord {
         build_id: plan.build.build_id.clone(),
         version: plan.build.version_name.clone(),

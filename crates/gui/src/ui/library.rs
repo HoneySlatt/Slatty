@@ -127,9 +127,11 @@ impl App {
                     .spacing(8)
                     .into(),
                 ),
-                Interrupted::Update => (
+                Interrupted::Update | Interrupted::UpdatePaused => (
                     if working {
                         "Finishing the update…"
+                    } else if *kind == Interrupted::UpdatePaused {
+                        "Update paused. The game cannot start until it is finished."
                     } else {
                         "Update interrupted. The game cannot start until it is finished."
                     },

@@ -10,8 +10,10 @@ use slatty_core::install::Install;
 use slatty_core::installer::{
     self, DlcChoice, DlcSelection, InstallEvent, InstallJob, InstallRequest, Progress,
 };
+use slatty_core::maintenance::Change;
 use tokio_util::sync::CancellationToken;
 
+use crate::maintenance::MaintenanceMsg;
 use crate::settings::ProtonChoice;
 use crate::work::{paused_or, progress_stream, tokens};
 use crate::{App, Core, Message, err};
@@ -489,11 +491,24 @@ async fn free_space(root: String) -> Option<u64> {
 }
 
 impl App {
-    /// Resumes the first download cut off by a closed window, a crash or a power loss. Downloads
-    /// paused on request wait for Resume.
+    /// Resumes what a closed window, a crash or a power loss cut off: every unfinished update and
+    /// the first download. Work paused on request waits for Resume or Finish update.
     pub fn resume_interrupted(&mut self) -> Task<Message> {
-        if self.installing().is_some() || self.account.is_none() {
+        if self.account.is_none() {
             return Task::none();
+        }
+        let updates: Vec<String> = self
+            .interrupted
+            .iter()
+            .filter(|(_, kind)| *kind == crate::Interrupted::Update)
+            .map(|(id, _)| id.clone())
+            .collect();
+        let mut tasks: Vec<Task<Message>> = updates
+            .into_iter()
+            .map(|id| self.update_maintenance(MaintenanceMsg::Apply(id, Change::Update)))
+            .collect();
+        if self.installing().is_some() {
+            return Task::batch(tasks);
         }
         let Some(game_id) = self
             .interrupted
@@ -501,9 +516,10 @@ impl App {
             .find(|(_, kind)| *kind == crate::Interrupted::Download)
             .map(|(id, _)| id.clone())
         else {
-            return Task::none();
+            return Task::batch(tasks);
         };
         self.auto_resume = Some(game_id.clone());
-        self.update_install(InstallMsg::Prepare(game_id, None))
+        tasks.push(self.update_install(InstallMsg::Prepare(game_id, None)));
+        Task::batch(tasks)
     }
 }

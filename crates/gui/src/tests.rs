@@ -1564,3 +1564,32 @@ fn a_cut_off_download_resumes_by_itself_at_start_up() {
     assert_eq!(app.interrupted.len(), 1);
     assert!(app.notice.as_ref().is_some_and(|n| n.error));
 }
+
+#[test]
+fn a_cut_off_update_resumes_by_itself_at_start_up() {
+    use crate::Interrupted;
+    let mut app = library_app();
+    app.installs.insert(
+        "4".into(),
+        Install {
+            game_id: "4".into(),
+            ..app.installs["3"].clone()
+        },
+    );
+    app.interrupted = vec![
+        ("3".into(), Interrupted::Update),
+        ("4".into(), Interrupted::UpdatePaused),
+    ];
+    let _ = app.resume_interrupted();
+    assert!(app.maintenance.get("3").is_some_and(|m| m.busy));
+    assert!(
+        !app.maintenance.get("4").is_some_and(|m| m.busy),
+        "paused on request: waits for Finish update"
+    );
+    let mut ui = render(&app);
+    assert!(
+        ui.find("Update paused. The game cannot start until it is finished.")
+            .is_ok()
+    );
+    assert!(ui.find("Finishing the update…").is_ok());
+}

@@ -119,7 +119,8 @@ session left without an end (crash) still blocks changes until the next launch r
 
 An interrupted install keeps its job in the database, and resumes with the same build, language and
 folder. Its state tells a pause on request (`paused`, resumed when asked) from a cut-off
-(`downloading`, resumed by the interface at start-up). A cut-off after the partial folder was renamed
+(`downloading`, resumed by the interface at start-up). Updates do the same with `updating-paused`
+and `updating`; both keep the game from starting. A cut-off after the partial folder was renamed
 but before the game was registered is resumed by checking the game folder in place; a job left
 behind by a game registered just before a cut-off is dropped at start-up.
 

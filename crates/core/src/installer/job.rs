@@ -32,6 +32,7 @@ impl InstallJob {
     /// An update, language or DLC change of an installed game, rather than a first install.
     pub fn is_update(&self) -> bool {
         self.state == crate::maintenance::UPDATING
+            || self.state == crate::maintenance::UPDATE_PAUSED
     }
 
     pub fn save(&self, db: &Db) -> Result<()> {
@@ -96,15 +97,19 @@ impl InstallJob {
 
     /// Paused on request (Pause, Ctrl+C), rather than interrupted by a crash or a closed window.
     pub fn is_paused(&self) -> bool {
-        self.state == PAUSED
+        self.state == PAUSED || self.state == crate::maintenance::UPDATE_PAUSED
     }
 
     /// Drops the jobs of installs that were registered just before an interruption left their
     /// job behind.
     pub fn forget_finished(db: &Db) -> Result<()> {
         db.conn().execute(
-            "DELETE FROM install_jobs WHERE state != ?1 AND game_id IN (SELECT game_id FROM installs)",
-            [crate::maintenance::UPDATING],
+            "DELETE FROM install_jobs WHERE state NOT IN (?1, ?2)
+             AND game_id IN (SELECT game_id FROM installs)",
+            [
+                crate::maintenance::UPDATING,
+                crate::maintenance::UPDATE_PAUSED,
+            ],
         )?;
         Ok(())
     }

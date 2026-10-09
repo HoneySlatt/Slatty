@@ -94,10 +94,10 @@ tab leads back to the game.
 
 Escape closes the panel, then the game page.
 
-A download cut off by a closed window, a crash or a power cut resumes by itself when SlattyLauncher
-starts again (one at a time). Downloads paused on request, and updates left unfinished, are listed at
-the top of the Library tab instead: **Resume** or **Discard** a download, **Finish update** for an
-update, which the game needs before it can start again.
+A download or an update cut off by a closed window, a crash or a power cut resumes by itself when
+SlattyLauncher starts again (one download at a time). Those paused on request are listed at the top
+of the Library tab instead: **Resume** or **Discard** a download, **Finish update** for an update,
+which the game needs before it can start again, paused or not.
 
 Nothing an interruption leaves behind is trusted: every file already on disk is checked again
 against GOG's checksums before it is kept, and the game folder appears only once every file is
