@@ -298,11 +298,66 @@ impl App {
 
     pub(super) fn cloud_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let installed = self.installs.contains_key(&g.id);
+        let (ic, color, status) = self.cloud_status(g);
+        // The whole card opens the cloud panel; "Manage" shows when the card has room for it
+        // (a drawer narrows the page).
+        let card = responsive(move |size| {
+            let mut content = row![
+                container(icon(Icon::Cloud, 22.0, tokens().text))
+                    .center(40)
+                    .style(theme::circle),
+                column![
+                    text("Cloud saves")
+                        .size(15)
+                        .font(SEMIBOLD)
+                        .wrapping(Wrapping::None),
+                    // The state icon matters once there are saves to keep in step.
+                    row![]
+                        .push(installed.then(|| icon(ic, 16.0, color)))
+                        .push(
+                            // Wraps rather than run over the next card when a drawer narrows it.
+                            text(status.clone()).size(14).color(tokens().muted),
+                        )
+                        .spacing(8)
+                        .align_y(Alignment::Center),
+                ]
+                .spacing(4)
+                .width(Length::Fill),
+            ]
+            .spacing(14)
+            .align_y(Alignment::Center);
+            if installed && size.width >= 280.0 {
+                content = content.push(
+                    button(
+                        row![
+                            text("Manage").size(15),
+                            icon(Icon::ArrowRight, 16.0, tokens().accent)
+                        ]
+                        .spacing(6)
+                        .align_y(Alignment::Center),
+                    )
+                    .on_press(Message::OpenPanel(Panel::Cloud))
+                    .style(theme::link),
+                );
+            }
+            container(content).center_y(Length::Fill).into()
+        });
+        button(card)
+            .padding([0, 18])
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .on_press_maybe(installed.then_some(Message::OpenPanel(Panel::Cloud)))
+            .style(theme::tile)
+            .into()
+    }
+
+    /// The cloud state of a game in a few words, with its icon and colour.
+    pub(super) fn cloud_status(&self, g: &LibraryGame) -> (Icon, iced::Color, String) {
         let launched = self
             .installs
             .get(&g.id)
             .is_some_and(slatty_core::runner::prefix_ready);
-        let (ic, color, status) = if installed {
+        if self.installs.contains_key(&g.id) {
             match self.cloud.get(&g.id) {
                 Some(c) if c.busy => (Icon::RefreshCw, tokens().muted, "Checking…".to_string()),
                 Some(c) => match &c.status {
@@ -345,59 +400,7 @@ impl App {
                 Some(_) => (Icon::X, tokens().muted, "Not supported by this game".into()),
                 None => (Icon::Cloud, tokens().muted, "Synced once installed".into()),
             }
-        };
-        // The whole card opens the cloud panel; "Manage" shows when the card has room for it
-        // (a drawer narrows the page).
-        let card = responsive(move |size| {
-            let mut content = row![
-                container(icon(Icon::Cloud, 22.0, tokens().text))
-                    .center(40)
-                    .style(theme::circle),
-                column![
-                    text("Cloud saves")
-                        .size(15)
-                        .font(SEMIBOLD)
-                        .wrapping(Wrapping::None),
-                    // The state icon matters once there are saves to keep in step.
-                    row![]
-                        .push(installed.then(|| icon(ic, 16.0, color)))
-                        .push(
-                            text(status.clone())
-                                .size(14)
-                                .color(tokens().muted)
-                                .wrapping(Wrapping::None),
-                        )
-                        .spacing(8)
-                        .align_y(Alignment::Center),
-                ]
-                .spacing(4)
-                .width(Length::Fill),
-            ]
-            .spacing(14)
-            .align_y(Alignment::Center);
-            if installed && size.width >= 280.0 {
-                content = content.push(
-                    button(
-                        row![
-                            text("Manage").size(15),
-                            icon(Icon::ArrowRight, 16.0, tokens().accent)
-                        ]
-                        .spacing(6)
-                        .align_y(Alignment::Center),
-                    )
-                    .on_press(Message::OpenPanel(Panel::Cloud))
-                    .style(theme::link),
-                );
-            }
-            container(content).center_y(Length::Fill).into()
-        });
-        button(card)
-            .padding([0, 18])
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .on_press_maybe(installed.then_some(Message::OpenPanel(Panel::Cloud)))
-            .style(theme::tile)
-            .into()
+        }
     }
 
     pub(super) fn achievements_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {

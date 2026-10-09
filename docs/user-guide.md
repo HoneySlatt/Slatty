@@ -83,7 +83,7 @@ panels:
 |---|---|
 | Sliders button (top right) | Game settings, in a drawer beside the page: folder, Proton build (used from the next launch), language and DLC |
 | ⋮ button (top right) | Manage, in a drawer beside the page: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
-| Cloud saves, **Manage →** | Check, sync, resolve conflicts |
+| Cloud saves card | A drawer beside the page: status, save folder, what a sync would do (upload, download, compare, unchanged, deleted on one side), Check, Sync now, conflict choices |
 | Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page (over it in a narrow window) |
 | Install button | A drawer beside the page: version, download and disk size, free space, folder, language, DLC, Proton, start, discard |
 

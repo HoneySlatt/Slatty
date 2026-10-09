@@ -3,9 +3,12 @@
 use iced::widget::{Svg, svg};
 use iced::{Color, Theme};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Icon {
+    ArrowDown,
     ArrowRight,
+    ArrowRightLeft,
+    ArrowUp,
     Calendar,
     ChevronLeft,
     ChevronRight,
@@ -43,7 +46,10 @@ pub enum Icon {
 impl Icon {
     fn bytes(self) -> &'static [u8] {
         match self {
+            Icon::ArrowDown => include_bytes!("../assets/icons/arrow-down.svg"),
             Icon::ArrowRight => include_bytes!("../assets/icons/arrow-right.svg"),
+            Icon::ArrowRightLeft => include_bytes!("../assets/icons/arrow-right-left.svg"),
+            Icon::ArrowUp => include_bytes!("../assets/icons/arrow-up.svg"),
             Icon::Calendar => include_bytes!("../assets/icons/calendar.svg"),
             Icon::ChevronLeft => include_bytes!("../assets/icons/chevron-left.svg"),
             Icon::ChevronRight => include_bytes!("../assets/icons/chevron-right.svg"),

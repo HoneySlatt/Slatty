@@ -1,6 +1,7 @@
 //! The interface: the window shell (top bar, notices, quit dialog) and widgets shared by pages.
 
 mod achievements;
+mod cloud;
 mod edit;
 pub mod format;
 mod game;

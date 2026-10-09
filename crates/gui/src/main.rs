@@ -513,7 +513,9 @@ impl App {
             }
             Message::Achievements(id, result) => return self.achievements_received(id, result),
             Message::Cloud(game_id, request) => return self.request_cloud(game_id, request),
-            Message::CloudDone(game_id, _, result) => self.cloud_done(game_id, result),
+            Message::CloudDone(game_id, request, result) => {
+                return self.cloud_done(game_id, request, result);
+            }
             Message::Install(msg) => return self.update_install(msg),
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),

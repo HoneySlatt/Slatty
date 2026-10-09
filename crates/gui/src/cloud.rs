@@ -20,18 +20,47 @@ pub enum CloudStatus {
     Problem,
 }
 
+#[derive(Default)]
 pub struct CloudView {
+    /// Notes about the game as a whole (no cloud saves, an error).
     pub lines: Vec<String>,
+    pub locations: Vec<SaveLocation>,
     pub conflicts: bool,
     pub busy: bool,
     pub status: Option<CloudStatus>,
+    /// What the last sync did, kept across the checks that follow it.
+    pub last_sync: Option<String>,
+}
+
+/// One save folder of the game, as the last check or sync left it.
+#[derive(Debug, Clone)]
+pub struct SaveLocation {
+    pub name: String,
+    pub folder: String,
+    /// What a sync would do; known after a check.
+    pub counts: Option<Counts>,
+    /// Warnings, conflicts and problems.
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Counts {
+    pub upload: usize,
+    pub download: usize,
+    pub compare: usize,
+    pub unchanged: usize,
+    /// Deleted on one side, kept on the other until deletions are allowed.
+    pub deleted: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct CloudResult {
     pub lines: Vec<String>,
+    pub locations: Vec<SaveLocation>,
     pub conflicts: bool,
     pub status: CloudStatus,
+    /// For a sync: what it did.
+    pub summary: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,36 +84,43 @@ impl App {
             self.notify_error("The game is running; sync once the session has ended.".into());
             return Task::none();
         }
-        self.cloud
-            .entry(game_id.clone())
-            .or_insert(CloudView {
-                lines: Vec::new(),
-                conflicts: false,
-                busy: true,
-                status: None,
-            })
-            .busy = true;
+        self.cloud.entry(game_id.clone()).or_default().busy = true;
         Task::perform(cloud_task(core, install, request), move |r| {
             Message::CloudDone(game_id.clone(), request, r)
         })
     }
 
-    pub fn cloud_done(&mut self, game_id: String, result: Result<CloudResult, String>) {
+    /// A sync is followed by a check, so the drawer shows where things stand afterwards.
+    pub fn cloud_done(
+        &mut self,
+        game_id: String,
+        request: CloudRequest,
+        result: Result<CloudResult, String>,
+    ) -> Task<Message> {
+        let last_sync = self.cloud.get(&game_id).and_then(|c| c.last_sync.clone());
+        let synced = request != CloudRequest::Check && result.is_ok();
         let view = match result {
             Ok(r) => CloudView {
                 lines: r.lines,
+                locations: r.locations,
                 conflicts: r.conflicts,
                 busy: false,
                 status: Some(r.status),
+                last_sync: r.summary.or(last_sync),
             },
             Err(e) => CloudView {
                 lines: vec![format!("Error: {e}")],
-                conflicts: false,
-                busy: false,
                 status: Some(CloudStatus::Problem),
+                last_sync,
+                ..Default::default()
             },
         };
-        self.cloud.insert(game_id, view);
+        let conflicts = view.conflicts;
+        self.cloud.insert(game_id.clone(), view);
+        if synced && !conflicts {
+            return self.request_cloud(game_id, CloudRequest::Check);
+        }
+        Task::none()
     }
 }
 
@@ -112,78 +148,84 @@ async fn cloud_task(
     else {
         return Ok(CloudResult {
             lines: vec!["GOG has no cloud saves for this game.".into()],
+            locations: Vec::new(),
             conflicts: false,
             status: CloudStatus::NoCloud,
+            summary: None,
         });
     };
-    let mut lines = Vec::new();
+    let mut locations = Vec::new();
     let mut conflicts = false;
     let mut pending = 0;
     let mut problem = false;
+    let (mut uploaded, mut downloaded) = (0, 0);
     for o in &outcomes {
-        let root = o
+        let folder = o
             .root
             .as_ref()
             .map(|r| r.display().to_string())
             .unwrap_or_else(|| o.template.clone());
-        lines.push(format!("[{}] {root}", o.name));
+        let mut location = SaveLocation {
+            name: o.name.clone(),
+            folder,
+            counts: None,
+            notes: Vec::new(),
+        };
         match &o.result {
             Err(e) => {
                 problem = true;
-                lines.push(format!("  error: {e}"));
+                location.notes.push(format!("Error: {e}"));
             }
             Ok(r) => {
-                lines.extend(
+                location.notes.extend(
                     r.plan
                         .warnings
                         .iter()
-                        .map(|w| format!("  warning: {}", ui::format::describe_warning(*w))),
+                        .map(|w| ui::format::describe_warning(*w).to_string()),
                 );
                 if opts.dry_run {
                     let p = &r.plan;
-                    pending += p.count(Action::Upload)
-                        + p.count(Action::Download)
-                        + p.count(Action::Compare);
-                    lines.push(format!(
-                        "  to upload {} · to download {} · to compare {} · unchanged {} · deleted on one side {}",
-                        p.count(Action::Upload),
-                        p.count(Action::Download),
-                        p.count(Action::Compare),
-                        p.count(Action::Keep),
-                        p.count(Action::DeleteRemote) + p.count(Action::DeleteLocal)
-                    ));
+                    let counts = Counts {
+                        upload: p.count(Action::Upload),
+                        download: p.count(Action::Download),
+                        compare: p.count(Action::Compare),
+                        unchanged: p.count(Action::Keep),
+                        deleted: p.count(Action::DeleteRemote) + p.count(Action::DeleteLocal),
+                    };
+                    pending += counts.upload + counts.download + counts.compare;
+                    location.counts = Some(counts);
                     for (path, _) in p.conflicts() {
-                        lines.push(format!("  conflict: {path}"));
+                        location.notes.push(format!("Conflict: {path}"));
                         conflicts = true;
                     }
                 } else {
-                    lines.push(format!(
-                        "  uploaded {} · downloaded {}",
-                        r.uploaded.len(),
-                        r.downloaded.len()
-                    ));
+                    uploaded += r.uploaded.len();
+                    downloaded += r.downloaded.len();
                     for (path, _) in &r.conflicts {
-                        lines.push(format!("  conflict: {path}"));
+                        location.notes.push(format!("Conflict: {path}"));
                         conflicts = true;
                     }
                     problem |= !r.refused.is_empty() || !r.errors.is_empty();
-                    lines.extend(
+                    location.notes.extend(
                         r.refused
                             .iter()
                             .chain(&r.errors)
-                            .map(|(p, e)| format!("  problem {p}: {e}")),
+                            .map(|(p, e)| format!("Problem with {p}: {e}")),
                     );
-                    lines.extend(
+                    location.notes.extend(
                         r.pending_deletions
                             .iter()
-                            .map(|p| format!("  deletion not applied: {p}")),
+                            .map(|p| format!("Deletion not applied: {p}")),
                     );
                     if let Some(dir) = &r.backup_dir {
-                        lines.push(format!("  previous versions: {}", dir.display()));
+                        location
+                            .notes
+                            .push(format!("Previous versions: {}", dir.display()));
                     }
                 }
             }
         }
+        locations.push(location);
     }
     let status = if conflicts {
         CloudStatus::Conflict
@@ -195,8 +237,11 @@ async fn cloud_task(
         CloudStatus::UpToDate
     };
     Ok(CloudResult {
-        lines,
+        lines: Vec::new(),
+        locations,
         conflicts,
         status,
+        summary: (!opts.dry_run)
+            .then(|| format!("Last sync: {uploaded} file(s) uploaded, {downloaded} downloaded.")),
     })
 }

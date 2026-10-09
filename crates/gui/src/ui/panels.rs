@@ -5,7 +5,6 @@ use iced::widget::{
     row, scrollable, space, stack, text,
 };
 use iced::{Alignment, Element, Length, Padding};
-use slatty_core::cloud::sync::Prefer;
 use slatty_core::install::Install;
 use slatty_core::installer::DlcChoice;
 use slatty_core::library::LibraryGame;
@@ -18,7 +17,7 @@ use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
 use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
-use crate::{App, CloudRequest, Loadable, Message, Panel};
+use crate::{App, Loadable, Message, Panel};
 
 /// Width of the drawers beside the game page.
 const DRAWER_WIDTH: f32 = 500.0;
@@ -36,7 +35,7 @@ impl App {
             Panel::Install => return self.install_drawer(page, g),
             Panel::GameSettings => return self.game_settings_drawer(page, g),
             Panel::Manage => return self.manage_drawer(page, g),
-            Panel::Cloud => ("Cloud saves", self.cloud_panel(g)),
+            Panel::Cloud => return self.cloud_drawer(page, g),
             Panel::Achievements => return self.achievements_drawer(page, g),
             Panel::Session => ("Session", self.session_panel(g)),
         };
@@ -112,74 +111,6 @@ impl App {
                 .play
                 .as_ref()
                 .is_some_and(|p| p.running && p.game_id == game_id)
-    }
-
-    pub(super) fn cloud_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let cloud = self.cloud.get(&g.id);
-        let busy = cloud.is_some_and(|c| c.busy);
-        // Before the first launch Proton has not created the prefix yet: saves can be compared, and
-        // are downloaded when the game first starts.
-        let launched = self
-            .installs
-            .get(&g.id)
-            .is_some_and(slatty_core::runner::prefix_ready);
-        let mut actions = row![
-            button(text("Check").size(14))
-                .padding([10, 16])
-                .on_press_maybe((!busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Check)))
-                .style(theme::tonal),
-        ]
-        .spacing(8);
-        if launched {
-            actions = actions.push(
-                button(text("Sync now").size(14))
-                    .padding([10, 16])
-                    .on_press_maybe(
-                        (!busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Sync)),
-                    )
-                    .style(theme::tonal),
-            );
-        }
-        let mut items: Vec<Element<'_, Message>> = vec![actions.into()];
-        if !launched {
-            items.push(note(
-                "Your cloud saves are downloaded when the game first starts, \
-                 before it runs.",
-            ));
-        }
-        if let Some(c) = cloud {
-            if c.busy {
-                items.push(note("Working…"));
-            }
-            items.extend(c.lines.iter().map(|l| note(l.as_str())));
-            if c.conflicts && !c.busy {
-                items.push(note(
-                    "Both versions changed. Choose the one to keep; \
-                     the other one is kept in the backups folder.",
-                ));
-                items.push(
-                    row![
-                        button(text("Keep the local version").size(14))
-                            .padding([10, 16])
-                            .on_press(Message::Cloud(
-                                g.id.clone(),
-                                CloudRequest::Keep(Prefer::Local)
-                            ))
-                            .style(theme::primary),
-                        button(text("Keep the cloud version").size(14))
-                            .padding([10, 16])
-                            .on_press(Message::Cloud(
-                                g.id.clone(),
-                                CloudRequest::Keep(Prefer::Remote)
-                            ))
-                            .style(theme::primary),
-                    ]
-                    .spacing(8)
-                    .into(),
-                );
-            }
-        }
-        Column::with_children(items).spacing(10).into()
     }
 
     /// Achievements open in a drawer beside the game page, which stays visible.
