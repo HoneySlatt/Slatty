@@ -6,6 +6,7 @@ use iced::{Alignment, Element, Length, Padding};
 use super::card;
 use super::format::*;
 use super::widgets::logo;
+use crate::icons::{Icon, icon};
 use crate::settings::{ProtonChoice, SettingsMsg};
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, Message};
@@ -78,10 +79,17 @@ impl App {
                             .on_submit(Message::Settings(SettingsMsg::SaveRoot))
                             .style(theme::field)
                             .padding([8, 12]),
-                        button(text("Save").size(14))
-                            .padding([8, 16])
-                            .on_press(Message::Settings(SettingsMsg::SaveRoot))
-                            .style(theme::tonal),
+                        button(
+                            row![
+                                icon(Icon::FolderOpen, 16.0, tokens().text),
+                                text("Browse").size(14)
+                            ]
+                            .spacing(8)
+                            .align_y(Alignment::Center)
+                        )
+                        .padding([8, 16])
+                        .on_press(Message::Settings(SettingsMsg::BrowseRoot))
+                        .style(theme::tonal),
                     ]
                     .spacing(10)
                     .align_y(Alignment::Center)

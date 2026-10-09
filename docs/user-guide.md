@@ -331,7 +331,8 @@ belong to them.
 The interface's **Settings** tab holds the account (log out), the library refresh, and:
 
 - **Default installation path:** where new games are installed unless the Install panel says
-  otherwise.
+  otherwise. Type it, or pick a folder with **Browse**; it is saved as soon as it is an absolute
+  path.
 - **Default Proton:** the build new installs start with. The menus list custom builds from
   `~/.local/share/Steam/compatibilitytools.d`, Valve's builds (Proton Experimental, stable,
   Hotfix) that Steam downloaded in any of its libraries, and those umu downloaded. Valve's builds

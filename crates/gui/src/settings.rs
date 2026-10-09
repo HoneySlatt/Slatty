@@ -25,7 +25,10 @@ impl fmt::Display for ProtonChoice {
 #[derive(Debug, Clone)]
 pub enum SettingsMsg {
     RootInput(String),
+    /// Enter in the field, or a folder chosen with Browse.
     SaveRoot,
+    BrowseRoot,
+    BrowsedRoot(Option<PathBuf>),
     Proton(ProtonChoice),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
@@ -37,7 +40,15 @@ impl App {
             return Task::none();
         };
         match msg {
-            SettingsMsg::RootInput(v) => self.library_root = v,
+            // Kept as typed, without a Save button: an absolute path is saved quietly, and Enter
+            // says what is wrong with any other.
+            SettingsMsg::RootInput(v) => {
+                let path = PathBuf::from(v.trim());
+                self.library_root = v;
+                if path.is_absolute() {
+                    let _ = settings::set_library_root(&core.db, &path);
+                }
+            }
             SettingsMsg::SaveRoot => {
                 let path = PathBuf::from(self.library_root.trim());
                 if !path.is_absolute() {
@@ -46,6 +57,25 @@ impl App {
                     self.notify_error(e.to_string());
                 }
             }
+            SettingsMsg::BrowseRoot => {
+                let start = PathBuf::from(self.library_root.trim());
+                return Task::perform(
+                    async move {
+                        let mut dialog =
+                            rfd::AsyncFileDialog::new().set_title("Default installation path");
+                        if start.is_dir() {
+                            dialog = dialog.set_directory(&start);
+                        }
+                        dialog.pick_folder().await.map(|f| f.path().to_path_buf())
+                    },
+                    |picked| Message::Settings(SettingsMsg::BrowsedRoot(picked)),
+                );
+            }
+            SettingsMsg::BrowsedRoot(Some(folder)) => {
+                self.library_root = folder.display().to_string();
+                return self.update_settings(SettingsMsg::SaveRoot);
+            }
+            SettingsMsg::BrowsedRoot(None) => {}
             SettingsMsg::Proton(choice) => {
                 match settings::set_default_proton(&core.db, &choice.0) {
                     Ok(()) => self.proton = Some(choice.0),

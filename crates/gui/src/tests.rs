@@ -1405,3 +1405,40 @@ fn download_speed_follows_the_last_seconds() {
     }
     assert_eq!(rate.per_second(), Some((1 << 20) as f64));
 }
+
+#[test]
+fn default_installation_path_is_browsed_or_typed_without_a_save_button() {
+    use crate::settings::SettingsMsg;
+    let mut app = library_app();
+    app.page = Page::Settings;
+    let db = app.core.clone().unwrap().db;
+    let saved = || slatty_core::settings::library_root(&db).unwrap();
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Save").is_err());
+        ui.click("Browse").unwrap();
+        assert!(
+            ui.into_messages()
+                .any(|m| matches!(m, Message::Settings(SettingsMsg::BrowseRoot)))
+        );
+    }
+    let _ = app.update(Message::Settings(SettingsMsg::BrowsedRoot(Some(
+        "/games/picked".into(),
+    ))));
+    assert_eq!(app.library_root, "/games/picked");
+    assert_eq!(saved(), PathBuf::from("/games/picked"));
+
+    let _ = app.update(Message::Settings(SettingsMsg::RootInput("games".into())));
+    assert_eq!(
+        saved(),
+        PathBuf::from("/games/picked"),
+        "not absolute: kept"
+    );
+    assert!(app.notice.is_none(), "no error while typing");
+    let _ = app.update(Message::Settings(SettingsMsg::SaveRoot));
+    assert!(app.notice.is_some(), "Enter says why");
+    let _ = app.update(Message::Settings(SettingsMsg::RootInput(
+        "/games/typed".into(),
+    )));
+    assert_eq!(saved(), PathBuf::from("/games/typed"));
+}
