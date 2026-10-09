@@ -180,6 +180,12 @@ impl App {
                         cancelling: Cancelling::No,
                     },
                 );
+                // The game page shows the download from here, so the window stays free.
+                if self.selected.as_deref() == Some(game_id.as_str())
+                    && self.panel == Some(crate::Panel::Install)
+                {
+                    self.panel = None;
+                }
                 return Task::run(install_stream(core, req, cancel), |m| m);
             }
             InstallMsg::Progress(game_id, p) => {

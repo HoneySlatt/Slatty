@@ -641,6 +641,15 @@ impl App {
         let Some(id) = self.selected.clone() else {
             return Task::none();
         };
+        // A running download shows on the game page itself.
+        if panel == Panel::Install
+            && matches!(
+                self.install_views.get(&id),
+                Some(InstallView::Running { .. })
+            )
+        {
+            return Task::none();
+        }
         self.panel = Some(panel);
         match panel {
             Panel::Install if !self.install_views.contains_key(&id) => {

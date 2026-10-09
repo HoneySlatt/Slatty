@@ -534,6 +534,15 @@ fn install_needs_a_proton_choice_then_starts() {
         ui.into_messages()
             .any(|m| matches!(m, Message::Install(InstallMsg::Start(id)) if id == "5"))
     );
+    // Once started, the panel gives way to the game page, which shows the download.
+    let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Running { .. })
+    ));
+    assert_eq!(app.panel, None);
+    let mut ui = render(&app);
+    snapshot(&mut ui, "download-on-game-page");
 }
 
 #[test]
@@ -600,10 +609,13 @@ fn running_install_shows_progress_and_can_pause() {
         },
     );
     assert!(render(&app).find("Downloading [FAKE] Game 5").is_ok());
-    open(&mut app, "5", None);
-    assert!(render(&app).find("Downloading 25 %").is_ok());
-    app.panel = Some(Panel::Install);
+    // The game page shows the download; no panel holds the window.
+    let _ = app.update(Message::Select("5".into()));
+    let _ = app.update(Message::OpenPanel(Panel::Install));
+    assert_eq!(app.panel, None);
+    settle(&mut app);
     let mut ui = render(&app);
+    assert!(ui.find("1.00 GiB / 4.00 GiB · files 3/10 · 25 %").is_ok());
     snapshot(&mut ui, "install-running");
     ui.click("Pause").unwrap();
     assert!(
@@ -1282,7 +1294,7 @@ fn the_cover_does_not_stand_in_while_the_key_art_downloads() {
 fn cancelling_a_download_asks_then_deletes_it() {
     use crate::install::Cancelling;
     let mut app = library_app();
-    open(&mut app, "5", Some(Panel::Install));
+    open(&mut app, "5", None);
     let cancel = tokio_util::sync::CancellationToken::new();
     app.install_views.insert(
         "5".into(),

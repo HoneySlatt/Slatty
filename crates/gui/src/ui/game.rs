@@ -6,13 +6,15 @@ use iced::widget::{
     tooltip,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
+use slatty_core::installer::Progress;
 use slatty_core::library::LibraryGame;
 
 use super::format::*;
 use super::panels::runner_label;
+use super::{inner, note};
 use crate::achievements::latest_unlocked;
 use crate::icons::{Icon, icon};
-use crate::install::InstallView;
+use crate::install::{Cancelling, InstallMsg, InstallView};
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, CloudStatus, Loadable, Message, Panel};
 
@@ -115,6 +117,7 @@ impl App {
                 text(&g.title).size(52).font(BOLD).line_height(1.05),
                 self.play_row(g),
                 self.session_line(g),
+                self.download_line(g),
             ]
             .spacing(16)
             .max_width(720),
@@ -168,10 +171,21 @@ impl App {
             }
         } else {
             match self.install_views.get(&g.id) {
-                Some(InstallView::Running { progress, .. }) => big(
+                // The download shows under these buttons; the page stays free to leave.
+                Some(InstallView::Running { .. }) => big(
+                    Icon::Pause,
+                    "Pause".into(),
+                    Some(Message::Install(InstallMsg::Pause(g.id.clone()))),
+                    false,
+                ),
+                Some(InstallView::Ready(info)) if info.resumable => big(
                     Icon::Download,
-                    format!("Downloading {:.0} %", fraction(*progress) * 100.0),
-                    Some(Message::OpenPanel(Panel::Install)),
+                    "Resume".into(),
+                    Some(if info.proton.is_some() {
+                        Message::Install(InstallMsg::Start(g.id.clone()))
+                    } else {
+                        Message::OpenPanel(Panel::Install)
+                    }),
                     false,
                 ),
                 _ => big(
@@ -206,6 +220,18 @@ impl App {
             .spacing(12)
             .align_y(Alignment::Center)
             .into()
+    }
+
+    /// The running download of this game, under Pause.
+    pub(super) fn download_line<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        match self.install_views.get(&g.id) {
+            Some(InstallView::Running {
+                progress,
+                cancelling,
+                ..
+            }) => download_controls(g, *progress, *cancelling, false),
+            _ => Space::new().into(),
+        }
     }
 
     pub(super) fn session_line<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
@@ -478,4 +504,81 @@ impl App {
         };
         content.spacing(18).align_y(Alignment::Center).into()
     }
+}
+
+/// Progress of a running download, with Cancel (asked first) and, when asked for, Pause.
+pub(super) fn download_controls<'a>(
+    g: &'a LibraryGame,
+    progress: Progress,
+    cancelling: Cancelling,
+    pause: bool,
+) -> Element<'a, Message> {
+    let msg = |m: fn(String) -> InstallMsg| Message::Install(m(g.id.clone()));
+    let status = note(format!(
+        "{} / {} · files {}/{} · {:.0} %",
+        human_size(progress.bytes_done),
+        human_size(progress.bytes_total),
+        progress.files_done,
+        progress.files_total,
+        fraction(progress) * 100.0
+    ));
+    let buttons = (cancelling == Cancelling::No).then(|| {
+        row![]
+            .push(pause.then(|| {
+                button(text("Pause").size(14))
+                    .padding([10, 18])
+                    .on_press(msg(InstallMsg::Pause))
+                    .style(theme::tonal)
+            }))
+            .push(
+                button(text("Cancel").size(14))
+                    .padding([10, 18])
+                    .on_press(msg(InstallMsg::AskCancel))
+                    .style(theme::tonal),
+            )
+            .spacing(10)
+    });
+    let below: Option<Element<'a, Message>> = match cancelling {
+        Cancelling::No => None,
+        Cancelling::Asked => Some(
+            container(
+                column![
+                    text(format!(
+                        "Cancel the download of {} and delete the {} downloaded so far?",
+                        g.title,
+                        human_size(progress.bytes_done)
+                    ))
+                    .size(14),
+                    row![
+                        button(text("Keep downloading").size(14))
+                            .padding([10, 18])
+                            .on_press(msg(InstallMsg::KeepDownloading))
+                            .style(theme::tonal),
+                        button(text("Cancel download").size(14))
+                            .padding([10, 18])
+                            .on_press(msg(InstallMsg::ConfirmCancel))
+                            .style(theme::danger),
+                    ]
+                    .spacing(10),
+                ]
+                .spacing(12),
+            )
+            .padding(16)
+            .width(Length::Fill)
+            .style(inner)
+            .into(),
+        ),
+        Cancelling::Confirmed => Some(note("Cancelling… the downloaded files are deleted.")),
+    };
+    column![
+        progress_bar(0.0..=1.0, fraction(progress))
+            .girth(8)
+            .style(theme::progress),
+        row![container(status).width(Length::Fill)]
+            .push(buttons)
+            .align_y(Alignment::Center),
+    ]
+    .push(below)
+    .spacing(10)
+    .into()
 }

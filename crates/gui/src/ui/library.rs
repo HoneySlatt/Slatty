@@ -279,7 +279,7 @@ pub(super) fn download_banner<'a>(id: &str, title: &str, p: Progress) -> Element
     )
     .padding([10, 16])
     .width(Length::Fill)
-    .on_press(Message::SelectWith(id.to_string(), Panel::Install))
+    .on_press(Message::Select(id.to_string()))
     .style(theme::row_button)
     .into()
 }
