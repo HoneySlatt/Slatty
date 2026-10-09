@@ -437,7 +437,7 @@ pub fn input(_: &Theme, _: text_input::Status) -> text_input::Style {
 pub fn field(_: &Theme, status: text_input::Status) -> text_input::Style {
     text_input::Style {
         background: Background::Color(tokens().surface_high),
-        border: round(12.0).width(1.0).color(match status {
+        border: round(tokens().radius).width(1.0).color(match status {
             text_input::Status::Focused { .. } => tokens().accent,
             _ => tokens().outline,
         }),
@@ -460,7 +460,7 @@ pub fn select(_: &Theme, status: pick_list::Status) -> pick_list::Style {
             pick_list::Status::Hovered | pick_list::Status::Opened { .. } => tokens().surface_high,
             _ => tokens().surface,
         }),
-        border: round(999.0).color(tokens().outline).width(1.0),
+        border: round(tokens().radius).color(tokens().outline).width(1.0),
     }
 }
 

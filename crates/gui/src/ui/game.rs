@@ -316,9 +316,13 @@ impl App {
                         .push(installed.then(|| icon(ic, 16.0, color)))
                         .push(
                             // Wraps rather than run over the next card when a drawer narrows it.
-                            text(status.clone()).size(14).color(tokens().muted),
+                            text(status.clone())
+                                .size(14)
+                                .color(tokens().muted)
+                                .width(Length::Fill),
                         )
                         .spacing(8)
+                        .width(Length::Fill)
                         .align_y(Alignment::Center),
                 ]
                 .spacing(4)
