@@ -1,7 +1,10 @@
+mod achievements;
+mod cloud;
 mod game;
 mod icons;
 mod install;
 mod maintenance;
+mod play;
 mod settings;
 #[cfg(test)]
 mod tests;
@@ -14,8 +17,11 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use achievements::{AchievementChange, PendingChange, achievement_icons};
+use cloud::{CloudRequest, CloudResult, CloudStatus, CloudView};
 use install::{InstallMsg, InstallView};
 use maintenance::{MaintenanceMsg, MaintenanceView};
+use play::{PlayMsg, PlayState};
 use settings::SettingsMsg;
 use work::tokens;
 
@@ -23,12 +29,7 @@ use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::widget::{image, operation};
 use iced::{Subscription, Task, keyboard};
 use slatty_core::account::{Account, AccountInfo};
-use slatty_core::achievements::{self, Achievement};
-use slatty_core::cloud::{
-    self,
-    plan::Action,
-    sync::{Prefer, SyncOptions},
-};
+use slatty_core::achievements::Achievement;
 use slatty_core::db::Db;
 use slatty_core::http::HttpClient;
 use slatty_core::install::Install;
@@ -36,10 +37,8 @@ use slatty_core::installer::{InstallJob, InstallRecord};
 use slatty_core::library::{self, LibraryCache, LibraryGame};
 use slatty_core::overview::{self, GameOverview};
 use slatty_core::paths::Dirs;
-use slatty_core::play::{self, PlayEvent, PlayRequest};
 use slatty_core::session::{self, Playtime};
 use tokio::sync::Semaphore;
-use tokio::sync::mpsc::UnboundedSender;
 
 fn main() -> iced::Result {
     if std::env::args_os()
@@ -74,29 +73,6 @@ pub enum Loadable<T> {
     Loading,
     Ready(T),
     Failed(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CloudStatus {
-    UpToDate,
-    Pending(usize),
-    Conflict,
-    NoCloud,
-    Problem,
-}
-
-pub struct CloudView {
-    pub lines: Vec<String>,
-    pub conflicts: bool,
-    pub busy: bool,
-    pub status: Option<CloudStatus>,
-}
-
-pub struct PlayState {
-    pub game_id: String,
-    pub log: Vec<String>,
-    pub stop: UnboundedSender<()>,
-    pub running: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -287,33 +263,6 @@ impl Default for App {
     }
 }
 
-/// Manual achievement changes waiting for the user's confirmation.
-#[derive(Debug, Clone)]
-pub struct PendingChange {
-    pub game_id: String,
-    pub changes: Vec<AchievementChange>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AchievementChange {
-    pub achievement_id: String,
-    pub name: String,
-    pub unlock: bool,
-}
-
-#[derive(Debug, Clone)]
-pub enum PlayMsg {
-    Event(PlayEvent),
-    Done(Result<(), String>),
-}
-
-#[derive(Debug, Clone)]
-pub struct CloudResult {
-    pub lines: Vec<String>,
-    pub conflicts: bool,
-    pub status: CloudStatus,
-}
-
 #[derive(Debug, Clone)]
 pub enum Message {
     Booted(Result<Box<Boot>, String>),
@@ -367,13 +316,6 @@ pub enum Message {
     ConfirmQuit,
     CancelQuit,
     Key(keyboard::Event),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CloudRequest {
-    Check,
-    Sync,
-    Keep(Prefer),
 }
 
 #[derive(Debug, Clone)]
@@ -633,194 +575,21 @@ impl App {
                 }
                 self.save_overview();
             }
-            Message::Play(game_id) => {
-                let Some(core) = self.core.clone() else {
-                    return Task::none();
-                };
-                if !self.can_play(&game_id) {
-                    return Task::none();
-                }
-                let (stop_tx, stop_rx) = tokio::sync::mpsc::unbounded_channel();
-                self.play = Some(PlayState {
-                    game_id: game_id.clone(),
-                    log: vec!["Preparing…".into()],
-                    stop: stop_tx,
-                    running: true,
-                });
-                return Task::run(play_stream(core, game_id, stop_rx), Message::Playing);
-            }
-            Message::Playing(PlayMsg::Event(event)) => {
-                if let Some(p) = &mut self.play {
-                    p.log.push(view::describe_play_event(&event));
-                }
-            }
-            Message::Playing(PlayMsg::Done(result)) => {
-                let Some(p) = &mut self.play else {
-                    return Task::none();
-                };
-                p.running = false;
-                match result {
-                    Ok(()) => p.log.push("Done.".into()),
-                    Err(e) => p.log.push(format!("Failed: {e}")),
-                }
-                let game = p.game_id.clone();
-                self.cloud.remove(&game);
-                self.achievements.remove(&game);
-                if let Some(core) = &self.core {
-                    self.playtime = session::playtime(&core.db).unwrap_or_default();
-                }
-                let playtime = self.refresh_playtime(vec![game.clone()]);
-                if self.selected.as_deref() == Some(game.as_str()) {
-                    return Task::batch([
-                        playtime,
-                        Task::done(Message::LoadAchievements(game.clone())),
-                        Task::done(Message::Cloud(game, CloudRequest::Check)),
-                    ]);
-                }
-                return playtime;
-            }
-            Message::StopGame => {
-                if let Some(p) = &self.play {
-                    let _ = p.stop.send(());
-                }
-            }
-            Message::LoadAchievements(game_id) => {
-                let Some(core) = self.core.clone() else {
-                    return Task::none();
-                };
-                let install = self.installs.get(&game_id).cloned();
-                self.achievements.insert(game_id.clone(), Loadable::Loading);
-                let id = game_id.clone();
-                return Task::perform(
-                    async move {
-                        let (user_id, client_id, token) =
-                            achievement_access(&core, &id, install).await?;
-                        achievements::fetch(&core.http, &user_id, &client_id, &token)
-                            .await
-                            .map_err(err)
-                    },
-                    move |r| Message::Achievements(game_id.clone(), r),
-                );
-            }
+            Message::Play(game_id) => return self.start_game(game_id),
+            Message::Playing(msg) => return self.on_play(msg),
+            Message::StopGame => self.stop_game(),
+            Message::LoadAchievements(game_id) => return self.load_achievements(game_id),
             Message::AskAchievementChange(game_id, changes) => {
-                if !changes.is_empty() {
-                    self.pending_change = Some(PendingChange { game_id, changes });
-                }
+                self.ask_achievement_change(game_id, changes);
             }
             Message::CancelAchievementChange => self.pending_change = None,
-            Message::ConfirmAchievementChange => {
-                let (Some(core), Some(pending)) = (self.core.clone(), self.pending_change.take())
-                else {
-                    return Task::none();
-                };
-                let install = self.installs.get(&pending.game_id).cloned();
-                let game_id = pending.game_id.clone();
-                self.achievements.insert(game_id.clone(), Loadable::Loading);
-                return Task::perform(
-                    async move {
-                        let (user_id, client_id, token) =
-                            achievement_access(&core, &pending.game_id, install).await?;
-                        let mut failures = Vec::new();
-                        for change in &pending.changes {
-                            if let Err(e) = achievements::set_unlocked(
-                                &core.http,
-                                &user_id,
-                                &client_id,
-                                &token,
-                                &change.achievement_id,
-                                change.unlock,
-                            )
-                            .await
-                            {
-                                failures.push(format!("{} : {e}", change.name));
-                            }
-                        }
-                        let list = achievements::fetch(&core.http, &user_id, &client_id, &token)
-                            .await
-                            .map_err(err)?;
-                        Ok((list, failures))
-                    },
-                    move |r| Message::AchievementsChanged(game_id.clone(), r),
-                );
+            Message::ConfirmAchievementChange => return self.confirm_achievement_change(),
+            Message::AchievementsChanged(game_id, result) => {
+                self.achievements_changed(game_id, result);
             }
-            Message::AchievementsChanged(game_id, result) => match result {
-                Ok((list, failures)) => {
-                    self.achievements_loaded(&game_id, &list);
-                    self.achievements.insert(game_id, Loadable::Ready(list));
-                    if !failures.is_empty() {
-                        self.notify_error(format!("Failed: {}", failures.join(" ; ")));
-                    }
-                }
-                Err(e) => {
-                    self.achievements.insert(game_id, Loadable::Failed(e));
-                }
-            },
-            Message::Achievements(id, result) => {
-                let task = match &result {
-                    Ok(list) => {
-                        self.achievements_loaded(&id, list);
-                        self.request_images(achievement_icons(
-                            list,
-                            self.shows_all_achievements(&id),
-                        ))
-                    }
-                    Err(_) => Task::none(),
-                };
-                self.achievements.insert(
-                    id,
-                    match result {
-                        Ok(a) => Loadable::Ready(a),
-                        Err(e) => Loadable::Failed(e),
-                    },
-                );
-                return task;
-            }
-            Message::Cloud(game_id, request) => {
-                let (Some(core), Some(install)) =
-                    (self.core.clone(), self.installs.get(&game_id).cloned())
-                else {
-                    return Task::none();
-                };
-                if self
-                    .play
-                    .as_ref()
-                    .is_some_and(|p| p.running && p.game_id == game_id)
-                {
-                    self.notify_error(
-                        "The game is running; sync once the session has ended.".into(),
-                    );
-                    return Task::none();
-                }
-                self.cloud
-                    .entry(game_id.clone())
-                    .or_insert(CloudView {
-                        lines: Vec::new(),
-                        conflicts: false,
-                        busy: true,
-                        status: None,
-                    })
-                    .busy = true;
-                return Task::perform(cloud_task(core, install, request), move |r| {
-                    Message::CloudDone(game_id.clone(), request, r)
-                });
-            }
-            Message::CloudDone(game_id, _, result) => {
-                let view = match result {
-                    Ok(r) => CloudView {
-                        lines: r.lines,
-                        conflicts: r.conflicts,
-                        busy: false,
-                        status: Some(r.status),
-                    },
-                    Err(e) => CloudView {
-                        lines: vec![format!("Error: {e}")],
-                        conflicts: false,
-                        busy: false,
-                        status: Some(CloudStatus::Problem),
-                    },
-                };
-                self.cloud.insert(game_id, view);
-            }
+            Message::Achievements(id, result) => return self.achievements_received(id, result),
+            Message::Cloud(game_id, request) => return self.request_cloud(game_id, request),
+            Message::CloudDone(game_id, _, result) => self.cloud_done(game_id, result),
             Message::Install(msg) => return self.update_install(msg),
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
@@ -893,13 +662,6 @@ impl App {
             .map(|g| g.title.clone())
             .or_else(|| self.installs.get(game_id).map(|i| i.title.clone()))
             .unwrap_or_else(|| game_id.to_string())
-    }
-
-    /// No game is running and nothing else is working on this game's files or saves.
-    pub fn can_play(&self, game_id: &str) -> bool {
-        !self.play.as_ref().is_some_and(|p| p.running)
-            && !self.maintenance.get(game_id).is_some_and(|m| m.busy)
-            && !self.cloud.get(game_id).is_some_and(|c| c.busy)
     }
 
     /// What closing the window would interrupt, described for the user.
@@ -985,28 +747,6 @@ impl App {
         }
     }
 
-    fn shows_all_achievements(&self, game_id: &str) -> bool {
-        let page = self.selected.is_none()
-            && self.page == Page::Achievements
-            && self.achievements_game.as_deref() == Some(game_id);
-        let panel =
-            self.panel == Some(Panel::Achievements) && self.selected.as_deref() == Some(game_id);
-        page || panel
-    }
-
-    /// Full-page achievement list of one game, inside the Achievements tab.
-    fn open_achievements(&mut self, id: String) -> Task<Message> {
-        self.page = Page::Achievements;
-        self.selected = None;
-        self.panel = None;
-        self.achievements_game = Some(id.clone());
-        match self.achievements.get(&id) {
-            Some(Loadable::Ready(list)) => self.request_images(achievement_icons(list, true)),
-            Some(Loadable::Loading) => Task::none(),
-            _ => Task::done(Message::LoadAchievements(id)),
-        }
-    }
-
     fn fetch_avatar(&self) -> Task<Message> {
         let (Some(core), Some(account)) = (self.core.clone(), self.account.as_ref()) else {
             return Task::none();
@@ -1021,18 +761,6 @@ impl App {
             },
             Message::Avatar,
         )
-    }
-
-    /// Keeps the cached overview in step with a freshly read achievement list.
-    fn achievements_loaded(&mut self, game_id: &str, list: &[Achievement]) {
-        let fresh = GameOverview {
-            achievements: overview::counts(list),
-            ..self.overview.get(game_id).copied().unwrap_or_default()
-        };
-        if self.overview.get(game_id) != Some(&fresh) {
-            self.overview.insert(game_id.to_string(), fresh);
-            self.save_overview();
-        }
     }
 
     /// Reads play time recorded by GOG for these games.
@@ -1213,46 +941,11 @@ fn summary(r: &InstallRecord) -> InstallSummary {
     }
 }
 
-/// Icons to show: the three latest unlocks on the game page, or all of them in the panel.
-fn achievement_icons(list: &[Achievement], all: bool) -> Vec<String> {
-    if all {
-        list.iter()
-            .map(|a| {
-                if a.date_unlocked.is_some() {
-                    a.image_url_unlocked.clone()
-                } else {
-                    a.image_url_locked.clone()
-                }
-            })
-            .collect()
-    } else {
-        view::latest_unlocked(list)
-            .iter()
-            .map(|a| a.image_url_unlocked.clone())
-            .collect()
-    }
-}
-
-/// User id, Galaxy client id and game token for any owned game, installed or not.
-async fn achievement_access(
-    core: &Core,
-    game_id: &str,
-    install: Option<Install>,
-) -> Result<(String, String, slatty_core::secret::Secret), String> {
-    let tokens = tokens(core).await?;
-    let (client_id, token) = match &install {
-        Some(i) => achievements::game_token(&core.http, &tokens, i).await,
-        None => achievements::product_token(&core.http, &tokens, game_id).await,
-    }
-    .map_err(err)?;
-    Ok((tokens.user_id, client_id, token))
-}
-
 async fn boot() -> Result<Boot, String> {
     let dirs = Dirs::from_system().map_err(err)?;
     let db = Db::open(&dirs.db_file()).map_err(err)?;
     let http = slatty_core::http::client().map_err(err)?;
-    let interrupted = play::recover_unfinished(&db)
+    let interrupted = slatty_core::play::recover_unfinished(&db)
         .map_err(err)?
         .into_iter()
         .map(|s| s.game_id)
@@ -1322,158 +1015,5 @@ fn overview_stream(core: Core, ids: Vec<String>) -> impl Stream<Item = Message> 
             }
         }
         let _ = output.send(Message::OverviewDone).await;
-    })
-}
-
-fn play_stream(
-    core: Core,
-    game_id: String,
-    stop: tokio::sync::mpsc::UnboundedReceiver<()>,
-) -> impl Stream<Item = PlayMsg> {
-    iced::stream::channel(64, async move |mut output| {
-        let supervisor = match std::env::current_exe() {
-            Ok(p) => p,
-            Err(e) => {
-                let _ = output.send(PlayMsg::Done(Err(e.to_string()))).await;
-                return;
-            }
-        };
-        let req = PlayRequest {
-            game_id,
-            cloud: true,
-            comet: true,
-            supervisor,
-        };
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let run = async {
-            play::play(
-                &core.db,
-                &core.dirs,
-                &core.http,
-                req,
-                move |e| drop(tx.send(e)),
-                stop,
-            )
-            .await
-            .map_err(err)
-        };
-        let mut forward_out = output.clone();
-        let forward = async move {
-            while let Some(e) = rx.recv().await {
-                let _ = forward_out.send(PlayMsg::Event(e)).await;
-            }
-        };
-        let (result, ()) = tokio::join!(run, forward);
-        let _ = output.send(PlayMsg::Done(result)).await;
-    })
-}
-
-async fn cloud_task(
-    core: Core,
-    install: Install,
-    request: CloudRequest,
-) -> Result<CloudResult, String> {
-    let opts = match request {
-        CloudRequest::Check => SyncOptions {
-            dry_run: true,
-            ..Default::default()
-        },
-        CloudRequest::Sync => SyncOptions::default(),
-        CloudRequest::Keep(side) => SyncOptions {
-            prefer: Some(side),
-            ..Default::default()
-        },
-    };
-    let tokens = tokens(&core).await?;
-    let Some(outcomes) =
-        cloud::sync_game(&core.db, &core.dirs, &core.http, &tokens, &install, opts)
-            .await
-            .map_err(err)?
-    else {
-        return Ok(CloudResult {
-            lines: vec!["GOG has no cloud saves for this game.".into()],
-            conflicts: false,
-            status: CloudStatus::NoCloud,
-        });
-    };
-    let mut lines = Vec::new();
-    let mut conflicts = false;
-    let mut pending = 0;
-    let mut problem = false;
-    for o in &outcomes {
-        let root = o
-            .root
-            .as_ref()
-            .map(|r| r.display().to_string())
-            .unwrap_or_else(|| o.template.clone());
-        lines.push(format!("[{}] {root}", o.name));
-        match &o.result {
-            Err(e) => {
-                problem = true;
-                lines.push(format!("  error: {e}"));
-            }
-            Ok(r) => {
-                lines.extend(
-                    r.plan
-                        .warnings
-                        .iter()
-                        .map(|w| format!("  warning: {}", view::describe_warning(*w))),
-                );
-                if opts.dry_run {
-                    let p = &r.plan;
-                    pending += p.count(Action::Upload) + p.count(Action::Download);
-                    lines.push(format!(
-                        "  to upload {} · to download {} · to compare {} · unchanged {}",
-                        p.count(Action::Upload),
-                        p.count(Action::Download),
-                        p.count(Action::Compare),
-                        p.count(Action::Keep)
-                    ));
-                    for (path, _) in p.conflicts() {
-                        lines.push(format!("  conflict: {path}"));
-                        conflicts = true;
-                    }
-                } else {
-                    lines.push(format!(
-                        "  uploaded {} · downloaded {}",
-                        r.uploaded.len(),
-                        r.downloaded.len()
-                    ));
-                    for (path, _) in &r.conflicts {
-                        lines.push(format!("  conflict: {path}"));
-                        conflicts = true;
-                    }
-                    problem |= !r.refused.is_empty() || !r.errors.is_empty();
-                    lines.extend(
-                        r.refused
-                            .iter()
-                            .chain(&r.errors)
-                            .map(|(p, e)| format!("  problem {p}: {e}")),
-                    );
-                    lines.extend(
-                        r.pending_deletions
-                            .iter()
-                            .map(|p| format!("  deletion not applied: {p}")),
-                    );
-                    if let Some(dir) = &r.backup_dir {
-                        lines.push(format!("  previous versions: {}", dir.display()));
-                    }
-                }
-            }
-        }
-    }
-    let status = if conflicts {
-        CloudStatus::Conflict
-    } else if problem {
-        CloudStatus::Problem
-    } else if pending > 0 {
-        CloudStatus::Pending(pending)
-    } else {
-        CloudStatus::UpToDate
-    };
-    Ok(CloudResult {
-        lines,
-        conflicts,
-        status,
     })
 }
