@@ -533,11 +533,7 @@ impl App {
         self.panel = None;
         let mut tasks = Vec::new();
         if let Some(game) = self.library.iter().find(|g| g.id == id) {
-            let art: Vec<String> = [&game.background, &game.logo]
-                .into_iter()
-                .flatten()
-                .cloned()
-                .collect();
+            let art: Vec<String> = game.background.iter().cloned().collect();
             tasks.push(self.request_images(art));
             tasks.push(self.refresh_playtime(vec![id.clone()]));
         }

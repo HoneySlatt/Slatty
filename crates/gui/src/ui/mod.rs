@@ -37,9 +37,7 @@ impl App {
             return self.with_notice(self.login_view());
         };
         let body: Element<'_, Message> = match self.selected_game() {
-            Some(game) => container(self.game_page(game))
-                .padding(Padding::new(24.0).top(16.0))
-                .into(),
+            Some(game) => self.game_page(game),
             None => column![
                 self.top_bar(&account.username),
                 container(match self.page {

@@ -65,8 +65,9 @@ dot says you are signed in.
 Hovering a cover shows its title, a settings button and a play (or install) button. Clicking it
 opens the game page.
 
-**The game page** shows the key art, Play (Install when the game is not installed), the favorite
-button, play time and last session, cloud save status and achievement progress. Play time is the
+**The game page** shows the key art across the window with the title, Play (Install when the game
+is not installed) and the favorite button over it; below, three cards give play time and last
+session, cloud save status, and achievement progress with the latest unlocks. Play time is the
 total GOG records, so it includes GOG Galaxy and other launchers that report sessions. "Last played"
 only knows sessions started by SlattyLauncher: GOG does not expose that date. The tools open in
 panels:

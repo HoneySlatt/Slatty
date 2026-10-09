@@ -132,21 +132,29 @@ pub fn ghost(_: &Theme, status: button::Status) -> button::Style {
 /// The main call to action (Play, Install, Confirm).
 pub fn primary(_: &Theme, status: button::Status) -> button::Style {
     match status {
-        button::Status::Hovered | button::Status::Pressed => {
-            base(Some(tokens().accent_hover), tokens().on_accent, 18.0)
+        button::Status::Hovered | button::Status::Pressed => base(
+            Some(tokens().accent_hover),
+            tokens().on_accent,
+            tokens().radius,
+        ),
+        button::Status::Disabled => {
+            base(Some(tokens().surface_high), tokens().muted, tokens().radius)
         }
-        button::Status::Disabled => base(Some(tokens().surface_high), tokens().muted, 18.0),
-        button::Status::Active => base(Some(tokens().accent), tokens().on_accent, 18.0),
+        button::Status::Active => base(Some(tokens().accent), tokens().on_accent, tokens().radius),
     }
 }
 
 pub fn danger(_: &Theme, status: button::Status) -> button::Style {
     match status {
-        button::Status::Disabled => base(Some(tokens().surface_high), tokens().muted, 14.0),
-        button::Status::Hovered | button::Status::Pressed => {
-            base(Some(tokens().danger_hover), tokens().on_accent, 14.0)
+        button::Status::Disabled => {
+            base(Some(tokens().surface_high), tokens().muted, tokens().radius)
         }
-        button::Status::Active => base(Some(tokens().danger), tokens().on_accent, 14.0),
+        button::Status::Hovered | button::Status::Pressed => base(
+            Some(tokens().danger_hover),
+            tokens().on_accent,
+            tokens().radius,
+        ),
+        button::Status::Active => base(Some(tokens().danger), tokens().on_accent, tokens().radius),
     }
 }
 
@@ -285,6 +293,30 @@ pub fn notice(error: bool) -> impl Fn(&Theme) -> container::Style {
         })),
         border: round(14.0),
         text_color: Some(tokens().text),
+        ..Default::default()
+    }
+}
+
+/// Darkens the bottom of a game's key art so the title and buttons over it stay readable.
+pub fn hero_fade(_: &Theme) -> container::Style {
+    let t = tokens();
+    let clear = Color {
+        a: 0.0,
+        ..t.background
+    };
+    container::Style {
+        background: Some(Background::Gradient(iced::Gradient::Linear(
+            iced::gradient::Linear::new(iced::Radians(std::f32::consts::PI))
+                .add_stop(0.0, clear)
+                .add_stop(0.5, clear)
+                .add_stop(
+                    1.0,
+                    Color {
+                        a: 0.85,
+                        ..t.background
+                    },
+                ),
+        ))),
         ..Default::default()
     }
 }

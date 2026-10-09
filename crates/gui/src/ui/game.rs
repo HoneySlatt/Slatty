@@ -1,67 +1,78 @@
 //! Game page: key art, play button, stats, cloud and achievements summaries.
 
 use iced::widget::{
-    Space, button, column, container, image, progress_bar, row, scrollable, space, stack, text,
+    Space, button, column, container, image, progress_bar, row, space, stack, text,
 };
-use iced::{Alignment, ContentFit, Element, Length};
+use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 
 use super::format::*;
 use super::panels::runner_label;
-use super::round_button;
-use super::widgets::logo;
 use crate::achievements::latest_unlocked;
 use crate::icons::{Icon, icon};
 use crate::install::InstallView;
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, CloudStatus, Loadable, Message, Panel};
 
-impl App {
-    pub fn game_page<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let installed = self.installs.contains_key(&g.id);
-        let mut tools = row![].spacing(10);
-        if installed {
-            tools = tools
-                .push(round_button(
-                    Icon::SlidersHorizontal,
-                    Message::OpenPanel(Panel::GameSettings),
-                ))
-                .push(round_button(
-                    Icon::EllipsisVertical,
-                    Message::OpenPanel(Panel::Manage),
-                ));
-        }
-        let header = row![
-            logo(34.0),
-            Space::new().width(10),
-            round_button(Icon::ChevronLeft, Message::CloseDetail),
-            text("Library").size(16),
-            space().width(Length::Fill),
-            tools,
-        ]
-        .spacing(12)
-        .align_y(Alignment::Center);
+/// Height of the summary cards under the key art.
+const CARD_HEIGHT: f32 = 150.0;
 
-        let side = column![
-            text(&g.title).size(52).font(BOLD).line_height(1.05),
-            self.play_row(g),
+impl App {
+    /// Key art with the title and Play across the window, the summary cards below it.
+    pub fn game_page<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let mut tools = row![].spacing(6);
+        if self.installs.contains_key(&g.id) {
+            let tool = |ic, panel| {
+                button(icon(ic, 20.0, tokens().text))
+                    .padding(8)
+                    .on_press(Message::OpenPanel(panel))
+                    .style(theme::ghost)
+            };
+            tools = tools
+                .push(tool(Icon::SlidersHorizontal, Panel::GameSettings))
+                .push(tool(Icon::EllipsisVertical, Panel::Manage));
+        }
+        let back = button(
+            row![
+                icon(Icon::ChevronLeft, 20.0, tokens().text),
+                text("Library").size(16)
+            ]
+            .spacing(12)
+            .align_y(Alignment::Center),
+        )
+        .padding([8, 10])
+        .on_press(Message::CloseDetail)
+        .style(theme::ghost);
+        let header = column![
+            container(row![back, space().width(Length::Fill), tools].align_y(Alignment::Center))
+                .padding([6, 14])
+                .width(Length::Fill),
+            container(Space::new())
+                .width(Length::Fill)
+                .height(1)
+                .style(theme::divider),
+        ];
+        let cards = row![
+            container(self.stats(g))
+                .padding(18)
+                .width(Length::FillPortion(9))
+                .height(CARD_HEIGHT)
+                .style(theme::block),
+            container(self.cloud_card(g))
+                .width(Length::FillPortion(8))
+                .height(CARD_HEIGHT),
+            container(self.achievements_card(g))
+                .width(Length::FillPortion(10))
+                .height(CARD_HEIGHT),
         ]
-        .push(self.session_line(g))
-        .push(self.stats(g))
-        .push(self.cloud_card(g))
-        .push(self.achievements_card(g))
-        .push(self.footer(g))
-        .spacing(18)
-        .width(470);
-        let body = row![
-            self.hero(g),
-            scrollable(side).style(theme::scroller).height(Length::Fill)
-        ]
-        .spacing(36)
-        .height(Length::Fill);
-        column![header, body].spacing(18).into()
+        .spacing(14);
+        let below = column![cards, self.footer(g)]
+            .spacing(12)
+            .padding(Padding::new(40.0).top(18.0).bottom(22.0));
+        column![header, self.hero(g), below].into()
     }
 
+    /// The game's key art, edge to edge, with its title, Play and favorite at the bottom left.
     pub(super) fn hero<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let art = g
             .background
@@ -73,7 +84,6 @@ impl App {
                 .content_fit(ContentFit::Cover)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .border_radius(22)
                 .into(),
             None => container(Space::new())
                 .width(Length::Fill)
@@ -81,23 +91,24 @@ impl App {
                 .style(theme::placeholder)
                 .into(),
         };
-        let mut layers = stack![base];
-        if let Some(h) = g.logo.as_ref().and_then(|u| self.images.get(u)) {
-            layers = layers.push(
-                container(
-                    image(h.clone())
-                        .content_fit(ContentFit::Contain)
-                        .width(320)
-                        .height(140),
-                )
-                .padding(32)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .align_x(Alignment::Start)
-                .align_y(Alignment::End),
-            );
-        }
-        container(layers)
+        let fade = container(Space::new())
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(theme::hero_fade);
+        let front = container(
+            column![
+                text(&g.title).size(52).font(BOLD).line_height(1.05),
+                self.play_row(g),
+                self.session_line(g),
+            ]
+            .spacing(16)
+            .max_width(720),
+        )
+        .padding(Padding::new(40.0).bottom(22.0))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_y(Alignment::End);
+        stack![base, fade, front]
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
@@ -120,8 +131,8 @@ impl App {
                 )
                 .center_x(Length::Fill),
             )
-            .padding([18, 0])
-            .width(Length::Fill)
+            .padding([16, 0])
+            .width(300)
             .on_press_maybe(msg)
             .style(if danger {
                 theme::danger
@@ -171,9 +182,9 @@ impl App {
                     tokens().text
                 },
             ))
-            .center(30),
+            .center(26),
         )
-        .padding(17)
+        .padding(16)
         .on_press(Message::ToggleFavorite(g.id.clone()))
         .style(theme::tonal);
         row![main, heart]
@@ -316,7 +327,8 @@ impl App {
         container(content)
             .padding(18)
             .width(Length::Fill)
-            .style(theme::card)
+            .height(Length::Fill)
+            .style(theme::block)
             .into()
     }
 
@@ -395,8 +407,9 @@ impl App {
         )
         .padding(18)
         .width(Length::Fill)
+        .height(Length::Fill)
         .on_press_maybe(ready.then_some(Message::OpenPanel(Panel::Achievements)))
-        .style(theme::row_button)
+        .style(theme::tile)
         .into()
     }
 
