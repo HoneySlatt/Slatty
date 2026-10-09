@@ -138,11 +138,24 @@ impl App {
                 });
             }
             InstallMsg::Planned(game_id, result) => {
+                let auto = self.auto_resume.take_if(|id| *id == game_id).is_some();
                 let view = match result {
                     Ok(info) => InstallView::Ready(info),
-                    Err(e) => InstallView::Failed(e),
+                    Err(e) => {
+                        if auto {
+                            self.notify_error(format!(
+                                "The download of {} could not resume: {e}",
+                                self.title_of(&game_id)
+                            ));
+                        }
+                        InstallView::Failed(e)
+                    }
                 };
-                self.install_views.insert(game_id, view);
+                let ready = matches!(view, InstallView::Ready(_));
+                self.install_views.insert(game_id.clone(), view);
+                if auto && ready {
+                    return self.update_install(InstallMsg::Start(game_id));
+                }
             }
             InstallMsg::Start(game_id) => {
                 if self.installing().is_some() {
@@ -473,4 +486,24 @@ async fn free_space(root: String) -> Option<u64> {
         .await
         .ok()
         .flatten()
+}
+
+impl App {
+    /// Resumes the first download cut off by a closed window, a crash or a power loss. Downloads
+    /// paused on request wait for Resume.
+    pub fn resume_interrupted(&mut self) -> Task<Message> {
+        if self.installing().is_some() || self.account.is_none() {
+            return Task::none();
+        }
+        let Some(game_id) = self
+            .interrupted
+            .iter()
+            .find(|(_, kind)| *kind == crate::Interrupted::Download)
+            .map(|(id, _)| id.clone())
+        else {
+            return Task::none();
+        };
+        self.auto_resume = Some(game_id.clone());
+        self.update_install(InstallMsg::Prepare(game_id, None))
+    }
 }

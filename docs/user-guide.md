@@ -89,18 +89,22 @@ panels:
 
 Once started, a download shows on the game page itself, with its progress, its percentage and its
 speed over the last seconds. The big button pauses it (then resumes it), and **Cancel** deletes it
-after asking. The rest of the launcher stays
-usable meanwhile; the banner at the top of the Library tab leads back to the game.
+after asking. The rest of the launcher stays usable meanwhile; the banner at the top of the Library
+tab leads back to the game.
 
 Escape closes the panel, then the game page.
 
-Downloads and updates left unfinished (window closed, crash, pause) are listed at the top of the
-Library tab: **Resume** or **Discard** a download, **Finish update** for an update, which the game
-needs before it can start again.
+A download cut off by a closed window, a crash or a power cut resumes by itself when SlattyLauncher
+starts again (one at a time). Downloads paused on request, and updates left unfinished, are listed at
+the top of the Library tab instead: **Resume** or **Discard** a download, **Finish update** for an
+update, which the game needs before it can start again.
+
+Nothing an interruption leaves behind is trusted: every file already on disk is checked again
+against GOG's checksums before it is kept, and the game folder appears only once every file is
+verified.
 
 Closing the window while something runs (a download, an update or repair, a cloud sync, a game)
-asks first and says what would be interrupted. Quitting pauses a download or an update; each resumes
-where it stopped.
+asks first and says what would be interrupted.
 
 **Achievements** shows every game with achievements as a card (cover, unlocked count, share and
 progress bar), the most completed first. Clicking a game opens its own

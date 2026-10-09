@@ -752,3 +752,66 @@ fn a_build_without_language_packs_can_be_planned_again() {
     assert_eq!(again.disk_size, 100);
     assert!(plan(Some("fr-FR")).is_err());
 }
+
+#[test]
+fn an_install_cut_off_after_publishing_is_checked_where_it_landed() {
+    let root = std::env::temp_dir().join(format!("slatty-published-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let (partial, target) = (partial_dir(&root, "Game"), root.join("Game"));
+    std::fs::create_dir_all(&partial).unwrap();
+    assert!(
+        !published_unregistered(true, &partial, &target),
+        "still downloading"
+    );
+    std::fs::rename(&partial, &target).unwrap();
+    assert!(published_unregistered(true, &partial, &target));
+    assert!(
+        !published_unregistered(false, &partial, &target),
+        "a new install never adopts an existing folder"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn jobs_left_behind_by_a_registered_install_are_forgotten() {
+    use crate::install::{Install, Platform};
+    use crate::runner::Runner;
+    let db = Db::in_memory().unwrap();
+    let job = |id: &str, state: &str| InstallJob {
+        game_id: id.into(),
+        build_id: "b".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game".into(),
+        state: state.into(),
+        dlcs: vec![],
+    };
+    job("1", "downloading").save(&db).unwrap();
+    job("2", crate::maintenance::UPDATING).save(&db).unwrap();
+    job("3", PAUSED).save(&db).unwrap();
+    for id in ["1", "2"] {
+        Install {
+            game_id: id.into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: "/games/Game".into(),
+            client_id: None,
+            runner: Runner::Native,
+            umu_id: None,
+        }
+        .save(&db)
+        .unwrap();
+    }
+    InstallJob::forget_finished(&db).unwrap();
+    let left: Vec<String> = InstallJob::list(&db)
+        .unwrap()
+        .into_iter()
+        .map(|j| j.game_id)
+        .collect();
+    assert_eq!(
+        left,
+        ["2", "3"],
+        "updates of installed games and other installs stay"
+    );
+    assert!(InstallJob::load(&db, "3").unwrap().unwrap().is_paused());
+}

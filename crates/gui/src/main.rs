@@ -107,7 +107,10 @@ pub enum Panel {
 /// Work left unfinished by an earlier run (or paused in this one).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Interrupted {
+    /// Cut off (window closed, crash, power loss): resumed at the next start.
     Download,
+    /// Paused on request: resumed only when asked.
+    Paused,
     /// An update, language or DLC change: the game cannot start until it is finished.
     Update,
 }
@@ -116,6 +119,8 @@ impl Interrupted {
     fn of(job: &InstallJob) -> Self {
         if job.is_update() {
             Interrupted::Update
+        } else if job.is_paused() {
+            Interrupted::Paused
         } else {
             Interrupted::Download
         }
@@ -178,6 +183,8 @@ pub struct App {
     pub edit: Option<edit::EditDraft>,
     pub menu_for: Option<String>,
     pub context_menu: Option<edit::ContextMenu>,
+    /// A download being planned again to resume on its own at start-up.
+    pub auto_resume: Option<String>,
     /// Size of the window, for layouts that change with it.
     pub window: Size,
     /// Fade in a new page, and the key art of a game once downloaded; `now` is the time of the
@@ -235,6 +242,7 @@ impl Default for App {
             edit: None,
             menu_for: None,
             context_menu: None,
+            auto_resume: None,
             window: Size::new(1440.0, 900.0),
             page_shown: Animation::new(true),
             art_shown: Animation::new(true),
@@ -416,10 +424,11 @@ impl App {
                     });
                 }
                 let avatar = self.fetch_avatar();
+                let resume = self.resume_interrupted();
                 if let Some(cache) = boot.library {
-                    return Task::batch([avatar, self.set_library(cache)]);
+                    return Task::batch([avatar, resume, self.set_library(cache)]);
                 }
-                return avatar;
+                return Task::batch([avatar, resume]);
             }
             Message::Booted(Err(e)) => self.fatal = Some(e),
             Message::OpenLoginPage => self.open_login_page(),
@@ -515,12 +524,8 @@ impl App {
                 self.quit_confirm = Some(running);
             }
             Message::CancelQuit => self.quit_confirm = None,
+            // A download is left as it stands: it resumes at the next start, like after a crash.
             Message::ConfirmQuit => {
-                for view in self.install_views.values() {
-                    if let InstallView::Running { cancel, .. } = view {
-                        cancel.cancel();
-                    }
-                }
                 for cancel in self.maintenance.values().filter_map(|v| v.cancel.as_ref()) {
                     cancel.cancel();
                 }
@@ -588,7 +593,7 @@ impl App {
         let mut work = Vec::new();
         if let Some((_, title, p)) = self.installing() {
             work.push(format!(
-                "Downloading {title} ({:.0} %). Quitting pauses it; it resumes where it stopped.",
+                "Downloading {title} ({:.0} %). It stops here and resumes where it stopped when SlattyLauncher starts again.",
                 ui::format::fraction(p) * 100.0
             ));
         }
@@ -731,6 +736,7 @@ async fn boot() -> Result<Boot, String> {
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let customs = slatty_core::custom::all(&db).map_err(err)?;
     let playtime = session::playtime(&db).map_err(err)?;
+    InstallJob::forget_finished(&db).map_err(err)?;
     let jobs = InstallJob::list(&db)
         .map_err(err)?
         .into_iter()

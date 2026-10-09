@@ -94,12 +94,30 @@ impl InstallJob {
             .collect()
     }
 
+    /// Paused on request (Pause, Ctrl+C), rather than interrupted by a crash or a closed window.
+    pub fn is_paused(&self) -> bool {
+        self.state == PAUSED
+    }
+
+    /// Drops the jobs of installs that were registered just before an interruption left their
+    /// job behind.
+    pub fn forget_finished(db: &Db) -> Result<()> {
+        db.conn().execute(
+            "DELETE FROM install_jobs WHERE state != ?1 AND game_id IN (SELECT game_id FROM installs)",
+            [crate::maintenance::UPDATING],
+        )?;
+        Ok(())
+    }
+
     pub fn delete(db: &Db, game_id: &str) -> Result<()> {
         db.conn()
             .execute("DELETE FROM install_jobs WHERE game_id = ?1", [game_id])?;
         Ok(())
     }
 }
+
+/// State of a job stopped on request.
+pub const PAUSED: &str = "paused";
 
 /// Abandons an unfinished install: deletes its hidden partial folder and its job. An unfinished
 /// update is refused here, since its files are the installed game itself.

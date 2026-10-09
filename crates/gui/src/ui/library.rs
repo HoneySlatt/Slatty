@@ -104,8 +104,12 @@ impl App {
             let title = self.title_of(id);
             let working = self.maintenance.get(id).is_some_and(|m| m.busy);
             let (status, actions): (&str, Element<'_, Message>) = match kind {
-                Interrupted::Download => (
-                    "Download interrupted. It resumes where it stopped.",
+                Interrupted::Download | Interrupted::Paused => (
+                    if *kind == Interrupted::Paused {
+                        "Download paused. It resumes where it stopped."
+                    } else {
+                        "Download interrupted. It resumes where it stopped."
+                    },
                     row![
                         button(text("Resume").size(14))
                             .padding([8, 16])

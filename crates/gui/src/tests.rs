@@ -902,7 +902,7 @@ fn closing_asks_first_only_when_something_is_running() {
     let mut ui = render(&app);
     assert!(
         ui.find(
-            "Downloading [FAKE] Game 5 (50 %). Quitting pauses it; it resumes where it stopped."
+            "Downloading [FAKE] Game 5 (50 %). It stops here and resumes where it stopped when SlattyLauncher starts again."
         )
         .is_ok()
     );
@@ -917,8 +917,8 @@ fn closing_asks_first_only_when_something_is_running() {
     let _ = app.update(Message::CloseRequested);
     let _ = app.update(Message::ConfirmQuit);
     assert!(
-        cancel.is_cancelled(),
-        "the download is paused before quitting"
+        !cancel.is_cancelled(),
+        "left as it stands, so that the next start resumes it"
     );
 }
 
@@ -984,7 +984,7 @@ fn interrupted_work_is_listed_with_a_way_to_finish_it() {
     .save(&app.core.as_ref().unwrap().db)
     .unwrap();
     let _ = app.update(Message::Install(InstallMsg::Done("7".into(), Err(None))));
-    assert_eq!(app.interrupted, [("7".to_string(), Interrupted::Download)]);
+    assert_eq!(app.interrupted, [("7".to_string(), Interrupted::Paused)]);
 }
 
 #[test]
@@ -1524,4 +1524,43 @@ fn game_settings_list_only_owned_dlc() {
             .find("You own none of this game's DLC.")
             .is_ok()
     );
+}
+
+#[test]
+fn a_cut_off_download_resumes_by_itself_at_start_up() {
+    use crate::Interrupted;
+    let mut app = library_app();
+    app.proton = Some("/proton/GE-Proton".into());
+    app.interrupted = vec![
+        ("6".into(), Interrupted::Paused),
+        ("5".into(), Interrupted::Download),
+    ];
+    let _ = app.resume_interrupted();
+    assert_eq!(app.auto_resume.as_deref(), Some("5"), "not the paused one");
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(crate::install::PlanInfo {
+            resumable: true,
+            ..fake_plan()
+        }),
+    )));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Running { .. })
+    ));
+    assert_eq!(app.interrupted, [("6".to_string(), Interrupted::Paused)]);
+    assert!(app.installing().is_some());
+
+    // Offline at start-up: it stays listed, and the reason is shown.
+    let mut app = library_app();
+    app.proton = Some("/proton/GE-Proton".into());
+    app.interrupted = vec![("5".into(), Interrupted::Download)];
+    let _ = app.resume_interrupted();
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Err("network error".into()),
+    )));
+    assert!(app.installing().is_none());
+    assert_eq!(app.interrupted.len(), 1);
+    assert!(app.notice.as_ref().is_some_and(|n| n.error));
 }

@@ -10,7 +10,7 @@ pub use job::*;
 pub use plan::*;
 pub use record::*;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use tokio_util::sync::CancellationToken;
 
@@ -111,6 +111,7 @@ pub async fn install(
         target: target.clone(),
         resumed: job.is_some(),
     });
+    let job_resumed = job.is_some();
     let mut job = InstallJob {
         game_id: req.game_id.clone(),
         build_id: plan.build.build_id.clone(),
@@ -132,7 +133,13 @@ pub async fn install(
             progress: &progress,
             free_space: &free_space,
         };
-        dl.run(&set, &partial, &target).await?;
+        if published_unregistered(job_resumed, &partial, &target) {
+            // Interrupted between publishing the folder and registering the game: its files are
+            // checked where they now are.
+            dl.check_installed(&set, &target, true).await?;
+        } else {
+            dl.run(&set, &partial, &target).await?;
+        }
         dl.check_installed(&set.support_set(), &support_dir(dirs, &req.game_id), true)
             .await?;
         Ok::<FileSet, Error>(set)
@@ -142,7 +149,7 @@ pub async fn install(
         Ok(set) => set,
         Err(e) => {
             job.state = if matches!(e, Error::Cancelled) {
-                "paused".into()
+                PAUSED.into()
             } else {
                 "failed".into()
             };
@@ -183,6 +190,12 @@ pub async fn install(
         dependencies: plan.meta.dependencies.clone(),
     });
     Ok(install)
+}
+
+/// The partial folder of a resumed install is gone and the game folder exists: the download
+/// finished and was renamed into place, but the game was not registered yet.
+fn published_unregistered(resumed: bool, partial: &Path, target: &Path) -> bool {
+    resumed && !partial.exists() && target.is_dir()
 }
 
 #[cfg(test)]
