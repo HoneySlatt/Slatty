@@ -13,6 +13,7 @@ use serde_json::Value;
 use crate::auth::Tokens;
 use crate::error::{Error, Result};
 use crate::http;
+use crate::paths::Dirs;
 
 const CONTENT_SYSTEM: &str = "https://content-system.gog.com";
 const CDN: &str = "https://gog-cdn-fastly.gog.com";
@@ -192,18 +193,21 @@ struct Endpoint {
 }
 
 /// CDN access for a game and its DLC. Each product has its own download links, fetched on first
-/// use; links expire and are refreshed on 401/403.
+/// use; links expire and are refreshed on 401/403, with the access token renewed when it has
+/// expired too (a download can outlast it).
 pub struct GogContent {
     http: Client,
-    tokens: Tokens,
+    dirs: Dirs,
+    tokens: tokio::sync::Mutex<Tokens>,
     endpoints: tokio::sync::RwLock<HashMap<String, Vec<Endpoint>>>,
 }
 
 impl GogContent {
-    pub fn new(http: Client, tokens: Tokens) -> Self {
+    pub fn new(http: Client, tokens: Tokens, dirs: &Dirs) -> Self {
         Self {
             http,
-            tokens,
+            dirs: dirs.clone(),
+            tokens: tokio::sync::Mutex::new(tokens),
             endpoints: tokio::sync::RwLock::new(HashMap::new()),
         }
     }
@@ -212,18 +216,27 @@ impl GogContent {
         if !refresh && let Some(e) = self.endpoints.read().await.get(product_id) {
             return Ok(e.clone());
         }
+        let tokens = self.access().await?;
         let fresh = if product_id == REDIST {
-            dependency_link(&self.http, &self.tokens).await?
+            dependency_link(&self.http, &tokens).await?
         } else if let Some(id) = product_id.strip_suffix(PATCH_STORE) {
-            secure_link(&self.http, &self.tokens, id, Some("/patches/store")).await?
+            secure_link(&self.http, &tokens, id, Some("/patches/store")).await?
         } else {
-            secure_link(&self.http, &self.tokens, product_id, None).await?
+            secure_link(&self.http, &tokens, product_id, None).await?
         };
         self.endpoints
             .write()
             .await
             .insert(product_id.to_string(), fresh.clone());
         Ok(fresh)
+    }
+
+    async fn access(&self) -> Result<Tokens> {
+        let mut tokens = self.tokens.lock().await;
+        if tokens.is_expired() {
+            *tokens = crate::account::fresh(&self.http, &self.dirs, &tokens, false).await?;
+        }
+        Ok(tokens.clone())
     }
 }
 

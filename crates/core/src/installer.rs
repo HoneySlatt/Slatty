@@ -931,7 +931,7 @@ pub async fn install(
     job.save(db)?;
 
     let result = async {
-        let source = galaxy::GogContent::new(http.clone(), tokens.clone());
+        let source = galaxy::GogContent::new(http.clone(), tokens.clone(), dirs);
         let set = collect_files(&source, &plan.depots).await?;
         let progress = |p| emit(InstallEvent::Progress(p));
         let dl = Download {

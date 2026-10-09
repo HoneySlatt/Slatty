@@ -113,26 +113,7 @@ impl Account {
     }
 
     pub async fn refresh(&mut self, http: &Client, force: bool) -> Result<()> {
-        let lock_path = self
-            .dirs
-            .locks()
-            .join(format!("auth-{}.lock", self.info.user_id));
-        let _lock = lock::acquire(&lock_path, Duration::from_secs(30)).await?;
-        if let Some(stored) = load_tokens(self.info.user_id.clone()).await? {
-            self.tokens = stored;
-        }
-        if !force && !self.tokens.is_expired() {
-            return Ok(());
-        }
-        let fresh = auth::refresh(http, &self.tokens).await?;
-        if fresh.user_id != self.info.user_id {
-            return Err(Error::parse(
-                "refreshing the session",
-                "token belongs to another account",
-            ));
-        }
-        store_tokens(fresh.clone()).await?;
-        self.tokens = fresh;
+        self.tokens = fresh(http, &self.dirs, &self.tokens, force).await?;
         Ok(())
     }
 
@@ -177,6 +158,28 @@ impl Account {
             .expect("keyring task panicked")?;
         db.set_setting(ACTIVE_USER, None)
     }
+}
+
+/// Valid tokens for the account `current` belongs to: the keyring copy when another process
+/// already refreshed them, else a refresh, under a cross-process lock and stored.
+pub async fn fresh(http: &Client, dirs: &Dirs, current: &Tokens, force: bool) -> Result<Tokens> {
+    let lock_path = dirs.locks().join(format!("auth-{}.lock", current.user_id));
+    let _lock = lock::acquire(&lock_path, Duration::from_secs(30)).await?;
+    let tokens = load_tokens(current.user_id.clone())
+        .await?
+        .unwrap_or_else(|| current.clone());
+    if !force && !tokens.is_expired() {
+        return Ok(tokens);
+    }
+    let fresh = auth::refresh(http, &tokens).await?;
+    if fresh.user_id != current.user_id {
+        return Err(Error::parse(
+            "refreshing the session",
+            "token belongs to another account",
+        ));
+    }
+    store_tokens(fresh.clone()).await?;
+    Ok(fresh)
 }
 
 async fn store_tokens(tokens: Tokens) -> Result<()> {

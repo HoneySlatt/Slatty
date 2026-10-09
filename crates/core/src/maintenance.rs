@@ -149,7 +149,7 @@ pub async fn check(
     )
     .await
     .map_err(installed_build_gone)?;
-    let source = GogContent::new(http.clone(), tokens.clone());
+    let source = GogContent::new(http.clone(), tokens.clone(), dirs);
     let set = installer::collect_files(&source, &plan.depots).await?;
     Download {
         source: &source,
@@ -325,7 +325,7 @@ pub async fn reconfigure(
         dlcs: selected.clone(),
     }
     .save(db)?;
-    let source = GogContent::new(http.clone(), tokens.clone());
+    let source = GogContent::new(http.clone(), tokens.clone(), dirs);
     let set = installer::collect_files(&source, &plan.depots).await?;
     let dl = Download {
         source: &source,

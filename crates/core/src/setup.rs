@@ -278,7 +278,7 @@ pub async fn run(
     let redist = redist_dir(dirs);
     let support = installer::support_dir(dirs, &install.game_id);
     emit(SetupEvent::Downloading);
-    let source = GogContent::new(http.clone(), tokens.clone());
+    let source = GogContent::new(http.clone(), tokens.clone(), dirs);
     let dl = Download {
         source: &source,
         cancel: tokio_util::sync::CancellationToken::new(),

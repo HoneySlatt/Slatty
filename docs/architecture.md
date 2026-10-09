@@ -52,6 +52,8 @@ GOG accepts only its Galaxy client's redirect URI (`https://embed.gog.com/on_log
 
 Refreshes take a file lock, so the CLI and the interface never refresh concurrently. Tests showed the
 refresh token is not rotated on refresh.
+Download links expire; a download that outlasts the access token (about an hour) renews it the
+same way before asking for new links.
 
 ### One operation per game
 
