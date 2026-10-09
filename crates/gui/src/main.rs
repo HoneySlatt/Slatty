@@ -26,7 +26,7 @@ use slatty_core::cloud::{
 use slatty_core::db::Db;
 use slatty_core::http::HttpClient;
 use slatty_core::install::Install;
-use slatty_core::installer::InstallRecord;
+use slatty_core::installer::{InstallJob, InstallRecord};
 use slatty_core::library::{self, LibraryCache, LibraryGame};
 use slatty_core::overview::{self, GameOverview};
 use slatty_core::paths::Dirs;
@@ -170,6 +170,16 @@ pub enum Interrupted {
     Download,
     /// An update, language or DLC change: the game cannot start until it is finished.
     Update,
+}
+
+impl Interrupted {
+    fn of(job: &InstallJob) -> Self {
+        if job.is_update() {
+            Interrupted::Update
+        } else {
+            Interrupted::Download
+        }
+    }
 }
 
 /// Version and size of a game installed by slatty.
@@ -854,9 +864,16 @@ impl App {
         self.interrupted.retain(|(id, _)| id != game_id);
     }
 
-    pub fn note_interrupted(&mut self, game_id: &str, kind: Interrupted) {
+    /// Lists the game again if, and only if, it has unfinished work recorded.
+    pub fn sync_interrupted(&mut self, game_id: &str) {
         self.forget_interrupted(game_id);
-        self.interrupted.push((game_id.to_string(), kind));
+        let Some(core) = &self.core else {
+            return;
+        };
+        if let Ok(Some(job)) = InstallJob::load(&core.db, game_id) {
+            self.interrupted
+                .push((game_id.to_string(), Interrupted::of(&job)));
+        }
     }
 
     pub fn title_of(&self, game_id: &str) -> String {
@@ -1236,17 +1253,10 @@ async fn boot() -> Result<Boot, String> {
     let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let playtime = session::playtime(&db).map_err(err)?;
-    let jobs = slatty_core::installer::InstallJob::list(&db)
+    let jobs = InstallJob::list(&db)
         .map_err(err)?
         .into_iter()
-        .map(|j| {
-            let kind = if j.state == "updating" {
-                Interrupted::Update
-            } else {
-                Interrupted::Download
-            };
-            (j.game_id, kind)
-        })
+        .map(|j| (j.game_id.clone(), Interrupted::of(&j)))
         .collect();
     let core = Core {
         dirs,

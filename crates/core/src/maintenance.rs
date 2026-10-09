@@ -161,12 +161,12 @@ pub async fn check(
     .await
 }
 
-const UPDATING: &str = "updating";
+pub(crate) const UPDATING: &str = "updating";
 
 /// Build id of an update, language or DLC change that started but did not finish.
 pub fn update_pending(db: &Db, game_id: &str) -> Result<Option<String>> {
     Ok(InstallJob::load(db, game_id)?
-        .filter(|j| j.state == UPDATING)
+        .filter(InstallJob::is_update)
         .map(|j| j.build_id))
 }
 
@@ -268,7 +268,7 @@ pub async fn reconfigure(
 ) -> Result<UpdateReport> {
     let _busy = crate::lock::game(dirs, game_id)?;
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
-    let pending = InstallJob::load(db, game_id)?.filter(|j| j.state == UPDATING);
+    let pending = InstallJob::load(db, game_id)?.filter(InstallJob::is_update);
     let (build, language, dlcs) = match (&pending, &change) {
         (Some(j), _) => (Some(j.build_id.clone()), j.language.clone(), j.dlcs.clone()),
         (None, Change::Update) => (None, record.language.clone(), record.dlcs.clone()),

@@ -634,6 +634,11 @@ pub struct InstallJob {
 }
 
 impl InstallJob {
+    /// An update, language or DLC change of an installed game, rather than a first install.
+    pub fn is_update(&self) -> bool {
+        self.state == crate::maintenance::UPDATING
+    }
+
     pub fn save(&self, db: &Db) -> Result<()> {
         db.conn().execute(
             "INSERT INTO install_jobs (game_id, build_id, language, root, directory, state, updated_at, dlcs)

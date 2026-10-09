@@ -805,6 +805,30 @@ fn interrupted_work_is_listed_with_a_way_to_finish_it() {
     )));
     assert!(app.interrupted.is_empty());
 
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Updated(
+        "3".into(),
+        Err("[FAKE] network down before anything changed".into()),
+    )));
+    let _ = app.update(Message::Install(InstallMsg::Done(
+        "8".into(),
+        Err(Some("[FAKE] refused before downloading".into())),
+    )));
+    assert!(
+        app.interrupted.is_empty(),
+        "failures that left nothing unfinished are not listed"
+    );
+
+    slatty_core::installer::InstallJob {
+        game_id: "7".into(),
+        build_id: "b".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 7".into(),
+        state: "paused".into(),
+        dlcs: vec![],
+    }
+    .save(&app.core.as_ref().unwrap().db)
+    .unwrap();
     let _ = app.update(Message::Install(InstallMsg::Done("7".into(), Err(None))));
     assert_eq!(app.interrupted, [("7".to_string(), Interrupted::Download)]);
 }

@@ -272,11 +272,11 @@ impl App {
                 }
             }
             InstallMsg::Done(game_id, Err(None)) => {
-                self.note_interrupted(&game_id, crate::Interrupted::Download);
+                self.sync_interrupted(&game_id);
                 return self.update_install(InstallMsg::Prepare(game_id, None));
             }
             InstallMsg::Done(game_id, Err(Some(e))) => {
-                self.note_interrupted(&game_id, crate::Interrupted::Download);
+                self.sync_interrupted(&game_id);
                 self.install_views.insert(game_id, InstallView::Failed(e));
             }
         }
@@ -792,7 +792,7 @@ impl App {
             MaintenanceMsg::Updated(game_id, result) => {
                 match &result {
                     Ok(_) => self.forget_interrupted(&game_id),
-                    Err(_) => self.note_interrupted(&game_id, crate::Interrupted::Update),
+                    Err(_) => self.sync_interrupted(&game_id),
                 }
                 self.refresh_record(&game_id);
                 let view = self.maintenance.entry(game_id).or_default();
