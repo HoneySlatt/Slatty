@@ -310,7 +310,16 @@ fn game_page_summarises_achievements() {
     let mut ui = render(&app);
     assert!(ui.find("1 / 2").is_ok());
     assert!(ui.find("50%").is_ok());
-    assert!(ui.find("[FAKE] Beta").is_ok(), "latest unlock shown");
+    assert!(ui.find("[FAKE] Beta").is_err(), "named on hover only");
+    let icon = ui
+        .find(iced_test::selector::id("latest-unlock-id-Beta"))
+        .expect("latest unlock shown");
+    let position = icon.bounds().center();
+    ui.point_at(position);
+    let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+        position,
+    })]);
+    snapshot(&mut ui, "game-achievements");
 }
 
 #[test]

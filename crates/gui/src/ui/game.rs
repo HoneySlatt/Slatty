@@ -1,7 +1,7 @@
 //! Game page: key art, play button, stats, cloud and achievements summaries.
 
 use iced::widget::{
-    Space, button, column, container, image, progress_bar, row, space, stack, text,
+    Space, button, column, container, image, progress_bar, row, space, stack, text, tooltip,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
@@ -15,7 +15,7 @@ use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, CloudStatus, Loadable, Message, Panel};
 
 /// Height of the summary cards under the key art.
-const CARD_HEIGHT: f32 = 150.0;
+const CARD_HEIGHT: f32 = 96.0;
 
 impl App {
     /// Key art with the title and Play across the window, the summary cards below it.
@@ -54,7 +54,8 @@ impl App {
         ];
         let cards = row![
             container(self.stats(g))
-                .padding(18)
+                .padding([0, 18])
+                .align_y(Alignment::Center)
                 .width(Length::FillPortion(9))
                 .height(CARD_HEIGHT)
                 .style(theme::block),
@@ -325,9 +326,10 @@ impl App {
             );
         }
         container(content)
-            .padding(18)
+            .padding([0, 18])
             .width(Length::Fill)
             .height(Length::Fill)
+            .align_y(Alignment::Center)
             .style(theme::block)
             .into()
     }
@@ -360,41 +362,45 @@ impl App {
             Some(Loadable::Ready(list)) => {
                 let done = list.iter().filter(|a| a.date_unlocked.is_some()).count();
                 let share = done as f32 / list.len() as f32;
+                // The latest unlocks, named on hover so the card stays one line high.
                 let latest: Vec<Element<'_, Message>> = latest_unlocked(list)
                     .into_iter()
                     .map(|a| {
-                        column![
-                            self.achievement_icon(&a.image_url_unlocked, 52.0),
-                            text(&a.name)
-                                .size(13)
-                                .color(tokens().muted)
-                                .align_x(Alignment::Center)
-                        ]
-                        .spacing(8)
-                        .align_x(Alignment::Center)
-                        .width(Length::Fill)
+                        tooltip(
+                            container(self.achievement_icon(&a.image_url_unlocked, 44.0))
+                                .id(format!("latest-unlock-{}", a.achievement_id)),
+                            container(text(&a.name).size(13))
+                                .padding([4, 10])
+                                .style(theme::block),
+                            tooltip::Position::Top,
+                        )
                         .into()
                     })
                     .collect();
-                column![
-                    row![
-                        text("Achievements").size(15).font(SEMIBOLD),
-                        text(format!("{done} / {}", list.len()))
-                            .size(15)
-                            .font(SEMIBOLD),
-                        space().width(Length::Fill),
-                        text(format!("{:.0}%", share * 100.0))
-                            .size(14)
-                            .color(tokens().muted),
+                row![
+                    column![
+                        row![
+                            text("Achievements").size(15).font(SEMIBOLD),
+                            text(format!("{done} / {}", list.len()))
+                                .size(15)
+                                .font(SEMIBOLD),
+                            space().width(Length::Fill),
+                            text(format!("{:.0}%", share * 100.0))
+                                .size(14)
+                                .color(tokens().muted),
+                        ]
+                        .spacing(20)
+                        .align_y(Alignment::Center),
+                        progress_bar(0.0..=1.0, share)
+                            .girth(8)
+                            .style(theme::progress),
                     ]
-                    .spacing(24)
-                    .align_y(Alignment::Center),
-                    progress_bar(0.0..=1.0, share)
-                        .girth(8)
-                        .style(theme::progress),
+                    .spacing(12)
+                    .width(Length::Fill),
                     row(latest).spacing(8),
                 ]
-                .spacing(14)
+                .spacing(20)
+                .align_y(Alignment::Center)
                 .into()
             }
         };
@@ -403,9 +409,10 @@ impl App {
         button(
             row![trophy, container(body).width(Length::Fill)]
                 .spacing(16)
-                .align_y(Alignment::Start),
+                .height(Length::Fill)
+                .align_y(Alignment::Center),
         )
-        .padding(18)
+        .padding([0, 18])
         .width(Length::Fill)
         .height(Length::Fill)
         .on_press_maybe(ready.then_some(Message::OpenPanel(Panel::Achievements)))
