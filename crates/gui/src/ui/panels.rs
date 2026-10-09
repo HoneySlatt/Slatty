@@ -161,18 +161,27 @@ impl App {
                 if info.resumable {
                     items.push(note(format!(
                         "Resuming an interrupted install ({}).",
-                        info.language
+                        language_name(&info.language)
                     )));
-                } else if info.languages.len() > 1 {
+                } else if info.languages.len() <= 1 {
+                    items.push(note(format!(
+                        "Language: {} (the only one GOG offers)",
+                        language_name(&info.language)
+                    )));
+                } else {
                     let id = g.id.clone();
                     items.push(
                         row![
                             text("Language").size(14).color(tokens().muted),
                             pick_list(
-                                info.languages.clone(),
-                                Some(info.language.clone()),
+                                info.languages
+                                    .iter()
+                                    .cloned()
+                                    .map(Language)
+                                    .collect::<Vec<_>>(),
+                                Some(Language(info.language.clone())),
                                 move |l| {
-                                    Message::Install(InstallMsg::Prepare(id.clone(), Some(l)))
+                                    Message::Install(InstallMsg::Prepare(id.clone(), Some(l.0)))
                                 }
                             )
                             .style(theme::select)
@@ -428,16 +437,32 @@ impl App {
         busy: bool,
     ) -> Element<'a, Message> {
         let mut col = Column::new().spacing(10);
-        if c.languages.len() > 1 {
+        if c.languages.len() <= 1 {
+            col = col.push(
+                row![
+                    text("Language").size(14).color(tokens().muted),
+                    text(language_name(&c.language)).size(14),
+                ]
+                .spacing(12),
+            );
+            col = col.push(note(
+                "GOG offers this game in this language only. Games that hold several languages \
+                 in one download let you choose in their own options.",
+            ));
+        } else {
             let id = game_id.to_string();
             col = col.push(
                 row![
                     text("Language").size(14).color(tokens().muted),
                     pick_list(
-                        c.languages.clone(),
-                        Some(c.chosen_language.clone()),
+                        c.languages
+                            .iter()
+                            .cloned()
+                            .map(Language)
+                            .collect::<Vec<_>>(),
+                        Some(Language(c.chosen_language.clone())),
                         move |l| {
-                            Message::Maintenance(MaintenanceMsg::ChooseLanguage(id.clone(), l))
+                            Message::Maintenance(MaintenanceMsg::ChooseLanguage(id.clone(), l.0))
                         }
                     )
                     .style(theme::select)

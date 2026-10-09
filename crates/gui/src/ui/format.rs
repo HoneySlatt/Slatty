@@ -51,6 +51,57 @@ pub fn local_time(ts: i64) -> String {
         .unwrap_or_default()
 }
 
+/// A language code of GOG's builds, named for a pick list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Language(pub String);
+
+impl std::fmt::Display for Language {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&language_name(&self.0))
+    }
+}
+
+/// "French" for "fr-FR"; the code itself when it is not known.
+pub fn language_name(code: &str) -> String {
+    let name = match code.to_ascii_lowercase().as_str() {
+        "en-us" | "en" => "English",
+        "en-gb" => "English (UK)",
+        "fr-fr" | "fr" => "French",
+        "de-de" | "de" => "German",
+        "es-es" | "es" => "Spanish",
+        "es-mx" => "Spanish (Latin America)",
+        "it-it" | "it" => "Italian",
+        "pl-pl" | "pl" => "Polish",
+        "ru-ru" | "ru" => "Russian",
+        "pt-br" => "Portuguese (Brazil)",
+        "pt-pt" | "pt" => "Portuguese",
+        "zh-hans" | "zh-cn" => "Chinese (Simplified)",
+        "zh-hant" | "zh-tw" => "Chinese (Traditional)",
+        "ja-jp" | "ja" => "Japanese",
+        "ko-kr" | "ko" => "Korean",
+        "cs-cz" | "cs" => "Czech",
+        "hu-hu" | "hu" => "Hungarian",
+        "tr-tr" | "tr" => "Turkish",
+        "uk-ua" | "uk" => "Ukrainian",
+        "nl-nl" | "nl" => "Dutch",
+        "sv-se" | "sv" => "Swedish",
+        "da-dk" | "da" => "Danish",
+        "fi-fi" | "fi" => "Finnish",
+        "nb-no" | "no" => "Norwegian",
+        "el-gr" | "el" => "Greek",
+        "ro-ro" | "ro" => "Romanian",
+        "bg-bg" | "bg" => "Bulgarian",
+        "sk-sk" | "sk" => "Slovak",
+        "ar" | "ar-sa" => "Arabic",
+        "he-il" | "he" => "Hebrew",
+        "th-th" | "th" => "Thai",
+        "vi-vn" | "vi" => "Vietnamese",
+        "id-id" | "id" => "Indonesian",
+        _ => return code.to_string(),
+    };
+    name.to_string()
+}
+
 pub fn describe_warning(w: Warning) -> &'static str {
     match w {
         Warning::LocalRootMissing => "local folder missing: no cloud file will be deleted",

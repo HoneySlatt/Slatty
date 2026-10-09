@@ -1205,3 +1205,43 @@ fn a_new_page_fades_in_then_stops_drawing_frames() {
     let _ = app.update(Message::ShowPage(Page::Achievements));
     assert!(app.page_shown.is_animating(app.now), "another tab");
 }
+
+#[test]
+fn game_settings_show_the_language_and_switch_it_when_gog_offers_others() {
+    use crate::maintenance::ContentInfo;
+    use slatty_core::maintenance::Change;
+    let mut app = library_app();
+    open(&mut app, "3", Some(Panel::GameSettings));
+    let content = |languages: &[&str]| ContentInfo {
+        language: "en-US".into(),
+        languages: languages.iter().map(|l| l.to_string()).collect(),
+        chosen_language: "en-US".into(),
+        dlcs: Vec::new(),
+        chosen_dlcs: Vec::new(),
+    };
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ContentLoaded(
+        "3".into(),
+        Ok(content(&["en-US"])),
+    )));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("English").is_ok(), "named, not en-US");
+        assert!(ui.find("Switch language").is_err(), "nothing to switch to");
+        snapshot(&mut ui, "game-settings-one-language");
+    }
+
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ContentLoaded(
+        "3".into(),
+        Ok(content(&["en-US", "fr-FR"])),
+    )));
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ChooseLanguage(
+        "3".into(),
+        "fr-FR".into(),
+    )));
+    let mut ui = render(&app);
+    ui.click("Switch language").unwrap();
+    assert!(ui.into_messages().any(|m| matches!(
+        m,
+        Message::Maintenance(MaintenanceMsg::Apply(id, Change::Language(l))) if id == "3" && l == "fr-FR"
+    )));
+}

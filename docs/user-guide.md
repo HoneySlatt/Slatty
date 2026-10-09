@@ -281,7 +281,11 @@ These changes work like updates:
 - only files that SlattyLauncher installed and that are no longer needed are removed.
 
 They stay on the installed build. If GOG no longer offers that build, update the game first. In the
-interface, use the game settings panel (sliders button).
+interface, use the game settings panel (sliders button): it names the installed language and, when
+GOG offers others, lets you switch.
+
+Many games (Hollow Knight, Undertale) come as a single download that holds every language. GOG
+then lists only one, and the language is chosen in the game's own options.
 
 ## Maintenance
 
