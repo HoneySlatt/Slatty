@@ -1,4 +1,4 @@
-//! Game page: key art, play button, stats, cloud and achievements summaries.
+//! Game page: key art, play b        let base: Element<'_, Message> = match self.hero_art(g) {tton, stats, cloud and achievements summaries.
 
 use iced::widget::text::Wrapping;
 use iced::widget::{
@@ -75,12 +75,28 @@ impl App {
         column![header, self.hero(g), below].into()
     }
 
+    /// The key art, or the cover for a game without any. Nothing while the key art downloads: the
+    /// cover would show for a moment, stretched, before it.
+    pub(crate) fn hero_art(&self, g: &LibraryGame) -> Option<image::Handle> {
+        let downloading = g
+            .background
+            .as_ref()
+            .is_some_and(|u| self.images_requested.contains(u));
+        match self.background(g) {
+            Some(h) => Some(h),
+            None if downloading => None,
+            None => self.cover(&g.id),
+        }
+    }
+
     /// The game's key art, edge to edge, with its title, Play and favorite at the bottom left.
     pub(super) fn hero<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let art = self.background(g).or_else(|| self.cover(&g.id));
-        let base: Element<'_, Message> = match art {
+        let base: Element<'_, Message> = match self.hero_art(g) {
+            // Enlarged a little: much of GOG's key art ends with a light strip at the bottom.
             Some(h) => image(h)
                 .content_fit(ContentFit::Cover)
+                .scale(1.06_f32)
+                .opacity(self.art_shown.interpolate(0.0, 1.0, self.now))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into(),

@@ -81,7 +81,7 @@ impl App {
         pointer::right_clicks(page, |at| Message::Edit(EditMsg::At(at))).into()
     }
 
-    fn selected_game(&self) -> Option<&LibraryGame> {
+    pub(crate) fn selected_game(&self) -> Option<&LibraryGame> {
         let id = self.selected.as_ref()?;
         self.library.iter().find(|g| &g.id == id)
     }

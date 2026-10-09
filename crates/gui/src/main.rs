@@ -180,8 +180,10 @@ pub struct App {
     pub context_menu: Option<edit::ContextMenu>,
     /// Size of the window, for layouts that change with it.
     pub window: Size,
-    /// Fades the page in after a change of page; `now` is the time of the frame drawn.
+    /// Fade in a new page, and the key art of a game once downloaded; `now` is the time of the
+    /// frame drawn.
     pub page_shown: Animation<bool>,
+    pub art_shown: Animation<bool>,
     pub now: Instant,
 }
 
@@ -235,6 +237,7 @@ impl Default for App {
             context_menu: None,
             window: Size::new(1440.0, 900.0),
             page_shown: Animation::new(true),
+            art_shown: Animation::new(true),
             now: Instant::now(),
         }
     }
@@ -339,7 +342,7 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let frames = if self.page_shown.is_animating(self.now) {
+        let frames = if self.animating() {
             iced::window::frames().map(Message::Frame)
         } else {
             Subscription::none()
@@ -358,12 +361,21 @@ impl App {
         let task = self.handle(message);
         if self.location() != shown {
             self.now = Instant::now();
-            self.page_shown = Animation::new(false)
-                .duration(theme::tokens().transition)
-                .easing(Easing::EaseOutCubic)
-                .go(true, self.now);
+            self.page_shown = Self::fade_in(self.now);
         }
         task
+    }
+
+    fn fade_in(now: Instant) -> Animation<bool> {
+        Animation::new(false)
+            .duration(theme::tokens().transition)
+            .easing(Easing::EaseOutCubic)
+            .go(true, now)
+    }
+
+    /// A page or a picture is fading in: frames are drawn until it is done.
+    pub fn animating(&self) -> bool {
+        self.page_shown.is_animating(self.now) || self.art_shown.is_animating(self.now)
     }
 
     /// The page shown, apart from panels and dialogs over it.
@@ -459,6 +471,11 @@ impl App {
             }
             Message::Cover(_, None) => {}
             Message::Image(url, Some(bytes)) => {
+                // The key art of the open game fades in once downloaded.
+                if self.selected_game().and_then(|g| g.background.as_ref()) == Some(&url) {
+                    self.now = Instant::now();
+                    self.art_shown = Self::fade_in(self.now);
+                }
                 self.images.insert(url, image::Handle::from_bytes(bytes));
             }
             Message::Image(url, None) => {

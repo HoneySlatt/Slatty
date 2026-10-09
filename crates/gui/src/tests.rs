@@ -1245,3 +1245,33 @@ fn game_settings_show_the_language_and_switch_it_when_gog_offers_others() {
         Message::Maintenance(MaintenanceMsg::Apply(id, Change::Language(l))) if id == "3" && l == "fr-FR"
     )));
 }
+
+#[test]
+fn the_cover_does_not_stand_in_while_the_key_art_downloads() {
+    let mut app = library_app();
+    let art = "https://images.example/[FAKE]-art.jpg".to_string();
+    app.library[2].background = Some(art.clone());
+    app.covers.insert(
+        "3".into(),
+        iced::widget::image::Handle::from_bytes(vec![0u8]),
+    );
+    let _ = app.update(Message::Select("3".into()));
+    settle(&mut app);
+    let game = app.library[2].clone();
+    assert!(app.images_requested.contains(&art));
+    assert!(app.hero_art(&game).is_none(), "plain while downloading");
+
+    let _ = app.update(Message::Image(art.clone(), Some(vec![1u8])));
+    assert!(app.hero_art(&game).is_some());
+    assert!(app.animating(), "the key art fades in");
+    settle(&mut app);
+    assert!(!app.animating());
+
+    // Without key art (download failed), the cover stands in.
+    app.images.clear();
+    let _ = app.update(Message::Image(art, None));
+    assert_eq!(
+        app.hero_art(&game).map(|h| h.id()),
+        app.covers.get("3").map(|h| h.id())
+    );
+}
