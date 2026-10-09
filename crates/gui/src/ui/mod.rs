@@ -71,6 +71,15 @@ impl App {
             (Some(panel), Some(game)) => self.with_panel(page, panel, game),
             _ => page,
         };
+        let page = match self
+            .install_dialog
+            .as_ref()
+            .filter(|_| self.selected.is_none())
+            .and_then(|id| self.library.iter().find(|g| &g.id == id))
+        {
+            Some(g) => self.install_dialog(page, g),
+            None => page,
+        };
         let page = match &self.context_menu {
             Some(menu) => edit::context_menu(page, menu),
             None => page,

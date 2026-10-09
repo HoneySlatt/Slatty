@@ -112,7 +112,7 @@ impl App {
                         button(text("Resume").size(14))
                             .padding([8, 16])
                             .on_press_maybe(
-                                (!busy).then(|| Message::SelectWith(id.clone(), Panel::Install)),
+                                (!busy).then(|| Message::Install(InstallMsg::Open(id.clone()))),
                             )
                             .style(theme::primary),
                         button(text("Discard").size(14))
@@ -226,7 +226,7 @@ impl App {
         } else {
             button(icon(Icon::Download, 16.0, tokens().on_accent))
                 .padding([8, 14])
-                .on_press(Message::SelectWith(g.id.clone(), Panel::Install))
+                .on_press(Message::Install(InstallMsg::Open(g.id.clone())))
                 .style(theme::primary)
         };
         let settings = button(icon(Icon::SlidersHorizontal, 16.0, tokens().text))

@@ -97,6 +97,9 @@ pub enum InstallMsg {
     Prepare(String, Option<String>),
     /// Another build to install.
     Version(String, String),
+    /// The install dialog over the library, for this game.
+    Open(String),
+    CloseDialog,
     Planned(String, Result<PlanInfo, String>),
     Start(String),
     Progress(String, Progress),
@@ -142,6 +145,13 @@ impl App {
                 };
                 return self.prepare(core, game_id, language, build);
             }
+            InstallMsg::Open(game_id) => {
+                self.install_dialog = Some(game_id.clone());
+                if !self.install_views.contains_key(&game_id) {
+                    return self.update_install(InstallMsg::Prepare(game_id, None));
+                }
+            }
+            InstallMsg::CloseDialog => self.install_dialog = None,
             InstallMsg::Version(game_id, build) => {
                 let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
                     return Task::none();
@@ -214,7 +224,8 @@ impl App {
                         rate: Rate::default(),
                     },
                 );
-                // The game page shows the download from here, so the window stays free.
+                // The game page and the library banner show the download from here.
+                self.install_dialog.take_if(|id| *id == game_id);
                 if self.selected.as_deref() == Some(game_id.as_str())
                     && self.panel == Some(crate::Panel::Install)
                 {
@@ -255,6 +266,7 @@ impl App {
             InstallMsg::Discarded(game_id, result) => {
                 self.install_views.remove(&game_id);
                 // Nothing is left to show in its Install panel.
+                self.install_dialog.take_if(|id| *id == game_id);
                 if self.selected.as_deref() == Some(game_id.as_str())
                     && self.panel == Some(crate::Panel::Install)
                 {

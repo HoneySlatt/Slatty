@@ -218,6 +218,8 @@ pub struct App {
     pub context_menu: Option<edit::ContextMenu>,
     /// A download being planned again to resume on its own at start-up.
     pub auto_resume: Option<String>,
+    /// Game whose install dialog is open over the library.
+    pub install_dialog: Option<String>,
     /// Font families of the system, listed when Settings first opens.
     pub font_families: Vec<String>,
     /// Size of the window, for layouts that change with it.
@@ -279,6 +281,7 @@ impl Default for App {
             context_menu: None,
             auto_resume: None,
             font_families: Vec::new(),
+            install_dialog: None,
             window: Size::new(1440.0, 900.0),
             page_shown: Animation::new(true),
             art_shown: Animation::new(true),
@@ -609,6 +612,9 @@ impl App {
         if self.context_menu.take().is_some() {
             return;
         }
+        if self.install_dialog.take().is_some() {
+            return;
+        }
         if self.edit.take().is_some() {
             return;
         }
@@ -674,6 +680,7 @@ impl App {
     }
 
     fn open_game(&mut self, id: String, panel: Option<Panel>) -> Task<Message> {
+        self.install_dialog = None;
         self.page = Page::Library;
         self.achievements_game = None;
         self.selected = Some(id.clone());

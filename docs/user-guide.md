@@ -65,7 +65,8 @@ dot says you are signed in.
 The size of the covers is set in Settings → Appearance.
 
 Hovering a cover shows its title, a settings button and a play (or install) button. Clicking it
-opens the game page.
+opens the game page. The install button opens the install choices in a dialog over the library,
+which stays where it was; the game page has the same choices in its Install drawer.
 
 Right-click a cover and choose **Edit game** to change its **Title**, its **Sorting title** (used
 when the library is sorted by name, for example "Witcher 3" for "The Witcher 3"), its **Cover**

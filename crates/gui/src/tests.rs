@@ -957,7 +957,7 @@ fn interrupted_work_is_listed_with_a_way_to_finish_it() {
     ui.click("Resume").unwrap();
     assert!(
         ui.into_messages()
-            .any(|m| matches!(m, Message::SelectWith(id, Panel::Install) if id == "5"))
+            .any(|m| matches!(m, Message::Install(InstallMsg::Open(id)) if id == "5"))
     );
     let mut ui = render(&app);
     ui.click("Finish update").unwrap();
@@ -1867,4 +1867,40 @@ fn the_library_order_is_kept() {
     for s in Sort::ALL {
         assert_eq!(Sort::from_key(s.key()), Some(s));
     }
+}
+
+#[test]
+fn installing_from_the_library_stays_on_the_library() {
+    let mut app = library_app();
+    app.proton = Some("/proton/GE-Proton".into());
+    let _ = app.update(Message::Install(InstallMsg::Open("5".into())));
+    assert_eq!(app.install_dialog.as_deref(), Some("5"));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Planning)
+    ));
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(fake_plan()),
+    )));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Start install").is_ok() && ui.find("Proton").is_ok());
+        snapshot(&mut ui, "install-dialog");
+    }
+    let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
+    assert_eq!(
+        app.install_dialog, None,
+        "the dialog gives way once started"
+    );
+    assert_eq!(app.selected, None, "still on the library");
+    assert!(
+        render(&app).find("Downloading [FAKE] Game 5").is_ok(),
+        "its banner"
+    );
+
+    // Escape closes the dialog without leaving the library.
+    let _ = app.update(Message::Install(InstallMsg::Open("6".into())));
+    app.go_back();
+    assert_eq!(app.install_dialog, None);
 }
