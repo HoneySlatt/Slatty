@@ -225,8 +225,14 @@ An update compares each file of the new build with the one on disk:
 If an update is interrupted, the game cannot be launched until `slatty update <game-id>` completes
 it. The command resumes with the same build and only downloads what is still missing.
 
-When a file changed only in places, the parts that did not change are copied from the installed
-file instead of downloaded. GOG cuts files into chunks (10 MiB on the games checked so far), so a
+When GOG publishes a binary patch from the installed build to the new one, changed files are rebuilt
+from the installed version and a small delta, often a few hundred bytes for a file of several
+megabytes. Each rebuilt file must match GOG's checksum; otherwise it is downloaded normally. GOG
+seems to publish patches only between consecutive builds, so skipping several versions downloads
+the changed files instead.
+
+Otherwise, when a file changed only in places, the parts that did not change are copied from the
+installed file instead of downloaded. GOG cuts files into chunks (10 MiB on the games checked so far), so a
 small change still costs at least one chunk. Repairs work the same way: `slatty verify --repair`
 downloads only the damaged chunks of a damaged file.
 

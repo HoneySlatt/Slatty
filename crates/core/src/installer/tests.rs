@@ -517,7 +517,7 @@ async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
         free_space: &free_space,
     };
     let before = env.source.fetched.load(Ordering::SeqCst);
-    let report = crate::maintenance::apply_update(&dl, &new_set, &old_record, &game)
+    let report = crate::maintenance::apply_update(&dl, &new_set, &old_record, &game, &[])
         .await
         .unwrap();
 
@@ -617,7 +617,7 @@ async fn dlc_files_come_from_their_product_and_removing_the_dlc_deletes_only_the
         progress: &|_| {},
         free_space: &free_space,
     };
-    let report = crate::maintenance::apply_update(&dl, &base_only, &record, &game)
+    let report = crate::maintenance::apply_update(&dl, &base_only, &record, &game, &[])
         .await
         .unwrap();
     assert!(report.downloaded.is_empty());

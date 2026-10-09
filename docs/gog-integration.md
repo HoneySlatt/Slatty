@@ -50,6 +50,19 @@ Chunks hold up to 10 MiB of file data (seen on Undertale: 10 485 760 bytes, the 
 larger). The decompressed MD5 identifies a chunk's content, which is what allows reusing chunks
 already on disk.
 
+### Binary patches
+
+| Use | Request | Source | Status |
+|---|---|---|---|
+| Find a patch | `GET https://content-system.gog.com/products/{id}/patches?_version=4&from_build_id=…&to_build_id=…` with the account token; returns `{"link": …}`, or 404 | heroic-gogdl | Verified (Hollow Knight 1.5.12618 → 1.5.12620: 354 files, 86 KB of deltas; none for Undertale 1.06 → 1.08 or non-consecutive builds) |
+| Patch description | The link (zlib JSON): `algorithm` (`xdelta3`), `baseProductId`, `depots` with `productId`, `languages`, `manifest` | heroic-gogdl | Verified |
+| File diffs | `GET https://gog-cdn-fastly.gog.com/content-system/v2/patches/meta/{ab}/{cd}/{manifest}`: `DepotDiff` items with `path_source`, `path_target`, `md5_source`, `md5_target` and delta chunks | heroic-gogdl | Verified |
+| Delta chunks | Download links from `secure_link` with `&root=/patches/store` | heroic-gogdl | Verified |
+
+Deltas are VCDIFF as produced by xdelta3 without secondary compression (heroic-gogdl builds xdelta3
+with `SECONDARY_DJW=0` and `SECONDARY_LZMA=0`). The match is on the whole-file MD5 of the source;
+the rebuilt file must have `md5_target`.
+
 ### Dependencies and post-install setup
 
 | Use | Request | Source | Status |

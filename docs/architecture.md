@@ -27,7 +27,8 @@ core functions. Long operations report progress through callbacks or typed event
 | `install` | Installed-game records |
 | `galaxy` | Content system: builds, build metadata, depot manifests, secure links, chunks |
 | `installer` | Install plans, staged verified downloads, resumable jobs, install records |
-| `maintenance` | Verify, repair, uninstall |
+| `maintenance` | Verify, repair, uninstall, updates and content changes |
+| `patches` | GOG's binary patches between builds: lookup, delta download, xdelta3 application |
 | `runner` | Launch commands for umu/Proton, Wine and native games; prefix creation |
 | `session` | Session supervisor (subreaper), session records, play time |
 | `play` | Full play flow: prefix, cloud, Comet, session, upload, achievement diff |

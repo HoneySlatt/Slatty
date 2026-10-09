@@ -241,6 +241,9 @@ pub struct UpdateReport {
     pub downloaded: Vec<PathBuf>,
     /// Bytes of changed files copied from their installed version instead of downloaded.
     pub reused_bytes: u64,
+    /// Files rebuilt from GOG's binary patches, and the size of those patches.
+    pub patched: Vec<PathBuf>,
+    pub patch_bytes: u64,
     pub removed: Vec<PathBuf>,
     /// An earlier unfinished change was completed instead of the requested one.
     pub resumed: bool,
@@ -327,7 +330,28 @@ pub async fn reconfigure(
         progress,
         free_space: &installer::free_space,
     };
-    let report = apply_update(&dl, &set, &record, &install.path).await?;
+    let patches = if plan.build.build_id == record.build_id {
+        Vec::new()
+    } else {
+        let mut products = vec![game_id.to_string()];
+        products.extend(selected.iter().cloned());
+        crate::patches::find(
+            http,
+            tokens,
+            game_id,
+            &record.build_id,
+            &plan.build.build_id,
+            &plan.language,
+            &products,
+        )
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!("no binary patch used: {e}");
+            None
+        })
+        .unwrap_or_default()
+    };
+    let report = apply_update(&dl, &set, &record, &install.path, &patches).await?;
     dl.check_installed(
         &set.support_set(),
         &installer::support_dir(dirs, game_id),
@@ -358,7 +382,9 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
     set: &installer::FileSet,
     old: &InstallRecord,
     dir: &Path,
+    patches: &[crate::patches::FilePatch],
 ) -> Result<UpdateReport> {
+    let patched = crate::patches::apply_all(dl.source, patches, set, old, dir, &dl.cancel).await?;
     let checked = dl.check_installed(set, dir, true).await?;
     let kept: std::collections::HashSet<String> = set
         .files
@@ -388,6 +414,8 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
     Ok(UpdateReport {
         downloaded: checked.bad,
         reused_bytes: checked.reused_bytes,
+        patched: patched.files,
+        patch_bytes: patched.delta_bytes,
         removed,
         ..Default::default()
     })

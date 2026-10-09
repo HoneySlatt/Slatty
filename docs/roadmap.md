@@ -31,17 +31,13 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   - Wine prefix created at first launch.
 - **Maintenance.** Verify, repair, uninstall.
 - **Updates.** Detect a newer build; update in place, file by file, resumable. Unchanged chunks
-  of changed files are copied locally instead of downloaded.
+  of changed files are copied locally instead of downloaded. GOG's binary patches (xdelta3) are applied
+  when available.
 - **DLC and languages.** Owned DLC installed by default; add, remove or switch language later.
 - **Post-install setup.** GOG script interpreter or setup programs, game-folder dependencies, shared
   redistributables.
 - **Galaxy dummy service.** Comet's `GalaxyCommunication` service registered in each prefix, for
   games whose Galaxy SDK needs it to report achievements.
-
-## Next
-
-- **Binary patches.** GOG publishes xdelta3 patches between some builds (`products/{id}/patches`,
-  used by heroic-gogdl), smaller than whole chunks. Applying them needs an xdelta3 decoder.
 
 ## Planned
 

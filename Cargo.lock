@@ -3587,6 +3587,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxidelta"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1754ebd72de1f61efc690ca75beb1f46b07cba4c37c02879c11d1940dd1556f2"
+dependencies = [
+ "bitflags 2.13.2",
+ "log",
+ "simd-adler32",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4765,6 +4777,7 @@ dependencies = [
  "keyring",
  "md-5",
  "nix",
+ "oxidelta",
  "reqwest",
  "rusqlite",
  "serde",

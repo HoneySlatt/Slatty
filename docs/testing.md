@@ -13,7 +13,7 @@ The automated tests check SlattyLauncher's own logic, against simulated services
   failures, concurrent changes, account switches, case differences, path escapes, locking. They run
   against an in-memory cloud with fault injection.
 - **Installer:** staged publication, resume after interruption, corrupted chunks, tampered files,
-  unsafe manifest paths, cancellation, disk space, existing destinations, repair, reuse of unchanged
+  unsafe manifest paths, cancellation, disk space, existing destinations, repair, binary patches (applied, refused when the source changed or the result is wrong), reuse of unchanged
   or moved chunks. They run against an
   in-memory CDN.
 - **Uninstall:** only recorded files are deleted, foreign prefixes are kept, and a refusal never

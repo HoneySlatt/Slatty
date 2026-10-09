@@ -21,6 +21,7 @@ Proton-CachyOS.
 | 2026-10-09 | Update check (`slatty update`) | OK | Undertale reported up to date |
 | 2026-10-09 | Owned DLC detection (`slatty install --info`) | OK | Cyberpunk 2077: Phantom Liberty owned and selected; free REDmod listed as not owned (not added to the account). The Witcher 3 GOTY: no separate DLC |
 | 2026-10-09 | Play time | OK | Total read from GOG matches GOG Galaxy (Hollow Knight); a 4-minute Undertale session launched by slatty was accepted and counted; a 13-second one was not sent |
+| 2026-10-09 | Binary patches | OK | Hollow Knight 1.5.12618 → 1.5.12620: 11 real GOG deltas (60 KB to 5.9 MB files, 111 to 390 bytes of delta) applied by oxidelta to the old files downloaded from GOG, each matching GOG's target MD5. Not yet a full update of an installed game |
 
 ## Runners
 

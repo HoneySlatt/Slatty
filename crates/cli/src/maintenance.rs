@@ -223,6 +223,13 @@ async fn apply_change(
                 r.downloaded.len(),
                 r.removed.len()
             );
+            if !r.patched.is_empty() {
+                println!(
+                    "{} file(s) rebuilt from GOG's binary patches ({} downloaded).",
+                    r.patched.len(),
+                    crate::install::size(r.patch_bytes)
+                );
+            }
             if r.reused_bytes > 0 {
                 println!(
                     "{} of unchanged data copied from the installed files instead of downloaded.",

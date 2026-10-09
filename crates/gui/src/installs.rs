@@ -645,8 +645,8 @@ impl App {
                         )
                         .await
                         .map(|r| {
-                            format!(
-                                "{}Now at {}: {} file(s) downloaded, {} removed.{}",
+                            let mut summary = format!(
+                                "{}Now at {}: {} file(s) downloaded, {} removed.",
                                 if r.resumed {
                                     "An unfinished change was completed first. "
                                 } else {
@@ -655,15 +655,21 @@ impl App {
                                 r.to_version,
                                 r.downloaded.len(),
                                 r.removed.len(),
-                                if r.reused_bytes > 0 {
-                                    format!(
-                                        " {} reused from installed files.",
-                                        human_size(r.reused_bytes)
-                                    )
-                                } else {
-                                    String::new()
-                                }
-                            )
+                            );
+                            if !r.patched.is_empty() {
+                                summary += &format!(
+                                    " {} file(s) rebuilt from GOG patches ({}).",
+                                    r.patched.len(),
+                                    human_size(r.patch_bytes)
+                                );
+                            }
+                            if r.reused_bytes > 0 {
+                                summary += &format!(
+                                    " {} reused from installed files.",
+                                    human_size(r.reused_bytes)
+                                );
+                            }
+                            summary
                         })
                         .map_err(err)
                     },

@@ -18,6 +18,7 @@ pub mod library;
 pub mod lock;
 pub mod maintenance;
 pub mod overview;
+pub mod patches;
 pub mod paths;
 pub mod play;
 pub mod playtime;

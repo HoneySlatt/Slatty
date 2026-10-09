@@ -214,8 +214,10 @@ impl GogContent {
         }
         let fresh = if product_id == REDIST {
             dependency_link(&self.http, &self.tokens).await?
+        } else if let Some(id) = product_id.strip_suffix(PATCH_STORE) {
+            secure_link(&self.http, &self.tokens, id, Some("/patches/store")).await?
         } else {
-            secure_link(&self.http, &self.tokens, product_id).await?
+            secure_link(&self.http, &self.tokens, product_id, None).await?
         };
         self.endpoints
             .write()
@@ -247,14 +249,22 @@ fn chunk_url(endpoint: &Endpoint, compressed_md5: &str) -> String {
     url
 }
 
-async fn secure_link(http: &Client, tokens: &Tokens, product_id: &str) -> Result<Vec<Endpoint>> {
+async fn secure_link(
+    http: &Client,
+    tokens: &Tokens,
+    product_id: &str,
+    root: Option<&str>,
+) -> Result<Vec<Endpoint>> {
     #[derive(Deserialize)]
     struct Links {
         urls: Vec<Endpoint>,
     }
-    let url = format!(
+    let mut url = format!(
         "{CONTENT_SYSTEM}/products/{product_id}/secure_link?_version=2&generation=2&path=/"
     );
+    if let Some(root) = root {
+        url.push_str(&format!("&root={root}"));
+    }
     let links: Links = http::json(
         http.get(url).bearer_auth(tokens.access_token.expose()),
         "requesting download links",
@@ -268,6 +278,13 @@ async fn secure_link(http: &Client, tokens: &Tokens, product_id: &str) -> Result
 
 /// Pseudo product id for GOG's shared dependency store (redistributables, script interpreter).
 pub const REDIST: &str = "redist";
+
+const PATCH_STORE: &str = "#patches";
+
+/// Pseudo product id for a product's patch store (binary deltas between builds).
+pub fn patch_store(product_id: &str) -> String {
+    format!("{product_id}{PATCH_STORE}")
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
