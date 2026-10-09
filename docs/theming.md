@@ -10,8 +10,9 @@ Without that file, SlattyLauncher uses its own look. **Settings → Appearance �
 writes the default theme there, every key with its value, as a starting point. **Edit** opens the
 file in your desktop's text editor, and **Reload** applies it without restarting.
 
-The font is chosen in the interface instead: **Settings → Appearance → Font** lists the font
-families installed on the system and applies the one picked at once. A family without a semibold
+The font is chosen in the interface instead. The default is Geist, built into SlattyLauncher, so
+the look is the same on every system. **Settings → Appearance → Font** lists the font families
+installed on the system as alternatives and applies the one picked at once. A family without a semibold
 weight shows bold where the interface uses semibold.
 
 ## Format

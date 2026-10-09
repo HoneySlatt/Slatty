@@ -100,6 +100,8 @@ SlattyLauncher stands on the work of others:
 - [heroic-gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl) (GPL-3.0) is the reference
   for Galaxy depots, cloud storage and session handling. Parts of SlattyLauncher follow its logic.
 - [Lucide](https://lucide.dev) (ISC) provides the interface icons, in `crates/gui/assets/icons`.
+- [Geist](https://vercel.com/font) (SIL Open Font License 1.1) is the interface font, built into the
+  binary from `crates/gui/assets/fonts`, where its licence is.
 - [oxidelta](https://github.com/sockudo/oxidelta) (MIT) decodes GOG's xdelta3 patches.
 - [rfd](https://github.com/PolyMeilex/rfd) (MIT) opens the desktop's folder chooser.
 - [Heroic Games Launcher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) showed how

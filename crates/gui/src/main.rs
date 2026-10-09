@@ -63,8 +63,11 @@ fn main() -> iced::Result {
             .and_then(|db| slatty_core::settings::interface_font(&db).ok().flatten());
         theme::set_font(family.as_deref());
     }
-    iced::application(App::boot, App::update, App::view)
-        .title("SlattyLauncher")
+    let mut app = iced::application(App::boot, App::update, App::view);
+    for font in theme::FONTS {
+        app = app.font(font);
+    }
+    app.title("SlattyLauncher")
         .subscription(App::subscription)
         .theme(App::theme)
         .window(iced::window::Settings {

@@ -116,7 +116,7 @@ impl App {
                 "About",
                 vec![
                     text(format!(
-                        "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC)",
+                        "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL)",
                         env!("CARGO_PKG_VERSION")
                     ))
                     .size(14)
@@ -202,11 +202,19 @@ impl App {
             row![action("Create theme file", SettingsMsg::CreateTheme)]
         };
         let current = match theme::font().family {
-            iced::font::Family::Name(name) => FontChoice::Family(name.to_string()),
+            iced::font::Family::Name(name) if name != theme::DEFAULT_FAMILY => {
+                FontChoice::Family(name.to_string())
+            }
             _ => FontChoice::Default,
         };
         let fonts: Vec<FontChoice> = std::iter::once(FontChoice::Default)
-            .chain(self.font_families.iter().cloned().map(FontChoice::Family))
+            .chain(
+                self.font_families
+                    .iter()
+                    .filter(|f| *f != theme::DEFAULT_FAMILY)
+                    .cloned()
+                    .map(FontChoice::Family),
+            )
             .collect();
         column![
             row![

@@ -32,7 +32,7 @@ pub enum FontChoice {
 impl fmt::Display for FontChoice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FontChoice::Default => f.write_str("System default"),
+            FontChoice::Default => write!(f, "{} (default)", crate::theme::DEFAULT_FAMILY),
             FontChoice::Family(name) => f.write_str(name),
         }
     }

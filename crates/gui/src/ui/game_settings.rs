@@ -197,9 +197,12 @@ fn dlcs<'a>(game_id: &'a str, c: &'a ContentInfo, busy: bool) -> Element<'a, Mes
 fn version<'a>(game_id: &'a str, c: &'a ContentInfo, busy: bool) -> Element<'a, Message> {
     let installed = c.versions.iter().find(|v| v.build_id == c.build_id);
     if c.versions.len() <= 1 {
-        return text(installed.map_or("", |v| v.label.as_str()))
-            .size(15)
-            .into();
+        // The only one GOG offers, or one it no longer lists.
+        return text(
+            installed.map_or_else(|| format!("Build {}", c.build_id), |v| v.label.clone()),
+        )
+        .size(15)
+        .into();
     }
     let id = game_id.to_string();
     column![

@@ -84,8 +84,17 @@ fn open(app: &mut App, game: &str, panel: Option<Panel>) {
     app.panel = panel;
 }
 
+/// The simulator with the fonts the application loads.
+fn settings() -> iced::Settings {
+    iced::Settings {
+        fonts: crate::theme::FONTS.iter().map(|f| (*f).into()).collect(),
+        default_font: crate::theme::font(),
+        ..Default::default()
+    }
+}
+
 fn render(app: &App) -> Simulator<'_, Message> {
-    Simulator::with_size(Default::default(), SIZE, app.view())
+    Simulator::with_size(settings(), SIZE, app.view())
 }
 
 fn snapshot(ui: &mut Simulator<'_, Message>, name: &str) {
@@ -1187,7 +1196,7 @@ fn a_narrow_window_lays_the_achievements_drawer_over_the_page() {
     use iced::mouse::{Button, Event as Mouse};
     let mut app = app_with_achievements();
     let click_page = |app: &App| -> Vec<Message> {
-        let mut ui = Simulator::with_size(Default::default(), app.window, app.view());
+        let mut ui = Simulator::with_size(settings(), app.window, app.view());
         ui.point_at(iced::Point::new(100.0, 300.0));
         let _ = ui.simulate([
             iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
@@ -1203,7 +1212,7 @@ fn a_narrow_window_lays_the_achievements_drawer_over_the_page() {
     );
     let _ = app.update(Message::WindowResized(Size::new(800.0, 560.0)));
     {
-        let mut ui = Simulator::with_size(Default::default(), app.window, app.view());
+        let mut ui = Simulator::with_size(settings(), app.window, app.view());
         snapshot(&mut ui, "drawer-narrow");
     }
     assert!(

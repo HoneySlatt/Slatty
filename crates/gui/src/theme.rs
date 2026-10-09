@@ -279,21 +279,30 @@ impl Tokens {
     }
 }
 
-static FONT: RwLock<Font> = RwLock::new(Font::DEFAULT);
+/// Geist (SIL Open Font License, see assets/fonts/OFL.txt), built into the binary: the
+/// interface looks the same whether or not the system has it.
+pub const FONTS: [&[u8]; 3] = [
+    include_bytes!("../assets/fonts/Geist-Regular.ttf"),
+    include_bytes!("../assets/fonts/Geist-SemiBold.ttf"),
+    include_bytes!("../assets/fonts/Geist-Bold.ttf"),
+];
+pub const DEFAULT_FAMILY: &str = "Geist";
+
+static FONT: RwLock<Font> = RwLock::new(Font::with_name(DEFAULT_FAMILY));
 /// The weight drawn for "semibold": many families only come in regular and bold.
 static SEMIBOLD: RwLock<font::Weight> = RwLock::new(font::Weight::Semibold);
 
-/// The font family of the interface, chosen in Settings; the system's sans-serif by default.
+/// The font family of the interface, chosen in Settings; Geist by default.
 pub fn font() -> Font {
     *FONT.read().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Uses `family` from the next frame, or the default font with `None`.
+/// Uses `family` from the next frame, or Geist with `None`.
 pub fn set_font(family: Option<&str>) {
     let font = match family {
         // Font names live as long as the process; a few bytes per change of font.
         Some(name) => Font::with_name(Box::leak(name.to_string().into_boxed_str())),
-        None => Font::DEFAULT,
+        None => Font::with_name(DEFAULT_FAMILY),
     };
     let semibold = match family {
         Some(name) if !has_weight(name, 600) => font::Weight::Bold,
