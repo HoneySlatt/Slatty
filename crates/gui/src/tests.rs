@@ -433,7 +433,7 @@ fn games_known_only_by_play_time_are_read_again() {
     assert!(app.overview_busy);
     assert!(
         render(&app)
-            .find("1 / 2 unlocked · 0 completed · Reading GOG data… 1/2 games")
+            .find("1 / 2 unlocked · Reading GOG data… 1/2 games · 0 completed")
             .is_ok()
     );
     let _ = app.update(Message::OverviewFetched(
@@ -443,7 +443,7 @@ fn games_known_only_by_play_time_are_read_again() {
     let _ = app.update(Message::OverviewDone);
     assert!(
         render(&app)
-            .find("1 / 2 unlocked · 0 completed · 1 game could not be read from GOG")
+            .find("1 / 2 unlocked · 1 game could not be read from GOG · 0 completed")
             .is_ok(),
         "no endless reading message after a failure"
     );

@@ -29,7 +29,7 @@ impl App {
             column![
                 text("Achievements").size(32).font(BOLD),
                 text(format!(
-                    "{unlocked} / {total} unlocked · {perfect} completed · {scanning}"
+                    "{unlocked} / {total} unlocked · {scanning} · {perfect} completed"
                 ))
                 .size(14)
                 .color(tokens().muted),
@@ -55,7 +55,7 @@ impl App {
             .collect();
         column![
             header,
-            scrollable(grid(cards).fluid(420).spacing(14).height(Length::Shrink))
+            scrollable(grid(cards).fluid(540).spacing(14).height(Length::Shrink))
                 .spacing(8)
                 .style(theme::scroller)
                 .height(Length::Fill)
