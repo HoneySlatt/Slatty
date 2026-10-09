@@ -234,7 +234,7 @@ mod tests {
             .unwrap();
             Install {
                 game_id: "1".into(),
-                title: "[FICTIF] Jeu".into(),
+                title: "[FAKE] Game".into(),
                 platform: Platform::Windows,
                 path: game.clone(),
                 client_id: None,

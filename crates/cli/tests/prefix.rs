@@ -13,7 +13,7 @@ async fn fresh_prefix_is_initialised_with_user_folders() {
     std::fs::create_dir_all(root.join("game")).unwrap();
     let install = Install {
         game_id: "0".into(),
-        title: "[FICTIF]".into(),
+        title: "[FAKE]".into(),
         platform: Platform::Windows,
         path: root.join("game"),
         client_id: None,

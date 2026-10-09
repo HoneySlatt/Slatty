@@ -97,7 +97,7 @@ impl Env {
         std::fs::create_dir_all(&root).unwrap();
         let mut source = MemoryContent::default();
         let items = vec![
-            source.file("Game.exe", b"[FICTIF] executable bytes", &["executable"]),
+            source.file("Game.exe", b"[FAKE] executable bytes", &["executable"]),
             source.file("data\\level1.pak", b"0123456789abcdefghij", &[]),
             source.file("goggame-1.info", b"{}", &[]),
             source.file("empty.txt", b"", &[]),
@@ -199,7 +199,7 @@ async fn interrupted_install_resumes_without_refetching_finished_files() {
     );
     assert_eq!(
         std::fs::read(env.target().join("Game.exe")).unwrap(),
-        b"[FICTIF] executable bytes"
+        b"[FAKE] executable bytes"
     );
 }
 
@@ -328,7 +328,7 @@ fn meta(depots: Vec<Depot>) -> Meta {
         dependencies: vec!["MSVC2017".into()],
         products: vec![Product {
             product_id: "1".into(),
-            name: "[FICTIF] Jeu".into(),
+            name: "[FAKE] Game".into(),
         }],
     }
 }

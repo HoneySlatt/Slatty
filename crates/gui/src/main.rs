@@ -5,7 +5,7 @@ mod view;
 
 use std::path::PathBuf;
 
-use installs::{InstallMsg, InstallView, SettingsMsg};
+use installs::{InstallMsg, InstallView, MaintenanceMsg, MaintenanceView, SettingsMsg};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -96,6 +96,7 @@ pub struct App {
     pub pending_change: Option<PendingChange>,
     pub cloud: HashMap<String, CloudView>,
     pub install_views: HashMap<String, InstallView>,
+    pub maintenance: HashMap<String, MaintenanceView>,
     pub settings_open: bool,
     pub library_root: String,
     pub proton: Option<PathBuf>,
@@ -151,6 +152,7 @@ pub enum Message {
     Cloud(String, CloudRequest),
     CloudDone(String, CloudRequest, Result<(Vec<String>, bool), String>),
     Install(InstallMsg),
+    Maintenance(MaintenanceMsg),
     Settings(SettingsMsg),
     DismissNotice,
     Key(keyboard::Event),
@@ -214,7 +216,7 @@ impl App {
                     self.notice = Some(Notice {
                         error: true,
                         text: format!(
-                            "Session(s) interrompue(s) sans fin enregistrée : {}. Vérifiez l'état cloud avant de rejouer.",
+                            "Session(s) without a recorded end: {}. Check cloud saves before playing again.",
                             boot.interrupted.join(", ")
                         ),
                     });
@@ -227,13 +229,13 @@ impl App {
             Message::OpenLoginPage => {
                 let url = slatty_core::auth::login_url();
                 if slatty_core::auth::open_in_browser(&url).is_err() {
-                    self.notify_error(format!("Impossible d'ouvrir le navigateur. Ouvrez : {url}"));
+                    self.notify_error(format!("Could not open a browser. Open: {url}"));
                 }
             }
             Message::LoginInput(v) => self.login_input = v,
             Message::PasteLogin => return iced::clipboard::read().map(Message::Pasted),
             Message::Pasted(Some(v)) => self.login_input = v.trim().to_string(),
-            Message::Pasted(None) => self.notify_error("Le presse-papiers est vide.".into()),
+            Message::Pasted(None) => self.notify_error("The clipboard is empty.".into()),
             Message::SubmitLogin => {
                 let (Some(core), false) = (self.core.clone(), self.login_busy) else {
                     return Task::none();
@@ -313,7 +315,7 @@ impl App {
                 match result {
                     Ok(cache) => return self.set_library(cache),
                     Err(e) => self.notify_error(format!(
-                        "Bibliothèque non actualisée : {e}. La version en cache reste affichée."
+                        "Library not refreshed: {e}. Showing the cached version."
                     )),
                 }
             }
@@ -334,7 +336,7 @@ impl App {
                 let (stop_tx, stop_rx) = tokio::sync::mpsc::unbounded_channel();
                 self.play = Some(PlayState {
                     game_id: game_id.clone(),
-                    log: vec!["Préparation…".into()],
+                    log: vec!["Preparing…".into()],
                     stop: stop_tx,
                     running: true,
                 });
@@ -349,8 +351,8 @@ impl App {
                 if let Some(p) = &mut self.play {
                     p.running = false;
                     match result {
-                        Ok(()) => p.log.push("Terminé.".into()),
-                        Err(e) => p.log.push(format!("Échec : {e}")),
+                        Ok(()) => p.log.push("Done.".into()),
+                        Err(e) => p.log.push(format!("Failed: {e}")),
                     }
                     let game = p.game_id.clone();
                     self.cloud.remove(&game);
@@ -425,7 +427,7 @@ impl App {
                 Ok((list, failures)) => {
                     self.achievements.insert(game_id, Loadable::Ready(list));
                     if !failures.is_empty() {
-                        self.notify_error(format!("Échec pour : {}", failures.join(" ; ")));
+                        self.notify_error(format!("Failed: {}", failures.join(" ; ")));
                     }
                 }
                 Err(e) => {
@@ -453,8 +455,7 @@ impl App {
                     .is_some_and(|p| p.running && p.game_id == game_id)
                 {
                     self.notify_error(
-                        "Le jeu est en cours : la synchronisation attendra la fin de la session."
-                            .into(),
+                        "The game is running; sync once the session has ended.".into(),
                     );
                     return Task::none();
                 }
@@ -478,7 +479,7 @@ impl App {
                         busy: false,
                     },
                     Err(e) => CloudView {
-                        lines: vec![format!("Erreur : {e}")],
+                        lines: vec![format!("Error: {e}")],
                         conflicts: false,
                         busy: false,
                     },
@@ -486,6 +487,7 @@ impl App {
                 self.cloud.insert(game_id, view);
             }
             Message::Install(msg) => return self.update_install(msg),
+            Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::DismissNotice => self.notice = None,
             Message::Key(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
@@ -654,10 +656,7 @@ async fn cloud_task(
             .await
             .map_err(err)?
     else {
-        return Ok((
-            vec!["GOG ne propose pas de sauvegardes cloud pour ce jeu.".into()],
-            false,
-        ));
+        return Ok((vec!["GOG has no cloud saves for this game.".into()], false));
     };
     let mut lines = Vec::new();
     let mut conflicts = false;
@@ -669,50 +668,50 @@ async fn cloud_task(
             .unwrap_or_else(|| o.template.clone());
         lines.push(format!("[{}] {root}", o.name));
         match &o.result {
-            Err(e) => lines.push(format!("  erreur : {e}")),
+            Err(e) => lines.push(format!("  error: {e}")),
             Ok(r) => {
                 lines.extend(
                     r.plan
                         .warnings
                         .iter()
-                        .map(|w| format!("  attention : {}", view::describe_warning(*w))),
+                        .map(|w| format!("  warning: {}", view::describe_warning(*w))),
                 );
                 if opts.dry_run {
                     let p = &r.plan;
                     lines.push(format!(
-                        "  à envoyer {} · à télécharger {} · à comparer {} · inchangés {}",
+                        "  to upload {} · to download {} · to compare {} · unchanged {}",
                         p.count(Action::Upload),
                         p.count(Action::Download),
                         p.count(Action::Compare),
                         p.count(Action::Keep)
                     ));
                     for (path, _) in p.conflicts() {
-                        lines.push(format!("  conflit : {path}"));
+                        lines.push(format!("  conflict: {path}"));
                         conflicts = true;
                     }
                 } else {
                     lines.push(format!(
-                        "  envoyés {} · téléchargés {}",
+                        "  uploaded {} · downloaded {}",
                         r.uploaded.len(),
                         r.downloaded.len()
                     ));
                     for (path, _) in &r.conflicts {
-                        lines.push(format!("  conflit : {path}"));
+                        lines.push(format!("  conflict: {path}"));
                         conflicts = true;
                     }
                     lines.extend(
                         r.refused
                             .iter()
                             .chain(&r.errors)
-                            .map(|(p, e)| format!("  problème {p} : {e}")),
+                            .map(|(p, e)| format!("  problem {p}: {e}")),
                     );
                     lines.extend(
                         r.pending_deletions
                             .iter()
-                            .map(|p| format!("  suppression non appliquée : {p}")),
+                            .map(|p| format!("  deletion not applied: {p}")),
                     );
                     if let Some(dir) = &r.backup_dir {
-                        lines.push(format!("  versions précédentes : {}", dir.display()));
+                        lines.push(format!("  previous versions: {}", dir.display()));
                     }
                 }
             }

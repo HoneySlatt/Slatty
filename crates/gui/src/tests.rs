@@ -28,7 +28,7 @@ fn core() -> Core {
 fn fake_game(id: &str, title: &str) -> LibraryGame {
     LibraryGame {
         id: id.into(),
-        title: format!("[FICTIF] {title}"),
+        title: format!("[FAKE] {title}"),
         cover: None,
         icon: None,
         os: vec!["windows".into()],
@@ -46,16 +46,16 @@ fn library_app() -> App {
         username: "testeur".into(),
     });
     app.library = (1..=14)
-        .map(|i| fake_game(&i.to_string(), &format!("Jeu {i}")))
+        .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
         .collect();
     app.fetched_at = Some(1_791_500_000);
     app.installs.insert(
         "3".into(),
         Install {
             game_id: "3".into(),
-            title: "[FICTIF] Jeu 3".into(),
+            title: "[FAKE] Game 3".into(),
             platform: Platform::Windows,
-            path: PathBuf::from("/jeux/Jeu 3"),
+            path: PathBuf::from("/games/Game 3"),
             client_id: Some("1".into()),
             runner: Runner::Umu {
                 proton: "/proton/GE-Proton".into(),
@@ -82,10 +82,10 @@ fn login_screen_offers_browser_login_without_password_field() {
         ..Default::default()
     };
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    assert!(ui.find("Valider").is_ok());
+    assert!(ui.find("Sign in").is_ok());
     assert!(ui.find("Mot de passe").is_err());
     snapshot(&mut ui, "login");
-    ui.click("Ouvrir la page de connexion GOG").unwrap();
+    ui.click("Open the GOG sign-in page").unwrap();
     assert!(
         ui.into_messages()
             .any(|m| matches!(m, Message::OpenLoginPage))
@@ -95,10 +95,10 @@ fn login_screen_offers_browser_login_without_password_field() {
 #[test]
 fn search_filters_the_library() {
     let mut app = library_app();
-    app.search = "jeu 1".into();
+    app.search = "game 1".into();
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    assert!(ui.find("[FICTIF] Jeu 12").is_ok());
-    assert!(ui.find("[FICTIF] Jeu 3").is_err());
+    assert!(ui.find("[FAKE] Game 12").is_ok());
+    assert!(ui.find("[FAKE] Game 3").is_err());
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn installed_game_detail_can_be_played() {
     app.selected = Some("3".into());
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
     snapshot(&mut ui, "detail");
-    ui.click("Jouer").unwrap();
+    ui.click("Play").unwrap();
     assert!(
         ui.into_messages()
             .any(|m| matches!(m, Message::Play(id) if id == "3"))
@@ -119,16 +119,16 @@ fn uninstalled_game_offers_achievements_but_not_play_or_cloud() {
     let mut app = library_app();
     app.selected = Some("5".into());
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    assert!(ui.find("Jouer").is_err());
-    assert!(ui.find("Vérifier").is_err());
-    assert!(ui.find("Afficher les achievements").is_ok());
+    assert!(ui.find("Play").is_err());
+    assert!(ui.find("Check").is_err());
+    assert!(ui.find("Show achievements").is_ok());
 }
 
 fn fake_achievement(key: &str, unlocked: bool) -> slatty_core::achievements::Achievement {
     slatty_core::achievements::Achievement {
         achievement_id: format!("id-{key}"),
         achievement_key: key.into(),
-        name: format!("[FICTIF] {key}"),
+        name: format!("[FAKE] {key}"),
         description: String::new(),
         visible: true,
         date_unlocked: unlocked.then(|| "2026-10-09T10:00:00+0000".into()),
@@ -153,8 +153,8 @@ fn app_with_achievements() -> App {
 fn unlocking_only_asks_for_confirmation() {
     let mut app = app_with_achievements();
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    assert!(ui.find("Réinitialiser").is_ok());
-    ui.click("Débloquer").unwrap();
+    assert!(ui.find("Clear").is_ok());
+    ui.click("Unlock").unwrap();
     let messages: Vec<Message> = ui.into_messages().collect();
     assert!(matches!(
         messages.as_slice(),
@@ -171,7 +171,7 @@ fn unlocking_only_asks_for_confirmation() {
 
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
     snapshot(&mut ui, "achievements-confirm");
-    ui.click("Confirmer").unwrap();
+    ui.click("Confirm").unwrap();
     assert!(
         ui.into_messages()
             .any(|m| matches!(m, Message::ConfirmAchievementChange))
@@ -185,12 +185,12 @@ fn cancelling_drops_the_pending_change() {
         "5".into(),
         vec![crate::AchievementChange {
             achievement_id: "id-Alpha".into(),
-            name: "[FICTIF] Alpha".into(),
+            name: "[FAKE] Alpha".into(),
             unlock: true,
         }],
     ));
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    ui.click("Annuler").unwrap();
+    ui.click("Cancel").unwrap();
     for m in ui.into_messages() {
         let _ = app.update(m);
     }
@@ -199,13 +199,13 @@ fn cancelling_drops_the_pending_change() {
 
 fn fake_plan() -> crate::installs::PlanInfo {
     crate::installs::PlanInfo {
-        title: "[FICTIF] Jeu 5".into(),
+        title: "[FAKE] Game 5".into(),
         version: "1.0".into(),
         language: "en-US".into(),
         languages: vec!["en-US".into(), "fr-FR".into()],
         download_size: 3 << 30,
         disk_size: 5 << 30,
-        folder: "/jeux/Jeu 5".into(),
+        folder: "/games/Game 5".into(),
         dependencies: vec!["MSVC2017".into()],
         resumable: false,
     }
@@ -218,11 +218,8 @@ fn install_needs_a_proton_choice_then_starts() {
     app.install_views
         .insert("5".into(), crate::installs::InstallView::Ready(fake_plan()));
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    assert!(
-        ui.find("Choisissez une version de Proton dans les paramètres.")
-            .is_ok()
-    );
-    let _ = ui.click("Installer");
+    assert!(ui.find("Choose a Proton version in Settings.").is_ok());
+    let _ = ui.click("Install");
     assert!(
         !ui.into_messages()
             .any(|m| matches!(m, Message::Install(crate::installs::InstallMsg::Start(_))))
@@ -231,7 +228,7 @@ fn install_needs_a_proton_choice_then_starts() {
     app.proton = Some("/proton/GE-Proton".into());
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
     snapshot(&mut ui, "install-ready");
-    ui.click("Installer").unwrap();
+    ui.click("Install").unwrap();
     assert!(ui.into_messages().any(
         |m| matches!(m, Message::Install(crate::installs::InstallMsg::Start(id)) if id == "5")
     ));
@@ -244,7 +241,7 @@ fn running_install_shows_progress_and_can_pause() {
     app.install_views.insert(
         "5".into(),
         crate::installs::InstallView::Running {
-            title: "[FICTIF] Jeu 5".into(),
+            title: "[FAKE] Game 5".into(),
             progress: slatty_core::installer::Progress {
                 files_done: 3,
                 files_total: 10,
@@ -255,10 +252,37 @@ fn running_install_shows_progress_and_can_pause() {
         },
     );
     let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
-    assert!(ui.find("Téléchargement : [FICTIF] Jeu 5").is_ok());
+    assert!(ui.find("Downloading [FAKE] Game 5").is_ok());
     snapshot(&mut ui, "install-running");
-    ui.click("Mettre en pause").unwrap();
+    ui.click("Pause").unwrap();
     assert!(ui.into_messages().any(
         |m| matches!(m, Message::Install(crate::installs::InstallMsg::Pause(id)) if id == "5")
+    ));
+}
+
+#[test]
+fn uninstall_requires_an_explicit_choice() {
+    use crate::installs::MaintenanceMsg;
+    let mut app = library_app();
+    app.selected = Some("3".into());
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    ui.click("Uninstall…").unwrap();
+    let messages: Vec<Message> = ui.into_messages().collect();
+    assert!(
+        matches!(messages.as_slice(), [Message::Maintenance(MaintenanceMsg::AskUninstall(id))] if id == "3")
+    );
+    for m in messages {
+        let _ = app.update(m);
+    }
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    snapshot(&mut ui, "uninstall-confirm");
+    ui.click("Uninstall, keep the prefix").unwrap();
+    assert!(ui.into_messages().any(
+        |m| matches!(m, Message::Maintenance(MaintenanceMsg::Uninstall(id, false)) if id == "3")
+    ));
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    ui.click("Also delete the prefix (backed up)").unwrap();
+    assert!(ui.into_messages().any(
+        |m| matches!(m, Message::Maintenance(MaintenanceMsg::Uninstall(id, true)) if id == "3")
     ));
 }

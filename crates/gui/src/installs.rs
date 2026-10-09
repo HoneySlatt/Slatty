@@ -102,13 +102,11 @@ impl App {
             }
             InstallMsg::Start(game_id) => {
                 if self.installing().is_some() {
-                    self.notify_error("Une installation est déjà en cours.".into());
+                    self.notify_error("Another install is already running.".into());
                     return Task::none();
                 }
                 let Some(proton) = self.proton.clone() else {
-                    self.notify_error(
-                        "Choisissez d'abord une version de Proton dans les paramètres.".into(),
-                    );
+                    self.notify_error("Choose a Proton version in Settings first.".into());
                     return Task::none();
                 };
                 let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
@@ -171,7 +169,7 @@ impl App {
             SettingsMsg::SaveRoot => {
                 let path = PathBuf::from(self.library_root.trim());
                 if !path.is_absolute() {
-                    self.notify_error("Le dossier des jeux doit être un chemin absolu.".into());
+                    self.notify_error("The games folder must be an absolute path.".into());
                 } else if let Err(e) = settings::set_library_root(&core.db, &path) {
                     self.notify_error(e.to_string());
                 }
@@ -287,5 +285,166 @@ pub fn human_size(bytes: u64) -> String {
         b if b >= 1 << 30 => format!("{:.2} Gio", b as f64 / (1u64 << 30) as f64),
         b if b >= 1 << 20 => format!("{:.1} Mio", b as f64 / (1u64 << 20) as f64),
         b => format!("{} Kio", b >> 10),
+    }
+}
+
+#[derive(Default)]
+pub struct MaintenanceView {
+    pub busy: bool,
+    pub lines: Vec<String>,
+    pub confirm_uninstall: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum MaintenanceMsg {
+    Check(String, bool),
+    Checked(String, bool, Result<Vec<PathBuf>, String>),
+    AskUninstall(String),
+    CancelUninstall(String),
+    Uninstall(String, bool),
+    Uninstalled(String, Result<Vec<String>, String>),
+}
+
+impl App {
+    pub fn update_maintenance(&mut self, msg: MaintenanceMsg) -> Task<Message> {
+        let Some(core) = self.core.clone() else {
+            return Task::none();
+        };
+        match msg {
+            MaintenanceMsg::Check(game_id, repair) => {
+                if self
+                    .play
+                    .as_ref()
+                    .is_some_and(|p| p.running && p.game_id == game_id)
+                {
+                    self.notify_error("The game is running.".into());
+                    return Task::none();
+                }
+                let view = self.maintenance.entry(game_id.clone()).or_default();
+                view.busy = true;
+                view.lines = vec![
+                    if repair {
+                        "Repairing…"
+                    } else {
+                        "Checking…"
+                    }
+                    .into(),
+                ];
+                let id = game_id.clone();
+                return Task::perform(
+                    async move {
+                        let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
+                        let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
+                        slatty_core::maintenance::check(
+                            &core.db,
+                            &core.dirs,
+                            &core.http,
+                            &tokens,
+                            &id,
+                            repair,
+                            &|_| {},
+                            CancellationToken::new(),
+                        )
+                        .await
+                        .map_err(err)
+                    },
+                    move |r| {
+                        Message::Maintenance(MaintenanceMsg::Checked(game_id.clone(), repair, r))
+                    },
+                );
+            }
+            MaintenanceMsg::Checked(game_id, repair, result) => {
+                let view = self.maintenance.entry(game_id).or_default();
+                view.busy = false;
+                view.lines = match result {
+                    Ok(bad) if bad.is_empty() => vec!["All files are intact.".into()],
+                    Ok(bad) => std::iter::once(format!(
+                        "{} file(s) {}:",
+                        bad.len(),
+                        if repair {
+                            "repaired"
+                        } else {
+                            "missing or damaged"
+                        }
+                    ))
+                    .chain(bad.iter().take(20).map(|b| format!("  {}", b.display())))
+                    .collect(),
+                    Err(e) => vec![format!("Error: {e}")],
+                };
+            }
+            MaintenanceMsg::AskUninstall(game_id) => {
+                self.maintenance
+                    .entry(game_id)
+                    .or_default()
+                    .confirm_uninstall = true;
+            }
+            MaintenanceMsg::CancelUninstall(game_id) => {
+                self.maintenance
+                    .entry(game_id)
+                    .or_default()
+                    .confirm_uninstall = false;
+            }
+            MaintenanceMsg::Uninstall(game_id, delete_prefix) => {
+                if self
+                    .play
+                    .as_ref()
+                    .is_some_and(|p| p.running && p.game_id == game_id)
+                {
+                    self.notify_error("The game is running.".into());
+                    return Task::none();
+                }
+                let view = self.maintenance.entry(game_id.clone()).or_default();
+                view.busy = true;
+                view.confirm_uninstall = false;
+                let id = game_id.clone();
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            slatty_core::maintenance::uninstall(
+                                &core.db,
+                                &core.dirs,
+                                &id,
+                                delete_prefix,
+                            )
+                        })
+                        .await
+                        .map_err(err)?
+                        .map_err(err)
+                        .map(|r| {
+                            let mut lines = vec![format!("{} file(s) deleted.", r.removed_files)];
+                            if !r.kept.is_empty() {
+                                lines.push(format!(
+                                    "{} file(s) not installed by slatty kept in the game folder.",
+                                    r.kept.len()
+                                ));
+                            }
+                            if let Some(b) = r.prefix_backup {
+                                lines.push(format!(
+                                    "Prefix user folder backed up to {}",
+                                    b.display()
+                                ));
+                            }
+                            lines
+                        })
+                    },
+                    move |r| Message::Maintenance(MaintenanceMsg::Uninstalled(game_id.clone(), r)),
+                );
+            }
+            MaintenanceMsg::Uninstalled(game_id, Ok(lines)) => {
+                self.installs.remove(&game_id);
+                self.cloud.remove(&game_id);
+                self.maintenance.remove(&game_id);
+                self.notice = Some(crate::Notice {
+                    error: false,
+                    text: format!("Uninstalled. {}", lines.join(" ")),
+                });
+            }
+            MaintenanceMsg::Uninstalled(game_id, Err(e)) => {
+                let view = self.maintenance.entry(game_id).or_default();
+                view.busy = false;
+                view.lines = vec![format!("Uninstall refused: {e}")];
+            }
+        }
+        Task::none()
     }
 }

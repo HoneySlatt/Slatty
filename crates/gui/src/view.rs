@@ -13,7 +13,9 @@ use slatty_core::runner::Runner;
 
 use slatty_core::installer::Progress;
 
-use crate::installs::{InstallMsg, InstallView, ProtonChoice, SettingsMsg, human_size};
+use crate::installs::{
+    InstallMsg, InstallView, MaintenanceMsg, ProtonChoice, SettingsMsg, human_size,
+};
 use crate::{AchievementChange, App, CloudRequest, Loadable, Message, PendingChange};
 
 fn fraction(p: Progress) -> f32 {
@@ -27,12 +29,12 @@ fn fraction(p: Progress) -> f32 {
 impl App {
     pub fn view(&self) -> Element<'_, Message> {
         if let Some(e) = &self.fatal {
-            return container(text(format!("Démarrage impossible : {e}")).size(18))
+            return container(text(format!("Cannot start: {e}")).size(18))
                 .padding(40)
                 .into();
         }
         if self.core.is_none() {
-            return container(text("Chargement…")).padding(40).into();
+            return container(text("Loading…")).padding(40).into();
         }
         let body = match &self.account {
             None => self.login_view(),
@@ -49,7 +51,7 @@ impl App {
                 container(
                     row![
                         text(&n.text).width(Length::Fill),
-                        button(text("Fermer"))
+                        button(text("Close"))
                             .on_press(Message::DismissNotice)
                             .style(button::text)
                     ]
@@ -67,21 +69,27 @@ impl App {
     fn login_view(&self) -> Element<'_, Message> {
         let busy = self.login_busy;
         let content = column![
-            text("Connexion à GOG").size(28),
+            text("Sign in to GOG").size(28),
             text(
-                "La connexion se fait dans votre navigateur ; SlattyLauncher ne voit jamais votre mot de passe. \
-                 Une fois connecté, le navigateur affiche une page presque vide sur embed.gog.com : \
-                 copiez l'adresse complète de cette page et collez-la ci-dessous."
+                "Sign-in happens in your browser; SlattyLauncher never sees your password. \
+                 Once signed in, the browser shows an almost blank page on embed.gog.com: \
+                 copy that page's full address and paste it below."
             ),
-            button(text("Ouvrir la page de connexion GOG")).on_press(Message::OpenLoginPage),
+            button(text("Open the GOG sign-in page")).on_press(Message::OpenLoginPage),
             row![
-                text_input("https://embed.gog.com/on_login_success?…&code=…", &self.login_input)
-                    .on_input(Message::LoginInput)
-                    .on_submit(Message::SubmitLogin)
-                    .width(Length::Fill),
-                button(text("Coller")).on_press(Message::PasteLogin).style(button::secondary),
-                button(text(if busy { "Connexion…" } else { "Valider" }))
-                    .on_press_maybe((!busy && !self.login_input.is_empty()).then_some(Message::SubmitLogin)),
+                text_input(
+                    "https://embed.gog.com/on_login_success?…&code=…",
+                    &self.login_input
+                )
+                .on_input(Message::LoginInput)
+                .on_submit(Message::SubmitLogin)
+                .width(Length::Fill),
+                button(text("Paste"))
+                    .on_press(Message::PasteLogin)
+                    .style(button::secondary),
+                button(text(if busy { "Signing in…" } else { "Sign in" })).on_press_maybe(
+                    (!busy && !self.login_input.is_empty()).then_some(Message::SubmitLogin)
+                ),
             ]
             .spacing(8),
         ]
@@ -97,27 +105,27 @@ impl App {
             .map(|a| a.username.as_str())
             .unwrap_or_default();
         let cache_note = match self.fetched_at {
-            Some(ts) => format!("cache du {}", local_time(ts)),
-            None => "aucun cache".into(),
+            Some(ts) => format!("cached {}", local_time(ts)),
+            None => "no cache".into(),
         };
         let top = row![
-            text_input("Rechercher…", &self.search)
+            text_input("Search…", &self.search)
                 .on_input(Message::Search)
                 .width(Length::FillPortion(3)),
-            text(format!("{} jeux · {cache_note}", self.library.len()))
+            text(format!("{} games · {cache_note}", self.library.len()))
                 .width(Length::FillPortion(2)),
             button(text(if self.library_busy {
-                "Actualisation…"
+                "Refreshing…"
             } else {
-                "Actualiser"
+                "Refresh"
             }))
             .on_press_maybe((!self.library_busy).then_some(Message::SyncLibrary))
             .style(button::secondary),
             text(account),
-            button(text("Paramètres"))
+            button(text("Settings"))
                 .on_press(Message::Settings(SettingsMsg::Toggle))
                 .style(button::text),
-            button(text("Déconnexion"))
+            button(text("Log out"))
                 .on_press(Message::Logout)
                 .style(button::text),
         ]
@@ -128,7 +136,7 @@ impl App {
             header = header.push(
                 button(
                     row![
-                        text(format!("Téléchargement : {title}"))
+                        text(format!("Downloading {title}"))
                             .size(13)
                             .width(Length::Fill),
                         progress_bar(0.0..=1.0, fraction(p)).length(240).girth(8),
@@ -154,9 +162,9 @@ impl App {
             .collect();
         let gallery: Element<'_, Message> = if cards.is_empty() {
             container(text(if self.library.is_empty() {
-                "Bibliothèque vide : cliquez sur « Actualiser »."
+                "Your library is empty: click Refresh."
             } else {
-                "Aucun jeu ne correspond à la recherche."
+                "No game matches the search."
             }))
             .padding(20)
             .into()
@@ -198,10 +206,10 @@ impl App {
             .collect();
         let selected = self.proton.clone().map(ProtonChoice);
         section(
-            "Paramètres",
+            "Settings",
             vec![
                 row![
-                    text("Dossier des jeux").size(14).width(160),
+                    text("Games folder").size(14).width(160),
                     text_input("/home/…/Games/GOG", &self.library_root)
                         .on_input(|v| Message::Settings(SettingsMsg::RootInput(v)))
                         .on_submit(Message::Settings(SettingsMsg::SaveRoot)),
@@ -217,7 +225,7 @@ impl App {
                     pick_list(choices, selected, |c| Message::Settings(
                         SettingsMsg::Proton(c)
                     ))
-                    .placeholder("Aucune version trouvée dans compatibilitytools.d"),
+                    .placeholder("No Proton found in compatibilitytools.d"),
                 ]
                 .spacing(8)
                 .align_y(Alignment::Center)
@@ -235,15 +243,15 @@ impl App {
         let mut items: Vec<Element<'_, Message>> = Vec::new();
         match self.install_views.get(&g.id) {
             None => {
-                items.push(text("Non installé.").size(14).into());
-                items.push(prepare("Préparer l'installation").into());
+                items.push(text("Not installed.").size(14).into());
+                items.push(prepare("Prepare install").into());
             }
             Some(InstallView::Planning) => {
-                items.push(text("Lecture des informations de GOG…").into())
+                items.push(text("Reading build information from GOG…").into())
             }
             Some(InstallView::Failed(e)) => {
-                items.push(text(format!("Échec : {e}")).size(13).into());
-                items.push(prepare("Réessayer").into());
+                items.push(text(format!("Failed: {e}")).size(13).into());
+                items.push(prepare("Retry").into());
             }
             Some(InstallView::Running { progress, .. }) => {
                 items.push(
@@ -263,7 +271,7 @@ impl App {
                     .into(),
                 );
                 items.push(
-                    button(text("Mettre en pause"))
+                    button(text("Pause"))
                         .on_press(Message::Install(InstallMsg::Pause(g.id.clone())))
                         .style(button::secondary)
                         .into(),
@@ -273,7 +281,7 @@ impl App {
                 items.push(text(format!("Version {}", info.version)).size(14).into());
                 items.push(
                     text(format!(
-                        "Téléchargement {} · sur disque {}",
+                        "Download {} · on disk {}",
                         human_size(info.download_size),
                         human_size(info.disk_size)
                     ))
@@ -281,14 +289,14 @@ impl App {
                     .into(),
                 );
                 items.push(
-                    text(format!("Dossier : {}", info.folder.display()))
+                    text(format!("Folder: {}", info.folder.display()))
                         .size(13)
                         .into(),
                 );
                 if info.resumable {
                     items.push(
                         text(format!(
-                            "Installation interrompue reprise ({}).",
+                            "Resuming an interrupted install ({}).",
                             info.language
                         ))
                         .size(13)
@@ -298,7 +306,7 @@ impl App {
                     let id = g.id.clone();
                     items.push(
                         row![
-                            text("Langue").size(13),
+                            text("Language").size(13),
                             pick_list(
                                 info.languages.clone(),
                                 Some(info.language.clone()),
@@ -315,7 +323,7 @@ impl App {
                 if !info.dependencies.is_empty() {
                     items.push(
                         text(format!(
-                            "Redistribuables non installés par slatty : {}",
+                            "Redistributables not installed by slatty: {}",
                             info.dependencies.join(", ")
                         ))
                         .size(12)
@@ -323,18 +331,14 @@ impl App {
                     );
                 }
                 if self.proton.is_none() {
-                    items.push(
-                        text("Choisissez une version de Proton dans les paramètres.")
-                            .size(13)
-                            .into(),
-                    );
+                    items.push(text("Choose a Proton version in Settings.").size(13).into());
                 }
                 let busy = self.installing().is_some();
                 items.push(
                     button(text(if info.resumable {
-                        "Reprendre l'installation"
+                        "Resume install"
                     } else {
-                        "Installer"
+                        "Install"
                     }))
                     .on_press_maybe(
                         (!busy && self.proton.is_some())
@@ -383,15 +387,15 @@ impl App {
         let mut col = column![
             row![
                 text(&g.title).size(24).width(Length::Fill),
-                button(text("Fermer"))
+                button(text("Close"))
                     .on_press(Message::CloseDetail)
                     .style(button::text)
             ]
             .align_y(Alignment::Center),
             text(format!(
-                "Plateformes : {}",
+                "Platforms: {}",
                 if g.os.is_empty() {
-                    "inconnues".into()
+                    "unknown".into()
                 } else {
                     g.os.join(", ")
                 }
@@ -405,17 +409,17 @@ impl App {
             col = col.push(self.achievements_section(g));
             return scrollable(col.padding(8)).height(Length::Fill).into();
         };
-        col = col.push(text(format!("Dossier : {}", install.path.display())).size(13));
+        col = col.push(text(format!("Folder: {}", install.path.display())).size(13));
         col = col.push(text(runner_label(install)).size(13));
 
         let playing = self.play.as_ref().filter(|p| p.running);
         let this_running = playing.is_some_and(|p| p.game_id == g.id);
         col = col.push(
             row![
-                button(text(if this_running { "En cours…" } else { "Jouer" }))
+                button(text(if this_running { "Running…" } else { "Play" }))
                     .on_press_maybe(playing.is_none().then(|| Message::Play(g.id.clone())))
                     .style(button::success),
-                button(text("Arrêter le jeu"))
+                button(text("Stop game"))
                     .on_press_maybe(this_running.then_some(Message::StopGame))
                     .style(button::danger),
             ]
@@ -432,12 +436,12 @@ impl App {
         let cloud_busy = cloud.is_some_and(|c| c.busy);
         let mut cloud_items: Vec<Element<'_, Message>> = vec![
             row![
-                button(text("Vérifier"))
+                button(text("Check"))
                     .on_press_maybe(
                         (!cloud_busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Check))
                     )
                     .style(button::secondary),
-                button(text("Synchroniser"))
+                button(text("Sync"))
                     .on_press_maybe(
                         (!cloud_busy).then(|| Message::Cloud(g.id.clone(), CloudRequest::Sync))
                     )
@@ -451,19 +455,19 @@ impl App {
             if c.conflicts && !c.busy {
                 cloud_items.push(
                     text(
-                        "Les deux versions ont changé. Choisissez celle à garder ; \
-                         l'autre est conservée dans le dossier de sauvegardes.",
+                        "Both versions changed. Choose the one to keep; \
+                         the other one is kept in the backups folder.",
                     )
                     .size(13)
                     .into(),
                 );
                 cloud_items.push(
                     row![
-                        button(text("Garder la version locale")).on_press(Message::Cloud(
+                        button(text("Keep the local version")).on_press(Message::Cloud(
                             g.id.clone(),
                             CloudRequest::Keep(Prefer::Local)
                         )),
-                        button(text("Garder la version cloud")).on_press(Message::Cloud(
+                        button(text("Keep the cloud version")).on_press(Message::Cloud(
                             g.id.clone(),
                             CloudRequest::Keep(Prefer::Remote)
                         )),
@@ -473,25 +477,83 @@ impl App {
                 );
             }
         }
-        col = col.push(section("Sauvegardes cloud", cloud_items));
+        col = col.push(section("Cloud saves", cloud_items));
         col = col.push(self.achievements_section(g));
+        col = col.push(self.maintenance_section(g));
         scrollable(col.padding(8)).height(Length::Fill).into()
+    }
+
+    fn maintenance_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let view = self.maintenance.get(&g.id);
+        let busy = view.is_some_and(|v| v.busy)
+            || self
+                .play
+                .as_ref()
+                .is_some_and(|p| p.running && p.game_id == g.id);
+        let action = |label, msg: MaintenanceMsg| {
+            button(text(label))
+                .on_press_maybe((!busy).then(|| Message::Maintenance(msg)))
+                .style(button::secondary)
+        };
+        let mut items: Vec<Element<'_, Message>> = vec![
+            row![
+                action("Verify files", MaintenanceMsg::Check(g.id.clone(), false)),
+                action("Repair", MaintenanceMsg::Check(g.id.clone(), true)),
+                action("Uninstall…", MaintenanceMsg::AskUninstall(g.id.clone())),
+            ]
+            .spacing(8)
+            .into(),
+        ];
+        if let Some(v) = view {
+            items.extend(v.lines.iter().map(|l| text(l).size(13).into()));
+            if v.confirm_uninstall && !v.busy {
+                items.push(
+                    container(
+                        column![
+                            text(
+                                "Only files installed by slatty are deleted; anything else in the folder is kept. \
+                                 The Wine prefix holds most local saves.",
+                            )
+                            .size(13),
+                            column![
+                                button(text("Uninstall, keep the prefix"))
+                                    .on_press(Message::Maintenance(MaintenanceMsg::Uninstall(g.id.clone(), false)))
+                                    .style(button::danger),
+                                button(text("Also delete the prefix (backed up)"))
+                                    .on_press(Message::Maintenance(MaintenanceMsg::Uninstall(g.id.clone(), true)))
+                                    .style(button::danger),
+                                button(text("Cancel"))
+                                    .on_press(Message::Maintenance(MaintenanceMsg::CancelUninstall(g.id.clone())))
+                                    .style(button::secondary),
+                            ]
+                            .spacing(8),
+                        ]
+                        .spacing(6),
+                    )
+                    .padding(8)
+                    .width(Length::Fill)
+                    .style(container::bordered_box)
+                    .into(),
+                );
+            }
+        }
+        section("Maintenance", items)
     }
 
     fn achievements_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let mut items: Vec<Element<'_, Message>> = Vec::new();
         match self.achievements.get(&g.id) {
             None => items.push(
-                button(text("Afficher les achievements"))
+                button(text("Show achievements"))
                     .on_press(Message::LoadAchievements(g.id.clone()))
                     .style(button::secondary)
                     .into(),
             ),
-            Some(Loadable::Loading) => items.push(text("Chargement…").into()),
+            Some(Loadable::Loading) => items.push(text("Loading…").into()),
             Some(Loadable::Failed(e)) => {
                 items.push(text(format!("Indisponible : {e}")).size(13).into());
                 items.push(
-                    button(text("Réessayer"))
+                    button(text("Retry"))
                         .on_press(Message::LoadAchievements(g.id.clone()))
                         .into(),
                 );
@@ -505,13 +567,10 @@ impl App {
                     .collect();
                 items.push(
                     row![
-                        text(format!(
-                            "{unlocked} / {} débloqués (données GOG)",
-                            list.len()
-                        ))
-                        .size(14)
-                        .width(Length::Fill),
-                        button(text("Tout débloquer"))
+                        text(format!("{unlocked} / {} unlocked (GOG data)", list.len()))
+                            .size(14)
+                            .width(Length::Fill),
+                        button(text("Unlock all"))
                             .on_press_maybe((!locked.is_empty()).then(|| {
                                 Message::AskAchievementChange(g.id.clone(), locked.clone())
                             }))
@@ -528,15 +587,14 @@ impl App {
                     let name = if a.visible || done {
                         a.name.as_str()
                     } else {
-                        "Achievement caché"
+                        "Hidden achievement"
                     };
-                    let action =
-                        button(text(if done { "Réinitialiser" } else { "Débloquer" }).size(12))
-                            .on_press(Message::AskAchievementChange(
-                                g.id.clone(),
-                                vec![change(a, !done)],
-                            ))
-                            .style(button::text);
+                    let action = button(text(if done { "Clear" } else { "Unlock" }).size(12))
+                        .on_press(Message::AskAchievementChange(
+                            g.id.clone(),
+                            vec![change(a, !done)],
+                        ))
+                        .style(button::text);
                     items.push(
                         row![
                             text(format!("{} {name}", if done { "✔" } else { "·" }))
@@ -556,24 +614,32 @@ impl App {
     fn confirmation<'a>(&'a self, p: &'a PendingChange) -> Element<'a, Message> {
         let names: Vec<&str> = p.changes.iter().map(|c| c.name.as_str()).collect();
         let verb = if p.changes.iter().all(|c| c.unlock) {
-            "Débloquer"
+            "Unlock"
         } else if p.changes.iter().all(|c| !c.unlock) {
-            "Réinitialiser"
+            "Clear"
         } else {
-            "Modifier"
+            "Change"
         };
         container(
             column![
-                text(format!("{verb} {} achievement(s) sans jouer : {}", p.changes.len(), names.join(", ")))
-                    .size(13),
+                text(format!(
+                    "{verb} {} achievement(s) without playing: {}",
+                    p.changes.len(),
+                    names.join(", ")
+                ))
+                .size(13),
                 text(
-                    "Le changement est fait directement sur votre profil GOG public, \
-                     avec la date d'aujourd'hui. Il est probablement contraire aux conditions de GOG.",
+                    "The change is written directly to your public GOG profile, \
+                     dated today. It is probably against GOG's terms.",
                 )
                 .size(12),
                 row![
-                    button(text("Confirmer")).on_press(Message::ConfirmAchievementChange).style(button::danger),
-                    button(text("Annuler")).on_press(Message::CancelAchievementChange).style(button::secondary),
+                    button(text("Confirm"))
+                        .on_press(Message::ConfirmAchievementChange)
+                        .style(button::danger),
+                    button(text("Cancel"))
+                        .on_press(Message::CancelAchievementChange)
+                        .style(button::secondary),
                 ]
                 .spacing(8),
             ]
@@ -610,15 +676,15 @@ fn section<'a>(title: &'a str, items: Vec<Element<'a, Message>>) -> Element<'a, 
 
 fn runner_label(install: &Install) -> String {
     match &install.runner {
-        Runner::Native => "Lancement natif".into(),
+        Runner::Native => "Native".into(),
         Runner::Umu { proton, .. } => format!(
-            "Proton (umu) : {}",
+            "Proton (umu): {}",
             proton
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default()
         ),
-        Runner::Wine { wine, .. } => format!("Wine : {}", wine.display()),
+        Runner::Wine { wine, .. } => format!("Wine: {}", wine.display()),
     }
 }
 
@@ -633,70 +699,66 @@ fn local_time(ts: i64) -> String {
 
 pub fn describe_warning(w: Warning) -> &'static str {
     match w {
-        Warning::LocalRootMissing => {
-            "dossier local absent : aucune suppression cloud ne sera faite"
-        }
+        Warning::LocalRootMissing => "local folder missing: no cloud file will be deleted",
         Warning::LocalEmptyWithHistory => {
-            "dossier local vide alors qu'il contenait des sauvegardes : suppressions bloquées"
+            "local folder empty although it held saves: deletions blocked"
         }
         Warning::RemoteEmptyWithHistory => {
-            "cloud vide alors qu'il contenait des sauvegardes : suppressions locales bloquées"
+            "cloud empty although it held saves: local deletions blocked"
         }
-        Warning::RootChanged => {
-            "le dossier de sauvegarde a changé : l'historique précédent est ignoré"
-        }
+        Warning::RootChanged => "the save folder changed: previous history is ignored",
     }
 }
 
 fn describe_cloud(prefix: &str, s: &CloudSummary) -> String {
     let mut out = format!(
-        "{prefix} : {} envoyé(s), {} téléchargé(s)",
+        "{prefix}: {} uploaded, {} downloaded",
         s.uploaded, s.downloaded
     );
     if !s.conflicts.is_empty() {
-        out += &format!(" ; conflits : {}", s.conflicts.join(", "));
+        out += &format!("; conflicts: {}", s.conflicts.join(", "));
     }
     if !s.problems.is_empty() {
-        out += &format!(" ; problèmes : {}", s.problems.join(", "));
+        out += &format!("; problems: {}", s.problems.join(", "));
     }
     out
 }
 
 pub fn describe_play_event(e: &PlayEvent) -> String {
     match e {
-        PlayEvent::PreparingPrefix => "Premier lancement : création du préfixe Wine…".into(),
-        PlayEvent::CloudChecked(s) => describe_cloud("Cloud vérifié", s),
+        PlayEvent::PreparingPrefix => "First launch: creating the Wine prefix…".into(),
+        PlayEvent::CloudChecked(s) => describe_cloud("Cloud checked", s),
         PlayEvent::CloudSkipped(why) => {
-            format!("Cloud non vérifié ({why}) ; les sauvegardes locales sont conservées.")
+            format!("Cloud not checked ({why}); local saves are kept.")
         }
         PlayEvent::Blocked(s) => format!(
-            "{}. Lancement annulé : résolvez le conflit dans « Sauvegardes cloud ».",
-            describe_cloud("Cloud à vérifier", s)
+            "{}. Launch cancelled: resolve the conflict under Cloud saves.",
+            describe_cloud("Cloud needs attention", s)
         ),
         PlayEvent::CometReady => {
-            "Comet actif : les achievements obtenus en jeu sont transmis à GOG.".into()
+            "Comet running: achievements earned in game are sent to GOG.".into()
         }
         PlayEvent::CometUnavailable(why) => {
-            format!("Achievements indisponibles pour cette session : {why}")
+            format!("Achievements unavailable for this session: {why}")
         }
-        PlayEvent::Started { pid } => format!("Jeu lancé (pid {pid})."),
+        PlayEvent::Started { pid } => format!("Game started (pid {pid})."),
         PlayEvent::LauncherExited { code } => {
-            format!("Processus de lancement terminé ({code:?}) ; suivi des processus restants…")
+            format!("Launcher exited ({code:?}); following remaining game processes…")
         }
-        PlayEvent::StopRequested => "Arrêt demandé…".into(),
+        PlayEvent::StopRequested => "Stopping…".into(),
         PlayEvent::Ended { seconds, clean, .. } => format!(
-            "Session terminée après {} min{}.",
+            "Session ended after {} min{}.",
             seconds / 60,
-            if *clean { "" } else { " (fin incertaine)" }
+            if *clean { "" } else { " (end uncertain)" }
         ),
-        PlayEvent::CloudUploaded(s) => describe_cloud("Cloud après la partie", s),
+        PlayEvent::CloudUploaded(s) => describe_cloud("Cloud after playing", s),
         PlayEvent::CloudUploadSkipped(why) => {
-            format!("Cloud non synchronisé ({why}) ; sauvegardes locales conservées.")
+            format!("Cloud not synced ({why}); local saves are kept.")
         }
         PlayEvent::Unlocked(names) => {
-            format!("Achievements enregistrés sur GOG : {}", names.join(", "))
+            format!("Achievements recorded on GOG: {}", names.join(", "))
         }
-        PlayEvent::NoNewAchievement => "Aucun nouvel achievement enregistré sur GOG.".into(),
-        PlayEvent::AchievementsUnknown => "Impossible de relire les achievements sur GOG.".into(),
+        PlayEvent::NoNewAchievement => "No new achievement recorded on GOG.".into(),
+        PlayEvent::AchievementsUnknown => "Could not read achievements back from GOG.".into(),
     }
 }
