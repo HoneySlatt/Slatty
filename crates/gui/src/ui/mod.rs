@@ -40,21 +40,23 @@ impl App {
             return self.with_notice(self.login_view());
         };
         let body: Element<'_, Message> = match self.selected_game() {
-            Some(game) => self.game_page(game),
+            Some(game) => self.arriving(self.game_page(game)),
             None => column![
                 self.top_bar(&account.username),
-                container(match self.page {
-                    Page::Library => self.library_page(),
-                    Page::Achievements => match self
-                        .achievements_game
-                        .as_ref()
-                        .and_then(|id| self.library.iter().find(|g| &g.id == id))
-                    {
-                        Some(game) => self.achievements_game_page(game),
-                        None => self.achievements_page(),
-                    },
-                    Page::Settings => self.settings_page(),
-                })
+                container(
+                    self.arriving(match self.page {
+                        Page::Library => self.library_page(),
+                        Page::Achievements => match self
+                            .achievements_game
+                            .as_ref()
+                            .and_then(|id| self.library.iter().find(|g| &g.id == id))
+                        {
+                            Some(game) => self.achievements_game_page(game),
+                            None => self.achievements_page(),
+                        },
+                        Page::Settings => self.settings_page(),
+                    })
+                )
                 .padding(Padding::new(20.0).top(16.0)),
             ]
             .into(),
@@ -228,4 +230,20 @@ fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a
         center(opaque(dialog)),
     ]
     .into()
+}
+
+impl App {
+    /// A page just shown fades in from the background while rising slightly. The layers stay the
+    /// same once it has arrived, so the page keeps its state (scrolling, focus).
+    fn arriving<'a>(&self, page: Element<'a, Message>) -> Element<'a, Message> {
+        let shown: f32 = self.page_shown.interpolate(0.0, 1.0, self.now);
+        stack![
+            container(page).padding(Padding::ZERO.top((1.0 - shown) * tokens().transition_rise)),
+            container(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(theme::veil(1.0 - shown)),
+        ]
+        .into()
+    }
 }

@@ -97,6 +97,11 @@ fn snapshot(ui: &mut Simulator<'_, Message>, name: &str) {
     }
 }
 
+/// Ends the page transition, for snapshots of the page as it stays.
+fn settle(app: &mut App) {
+    let _ = app.update(Message::Frame(app.now + std::time::Duration::from_secs(1)));
+}
+
 fn titles(app: &App) -> Vec<String> {
     app.visible_games()
         .iter()
@@ -798,6 +803,7 @@ fn achievements_tab_opens_a_dedicated_page_per_game() {
         (app.page, app.achievements_game.as_deref()),
         (Page::Achievements, Some("5"))
     );
+    settle(&mut app);
     let mut ui = render(&app);
     assert!(ui.find("1 / 2 unlocked").is_ok());
     assert!(ui.find("Time played").is_err(), "not the game page");
@@ -1173,4 +1179,29 @@ fn a_narrow_window_lays_the_achievements_drawer_over_the_page() {
             .any(|m| matches!(m, Message::ClosePanel)),
         "over the page in a narrow window, closed by a click beside it"
     );
+}
+
+#[test]
+fn a_new_page_fades_in_then_stops_drawing_frames() {
+    use std::time::Duration;
+    let mut app = library_app();
+    assert!(!app.page_shown.is_animating(app.now));
+    let _ = app.update(Message::Select("3".into()));
+    let start = app.now;
+    assert!(app.page_shown.is_animating(start), "opening a game");
+    let _ = app.update(Message::Frame(start + Duration::from_secs(1)));
+    assert!(
+        !app.page_shown.is_animating(app.now),
+        "done once its time is over"
+    );
+    let _ = app.update(Message::OpenPanel(Panel::Achievements));
+    assert!(
+        !app.page_shown.is_animating(app.now),
+        "a panel is not a new page"
+    );
+    let _ = app.update(Message::CloseDetail);
+    assert!(app.page_shown.is_animating(app.now), "back to the library");
+    let _ = app.update(Message::Frame(app.now + Duration::from_secs(1)));
+    let _ = app.update(Message::ShowPage(Page::Achievements));
+    assert!(app.page_shown.is_animating(app.now), "another tab");
 }

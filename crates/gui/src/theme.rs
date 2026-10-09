@@ -2,11 +2,12 @@
 //! from them only. A custom theme is another `Tokens`; views never name a colour themselves.
 
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use iced::widget::{button, container, pick_list, progress_bar, scrollable, slider, text_input};
 use iced::{Background, Border, Color, Font, Shadow, Theme, border, color, font};
 
-/// Colours of the interface. The defaults are SlattyLauncher's own look.
+/// Colours, corner radii and motion of the interface. The defaults are SlattyLauncher's own look.
 #[derive(Debug, Clone)]
 pub struct Tokens {
     pub background: Color,
@@ -31,6 +32,9 @@ pub struct Tokens {
     pub radius: f32,
     /// Corner radius of game covers.
     pub cover_radius: f32,
+    /// How long a new page takes to appear, and how far it rises meanwhile. Zero turns it off.
+    pub transition: Duration,
+    pub transition_rise: f32,
 }
 
 impl Default for Tokens {
@@ -56,6 +60,8 @@ impl Default for Tokens {
             },
             radius: 8.0,
             cover_radius: 6.0,
+            transition: Duration::from_millis(180),
+            transition_rise: 8.0,
         }
     }
 }
@@ -273,6 +279,14 @@ pub fn placeholder(_: &Theme) -> container::Style {
         background: Some(Background::Color(tokens().surface_high)),
         border: round(tokens().cover_radius),
         text_color: Some(tokens().muted),
+        ..Default::default()
+    }
+}
+
+/// Covers a page with the background colour, `amount` from 0 (clear) to 1 (hidden).
+pub fn veil(amount: f32) -> impl Fn(&Theme) -> container::Style {
+    move |_| container::Style {
+        background: Some(Background::Color(tokens().background.scale_alpha(amount))),
         ..Default::default()
     }
 }

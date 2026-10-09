@@ -26,8 +26,10 @@ use maintenance::{MaintenanceMsg, MaintenanceView};
 use play::{PlayMsg, PlayState};
 use settings::SettingsMsg;
 
+use iced::animation::Easing;
+use iced::time::Instant;
 use iced::widget::{image, operation};
-use iced::{Size, Subscription, Task, keyboard};
+use iced::{Animation, Size, Subscription, Task, keyboard};
 use slatty_core::account::{Account, AccountInfo};
 use slatty_core::achievements::Achievement;
 use slatty_core::db::Db;
@@ -178,6 +180,9 @@ pub struct App {
     pub context_menu: Option<edit::ContextMenu>,
     /// Size of the window, for layouts that change with it.
     pub window: Size,
+    /// Fades the page in after a change of page; `now` is the time of the frame drawn.
+    pub page_shown: Animation<bool>,
+    pub now: Instant,
 }
 
 impl Default for App {
@@ -229,6 +234,8 @@ impl Default for App {
             menu_for: None,
             context_menu: None,
             window: Size::new(1440.0, 900.0),
+            page_shown: Animation::new(true),
+            now: Instant::now(),
         }
     }
 }
@@ -287,6 +294,7 @@ pub enum Message {
     CancelQuit,
     Edit(edit::EditMsg),
     WindowResized(Size),
+    Frame(Instant),
     Key(keyboard::Event),
 }
 
@@ -331,14 +339,43 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
+        let frames = if self.page_shown.is_animating(self.now) {
+            iced::window::frames().map(Message::Frame)
+        } else {
+            Subscription::none()
+        };
         Subscription::batch([
+            frames,
             keyboard::listen().map(Message::Key),
             iced::window::close_requests().map(|_| Message::CloseRequested),
             iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),
         ])
     }
 
+    /// Plays the page transition when the update moved to another page.
     fn update(&mut self, message: Message) -> Task<Message> {
+        let shown = self.location();
+        let task = self.handle(message);
+        if self.location() != shown {
+            self.now = Instant::now();
+            self.page_shown = Animation::new(false)
+                .duration(theme::tokens().transition)
+                .easing(Easing::EaseOutCubic)
+                .go(true, self.now);
+        }
+        task
+    }
+
+    /// The page shown, apart from panels and dialogs over it.
+    fn location(&self) -> (Page, Option<String>, Option<String>) {
+        (
+            self.page,
+            self.selected.clone(),
+            self.achievements_game.clone(),
+        )
+    }
+
+    fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Booted(Ok(boot)) => {
                 self.core = Some(boot.core);
@@ -451,6 +488,7 @@ impl App {
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Edit(msg) => return self.update_edit(msg),
             Message::WindowResized(size) => self.window = size,
+            Message::Frame(now) => self.now = now,
             Message::DismissNotice => self.notice = None,
             Message::CloseRequested => {
                 let running = self.running_work();
