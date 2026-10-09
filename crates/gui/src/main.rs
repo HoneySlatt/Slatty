@@ -300,6 +300,7 @@ pub struct Boot {
     interrupted: Vec<String>,
     library_root: PathBuf,
     proton: Option<PathBuf>,
+    proton_choices: Vec<PathBuf>,
     favorites: Vec<String>,
     playtime: HashMap<String, Playtime>,
     overview: HashMap<String, GameOverview>,
@@ -344,7 +345,7 @@ impl App {
                 self.account = boot.account;
                 self.library_root = boot.library_root.display().to_string();
                 self.proton = boot.proton;
-                self.proton_choices = slatty_core::settings::proton_candidates();
+                self.proton_choices = boot.proton_choices;
                 self.installs = boot
                     .installs
                     .into_iter()
@@ -661,6 +662,8 @@ async fn boot() -> Result<Boot, String> {
         .collect();
     let library_root = slatty_core::settings::library_root(&db).map_err(err)?;
     let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
+    // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
+    let proton_choices = slatty_core::settings::proton_candidates();
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let customs = slatty_core::custom::all(&db).map_err(err)?;
     let playtime = session::playtime(&db).map_err(err)?;
@@ -684,6 +687,7 @@ async fn boot() -> Result<Boot, String> {
         interrupted,
         library_root,
         proton,
+        proton_choices,
         favorites,
         playtime,
         overview,
