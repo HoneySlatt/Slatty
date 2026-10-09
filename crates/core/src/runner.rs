@@ -39,9 +39,14 @@ pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
             if !script.is_file() {
                 return Err(Error::NotFound(format!("{} is missing", script.display())));
             }
+            let steam_run = Path::new("/etc/NIXOS")
+                .exists()
+                .then(|| find_in_path("steam-run"))
+                .flatten();
+            let (program, args) = native_command(&script, steam_run);
             Ok(LaunchSpec {
-                program: script,
-                args: Vec::new(),
+                program,
+                args,
                 cwd: install.path.clone(),
                 env: Vec::new(),
             })
@@ -53,6 +58,36 @@ pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
         (platform, runner) => Err(Error::Unsupported(format!(
             "{platform:?} game with runner {runner:?}"
         ))),
+    }
+}
+
+/// How to start a native game's script. On NixOS, through `steam-run` when given: it lends the
+/// game the usual Linux layout and libraries (`/bin/bash`, OpenGL, sound) that NixOS lacks.
+/// Elsewhere, through the interpreter its first line names, found in PATH by name when that path
+/// does not exist (GOG's scripts ask for `/bin/bash`).
+fn native_command(script: &Path, steam_run: Option<PathBuf>) -> (PathBuf, Vec<String>) {
+    let script_arg = vec![script.display().to_string()];
+    if let Some(run) = steam_run {
+        return (run, script_arg);
+    }
+    let first = std::fs::read(script)
+        .ok()
+        .and_then(|b| b.split(|c| *c == b'\n').next().map(<[u8]>::to_vec))
+        .map(|l| String::from_utf8_lossy(&l).into_owned())
+        .unwrap_or_default();
+    let interpreter = first
+        .strip_prefix("#!")
+        .and_then(|l| l.split_whitespace().next())
+        .map(PathBuf::from);
+    match interpreter {
+        Some(i) if !i.exists() => match i
+            .file_name()
+            .and_then(|n| find_in_path(&n.to_string_lossy()))
+        {
+            Some(found) => (found, script_arg),
+            None => (script.to_path_buf(), Vec::new()),
+        },
+        _ => (script.to_path_buf(), Vec::new()),
     }
 }
 
@@ -177,5 +212,26 @@ mod tests {
         assert_eq!(game_id(&install).as_deref(), Some("umu-0"));
         install.umu_id = Some("umu-1091500".into());
         assert_eq!(game_id(&install).as_deref(), Some("umu-1091500"));
+    }
+    #[test]
+    fn a_native_script_starts_through_an_interpreter_that_exists() {
+        let dir = std::env::temp_dir().join(format!("slatty-native-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("start.sh");
+        let arg = vec![script.display().to_string()];
+        // GOG's scripts name /bin/bash, which NixOS does not have.
+        std::fs::write(&script, "#!/nonexistent/bin/sh \necho hi\n").unwrap();
+        let (program, args) = native_command(&script, None);
+        assert_eq!(program, find_in_path("sh").unwrap());
+        assert_eq!(args, arg);
+        // An interpreter that exists: the script runs as it is.
+        std::fs::write(&script, "#!/bin/sh\necho hi\n").unwrap();
+        if Path::new("/bin/sh").exists() {
+            assert_eq!(native_command(&script, None), (script.clone(), Vec::new()));
+        }
+        // steam-run, when given, runs it in its usual Linux layout.
+        let run = PathBuf::from("/run/current-system/sw/bin/steam-run");
+        assert_eq!(native_command(&script, Some(run.clone())), (run, arg));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
