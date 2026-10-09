@@ -16,6 +16,7 @@ rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 slatty-core.workspace = true
 tokio = { workspace = true, features = ["sync", "macros"] }
 tokio-util = "0.7"
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 iced_test = "0.14"

@@ -4832,6 +4832,7 @@ dependencies = [
  "slatty-core",
  "tokio",
  "tokio-util",
+ "tracing-subscriber",
 ]
 
 [[package]]

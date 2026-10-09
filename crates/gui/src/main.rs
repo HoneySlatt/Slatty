@@ -46,6 +46,10 @@ fn main() -> iced::Result {
     {
         std::process::exit(slatty_core::session::supervise_main());
     }
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_env("SLATTY_LOG"))
+        .with_writer(std::io::stderr)
+        .init();
     iced::application(App::boot, App::update, App::view)
         .title("SlattyLauncher")
         .subscription(App::subscription)
