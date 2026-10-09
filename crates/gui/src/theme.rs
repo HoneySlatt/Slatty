@@ -152,12 +152,24 @@ pub fn danger(_: &Theme, status: button::Status) -> button::Style {
 
 /// Secondary actions: a filled surface that lightens on hover.
 pub fn tonal(_: &Theme, status: button::Status) -> button::Style {
+    let t = tokens();
     match status {
-        button::Status::Disabled => base(Some(tokens().surface), tokens().outline, 14.0),
+        button::Status::Disabled => base(Some(t.surface), t.outline, t.radius),
         button::Status::Hovered | button::Status::Pressed => {
-            base(Some(tokens().outline), tokens().text, 14.0)
+            base(Some(t.outline), t.text, t.radius)
         }
-        button::Status::Active => base(Some(tokens().surface_high), tokens().text, 14.0),
+        button::Status::Active => base(Some(t.surface_high), t.text, t.radius),
+    }
+}
+
+/// A clickable card of a grid (a game on the Achievements tab).
+pub fn tile(_: &Theme, status: button::Status) -> button::Style {
+    let t = tokens();
+    match status {
+        button::Status::Hovered | button::Status::Pressed => {
+            base(Some(t.surface_high), t.text, t.radius)
+        }
+        _ => base(Some(t.surface), t.text, t.radius),
     }
 }
 

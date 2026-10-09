@@ -89,7 +89,8 @@ Closing the window while something runs (a download, an update or repair, a clou
 asks first and says what would be interrupted. Quitting pauses a download or an update; each resumes
 where it stopped.
 
-**Achievements** lists every game with achievements, by completion. Clicking a game opens its own
+**Achievements** shows every game with achievements as a card (cover, unlocked count, share and
+progress bar), the most completed first. Clicking a game opens its own
 achievements page in the same tab, where you can unlock or clear them. SlattyLauncher reads which games
 have achievements and cloud saves from GOG in the background and keeps the answer in
 `~/.cache/slatty/<user id>/overview.json`; **Refresh** reads it again.

@@ -361,7 +361,14 @@ fn cancelling_drops_the_pending_change() {
 fn achievements_tab_lists_games_by_completion() {
     let mut app = library_app();
     app.page = Page::Achievements;
-    for (id, done, total) in [("2", 1, 4), ("6", 4, 4), ("8", 0, 10)] {
+    for (id, done, total) in [
+        ("2", 1, 4),
+        ("6", 4, 4),
+        ("8", 0, 10),
+        ("9", 6, 80),
+        ("10", 1, 50),
+        ("11", 2, 8),
+    ] {
         app.overview.insert(
             id.into(),
             GameOverview {
@@ -371,6 +378,23 @@ fn achievements_tab_lists_games_by_completion() {
             },
         );
     }
+    let order: Vec<&str> = app
+        .games_by_achievements()
+        .iter()
+        .map(|(g, _, _)| g.title.as_str())
+        .collect();
+    assert_eq!(
+        order,
+        [
+            "[FAKE] Game 6",
+            "[FAKE] Game 11",
+            "[FAKE] Game 2",
+            "[FAKE] Game 9",
+            "[FAKE] Game 10",
+            "[FAKE] Game 8"
+        ],
+        "highest share first, even with fewer unlocked; equal shares by title"
+    );
     let mut ui = render(&app);
     assert!(ui.find("4 / 4").is_ok());
     assert!(ui.find("25%").is_ok());

@@ -1,7 +1,8 @@
 //! Achievements tab, the per-game achievements page, and the widgets they share with the game page.
 
 use iced::widget::{
-    Column, Space, button, column, container, image, progress_bar, row, scrollable, space, text,
+    Column, Space, button, column, container, grid, image, progress_bar, row, scrollable, space,
+    text,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::achievements::Achievement;
@@ -12,31 +13,21 @@ use crate::icons::{Icon, icon};
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{AchievementChange, App, Loadable, Message, Page, PendingChange};
 
+/// Height of a game card on the Achievements tab.
+const TILE_HEIGHT: f32 = 186.0;
+
 impl App {
     pub(super) fn achievements_page(&self) -> Element<'_, Message> {
-        let mut games: Vec<(&LibraryGame, usize, usize)> = self
-            .library
-            .iter()
-            .filter_map(|g| {
-                let (done, total) = self.overview.get(&g.id)?.achievements?;
-                Some((g, done, total))
-            })
-            .collect();
-        games.sort_by(|a, b| {
-            let pa = a.1 as f32 / a.2 as f32;
-            let pb = b.1 as f32 / b.2 as f32;
-            pb.total_cmp(&pa)
-                .then_with(|| a.0.title.to_lowercase().cmp(&b.0.title.to_lowercase()))
-        });
+        let games = self.games_by_achievements();
         let unlocked: usize = games.iter().map(|g| g.1).sum();
         let total: usize = games.iter().map(|g| g.2).sum();
         let perfect = games.iter().filter(|g| g.1 == g.2).count();
         let scanning = self
             .overview_status()
-            .unwrap_or_else(|| format!("{} games with achievements", games.len()));
+            .unwrap_or_else(|| format!("{} games", games.len()));
         let header = row![
             column![
-                text("Achievements").size(30).font(BOLD),
+                text("Achievements").size(32).font(BOLD),
                 text(format!(
                     "{unlocked} / {total} unlocked · {perfect} completed · {scanning}"
                 ))
@@ -58,65 +49,69 @@ impl App {
             .style(theme::tonal),
         ]
         .align_y(Alignment::Center);
-        let rows: Vec<Element<'_, Message>> = games
+        let cards: Vec<Element<'_, Message>> = games
             .into_iter()
-            .map(|(g, done, total)| {
-                let thumb: Element<'_, Message> = match self.covers.get(&g.id) {
-                    Some(h) => image(h.clone())
-                        .content_fit(ContentFit::Cover)
-                        .width(48)
-                        .height(64)
-                        .border_radius(8)
-                        .into(),
-                    None => container(Space::new())
-                        .width(48)
-                        .height(64)
-                        .style(theme::placeholder)
-                        .into(),
-                };
-                let share = done as f32 / total as f32;
-                button(
-                    row![
-                        thumb,
-                        column![
-                            text(&g.title).size(16).font(SEMIBOLD),
-                            progress_bar(0.0..=1.0, share)
-                                .girth(8)
-                                .style(theme::progress),
-                        ]
-                        .spacing(10)
-                        .width(Length::Fill),
-                        text(format!("{done} / {total}"))
-                            .size(15)
-                            .font(SEMIBOLD)
-                            .width(90)
-                            .align_x(Alignment::End),
-                        text(format!("{:.0}%", share * 100.0))
-                            .size(14)
-                            .color(tokens().muted)
-                            .width(50)
-                            .align_x(Alignment::End),
-                    ]
-                    .spacing(18)
-                    .align_y(Alignment::Center),
-                )
-                .padding([10, 16])
-                .width(Length::Fill)
-                .on_press(Message::OpenAchievements(g.id.clone()))
-                .style(theme::row_button)
-                .into()
-            })
+            .map(|(g, done, total)| self.achievement_tile(g, done, total))
             .collect();
         column![
             header,
-            scrollable(Column::with_children(rows).spacing(8))
+            scrollable(grid(cards).fluid(420).spacing(14).height(Length::Shrink))
                 .spacing(8)
                 .style(theme::scroller)
                 .height(Length::Fill)
         ]
         .spacing(20)
-        .padding(Padding::ZERO.top(10))
+        .padding(Padding::ZERO.top(4))
         .into()
+    }
+
+    /// One game of the Achievements tab: cover, title and progress.
+    fn achievement_tile<'a>(
+        &'a self,
+        g: &'a LibraryGame,
+        done: usize,
+        total: usize,
+    ) -> Element<'a, Message> {
+        let cover_height = TILE_HEIGHT - 16.0;
+        let cover_width = cover_height * 3.0 / 4.0;
+        let cover: Element<'_, Message> = match self.covers.get(&g.id) {
+            Some(h) => image(h.clone())
+                .content_fit(ContentFit::Cover)
+                .width(cover_width)
+                .height(cover_height)
+                .border_radius(tokens().cover_radius)
+                .into(),
+            None => container(Space::new())
+                .width(cover_width)
+                .height(cover_height)
+                .style(theme::placeholder)
+                .into(),
+        };
+        let share = done as f32 / total as f32;
+        let details = column![
+            text(&g.title).size(17).font(SEMIBOLD),
+            space().height(Length::Fill),
+            row![
+                text(format!("{done} / {total}")).size(16),
+                space().width(Length::Fill),
+                text(format!("{:.0}%", share * 100.0))
+                    .size(15)
+                    .color(tokens().muted),
+            ],
+            progress_bar(0.0..=1.0, share)
+                .girth(8)
+                .style(theme::progress),
+        ]
+        .spacing(10)
+        .padding(Padding::new(16.0).left(6.0).bottom(30.0))
+        .height(Length::Fill);
+        button(row![cover, details].spacing(14).height(Length::Fill))
+            .padding(8)
+            .width(Length::Fill)
+            .height(TILE_HEIGHT)
+            .on_press(Message::OpenAchievements(g.id.clone()))
+            .style(theme::tile)
+            .into()
     }
 
     pub(super) fn achievements_game_page<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
