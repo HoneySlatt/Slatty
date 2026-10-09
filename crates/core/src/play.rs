@@ -16,6 +16,7 @@ use crate::install::Install;
 use crate::paths::Dirs;
 use crate::runner;
 use crate::session::{self, SessionHandle, SessionOutcome, SupervisorEvent};
+use crate::setup::SetupEvent;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CloudSummary {
@@ -68,6 +69,11 @@ impl CloudSummary {
 pub enum PlayEvent {
     /// First launch of a fresh install: the Wine prefix is being created.
     PreparingPrefix,
+    /// Post-install setup (GOG scripts, redistributables), once per installed build.
+    SetupStep(String),
+    SetupWarning(String),
+    /// Setup could not run now (offline, error); it is retried at the next launch.
+    SetupSkipped(String),
     CloudChecked(CloudSummary),
     /// Cloud not checked; the reason is shown and local saves are kept.
     CloudSkipped(String),
@@ -139,6 +145,37 @@ pub async fn play(
                 "the Wine prefix could not be created; see {}",
                 log.display()
             )));
+        }
+    }
+
+    if crate::setup::pending(dirs, &install.game_id)? {
+        let result = async {
+            let tokens = tokens(db, dirs, http).await?;
+            let forward = |e: SetupEvent| {
+                emit(match e {
+                    SetupEvent::Downloading => {
+                        PlayEvent::SetupStep("downloading setup files".into())
+                    }
+                    SetupEvent::Running(label) => PlayEvent::SetupStep(label),
+                    SetupEvent::NonZeroExit { label, code } => {
+                        PlayEvent::SetupWarning(format!("{label} exited with code {code:?}"))
+                    }
+                })
+            };
+            crate::setup::run(
+                dirs,
+                http,
+                &tokens,
+                &install,
+                &req.supervisor,
+                false,
+                &forward,
+            )
+            .await
+        }
+        .await;
+        if let Err(e) = result {
+            emit(PlayEvent::SetupSkipped(e.to_string()));
         }
     }
 

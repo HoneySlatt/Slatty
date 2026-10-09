@@ -73,7 +73,7 @@ pub fn prefix_init_spec(install: &Install) -> Result<Option<LaunchSpec>> {
     .map(Some)
 }
 
-fn windows_command(install: &Install, args: Vec<String>, cwd: PathBuf) -> Result<LaunchSpec> {
+pub fn windows_command(install: &Install, args: Vec<String>, cwd: PathBuf) -> Result<LaunchSpec> {
     match &install.runner {
         Runner::Umu { proton, prefix } => {
             if !proton.join("proton").is_file() {

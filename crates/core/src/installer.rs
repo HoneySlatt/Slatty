@@ -712,6 +712,9 @@ pub struct InstallRecord {
     pub path: Option<PathBuf>,
     #[serde(default)]
     pub dlcs: Vec<String>,
+    /// Build whose post-install setup has run.
+    #[serde(default)]
+    pub setup_build: Option<String>,
     pub files: Vec<RecordedFile>,
 }
 
@@ -853,6 +856,7 @@ pub async fn install(
         language: plan.language.clone(),
         path: Some(target.clone()),
         dlcs: plan.selected_dlcs(),
+        setup_build: None,
         files: recorded_files(&set),
     }
     .save(dirs, &req.game_id)?;

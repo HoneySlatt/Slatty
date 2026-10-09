@@ -47,6 +47,8 @@ enum Command {
     Update(maintenance::UpdateArgs),
     /// Show or change the language and DLC of an installed game
     Content(maintenance::ContentArgs),
+    /// Run GOG's post-install setup (installer scripts, redistributables)
+    Setup(maintenance::SetupArgs),
     /// Launch a game and follow its session until every process has exited
     Launch(launch::LaunchArgs),
     /// Cloud saves
@@ -111,6 +113,7 @@ async fn run() -> Result<()> {
         Command::Verify(args) => maintenance::verify(&ctx, args).await,
         Command::Update(args) => maintenance::update(&ctx, args).await,
         Command::Content(args) => maintenance::content(&ctx, args).await,
+        Command::Setup(args) => maintenance::setup(&ctx, args).await,
         Command::Launch(args) => launch::run(&ctx, args).await,
         Command::Cloud(cmd) => cloud::run(&ctx, cmd).await,
         Command::Achievements(args) => achievements::run(&ctx, args).await,

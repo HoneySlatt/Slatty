@@ -53,6 +53,11 @@ pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
 fn print_event(game_id: &str, event: PlayEvent) {
     match event {
         PlayEvent::PreparingPrefix => println!("First launch: creating the Wine prefix…"),
+        PlayEvent::SetupStep(step) => println!("Setup: {step}…"),
+        PlayEvent::SetupWarning(w) => println!("Setup warning: {w}"),
+        PlayEvent::SetupSkipped(why) => {
+            println!("Setup not run ({why}); it will be retried at the next launch.")
+        }
         PlayEvent::CloudChecked(s) => print_cloud("Cloud saves checked", &s),
         PlayEvent::CloudSkipped(why) => {
             println!("Cloud saves not checked ({why}); local saves are kept.")

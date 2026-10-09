@@ -212,8 +212,10 @@ async fn interrupted_install_resumes_without_refetching_finished_files() {
 #[tokio::test]
 async fn corrupted_chunk_stops_the_install() {
     let env = Env::new("corrupt");
-    let some_chunk = env.source.chunks.keys().next().unwrap().clone();
-    *env.source.corrupt.lock().unwrap() = Some(some_chunk);
+    let DepotItem::DepotFile(pak) = &env.source.manifests["m1"][1] else {
+        unreachable!()
+    };
+    *env.source.corrupt.lock().unwrap() = Some(pak.chunks[2].compressed_md5.clone());
     let err = env
         .run(&CancellationToken::new(), PLENTY)
         .await
@@ -479,6 +481,7 @@ async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
         language: "en-US".into(),
         path: Some(game.clone()),
         dlcs: vec![],
+        setup_build: None,
         files: recorded_files(&old_set),
     };
 
@@ -562,6 +565,7 @@ async fn dlc_files_come_from_their_product_and_removing_the_dlc_deletes_only_the
         language: "en-US".into(),
         path: Some(game.clone()),
         dlcs: vec!["2".into()],
+        setup_build: None,
         files: recorded_files(&with_dlc),
     };
     let base_only = collect_files(&env.source, &[base]).await.unwrap();

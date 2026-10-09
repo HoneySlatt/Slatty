@@ -338,6 +338,7 @@ pub async fn reconfigure(
         language: plan.language.clone(),
         path: Some(install.path.clone()),
         dlcs: selected,
+        setup_build: None,
         files: installer::recorded_files(&set),
     }
     .save(dirs, game_id)?;
@@ -491,6 +492,7 @@ mod tests {
                     language: "en-US".into(),
                     path: Some(game),
                     dlcs: vec![],
+                    setup_build: None,
                     files: ["Game.exe", "data/a.pak"]
                         .iter()
                         .map(|p| RecordedFile {

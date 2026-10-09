@@ -835,6 +835,11 @@ fn describe_cloud(prefix: &str, s: &CloudSummary) -> String {
 pub fn describe_play_event(e: &PlayEvent) -> String {
     match e {
         PlayEvent::PreparingPrefix => "First launch: creating the Wine prefix…".into(),
+        PlayEvent::SetupStep(step) => format!("Setup: {step}…"),
+        PlayEvent::SetupWarning(w) => format!("Setup warning: {w}"),
+        PlayEvent::SetupSkipped(why) => {
+            format!("Setup not run ({why}); it will be retried at the next launch.")
+        }
         PlayEvent::CloudChecked(s) => describe_cloud("Cloud checked", s),
         PlayEvent::CloudSkipped(why) => {
             format!("Cloud not checked ({why}); local saves are kept.")

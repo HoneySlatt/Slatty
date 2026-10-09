@@ -272,3 +272,70 @@ pub async fn content(ctx: &Ctx, args: ContentArgs) -> Result<()> {
     crate::install::print_dlcs(&plan.dlcs);
     Ok(())
 }
+
+#[derive(Args)]
+pub struct SetupArgs {
+    game_id: String,
+    /// Show what would be downloaded and run, without doing it
+    #[arg(long)]
+    dry_run: bool,
+    /// Run again even if it already ran for the installed build
+    #[arg(long)]
+    force: bool,
+}
+
+pub async fn setup(ctx: &Ctx, args: SetupArgs) -> Result<()> {
+    let install = crate::games::get(ctx, &args.game_id)?;
+    let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
+    let tokens = account.tokens(&ctx.http).await?.clone();
+    if args.dry_run {
+        let preview = slatty_core::setup::preview(&ctx.dirs, &ctx.http, &tokens, &install).await?;
+        for d in &preview.dependencies {
+            println!("download: {} ({})", d.readable_name, d.executable.path);
+        }
+        for c in &preview.commands {
+            println!(
+                "run: {}\n  {} {}",
+                c.label,
+                c.program.display(),
+                c.args.join(" ")
+            );
+        }
+        if preview.commands.is_empty() {
+            println!("Nothing to run for this game.");
+        }
+        return Ok(());
+    }
+    if install
+        .runner
+        .prefix()
+        .is_some_and(|p| !p.join("drive_c/users").is_dir())
+    {
+        anyhow::bail!(
+            "the Wine prefix does not exist yet; launch the game once (the setup then runs automatically)"
+        );
+    }
+    let emit = |e: slatty_core::setup::SetupEvent| match e {
+        slatty_core::setup::SetupEvent::Downloading => println!("Downloading setup files…"),
+        slatty_core::setup::SetupEvent::Running(label) => println!("Running {label}…"),
+        slatty_core::setup::SetupEvent::NonZeroExit { label, code } => {
+            println!("  {label} exited with code {code:?}")
+        }
+    };
+    let ran = slatty_core::setup::run(
+        &ctx.dirs,
+        &ctx.http,
+        &tokens,
+        &install,
+        &std::env::current_exe()?,
+        args.force,
+        &emit,
+    )
+    .await?;
+    if ran.is_empty() {
+        println!("Setup already done for the installed build (use --force to run it again).");
+    } else {
+        println!("Setup done ({} step(s)).", ran.len());
+    }
+    Ok(())
+}

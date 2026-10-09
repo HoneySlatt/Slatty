@@ -22,5 +22,6 @@ pub mod runner;
 pub mod secret;
 pub mod session;
 pub mod settings;
+pub mod setup;
 
 pub use error::{Error, Result};

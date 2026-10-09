@@ -46,6 +46,20 @@ known to work, which is why the final address is pasted back by the user.
 Each product (the game and every DLC) has its own download links; DLC chunks are fetched through the
 DLC's links. Download links expire. On 401 or 403 they are requested again.
 
+### Dependencies and post-install setup
+
+| Use | Request | Source | Status |
+|---|---|---|---|
+| Dependency repository | `GET https://content-system.gog.com/dependencies/repository?generation=2`, then its `repository_manifest` (zlib JSON: dependency id, executable path and arguments, manifest) | heroic-gogdl | Verified |
+| Dependency manifests | `GET https://gog-cdn-fastly.gog.com/content-system/v2/dependencies/meta/{ab}/{cd}/{hash}` | heroic-gogdl | Verified |
+| Dependency downloads | `GET https://content-system.gog.com/open_link?generation=2&_version=2&path=/dependencies/store/`, chunks under the returned `url` | heroic-gogdl | Verified (script interpreter) |
+| Setup data | Build metadata `scriptInterpreter` and per-product `temp_executable` | Heroic | Verified (`scriptInterpreter` on Undertale) |
+
+Dependencies whose executable lives under `__redist/` are shared and installed at first launch;
+the others ship files into the game folder and are installed with it, as heroic-gogdl does. The
+script interpreter and setup programs receive the same arguments as in Heroic (`/VERYSILENT`,
+`/DIR=`, `/ProductId=`, `/supportDir=`, …).
+
 ## Cloud saves
 
 | Use | Request | Source | Status |

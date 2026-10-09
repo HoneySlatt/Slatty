@@ -86,12 +86,9 @@ How an install behaves:
   would escape the game folder are refused before anything is downloaded.
 - `slatty installs` lists installed games and interrupted installs.
 
-What is not installed yet:
-
-- **Redistributables** (Visual C++ and similar): they are listed but not installed. Proton already
-  ships many of them.
-- **GOG installer scripts** ("support" files): most games do not need them, a few expect registry
-  entries they create.
+Dependencies that ship files into the game folder are installed with the game. GOG's installer
+scripts ("support" files) are kept in `~/.local/share/slatty/support/<id>/`; they are used by the
+setup that runs at first launch (see below).
 
 ## Playing
 
@@ -103,6 +100,11 @@ A launch goes through these steps:
 
 1. On the first launch of a fresh install, the Wine prefix is created (`wineboot`), so that save
    folders exist.
+   The post-install setup that GOG Galaxy performs runs once per installed build: GOG's script
+   interpreter or each product's setup program (registry entries and similar), then the shared
+   redistributables the game declares (Visual C++, DirectX…), installed silently. Offline or on
+   failure the game still starts and the setup is retried at the next launch. `slatty setup <id>
+   --dry-run` shows what it would run; `--force` runs it again.
 2. Cloud saves are synchronised. If both sides changed, the launch stops and asks you to choose
    (see [cloud saves](#cloud-saves)). Offline, the game starts with your local saves.
 3. Comet starts, so the game can report achievements.

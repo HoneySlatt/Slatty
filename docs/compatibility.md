@@ -33,6 +33,7 @@ Proton-CachyOS.
 | 2026-10-09 | Undertale (1456487183) | 1.08 | Installed by slatty | Galaxy install | OK | 126 MiB downloaded, 221 files verified, 1 support file skipped |
 | 2026-10-09 | Undertale (1456487183) | 1.08 | Installed by slatty | First launch | OK | Prefix created, cloud checked (empty), Comet 0.3.2 started, end of session detected |
 | 2026-10-09 | Undertale (1456487183) | 1.08 | Installed by slatty | `slatty verify` | OK | 221/221 files intact |
+| 2026-10-09 | Undertale (1456487183) | 1.08 | Installed by slatty | Post-install setup (`slatty setup`) | OK | Script interpreter downloaded and run under Proton; it wrote the `GOG.com\\Games\\1456487183` registry keys (build id, executable) |
 
 ## Not tested against GOG yet
 
@@ -40,5 +41,7 @@ Proton-CachyOS.
 - Repair and uninstall.
 - Applying an update (no installed game had one yet).
 - Installing, adding or removing DLC; switching language.
+- Installing shared redistributables (Visual C++, DirectX) during setup.
+- A game-folder dependency.
 - Cloud deletions.
 - An achievement earned in game and reported through Comet.

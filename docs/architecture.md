@@ -68,6 +68,23 @@ refresh token is not rotated on refresh.
 An interrupted install keeps its job in the database, and resumes with the same build, language and
 folder.
 
+### Post-install setup
+
+`setup::run` reproduces what Galaxy does after an install. It runs once per installed build, from
+the play flow after the prefix exists, or on demand with `slatty setup`:
+
+1. Missing support files and the shared dependencies are downloaded:
+   - support files go to the game's support folder;
+   - the shared dependencies (and the script interpreter when the build uses it) go to
+     `~/.local/share/slatty/redist`.
+2. For the base game and each installed DLC, it runs GOG's script interpreter when the build
+   metadata asks for it, otherwise the product's temporary setup program, with Galaxy's arguments.
+3. Shared redistributables are installed silently.
+
+Commands are built by a pure function (`setup::commands`). They are run under the session
+supervisor, so each one has really finished before the next starts. The build is then recorded as
+set up. Updates, language and DLC changes clear that mark.
+
 ### Update, language and DLC changes
 
 `maintenance::reconfigure` handles three changes the same way:

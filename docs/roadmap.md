@@ -29,20 +29,19 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 - **Maintenance.** Verify, repair, uninstall.
 - **Updates.** Detect a newer build; update in place, file by file, resumable.
 - **DLC and languages.** Owned DLC installed by default; add, remove or switch language later.
+- **Post-install setup.** GOG script interpreter or setup programs, game-folder dependencies, shared
+  redistributables.
 
-## In progress
+## Next
 
-- **GOG installer scripts.** Apply what the "support" files do (registry entries, for example) so the
-  games that need them run.
+- **Galaxy dummy service.** Some games report achievements only when it is registered in the
+  prefix.
+- **Smaller updates.** Reuse unchanged chunks of changed files, or GOG's binary patches.
 
 ## Planned
 
-- **Smaller updates.** Reuse unchanged chunks of changed files, or GOG's binary patches.
 - **Store-like game pages.** Description, screenshots, changelog. GOG's descriptions are HTML,
   rendered through Iced's Markdown support.
-- **Galaxy dummy service.** Some games report achievements only when it is registered in the
-  prefix.
-- **Redistributables.** Install the dependencies a game declares.
 - **Gamepad navigation.** A couch mode.
 - **Translations of the interface.** It is in English for now.
 - **More runners.** System Wine, per-game Proton choice, managed Proton downloads.
