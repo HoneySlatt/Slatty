@@ -272,3 +272,68 @@ pub(super) fn runner_label(install: &Install) -> String {
         Runner::Wine { wine, .. } => format!("Wine: {}", wine.display()),
     }
 }
+
+impl App {
+    /// A game's dialog over the library: its cover with a title and subtitle beside it, a close
+    /// button, then `body`. The library stays where it was underneath.
+    pub(super) fn library_dialog<'a>(
+        &'a self,
+        page: Element<'a, Message>,
+        g: &'a LibraryGame,
+        title: &'a str,
+        details: Vec<Element<'a, Message>>,
+        body: Element<'a, Message>,
+    ) -> Element<'a, Message> {
+        const COVER: (f32, f32) = (94.0, 125.0);
+        let cover: Element<'a, Message> = match self.cover(&g.id) {
+            Some(h) => iced::widget::image(h)
+                .content_fit(iced::ContentFit::Cover)
+                .width(COVER.0)
+                .height(COVER.1)
+                .border_radius(tokens().cover_radius)
+                .into(),
+            None => container(Space::new())
+                .width(COVER.0)
+                .height(COVER.1)
+                .style(theme::placeholder)
+                .into(),
+        };
+        let header = Column::new()
+            .push(text(title).size(30).font(bold()))
+            .push(text(&g.title).size(18).color(tokens().muted))
+            .extend(details)
+            .spacing(4);
+        // The title and details centred against the cover; the close button stays at the top.
+        let top = row![
+            cover,
+            container(header).center_y(COVER.1).width(Length::Fill),
+            round_button(Icon::X, Message::CloseDialog)
+        ]
+        .spacing(22)
+        .align_y(Alignment::Start);
+        let dialog = container(
+            scrollable(
+                column![top, body]
+                    .spacing(22)
+                    .padding(Padding::ZERO.right(10)),
+            )
+            .style(theme::scroller),
+        )
+        .padding(28)
+        .max_width(640)
+        .max_height(self.window.height - 60.0)
+        .style(theme::card);
+        stack![
+            page,
+            mouse_area(
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(theme::backdrop)
+            )
+            .on_press(Message::CloseDialog),
+            center(opaque(dialog)),
+        ]
+        .into()
+    }
+}

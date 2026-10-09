@@ -23,16 +23,19 @@ impl App {
         g: &'a LibraryGame,
     ) -> Element<'a, Message> {
         let subtitle = text(&g.title).size(18).color(tokens().muted);
-        let body = scrollable(container(self.game_settings(g)).padding(Padding::ZERO.right(14)))
-            .style(theme::scroller)
-            .height(Length::Fill);
+        let body =
+            scrollable(container(self.game_settings(g, 0.0)).padding(Padding::ZERO.right(14)))
+                .style(theme::scroller)
+                .height(Length::Fill);
         self.drawer(page, "Game settings", subtitle.into(), body.into(), None)
     }
 
-    fn game_settings<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+    /// The sections; `indent` sets their content under their title rather than under their icon.
+    fn game_settings<'a>(&'a self, g: &'a LibraryGame, indent: f32) -> Element<'a, Message> {
         let Some(install) = self.installs.get(&g.id) else {
             return note("Not installed.");
         };
+        let section = |ic, title, content| titled(ic, title, content, indent);
         let mut sections = vec![section(
             Icon::Folder,
             "Folder",
@@ -108,12 +111,17 @@ impl App {
 }
 
 /// A titled part of the drawer, with its icon.
-fn section<'a>(ic: Icon, title: &'a str, content: Element<'a, Message>) -> Element<'a, Message> {
+fn titled<'a>(
+    ic: Icon,
+    title: &'a str,
+    content: Element<'a, Message>,
+    indent: f32,
+) -> Element<'a, Message> {
     column![
         row![icon(ic, 22.0, tokens().text), text(title).size(17)]
             .spacing(12)
             .align_y(Alignment::Center),
-        content,
+        container(content).padding(Padding::ZERO.left(indent)),
     ]
     .spacing(14)
     .into()
@@ -228,4 +236,17 @@ fn version<'a>(game_id: &'a str, c: &'a ContentInfo, busy: bool) -> Element<'a, 
     ]
     .spacing(10)
     .into()
+}
+
+impl App {
+    /// Game settings opened from the library: a dialog over the grid.
+    pub(super) fn game_settings_dialog<'a>(
+        &'a self,
+        page: Element<'a, Message>,
+        g: &'a LibraryGame,
+    ) -> Element<'a, Message> {
+        // Content lines up with the section titles, past their icon.
+        let body = self.game_settings(g, 34.0);
+        self.library_dialog(page, g, "Game settings", Vec::new(), body)
+    }
 }

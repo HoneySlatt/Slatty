@@ -3,20 +3,19 @@
 
 use crate::theme::text;
 use iced::widget::{
-    Column, Space, button, center, column, container, image, mouse_area, opaque, pick_list, row,
-    scrollable, space, stack, text_input,
+    Column, Space, button, column, container, pick_list, row, scrollable, space, text_input,
 };
-use iced::{Alignment, ContentFit, Element, Length, Padding};
+use iced::{Alignment, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 
 use super::format::*;
 use super::game::download_controls;
+use super::note;
 use super::panels::dlc_row;
-use super::{note, round_button};
 use crate::icons::{Icon, icon};
 use crate::install::{InstallMsg, InstallView, PlanInfo};
 use crate::settings::ProtonChoice;
-use crate::theme::{self, bold, semibold, tokens};
+use crate::theme::{self, semibold, tokens};
 use crate::{App, Message};
 
 /// The parts of the install choices, laid out differently by the drawer and the dialog.
@@ -55,90 +54,49 @@ impl App {
         page: Element<'a, Message>,
         g: &'a LibraryGame,
     ) -> Element<'a, Message> {
-        let cover: Element<'a, Message> = match self.cover(&g.id) {
-            Some(h) => image(h)
-                .content_fit(ContentFit::Cover)
-                .width(94)
-                .height(125)
-                .border_radius(tokens().cover_radius)
-                .into(),
-            None => container(Space::new())
-                .width(94)
-                .height(125)
-                .style(theme::placeholder)
-                .into(),
-        };
         let info = match self.install_views.get(&g.id) {
             Some(InstallView::Ready(info)) => Some(info),
             _ => None,
         };
-        let mut header = column![
-            text("Install").size(30).font(bold()),
-            text(&g.title).size(18).color(tokens().muted),
-        ]
-        .spacing(4)
-        .width(Length::Fill);
-        if let Some(info) = info {
-            header = header.push(Space::new().height(6)).push(
-                text(format!("Version {}", info.version))
-                    .size(15)
-                    .font(semibold()),
-            );
-        }
-        // The title, game and version centred against the cover; the close button stays at the top.
-        let top = row![
-            cover,
-            container(header)
-                .height(125)
-                .center_y(125)
-                .width(Length::Fill),
-            round_button(Icon::X, Message::Install(InstallMsg::CloseDialog))
-        ]
-        .spacing(22)
-        .align_y(Alignment::Start);
-        let mut body = column![top].spacing(22);
-        match info {
+        let details: Vec<Element<'a, Message>> = info
+            .map(|info| {
+                vec![
+                    Space::new().height(6).into(),
+                    text(format!("Version {}", info.version))
+                        .size(15)
+                        .font(semibold())
+                        .into(),
+                ]
+            })
+            .unwrap_or_default();
+        let body: Element<'a, Message> = match info {
             Some(info) => {
                 let c = self.choices(g, info);
-                body = body
-                    .push(sizes(info, true))
-                    .push(c.short_of_space)
-                    .push(section("Install in", c.folder))
-                    .push(
-                        row![
-                            section("Language", c.language).width(Length::Fill),
-                            section("Proton", c.proton).width(Length::Fill),
-                        ]
-                        .spacing(20),
-                    )
-                    .push(section("Game version", c.version));
+                let mut body = column![
+                    sizes(info, true),
+                    section("Install in", c.folder),
+                    row![
+                        section("Language", c.language).width(Length::Fill),
+                        section("Proton", c.proton).width(Length::Fill),
+                    ]
+                    .spacing(20),
+                    section("Game version", c.version),
+                ]
+                .spacing(22);
+                if let Some(warning) = c.short_of_space {
+                    body = body.push(warning);
+                }
                 if let Some(dlcs) = c.dlcs {
                     body = body.push(section("DLC", dlcs));
                 }
-                body = body
-                    .push(c.redistributables)
+                body.push(c.redistributables)
                     .push(rule())
-                    .push(self.install_actions(g, info, false));
+                    .push(self.install_actions(g, info, false))
+                    .into()
             }
-            None => body = body.push(self.install_state(g, self.install_views.get(&g.id))),
-        }
-        let dialog = container(scrollable(body).style(theme::scroller))
-            .padding(28)
-            .max_width(640)
-            .max_height(self.window.height - 60.0)
-            .style(theme::card);
-        stack![
-            page,
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(theme::backdrop)
-            )
-            .on_press(Message::Install(InstallMsg::CloseDialog)),
-            center(opaque(dialog)),
-        ]
-        .into()
+            None => self.install_state(g, self.install_views.get(&g.id)),
+        };
+        self.library_dialog(page, g, "Install", details, body)
     }
 
     /// Before the choices are known, or once the download runs.

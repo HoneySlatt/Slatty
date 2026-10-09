@@ -25,7 +25,7 @@ use slatty_core::library::LibraryGame;
 use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
 use crate::theme::{self, bold, tokens};
-use crate::{App, Message, Page};
+use crate::{App, Message, Page, Panel};
 use widgets::{avatar, icon_tab, logo, nav_tab, vertical_rule};
 pub(super) use widgets::{card, inner, note, round_button};
 
@@ -71,13 +71,14 @@ impl App {
             (Some(panel), Some(game)) => self.with_panel(page, panel, game),
             _ => page,
         };
-        let page = match self
-            .install_dialog
+        let dialog = self
+            .dialog
             .as_ref()
             .filter(|_| self.selected.is_none())
-            .and_then(|id| self.library.iter().find(|g| &g.id == id))
-        {
-            Some(g) => self.install_dialog(page, g),
+            .and_then(|(id, panel)| Some((self.library.iter().find(|g| &g.id == id)?, *panel)));
+        let page = match dialog {
+            Some((g, Panel::GameSettings)) => self.game_settings_dialog(page, g),
+            Some((g, _)) => self.install_dialog(page, g),
             None => page,
         };
         let page = match &self.context_menu {

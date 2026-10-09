@@ -957,7 +957,7 @@ fn interrupted_work_is_listed_with_a_way_to_finish_it() {
     ui.click("Resume").unwrap();
     assert!(
         ui.into_messages()
-            .any(|m| matches!(m, Message::Install(InstallMsg::Open(id)) if id == "5"))
+            .any(|m| matches!(m, Message::OpenDialog(id, Panel::Install) if id == "5"))
     );
     let mut ui = render(&app);
     ui.click("Finish update").unwrap();
@@ -1873,8 +1873,8 @@ fn the_library_order_is_kept() {
 fn installing_from_the_library_stays_on_the_library() {
     let mut app = library_app();
     app.proton = Some("/proton/GE-Proton".into());
-    let _ = app.update(Message::Install(InstallMsg::Open("5".into())));
-    assert_eq!(app.install_dialog.as_deref(), Some("5"));
+    let _ = app.update(Message::OpenDialog("5".into(), Panel::Install));
+    assert_eq!(app.dialog, Some(("5".to_string(), Panel::Install)));
     assert!(matches!(
         app.install_views.get("5"),
         Some(InstallView::Planning)
@@ -1890,7 +1890,7 @@ fn installing_from_the_library_stays_on_the_library() {
     }
     let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
     assert_eq!(
-        app.install_dialog, None,
+        app.dialog, None,
         "the dialog gives way once started"
     );
     assert_eq!(app.selected, None, "still on the library");
@@ -1900,7 +1900,38 @@ fn installing_from_the_library_stays_on_the_library() {
     );
 
     // Escape closes the dialog without leaving the library.
-    let _ = app.update(Message::Install(InstallMsg::Open("6".into())));
+    let _ = app.update(Message::OpenDialog("6".into(), Panel::Install));
     app.go_back();
-    assert_eq!(app.install_dialog, None);
+    assert_eq!(app.dialog, None);
+}
+
+#[test]
+fn game_settings_open_over_the_library_too() {
+    use crate::maintenance::ContentInfo;
+    let mut app = library_app();
+    let _ = app.update(Message::OpenDialog("3".into(), Panel::GameSettings));
+    assert!(
+        app.maintenance.get("3").is_some_and(|m| m.busy),
+        "reading languages and DLC"
+    );
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ContentLoaded(
+        "3".into(),
+        Ok(ContentInfo {
+            build_id: "b1".into(),
+            chosen_build: "b1".into(),
+            versions: Vec::new(),
+            language: "en-US".into(),
+            languages: vec!["en-US".into()],
+            chosen_language: "en-US".into(),
+            dlcs: Vec::new(),
+            chosen_dlcs: Vec::new(),
+        }),
+    )));
+    let mut ui = render(&app);
+    assert!(ui.find("Game settings").is_ok() && ui.find("Used from the next launch.").is_ok());
+    snapshot(&mut ui, "settings-dialog");
+    drop(ui);
+    assert_eq!(app.selected, None, "still on the library");
+    let _ = app.update(Message::CloseDialog);
+    assert_eq!(app.dialog, None);
 }

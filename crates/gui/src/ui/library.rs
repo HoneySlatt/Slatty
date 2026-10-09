@@ -112,7 +112,7 @@ impl App {
                         button(text("Resume").size(14))
                             .padding([8, 16])
                             .on_press_maybe(
-                                (!busy).then(|| Message::Install(InstallMsg::Open(id.clone()))),
+                                (!busy).then(|| Message::OpenDialog(id.clone(), Panel::Install)),
                             )
                             .style(theme::primary),
                         button(text("Discard").size(14))
@@ -226,12 +226,12 @@ impl App {
         } else {
             button(icon(Icon::Download, 16.0, tokens().on_accent))
                 .padding([8, 14])
-                .on_press(Message::Install(InstallMsg::Open(g.id.clone())))
+                .on_press(Message::OpenDialog(g.id.clone(), Panel::Install))
                 .style(theme::primary)
         };
         let settings = button(icon(Icon::SlidersHorizontal, 16.0, tokens().text))
             .padding(8)
-            .on_press(Message::SelectWith(
+            .on_press(Message::OpenDialog(
                 g.id.clone(),
                 if installed {
                     Panel::GameSettings

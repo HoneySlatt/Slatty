@@ -218,8 +218,8 @@ pub struct App {
     pub context_menu: Option<edit::ContextMenu>,
     /// A download being planned again to resume on its own at start-up.
     pub auto_resume: Option<String>,
-    /// Game whose install dialog is open over the library.
-    pub install_dialog: Option<String>,
+    /// A game's install or settings, open over the library.
+    pub dialog: Option<(String, Panel)>,
     /// Font families of the system, listed when Settings first opens.
     pub font_families: Vec<String>,
     /// Size of the window, for layouts that change with it.
@@ -281,7 +281,7 @@ impl Default for App {
             context_menu: None,
             auto_resume: None,
             font_families: Vec::new(),
-            install_dialog: None,
+            dialog: None,
             window: Size::new(1440.0, 900.0),
             page_shown: Animation::new(true),
             art_shown: Animation::new(true),
@@ -342,6 +342,9 @@ pub enum Message {
     ConfirmQuit,
     CancelQuit,
     Edit(edit::EditMsg),
+    /// A game's install or settings, over the library.
+    OpenDialog(String, Panel),
+    CloseDialog,
     WindowResized(Size),
     Frame(Instant),
     Key(keyboard::Event),
@@ -574,6 +577,11 @@ impl App {
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Edit(msg) => return self.update_edit(msg),
+            Message::OpenDialog(id, panel) => {
+                self.dialog = Some((id.clone(), panel));
+                return self.load_panel(id, panel);
+            }
+            Message::CloseDialog => self.dialog = None,
             Message::WindowResized(size) => self.window = size,
             Message::Frame(now) => self.now = now,
             Message::DismissNotice => self.notice = None,
@@ -612,7 +620,7 @@ impl App {
         if self.context_menu.take().is_some() {
             return;
         }
-        if self.install_dialog.take().is_some() {
+        if self.dialog.take().is_some() {
             return;
         }
         if self.edit.take().is_some() {
@@ -680,7 +688,7 @@ impl App {
     }
 
     fn open_game(&mut self, id: String, panel: Option<Panel>) -> Task<Message> {
-        self.install_dialog = None;
+        self.dialog = None;
         self.page = Page::Library;
         self.achievements_game = None;
         self.selected = Some(id.clone());
@@ -717,9 +725,14 @@ impl App {
             return Task::none();
         }
         self.panel = Some(panel);
+        self.load_panel(id, panel)
+    }
+
+    /// What a panel needs from GOG before it can show its choices.
+    fn load_panel(&mut self, id: String, panel: Panel) -> Task<Message> {
         match panel {
             Panel::Install if !self.install_views.contains_key(&id) => {
-                Task::done(Message::Install(InstallMsg::Prepare(id, None)))
+                self.update_install(InstallMsg::Prepare(id, None))
             }
             Panel::GameSettings
                 if self
@@ -727,7 +740,7 @@ impl App {
                     .get(&id)
                     .is_none_or(|m| m.content.is_none() && !m.busy) =>
             {
-                Task::done(Message::Maintenance(MaintenanceMsg::LoadContent(id)))
+                self.update_maintenance(MaintenanceMsg::LoadContent(id))
             }
             Panel::Achievements => match self.achievements.get(&id) {
                 Some(Loadable::Ready(list)) => self.request_images(achievement_icons(list, true)),
