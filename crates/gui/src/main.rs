@@ -612,7 +612,9 @@ impl App {
             Message::Image(url, Some(bytes)) => {
                 self.images.insert(url, image::Handle::from_bytes(bytes));
             }
-            Message::Image(_, None) => {}
+            Message::Image(url, None) => {
+                self.images_requested.remove(&url);
+            }
             Message::ScanOverview => return self.scan_overview(true),
             Message::OverviewFetched(id, Ok(o)) => {
                 self.overview.insert(id, o);
@@ -1078,10 +1080,32 @@ impl App {
         }
     }
 
+    fn overview_checked(&self, game_id: &str) -> bool {
+        self.overview.get(game_id).is_some_and(|o| o.checked)
+    }
+
     pub fn overview_complete(&self) -> bool {
-        self.library
+        self.library.iter().all(|g| self.overview_checked(&g.id))
+    }
+
+    /// Progress of reading achievements and cloud saves from GOG, while anything is missing.
+    pub fn overview_status(&self) -> Option<String> {
+        let total = self.library.len();
+        let read = self
+            .library
             .iter()
-            .all(|g| self.overview.contains_key(&g.id))
+            .filter(|g| self.overview_checked(&g.id))
+            .count();
+        if self.overview_busy {
+            Some(format!("Reading GOG data… {read}/{total} games"))
+        } else if read < total {
+            Some(match total - read {
+                1 => "1 game could not be read from GOG".into(),
+                n => format!("{n} games could not be read from GOG"),
+            })
+        } else {
+            None
+        }
     }
 
     /// Reads achievements and cloud support of every game (or only of those not known yet).
@@ -1095,7 +1119,7 @@ impl App {
         let ids: Vec<String> = self
             .library
             .iter()
-            .filter(|g| all || !self.overview.contains_key(&g.id))
+            .filter(|g| all || !self.overview_checked(&g.id))
             .map(|g| g.id.clone())
             .collect();
         if ids.is_empty() {

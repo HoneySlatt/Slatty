@@ -343,16 +343,10 @@ impl App {
         ]
         .spacing(24)
         .align_y(Alignment::Center);
-        if (f.achievements || f.cloud_saves) && !self.overview_complete() {
-            items = items.push(
-                text(format!(
-                    "Reading GOG data… {}/{} games",
-                    self.overview.len().min(self.library.len()),
-                    self.library.len()
-                ))
-                .size(13)
-                .color(MUTED),
-            );
+        if (f.achievements || f.cloud_saves)
+            && let Some(status) = self.overview_status()
+        {
+            items = items.push(text(status).size(13).color(MUTED));
         }
         container(items)
             .padding([12, 18])
@@ -490,15 +484,9 @@ impl App {
         let unlocked: usize = games.iter().map(|g| g.1).sum();
         let total: usize = games.iter().map(|g| g.2).sum();
         let perfect = games.iter().filter(|g| g.1 == g.2).count();
-        let scanning = if self.overview_busy || !self.overview_complete() {
-            format!(
-                "Reading GOG data… {}/{} games",
-                self.overview.len().min(self.library.len()),
-                self.library.len()
-            )
-        } else {
-            format!("{} games with achievements", games.len())
-        };
+        let scanning = self
+            .overview_status()
+            .unwrap_or_else(|| format!("{} games with achievements", games.len()));
         let header = row![
             column![
                 text("Achievements").size(30).font(BOLD),

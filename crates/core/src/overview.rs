@@ -22,6 +22,9 @@ pub struct GameOverview {
     /// Minutes of play recorded by GOG.
     #[serde(default)]
     pub playtime_minutes: Option<u64>,
+    /// Achievements and cloud saves were read from GOG (play time alone does not count).
+    #[serde(default)]
+    pub checked: bool,
 }
 
 /// Unlocked and total achievements of a list; `None` when it is empty.
@@ -45,6 +48,7 @@ pub async fn fetch(http: &Client, tokens: &Tokens, game_id: &str) -> Result<Game
         Err(Error::Unsupported(_)) => {
             return Ok(GameOverview {
                 playtime_minutes,
+                checked: true,
                 ..Default::default()
             });
         }
@@ -57,6 +61,7 @@ pub async fn fetch(http: &Client, tokens: &Tokens, game_id: &str) -> Result<Game
         achievements: counts(&list),
         cloud_saves,
         playtime_minutes,
+        checked: true,
     })
 }
 
@@ -92,6 +97,7 @@ mod tests {
                 achievements: Some((2, 5)),
                 cloud_saves: true,
                 playtime_minutes: Some(90),
+                checked: true,
             },
         )]);
         save(&dirs, "0", &all).unwrap();

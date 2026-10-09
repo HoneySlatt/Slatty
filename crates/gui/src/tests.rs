@@ -383,6 +383,45 @@ fn achievements_tab_lists_games_by_completion() {
     );
 }
 
+#[test]
+fn games_known_only_by_play_time_are_read_again() {
+    let mut app = library_app();
+    app.library.truncate(2);
+    app.page = Page::Achievements;
+    app.overview.insert(
+        "1".into(),
+        GameOverview {
+            achievements: Some((1, 2)),
+            checked: true,
+            ..Default::default()
+        },
+    );
+    let _ = app.update(Message::PlaytimesFetched(vec![("2".into(), 30)]));
+    assert!(
+        !app.overview_complete(),
+        "play time says nothing of achievements"
+    );
+
+    let _ = app.update(Message::ScanOverview);
+    assert!(app.overview_busy);
+    assert!(
+        render(&app)
+            .find("1 / 2 unlocked · 0 completed · Reading GOG data… 1/2 games")
+            .is_ok()
+    );
+    let _ = app.update(Message::OverviewFetched(
+        "2".into(),
+        Err("[FAKE] offline".into()),
+    ));
+    let _ = app.update(Message::OverviewDone);
+    assert!(
+        render(&app)
+            .find("1 / 2 unlocked · 0 completed · 1 game could not be read from GOG")
+            .is_ok(),
+        "no endless reading message after a failure"
+    );
+}
+
 fn fake_plan() -> crate::installs::PlanInfo {
     crate::installs::PlanInfo {
         title: "[FAKE] Game 5".into(),
