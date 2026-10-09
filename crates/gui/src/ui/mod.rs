@@ -6,17 +6,20 @@ mod game;
 mod library;
 mod panels;
 mod settings;
+mod widgets;
 
 use iced::widget::{
-    Column, Space, button, center, column, container, image, mouse_area, opaque, row, space, stack,
-    text, text_input,
+    Column, Space, button, center, column, container, mouse_area, opaque, row, space, stack, text,
+    text_input,
 };
-use iced::{Alignment, ContentFit, Element, Length, Padding};
+use iced::{Alignment, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 
 use crate::icons::{Icon, icon};
-use crate::theme::{self, BOLD, SEMIBOLD, tokens};
+use crate::theme::{self, BOLD, tokens};
 use crate::{App, Message, Page};
+use widgets::{avatar, icon_tab, logo, nav_tab, vertical_rule};
+pub(super) use widgets::{card, inner, note, round_button};
 
 impl App {
     pub fn view(&self) -> Element<'_, Message> {
@@ -34,10 +37,12 @@ impl App {
             return self.with_notice(self.login_view());
         };
         let body: Element<'_, Message> = match self.selected_game() {
-            Some(game) => self.game_page(game),
+            Some(game) => container(self.game_page(game))
+                .padding(Padding::new(24.0).top(16.0))
+                .into(),
             None => column![
                 self.top_bar(&account.username),
-                match self.page {
+                container(match self.page {
                     Page::Library => self.library_page(),
                     Page::Achievements => match self
                         .achievements_game
@@ -48,12 +53,12 @@ impl App {
                         None => self.achievements_page(),
                     },
                     Page::Settings => self.settings_page(),
-                }
+                })
+                .padding(Padding::new(20.0).top(16.0)),
             ]
-            .spacing(14)
             .into(),
         };
-        let page = self.with_notice(container(body).padding(Padding::new(24.0).top(16.0)).into());
+        let page = self.with_notice(body);
         let page = match (self.panel, self.selected_game()) {
             (Some(panel), Some(game)) => self.with_panel(page, panel, game),
             _ => page,
@@ -102,23 +107,22 @@ impl App {
         column![container(banner).padding([8, 20]), body].into()
     }
 
+    /// Logo, page tabs, search and account, above every page but the game page.
     fn top_bar(&self, username: &str) -> Element<'_, Message> {
-        let tab = |label, page: Page| {
-            button(text(label).size(15).font(SEMIBOLD))
-                .padding([8, 22])
-                .on_press(Message::ShowPage(page))
-                .style(theme::segment(self.page == page && self.selected.is_none()))
-        };
-        let tabs = container(
-            row![
-                tab("Library", Page::Library),
-                tab("Achievements", Page::Achievements),
-                tab("Settings", Page::Settings),
-            ]
-            .spacing(4),
-        )
-        .padding(4)
-        .style(theme::pill);
+        let tab = |ic, label, page| nav_tab(ic, label, self.page == page, Message::ShowPage(page));
+        let tabs = row![
+            tab(Icon::LayoutGrid, "Library", Page::Library),
+            tab(Icon::Trophy, "Achievements", Page::Achievements),
+            vertical_rule(24.0),
+            icon_tab(
+                Icon::Settings,
+                "settings-tab",
+                self.page == Page::Settings,
+                Message::ShowPage(Page::Settings)
+            ),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center);
         let search = container(
             row![
                 icon(Icon::Search, 18.0, tokens().muted),
@@ -131,85 +135,41 @@ impl App {
             .spacing(10)
             .align_y(Alignment::Center),
         )
-        .padding([10, 16])
-        .width(320)
-        .style(theme::pill);
+        .padding([9, 14])
+        .width(360)
+        .style(theme::outlined);
         let initial = username
             .chars()
             .next()
-            .map(|c| c.to_lowercase().to_string())
+            .map(|c| c.to_uppercase().to_string())
             .unwrap_or_default();
-        let picture: Element<'_, Message> =
-            match self.avatar.as_ref().and_then(|u| self.images.get(u)) {
-                Some(h) => image(h.clone())
-                    .content_fit(ContentFit::Cover)
-                    .width(38)
-                    .height(38)
-                    .border_radius(19)
-                    .into(),
-                None => container(text(initial).size(17).font(BOLD))
-                    .center(38)
-                    .style(theme::avatar)
-                    .into(),
-            };
-        let avatar = button(picture)
+        let picture = self
+            .avatar
+            .as_ref()
+            .and_then(|u| self.images.get(u))
+            .cloned();
+        let account = button(avatar(picture, initial, 34.0))
             .padding(0)
             .on_press(Message::ShowPage(Page::Settings))
             .style(theme::plain);
-        row![
-            logo(),
-            Space::new().width(18),
+        let bar = row![
+            logo(44.0),
+            Space::new().width(12),
             tabs,
             space().width(Length::Fill),
             search,
-            avatar,
+            account,
         ]
-        .spacing(14)
-        .align_y(Alignment::Center)
-        .into()
-    }
-}
-
-pub(super) fn logo<'a>() -> Element<'a, Message> {
-    text("slatty")
-        .size(30)
-        .font(BOLD)
-        .color(tokens().accent)
-        .into()
-}
-
-/// A titled block of the settings page or of a panel.
-pub(super) fn card<'a>(title: &'a str, items: Vec<Element<'a, Message>>) -> Element<'a, Message> {
-    container(
+        .spacing(16)
+        .align_y(Alignment::Center);
         column![
-            text(title).size(17).font(SEMIBOLD),
-            Column::with_children(items).spacing(10)
+            container(bar).padding([7, 20]).width(Length::Fill),
+            container(Space::new())
+                .width(Length::Fill)
+                .height(1)
+                .style(theme::divider),
         ]
-        .spacing(14),
-    )
-    .padding(20)
-    .width(Length::Fill)
-    .style(theme::card)
-    .into()
-}
-
-pub(super) fn round_button<'a>(ic: Icon, msg: Message) -> Element<'a, Message> {
-    button(container(icon(ic, 20.0, tokens().text)).center(24))
-        .padding(10)
-        .on_press(msg)
-        .style(theme::icon_button)
         .into()
-}
-
-fn note<'a>(s: impl text::IntoFragment<'a>) -> Element<'a, Message> {
-    text(s).size(14).color(tokens().muted).into()
-}
-
-fn inner(_: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(iced::Background::Color(theme::tokens().surface_high)),
-        border: iced::border::rounded(14),
-        ..Default::default()
     }
 }
 

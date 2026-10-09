@@ -19,6 +19,20 @@ pub enum Shelf {
     Favorites,
 }
 
+impl Shelf {
+    pub const ALL: [Shelf; 3] = [Shelf::All, Shelf::Installed, Shelf::Favorites];
+}
+
+impl fmt::Display for Shelf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Shelf::All => "All",
+            Shelf::Installed => "Installed",
+            Shelf::Favorites => "Favorites",
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Sort {
     #[default]

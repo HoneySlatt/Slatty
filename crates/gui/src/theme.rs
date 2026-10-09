@@ -27,6 +27,10 @@ pub struct Tokens {
     pub error_surface: Color,
     /// Darkens the page behind dialogs.
     pub scrim: Color,
+    /// Corner radius of controls: tabs, fields, dropdowns, buttons of the new pages.
+    pub radius: f32,
+    /// Corner radius of game covers.
+    pub cover_radius: f32,
 }
 
 impl Default for Tokens {
@@ -50,6 +54,8 @@ impl Default for Tokens {
                 a: 0.7,
                 ..color!(0x05040a)
             },
+            radius: 8.0,
+            cover_radius: 6.0,
         }
     }
 }
@@ -98,14 +104,28 @@ fn base(background: Option<Color>, text: Color, radius: f32) -> button::Style {
     }
 }
 
-/// A tab or filter of a segmented bar.
-pub fn segment(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
-    move |_, status| match (active, status) {
-        (true, _) => base(Some(tokens().accent), tokens().on_accent, 999.0),
-        (false, button::Status::Hovered | button::Status::Pressed) => {
-            base(Some(tokens().surface_high), tokens().text, 999.0)
+/// A tab of the top bar: filled with the accent colour when it is the open page.
+pub fn nav_tab(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let t = tokens();
+        match (active, status) {
+            (true, _) => base(Some(t.accent), t.on_accent, t.radius),
+            (false, button::Status::Hovered | button::Status::Pressed) => {
+                base(Some(t.surface_high), t.text, t.radius)
+            }
+            (false, _) => base(None, t.text, t.radius),
         }
-        (false, _) => base(None, tokens().muted, 999.0),
+    }
+}
+
+/// A bare icon button that only shows a background when hovered.
+pub fn ghost(_: &Theme, status: button::Status) -> button::Style {
+    let t = tokens();
+    match status {
+        button::Status::Hovered | button::Status::Pressed => {
+            base(Some(t.surface_high), t.text, t.radius)
+        }
+        _ => base(None, t.text, t.radius),
     }
 }
 
@@ -189,14 +209,6 @@ pub fn card(_: &Theme) -> container::Style {
     }
 }
 
-pub fn pill(_: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(tokens().surface)),
-        border: round(999.0).color(tokens().outline).width(1.0),
-        ..Default::default()
-    }
-}
-
 pub fn circle(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(tokens().surface_high)),
@@ -221,7 +233,7 @@ pub fn cover_overlay(_: &Theme) -> container::Style {
             a: 0.82,
             ..tokens().background
         })),
-        border: border::rounded(border::bottom(12.0)),
+        border: border::rounded(border::bottom(tokens().cover_radius)),
         text_color: Some(tokens().text),
         ..Default::default()
     }
@@ -229,7 +241,9 @@ pub fn cover_overlay(_: &Theme) -> container::Style {
 
 pub fn cover_frame(_: &Theme) -> container::Style {
     container::Style {
-        border: round(12.0).color(tokens().accent).width(2.0),
+        border: round(tokens().cover_radius)
+            .color(tokens().accent)
+            .width(2.0),
         ..Default::default()
     }
 }
@@ -237,7 +251,7 @@ pub fn cover_frame(_: &Theme) -> container::Style {
 pub fn placeholder(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(tokens().surface_high)),
-        border: round(12.0),
+        border: round(tokens().cover_radius),
         text_color: Some(tokens().muted),
         ..Default::default()
     }
@@ -259,6 +273,26 @@ pub fn notice(error: bool) -> impl Fn(&Theme) -> container::Style {
         })),
         border: round(14.0),
         text_color: Some(tokens().text),
+        ..Default::default()
+    }
+}
+
+/// An outlined box around a field (the search box).
+pub fn outlined(_: &Theme) -> container::Style {
+    let t = tokens();
+    container::Style {
+        background: Some(Background::Color(t.surface)),
+        border: round(t.radius).color(t.outline).width(1.0),
+        ..Default::default()
+    }
+}
+
+/// The dot on the avatar saying the account is signed in.
+pub fn status_dot(_: &Theme) -> container::Style {
+    let t = tokens();
+    container::Style {
+        background: Some(Background::Color(t.success)),
+        border: round(999.0).color(t.background).width(2.0),
         ..Default::default()
     }
 }
@@ -311,6 +345,21 @@ pub fn select(_: &Theme, status: pick_list::Status) -> pick_list::Style {
             _ => tokens().surface,
         }),
         border: round(999.0).color(tokens().outline).width(1.0),
+    }
+}
+
+/// An outlined drop-down list of the toolbars.
+pub fn dropdown(_: &Theme, status: pick_list::Status) -> pick_list::Style {
+    let t = tokens();
+    pick_list::Style {
+        text_color: t.text,
+        placeholder_color: t.muted,
+        handle_color: t.muted,
+        background: Background::Color(t.background),
+        border: round(t.radius).width(1.0).color(match status {
+            pick_list::Status::Hovered | pick_list::Status::Opened { .. } => t.muted,
+            _ => t.outline,
+        }),
     }
 }
 

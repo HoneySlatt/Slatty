@@ -119,12 +119,14 @@ fn login_screen_offers_browser_login_without_password_field() {
 fn top_bar_offers_library_achievements_and_settings() {
     let app = library_app();
     let mut ui = render(&app);
-    for tab in ["Library", "Achievements", "Settings"] {
+    for tab in ["Library", "Achievements"] {
         assert!(ui.find(tab).is_ok(), "{tab}");
     }
-    assert!(ui.find("Activity").is_err());
+    for later in ["Activity", "Store", "Friends"] {
+        assert!(ui.find(later).is_err(), "{later}");
+    }
     snapshot(&mut ui, "library");
-    ui.click("Settings").unwrap();
+    ui.click(iced_test::selector::id("settings-tab")).unwrap();
     assert!(
         ui.into_messages()
             .any(|m| matches!(m, Message::ShowPage(Page::Settings)))

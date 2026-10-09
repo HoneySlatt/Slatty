@@ -51,12 +51,13 @@ slatty library list witcher   # filter by title
 
 ## The interface
 
-`slatty-gui` has three tabs: **Library**, **Achievements** and **Settings**. Your GOG avatar, top
-right, opens Settings. It comes from your public GOG profile.
+`slatty-gui` has three tabs in its top bar: **Library**, **Achievements** and **Settings** (the gear).
+Your GOG avatar, top right, also opens Settings; it comes from your public GOG profile, and its green
+dot says you are signed in.
 
 **Library** shows your games as covers. Above the grid:
 
-- **All**, **Installed**, **Favorites** choose the shelf;
+- the shelf menu shows **All** games, the **Installed** ones or your **Favorites**;
 - the sort menu orders by name, most recently played or most played;
 - the slider sets the cover size;
 - the filter button shows games for Windows or Linux, with achievements, or with cloud saves.

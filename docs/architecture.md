@@ -59,8 +59,8 @@ live under `ui/`.
 | `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
 | `settings` | Games folder and default Proton |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
-| `ui` | Window shell and shared widgets; `library`, `achievements`, `settings`, `game` and `panels` pages; `format` for text shown to the user |
-| `theme`, `icons` | Colours, widget styles, Lucide icons |
+| `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages; `format` for text shown to the user |
+| `theme`, `icons` | Design tokens (`Tokens`: every colour, and the corner radii of the redesigned pages) and the widget styles built from them; Lucide icons. Views never name a colour, so a custom theme is another `Tokens` |
 
 Interface tests (`tests.rs`) drive the real views with Iced's simulator and fictitious data.
 

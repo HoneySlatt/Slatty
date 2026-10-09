@@ -8,7 +8,8 @@ use slatty_core::library::LibraryGame;
 
 use super::format::*;
 use super::panels::runner_label;
-use super::{logo, round_button};
+use super::round_button;
+use super::widgets::logo;
 use crate::achievements::latest_unlocked;
 use crate::icons::{Icon, icon};
 use crate::install::InstallView;
@@ -31,7 +32,7 @@ impl App {
                 ));
         }
         let header = row![
-            logo(),
+            logo(34.0),
             Space::new().width(10),
             round_button(Icon::ChevronLeft, Message::CloseDetail),
             text("Library").size(16),

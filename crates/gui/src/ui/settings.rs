@@ -3,8 +3,9 @@
 use iced::widget::{button, column, container, pick_list, row, scrollable, text, text_input};
 use iced::{Alignment, Element, Length, Padding};
 
+use super::card;
 use super::format::*;
-use super::{card, logo};
+use super::widgets::logo;
 use crate::settings::{ProtonChoice, SettingsMsg};
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, Message};
@@ -123,7 +124,7 @@ impl App {
     pub(super) fn login_view(&self) -> Element<'_, Message> {
         let busy = self.login_busy;
         let content = column![
-            logo(),
+            logo(72.0),
             text("Sign in to GOG").size(30).font(BOLD),
             text(
                 "Sign-in happens in your browser; SlattyLauncher never sees your password. \

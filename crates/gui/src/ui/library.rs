@@ -10,6 +10,7 @@ use slatty_core::library::LibraryGame;
 use slatty_core::maintenance::Change;
 
 use super::format::*;
+use super::widgets::vertical_rule;
 use crate::icons::{Icon, icon};
 use crate::install::InstallMsg;
 use crate::maintenance::MaintenanceMsg;
@@ -19,54 +20,40 @@ use crate::{App, Filters, Interrupted, Message, Panel, Shelf, Sort};
 impl App {
     pub(super) fn library_page(&self) -> Element<'_, Message> {
         let games = self.visible_games();
-        let shelf = |label, s: Shelf| {
-            button(text(label).size(14).font(SEMIBOLD))
-                .padding([8, 20])
-                .on_press(Message::ShowShelf(s))
-                .style(theme::segment(self.shelf == s))
-        };
-        let shelves = container(
-            row![
-                shelf("All", Shelf::All),
-                shelf("Installed", Shelf::Installed),
-                shelf("Favorites", Shelf::Favorites),
-            ]
-            .spacing(4),
-        )
-        .padding(4)
-        .style(theme::pill);
         let filter_button = button(icon(
             Icon::ListFilter,
-            18.0,
+            20.0,
             if self.filters.any() {
-                tokens().on_accent
+                tokens().accent
             } else {
                 tokens().text
             },
         ))
-        .padding(11)
+        .padding(8)
         .on_press(Message::ToggleFilters)
-        .style(if self.filters.any() {
-            theme::segment(true)
-        } else {
-            theme::segment(false)
-        });
+        .style(theme::ghost);
         let toolbar = row![
-            shelves,
+            pick_list(Shelf::ALL, Some(self.shelf), Message::ShowShelf)
+                .style(theme::dropdown)
+                .padding([9, 16])
+                .text_size(14)
+                .width(150),
+            vertical_rule(22.0),
             text(format!("{} games", games.len()))
                 .size(14)
                 .color(tokens().muted),
             space().width(Length::Fill),
             pick_list(Sort::ALL, Some(self.sort), Message::SortBy)
-                .style(theme::select)
-                .padding([9, 18])
-                .text_size(14),
+                .style(theme::dropdown)
+                .padding([9, 16])
+                .text_size(14)
+                .width(170),
             Space::new().width(4),
             icon(Icon::LayoutGrid, 20.0, tokens().muted),
             slider(110.0..=240.0, self.card_width, Message::CardWidth)
-                .width(150)
+                .width(130)
                 .style(theme::size_slider),
-            container(filter_button).style(theme::pill),
+            filter_button,
         ]
         .spacing(14)
         .align_y(Alignment::Center);
@@ -98,7 +85,7 @@ impl App {
             scrollable(
                 grid(cards)
                     .fluid(self.card_width)
-                    .spacing(14)
+                    .spacing(12)
                     .height(grid::aspect_ratio(3, 4)),
             )
             .spacing(8)
@@ -211,7 +198,7 @@ impl App {
                 .content_fit(ContentFit::Cover)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .border_radius(12)
+                .border_radius(tokens().cover_radius)
                 .into(),
             None => container(text(&g.title).size(14).font(SEMIBOLD))
                 .padding(12)
