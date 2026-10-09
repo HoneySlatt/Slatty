@@ -9,12 +9,11 @@ use slatty_core::cloud::sync::Prefer;
 use slatty_core::install::Install;
 use slatty_core::installer::DlcChoice;
 use slatty_core::library::LibraryGame;
-use slatty_core::maintenance::Change;
 use slatty_core::runner::Runner;
 
 use super::achievements::unlock_all_button;
 use super::format::*;
-use super::{inner, note, round_button};
+use super::{note, round_button};
 use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
 use crate::maintenance::MaintenanceMsg;
@@ -36,7 +35,7 @@ impl App {
         let (title, content) = match panel {
             Panel::Install => return self.install_drawer(page, g),
             Panel::GameSettings => return self.game_settings_drawer(page, g),
-            Panel::Manage => ("Manage", self.manage_panel(g)),
+            Panel::Manage => return self.manage_drawer(page, g),
             Panel::Cloud => ("Cloud saves", self.cloud_panel(g)),
             Panel::Achievements => return self.achievements_drawer(page, g),
             Panel::Session => ("Session", self.session_panel(g)),
@@ -113,88 +112,6 @@ impl App {
                 .play
                 .as_ref()
                 .is_some_and(|p| p.running && p.game_id == game_id)
-    }
-
-    pub(super) fn manage_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let view = self.maintenance.get(&g.id);
-        let busy = self.maintenance_busy(&g.id);
-        let action = |label, msg: MaintenanceMsg| {
-            button(text(label).size(14))
-                .padding([10, 16])
-                .on_press_maybe((!busy).then(|| Message::Maintenance(msg)))
-                .style(theme::tonal)
-        };
-        let mut items: Vec<Element<'_, Message>> = vec![
-            row![
-                action("Verify files", MaintenanceMsg::Check(g.id.clone(), false)),
-                action("Repair", MaintenanceMsg::Check(g.id.clone(), true)),
-                action(
-                    "Check for update",
-                    MaintenanceMsg::CheckUpdate(g.id.clone())
-                ),
-                action("Uninstall…", MaintenanceMsg::AskUninstall(g.id.clone())),
-            ]
-            .spacing(8)
-            .wrap()
-            .into(),
-        ];
-        if view.is_some_and(|v| v.update_available) {
-            items.push(
-                button(text("Update now").size(15).font(SEMIBOLD))
-                    .padding([12, 22])
-                    .on_press_maybe((!busy).then(|| {
-                        Message::Maintenance(MaintenanceMsg::Apply(g.id.clone(), Change::Update))
-                    }))
-                    .style(theme::primary)
-                    .into(),
-            );
-        }
-        if let Some(v) = view {
-            items.extend(v.lines.iter().map(|l| note(l.as_str())));
-            items.extend(self.maintenance_progress(&g.id));
-            if v.confirm_uninstall && !v.busy {
-                items.push(
-                    container(
-                        column![
-                            note(
-                                "Only files installed by slatty are deleted; anything else in the \
-                                 folder is kept. The Wine prefix holds most local saves."
-                            ),
-                            row![
-                                button(text("Uninstall, keep the prefix").size(14))
-                                    .padding([10, 16])
-                                    .on_press(Message::Maintenance(MaintenanceMsg::Uninstall(
-                                        g.id.clone(),
-                                        false
-                                    )))
-                                    .style(theme::danger),
-                                button(text("Also delete the prefix (backed up)").size(14))
-                                    .padding([10, 16])
-                                    .on_press(Message::Maintenance(MaintenanceMsg::Uninstall(
-                                        g.id.clone(),
-                                        true
-                                    )))
-                                    .style(theme::danger),
-                                button(text("Cancel").size(14))
-                                    .padding([10, 16])
-                                    .on_press(Message::Maintenance(
-                                        MaintenanceMsg::CancelUninstall(g.id.clone())
-                                    ))
-                                    .style(theme::tonal),
-                            ]
-                            .spacing(8)
-                            .wrap(),
-                        ]
-                        .spacing(12),
-                    )
-                    .padding(16)
-                    .width(Length::Fill)
-                    .style(inner)
-                    .into(),
-                );
-            }
-        }
-        Column::with_children(items).spacing(12).into()
     }
 
     pub(super) fn cloud_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {

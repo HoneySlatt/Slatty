@@ -7,6 +7,7 @@ mod game;
 mod game_settings;
 mod install;
 mod library;
+mod manage;
 mod panels;
 mod pointer;
 mod settings;

@@ -124,6 +124,24 @@ pub fn nav_tab(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style
     }
 }
 
+/// A row of the Manage drawer: outlined, filled when hovered.
+pub fn action_row(_: &Theme, status: button::Status) -> button::Style {
+    let t = tokens();
+    let (background, text) = match status {
+        button::Status::Hovered | button::Status::Pressed => (t.surface_high, t.text),
+        button::Status::Disabled => (t.surface, t.muted),
+        button::Status::Active => (t.surface, t.text),
+    };
+    button::Style {
+        border: Border {
+            color: t.outline,
+            width: 1.0,
+            radius: t.radius.into(),
+        },
+        ..base(Some(background), text, t.radius)
+    }
+}
+
 /// A bare icon button that only shows a background when hovered.
 pub fn ghost(_: &Theme, status: button::Status) -> button::Style {
     let t = tokens();

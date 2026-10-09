@@ -62,7 +62,7 @@ live under `ui/`.
 | `settings` | Default installation path, default Proton, and the Proton build of each installed game |
 | `edit` | The menu a right click on a cover opens, and the edit dialog: draft, file picker, saving. `ui/pointer.rs` reports where a right click happened, without a message per mouse move |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
-| `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages, `install` and `game_settings` for their drawers (drawers share `panels::drawer`); `format` for text shown to the user |
+| `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages, `install`, `game_settings` and `manage` for their drawers (drawers share `panels::drawer`); `format` for text shown to the user |
 | `theme`, `icons` | Design tokens (`Tokens`: every colour, the corner radii of the redesigned pages, and the page transition: a short fade with a slight rise, played when the page changes and set to zero to turn it off) and the widget styles built from them; Lucide icons. Views never name a colour, so a custom theme is another `Tokens` |
 
 Interface tests (`tests.rs`) drive the real views with Iced's simulator and fictitious data.
