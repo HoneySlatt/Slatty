@@ -7,13 +7,14 @@ use slatty_core::achievements::Achievement;
 use slatty_core::cloud::plan::Warning;
 use slatty_core::installer::Progress;
 use slatty_core::library::LibraryGame;
+use slatty_core::maintenance::Change;
 use slatty_core::play::{CloudSummary, PlayEvent};
 
 use crate::game::{round_button, unlock_all_button};
 use crate::icons::{Icon, icon};
-use crate::installs::{ProtonChoice, SettingsMsg};
+use crate::installs::{InstallMsg, MaintenanceMsg, ProtonChoice, SettingsMsg};
 use crate::theme::{self, ACCENT, BOLD, MUTED, ON_ACCENT, SEMIBOLD, TEXT};
-use crate::{App, Filters, Loadable, Message, Page, Panel, Shelf, Sort};
+use crate::{App, Filters, Interrupted, Loadable, Message, Page, Panel, Shelf, Sort};
 
 pub fn fraction(p: Progress) -> f32 {
     if p.bytes_total == 0 {
@@ -227,6 +228,9 @@ impl App {
         if let Some((id, title, p)) = self.installing() {
             page = page.push(download_banner(id, title, p));
         }
+        if !self.interrupted.is_empty() {
+            page = page.push(self.interrupted_card());
+        }
 
         let cards: Vec<Element<'_, Message>> = games.iter().map(|g| self.card(g)).collect();
         let gallery: Element<'_, Message> = if cards.is_empty() {
@@ -253,6 +257,68 @@ impl App {
             .into()
         };
         page.push(gallery).into()
+    }
+
+    /// Downloads and updates left unfinished, with the way to resume or drop each one.
+    fn interrupted_card(&self) -> Element<'_, Message> {
+        let busy = self.installing().is_some();
+        let rows = self.interrupted.iter().map(|(id, kind)| {
+            let title = self.title_of(id);
+            let working = self.maintenance.get(id).is_some_and(|m| m.busy);
+            let (status, actions): (&str, Element<'_, Message>) = match kind {
+                Interrupted::Download => (
+                    "Download interrupted. It resumes where it stopped.",
+                    row![
+                        button(text("Resume").size(14))
+                            .padding([8, 16])
+                            .on_press_maybe(
+                                (!busy).then(|| Message::SelectWith(id.clone(), Panel::Install)),
+                            )
+                            .style(theme::primary),
+                        button(text("Discard").size(14))
+                            .padding([8, 16])
+                            .on_press_maybe(
+                                (!busy).then(|| Message::Install(InstallMsg::Discard(id.clone()))),
+                            )
+                            .style(theme::tonal),
+                    ]
+                    .spacing(8)
+                    .into(),
+                ),
+                Interrupted::Update => (
+                    if working {
+                        "Finishing the update…"
+                    } else {
+                        "Update interrupted. The game cannot start until it is finished."
+                    },
+                    button(text("Finish update").size(14))
+                        .padding([8, 16])
+                        .on_press_maybe((!working).then(|| {
+                            Message::Maintenance(MaintenanceMsg::Apply(id.clone(), Change::Update))
+                        }))
+                        .style(theme::primary)
+                        .into(),
+                ),
+            };
+            row![
+                icon(Icon::TriangleAlert, 18.0, theme::WARNING),
+                column![
+                    text(title).size(15).font(SEMIBOLD),
+                    text(status).size(13).color(MUTED)
+                ]
+                .spacing(2)
+                .width(Length::Fill),
+                actions,
+            ]
+            .spacing(14)
+            .align_y(Alignment::Center)
+            .into()
+        });
+        container(Column::with_children(rows).spacing(12))
+            .padding([14, 18])
+            .width(Length::Fill)
+            .style(theme::card)
+            .into()
     }
 
     fn filter_bar(&self) -> Element<'_, Message> {

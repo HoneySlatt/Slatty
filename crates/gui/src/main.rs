@@ -164,6 +164,14 @@ pub enum Panel {
     Session,
 }
 
+/// Work left unfinished by an earlier run (or paused in this one).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Interrupted {
+    Download,
+    /// An update, language or DLC change: the game cannot start until it is finished.
+    Update,
+}
+
 /// Version and size of a game installed by slatty.
 #[derive(Debug, Clone)]
 pub struct InstallSummary {
@@ -213,6 +221,7 @@ pub struct App {
     pub proton_choices: Vec<PathBuf>,
     /// Work that closing the window would interrupt, waiting for the user's choice.
     pub quit_confirm: Option<Vec<String>>,
+    pub interrupted: Vec<(String, Interrupted)>,
 }
 
 impl Default for App {
@@ -257,6 +266,7 @@ impl Default for App {
             proton: None,
             proton_choices: Vec::new(),
             quit_confirm: None,
+            interrupted: Vec::new(),
         }
     }
 }
@@ -363,6 +373,7 @@ pub struct Boot {
     favorites: Vec<String>,
     playtime: HashMap<String, Playtime>,
     overview: HashMap<String, GameOverview>,
+    jobs: Vec<(String, Interrupted)>,
 }
 
 impl std::fmt::Debug for Core {
@@ -411,6 +422,7 @@ impl App {
                 self.favorites = boot.favorites.into_iter().collect();
                 self.playtime = boot.playtime;
                 self.overview = boot.overview;
+                self.interrupted = boot.jobs;
                 if !boot.interrupted.is_empty() {
                     self.notice = Some(Notice {
                         error: true,
@@ -838,7 +850,16 @@ impl App {
         }
     }
 
-    fn title_of(&self, game_id: &str) -> String {
+    pub fn forget_interrupted(&mut self, game_id: &str) {
+        self.interrupted.retain(|(id, _)| id != game_id);
+    }
+
+    pub fn note_interrupted(&mut self, game_id: &str, kind: Interrupted) {
+        self.forget_interrupted(game_id);
+        self.interrupted.push((game_id.to_string(), kind));
+    }
+
+    pub fn title_of(&self, game_id: &str) -> String {
         self.library
             .iter()
             .find(|g| g.id == game_id)
@@ -1208,6 +1229,18 @@ async fn boot() -> Result<Boot, String> {
     let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let playtime = session::playtime(&db).map_err(err)?;
+    let jobs = slatty_core::installer::InstallJob::list(&db)
+        .map_err(err)?
+        .into_iter()
+        .map(|j| {
+            let kind = if j.state == "updating" {
+                Interrupted::Update
+            } else {
+                Interrupted::Download
+            };
+            (j.game_id, kind)
+        })
+        .collect();
     let core = Core {
         dirs,
         db: Arc::new(db),
@@ -1226,6 +1259,7 @@ async fn boot() -> Result<Boot, String> {
         favorites,
         playtime,
         overview,
+        jobs,
     })
 }
 

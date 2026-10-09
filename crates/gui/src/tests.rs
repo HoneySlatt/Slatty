@@ -703,3 +703,44 @@ fn closing_asks_first_only_when_something_is_running() {
         "the download is paused before quitting"
     );
 }
+
+#[test]
+fn interrupted_work_is_listed_with_a_way_to_finish_it() {
+    use crate::Interrupted;
+    let mut app = library_app();
+    app.interrupted = vec![
+        ("5".into(), Interrupted::Download),
+        ("3".into(), Interrupted::Update),
+    ];
+    let mut ui = render(&app);
+    assert!(
+        ui.find("Download interrupted. It resumes where it stopped.")
+            .is_ok()
+    );
+    assert!(
+        ui.find("Update interrupted. The game cannot start until it is finished.")
+            .is_ok()
+    );
+    snapshot(&mut ui, "interrupted");
+    ui.click("Resume").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::SelectWith(id, Panel::Install) if id == "5"))
+    );
+    let mut ui = render(&app);
+    ui.click("Finish update").unwrap();
+    assert!(ui.into_messages().any(|m| matches!(
+        m,
+        Message::Maintenance(MaintenanceMsg::Apply(id, slatty_core::maintenance::Change::Update)) if id == "3"
+    )));
+
+    let _ = app.update(Message::Install(InstallMsg::Discarded("5".into(), Ok(()))));
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Updated(
+        "3".into(),
+        Ok("[FAKE] done".into()),
+    )));
+    assert!(app.interrupted.is_empty());
+
+    let _ = app.update(Message::Install(InstallMsg::Done("7".into(), Err(None))));
+    assert_eq!(app.interrupted, [("7".to_string(), Interrupted::Download)]);
+}

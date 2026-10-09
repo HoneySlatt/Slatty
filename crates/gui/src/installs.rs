@@ -156,6 +156,7 @@ impl App {
                 };
                 let cancel = CancellationToken::new();
                 let title = info.title.clone();
+                self.forget_interrupted(&game_id);
                 self.install_views.insert(
                     game_id.clone(),
                     InstallView::Running {
@@ -198,8 +199,9 @@ impl App {
             }
             InstallMsg::Discarded(game_id, result) => {
                 self.install_views.remove(&game_id);
-                if let Err(e) = result {
-                    self.notify_error(e);
+                match result {
+                    Ok(()) => self.forget_interrupted(&game_id),
+                    Err(e) => self.notify_error(e),
                 }
             }
             InstallMsg::ToggleDlc(game_id, dlc) => {
@@ -225,9 +227,11 @@ impl App {
                 }
             }
             InstallMsg::Done(game_id, Err(None)) => {
+                self.note_interrupted(&game_id, crate::Interrupted::Download);
                 return self.update_install(InstallMsg::Prepare(game_id, None));
             }
             InstallMsg::Done(game_id, Err(Some(e))) => {
+                self.note_interrupted(&game_id, crate::Interrupted::Download);
                 self.install_views.insert(game_id, InstallView::Failed(e));
             }
         }
@@ -740,6 +744,10 @@ impl App {
                 }
             }
             MaintenanceMsg::Updated(game_id, result) => {
+                match &result {
+                    Ok(_) => self.forget_interrupted(&game_id),
+                    Err(_) => self.note_interrupted(&game_id, crate::Interrupted::Update),
+                }
                 self.refresh_record(&game_id);
                 let view = self.maintenance.entry(game_id).or_default();
                 view.busy = false;
