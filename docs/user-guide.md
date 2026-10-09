@@ -127,7 +127,8 @@ slatty install <game-id> --proton ~/.local/share/Steam/compatibilitytools.d/<Pro
 `--proton` and `--dir` are remembered, so later installs need only the game id. The default folder
 is `~/Games/GOG`. Use `--language fr-FR` (or any language listed by `--info`) for another language.
 
-In the interface, the Install panel starts from the default installation path and the default
+In the interface, the Install panel shows the free space on the drive that would hold the game
+(in red when it is short) and starts from the default installation path and the default
 Proton set in Settings. **Install in** changes the folder for this game only: type a path, or use
 **Browse** to pick a folder with your desktop's file chooser (through the XDG desktop portal). The
 game gets its own subfolder there, shown below the field. An interrupted install keeps the folder it

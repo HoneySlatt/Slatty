@@ -32,6 +32,8 @@ pub struct PlanInfo {
     pub dlcs: Vec<DlcChoice>,
     /// Proton build the game will run with: the default from Settings unless changed here.
     pub proton: Option<PathBuf>,
+    /// Free space where the game would go, once known.
+    pub free: Option<u64>,
 }
 
 impl PlanInfo {
@@ -97,6 +99,8 @@ pub enum InstallMsg {
     ConfirmCancel(String),
     RootInput(String, String),
     Proton(String, ProtonChoice),
+    /// Free space under the install folder typed then.
+    FreeSpace(String, String, Option<u64>),
     Browse(String),
     Browsed(String, Option<PathBuf>),
     ToggleDlc(String, String),
@@ -244,7 +248,18 @@ impl App {
                 if let Some(InstallView::Ready(info)) = self.install_views.get_mut(&game_id)
                     && !info.resumable
                 {
-                    info.root = root;
+                    info.root = root.clone();
+                    info.free = None;
+                    return Task::perform(free_space(root.clone()), move |free| {
+                        Message::Install(InstallMsg::FreeSpace(game_id, root, free))
+                    });
+                }
+            }
+            InstallMsg::FreeSpace(game_id, root, free) => {
+                if let Some(InstallView::Ready(info)) = self.install_views.get_mut(&game_id)
+                    && info.root == root
+                {
+                    info.free = free;
                 }
             }
             InstallMsg::Browse(game_id) => {
@@ -354,8 +369,10 @@ async fn plan(
     )
     .await
     .map_err(err)?;
+    let free = free_space(root.display().to_string()).await;
     Ok(PlanInfo {
         root: root.display().to_string(),
+        free,
         proton,
         directory: plan.directory_name().map_err(err)?,
         title: plan.title,
@@ -443,4 +460,17 @@ impl Rate {
         let seconds = t1.duration_since(t0).as_secs_f64();
         (seconds >= 1.0).then(|| b1.saturating_sub(b0) as f64 / seconds)
     }
+}
+
+/// Free space on the drive that would hold a game installed under `root`. Off the interface
+/// thread: the folder may sit on a slow or network drive.
+async fn free_space(root: String) -> Option<u64> {
+    let root = PathBuf::from(root.trim());
+    if !root.is_absolute() {
+        return None;
+    }
+    tokio::task::spawn_blocking(move || installer::free_space(&root).ok())
+        .await
+        .ok()
+        .flatten()
 }

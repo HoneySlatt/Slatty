@@ -480,6 +480,7 @@ fn fake_plan() -> crate::install::PlanInfo {
         root: "/games".into(),
         directory: "Game 5".into(),
         proton: Some("/proton/GE-Proton".into()),
+        free: Some(100 << 30),
         dependencies: vec!["MSVC2017".into()],
         resumable: false,
         dlcs: vec![
@@ -719,7 +720,10 @@ fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
     app.install_views
         .insert("5".into(), InstallView::Ready(fake_plan()));
     let mut ui = render(&app);
-    assert!(ui.find("Download 4.00 GiB · on disk 7.00 GiB").is_ok());
+    assert!(
+        ui.find("Download 4.00 GiB · on disk 7.00 GiB · 100.00 GiB free")
+            .is_ok()
+    );
     assert!(ui.find("[FAKE] Other DLC (2.00 GiB) — not owned").is_ok());
     snapshot(&mut ui, "install-dlc");
     ui.click("[FAKE] Owned DLC (2.00 GiB)").unwrap();
@@ -732,7 +736,7 @@ fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
     }
     assert!(
         render(&app)
-            .find("Download 3.00 GiB · on disk 5.00 GiB")
+            .find("Download 3.00 GiB · on disk 5.00 GiB · 100.00 GiB free")
             .is_ok()
     );
 }
@@ -1441,4 +1445,47 @@ fn default_installation_path_is_browsed_or_typed_without_a_save_button() {
         "/games/typed".into(),
     )));
     assert_eq!(saved(), PathBuf::from("/games/typed"));
+}
+
+#[test]
+fn install_panel_shows_the_free_space_and_warns_when_short() {
+    use crate::ui::format::human_size;
+    let mut app = library_app();
+    open(&mut app, "5", Some(Panel::Install));
+    let plan = fake_plan();
+    let sizes = format!(
+        "Download {} · on disk {}",
+        human_size(plan.total_download()),
+        human_size(plan.total_disk())
+    );
+    app.install_views
+        .insert("5".into(), InstallView::Ready(plan.clone()));
+    assert!(
+        render(&app)
+            .find(format!("{sizes} · 100.00 GiB free"))
+            .is_ok()
+    );
+
+    // Another folder: its drive is measured again, and an answer for the old one is ignored.
+    let _ = app.update(Message::Install(InstallMsg::RootInput(
+        "5".into(),
+        "/small".into(),
+    )));
+    let _ = app.update(Message::Install(InstallMsg::FreeSpace(
+        "5".into(),
+        "/games".into(),
+        Some(100 << 30),
+    )));
+    assert!(render(&app).find(sizes.clone()).is_ok(), "unknown yet");
+    let _ = app.update(Message::Install(InstallMsg::FreeSpace(
+        "5".into(),
+        "/small".into(),
+        Some(1 << 30),
+    )));
+    let mut ui = render(&app);
+    assert!(
+        ui.find(format!("{sizes} · only 1.00 GiB free on this drive"))
+            .is_ok()
+    );
+    snapshot(&mut ui, "install-short-of-space");
 }

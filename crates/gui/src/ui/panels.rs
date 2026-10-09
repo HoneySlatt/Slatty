@@ -113,11 +113,27 @@ impl App {
                         .font(SEMIBOLD)
                         .into(),
                 );
-                items.push(note(format!(
+                let mut sizes = format!(
                     "Download {} · on disk {}",
                     human_size(info.total_download()),
                     human_size(info.total_disk())
-                )));
+                );
+                match info.free {
+                    Some(free) if free < info.total_disk() => items.push(
+                        text(format!(
+                            "{sizes} · only {} free on this drive",
+                            human_size(free)
+                        ))
+                        .size(14)
+                        .color(tokens().danger)
+                        .into(),
+                    ),
+                    Some(free) => {
+                        sizes += &format!(" · {} free", human_size(free));
+                        items.push(note(sizes));
+                    }
+                    None => items.push(note(sizes)),
+                }
                 if info.resumable {
                     items.push(note(format!("Folder: {}", info.folder().display())));
                 } else {
