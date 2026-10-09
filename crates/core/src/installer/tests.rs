@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -11,6 +11,7 @@ use md5::{Digest, Md5};
 use tokio_util::sync::CancellationToken;
 
 use super::*;
+use crate::fsutil;
 use crate::galaxy::{Build, Chunk, ContentSource, Depot, DepotFile, DepotItem, Meta, Product};
 
 const CHUNK: usize = 4;
