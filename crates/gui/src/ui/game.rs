@@ -346,52 +346,57 @@ impl App {
                 None => (Icon::Cloud, tokens().muted, "Synced once installed".into()),
             }
         };
-        let mut content = row![
-            container(icon(Icon::Cloud, 22.0, tokens().text))
-                .center(40)
-                .style(theme::circle),
-            column![
-                text("Cloud saves")
-                    .size(15)
-                    .font(SEMIBOLD)
-                    .wrapping(Wrapping::None),
-                // The state icon matters once there are saves to keep in step.
-                row![]
-                    .push(installed.then(|| icon(ic, 16.0, color)))
-                    .push(
-                        text(status)
-                            .size(14)
-                            .color(tokens().muted)
-                            .wrapping(Wrapping::None),
-                    )
-                    .spacing(8)
-                    .align_y(Alignment::Center),
+        // The whole card opens the cloud panel; "Manage" shows when the card has room for it
+        // (a drawer narrows the page).
+        let card = responsive(move |size| {
+            let mut content = row![
+                container(icon(Icon::Cloud, 22.0, tokens().text))
+                    .center(40)
+                    .style(theme::circle),
+                column![
+                    text("Cloud saves")
+                        .size(15)
+                        .font(SEMIBOLD)
+                        .wrapping(Wrapping::None),
+                    // The state icon matters once there are saves to keep in step.
+                    row![]
+                        .push(installed.then(|| icon(ic, 16.0, color)))
+                        .push(
+                            text(status.clone())
+                                .size(14)
+                                .color(tokens().muted)
+                                .wrapping(Wrapping::None),
+                        )
+                        .spacing(8)
+                        .align_y(Alignment::Center),
+                ]
+                .spacing(4)
+                .width(Length::Fill),
             ]
-            .spacing(4)
-            .width(Length::Fill),
-        ]
-        .spacing(14)
-        .align_y(Alignment::Center);
-        if installed {
-            content = content.push(
-                button(
-                    row![
-                        text("Manage").size(15),
-                        icon(Icon::ArrowRight, 16.0, tokens().accent)
-                    ]
-                    .spacing(6)
-                    .align_y(Alignment::Center),
-                )
-                .on_press(Message::OpenPanel(Panel::Cloud))
-                .style(theme::link),
-            );
-        }
-        container(content)
+            .spacing(14)
+            .align_y(Alignment::Center);
+            if installed && size.width >= 280.0 {
+                content = content.push(
+                    button(
+                        row![
+                            text("Manage").size(15),
+                            icon(Icon::ArrowRight, 16.0, tokens().accent)
+                        ]
+                        .spacing(6)
+                        .align_y(Alignment::Center),
+                    )
+                    .on_press(Message::OpenPanel(Panel::Cloud))
+                    .style(theme::link),
+                );
+            }
+            container(content).center_y(Length::Fill).into()
+        });
+        button(card)
             .padding([0, 18])
             .width(Length::Fill)
             .height(Length::Fill)
-            .align_y(Alignment::Center)
-            .style(theme::block)
+            .on_press_maybe(installed.then_some(Message::OpenPanel(Panel::Cloud)))
+            .style(theme::tile)
             .into()
     }
 

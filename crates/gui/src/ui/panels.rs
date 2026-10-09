@@ -1,8 +1,8 @@
 //! Tool panels opened over the game page.
 
 use iced::widget::{
-    Column, Space, button, center, checkbox, column, container, mouse_area, opaque, pick_list,
-    progress_bar, row, scrollable, space, stack, text,
+    Column, Space, button, center, checkbox, column, container, mouse_area, opaque, progress_bar,
+    row, scrollable, space, stack, text,
 };
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::cloud::sync::Prefer;
@@ -17,8 +17,7 @@ use super::format::*;
 use super::{inner, note, round_button};
 use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
-use crate::maintenance::{ContentInfo, MaintenanceMsg};
-use crate::settings::{ProtonChoice, SettingsMsg};
+use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, CloudRequest, Loadable, Message, Panel};
 
@@ -36,7 +35,7 @@ impl App {
     ) -> Element<'a, Message> {
         let (title, content) = match panel {
             Panel::Install => return self.install_drawer(page, g),
-            Panel::GameSettings => ("Game settings", self.game_settings_panel(g)),
+            Panel::GameSettings => return self.game_settings_drawer(page, g),
             Panel::Manage => ("Manage", self.manage_panel(g)),
             Panel::Cloud => ("Cloud saves", self.cloud_panel(g)),
             Panel::Achievements => return self.achievements_drawer(page, g),
@@ -74,53 +73,6 @@ impl App {
             center(opaque(boxed)),
         ]
         .into()
-    }
-
-    pub(super) fn game_settings_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let Some(install) = self.installs.get(&g.id) else {
-            return note("Not installed.");
-        };
-        let view = self.maintenance.get(&g.id);
-        let busy = self.maintenance_busy(&g.id);
-        let runner: Element<'_, Message> = match &install.runner {
-            Runner::Umu { proton, .. } => {
-                let id = g.id.clone();
-                row![
-                    text("Proton").size(14).color(tokens().muted),
-                    pick_list(
-                        self.proton_choices
-                            .iter()
-                            .cloned()
-                            .map(ProtonChoice)
-                            .collect::<Vec<_>>(),
-                        Some(ProtonChoice(proton.clone())),
-                        move |c| Message::Settings(SettingsMsg::GameProton(id.clone(), c)),
-                    )
-                    .style(theme::select)
-                    .padding([8, 16]),
-                    note("Used from the next launch."),
-                ]
-                .spacing(12)
-                .align_y(Alignment::Center)
-                .into()
-            }
-            _ => note(runner_label(install)),
-        };
-        let mut col =
-            column![note(format!("Folder: {}", install.path.display())), runner,].spacing(10);
-        match view.and_then(|v| v.content.as_ref()) {
-            Some(c) => col = col.push(self.content_panel(&g.id, c, busy)),
-            None => {
-                col = col
-                    .extend(
-                        view.into_iter()
-                            .flat_map(|v| &v.lines)
-                            .map(|l| note(l.as_str())),
-                    )
-                    .extend(self.maintenance_progress(&g.id));
-            }
-        }
-        col.into()
     }
 
     /// Progress bar and Pause button of a running verify, repair or update.
@@ -243,91 +195,6 @@ impl App {
             }
         }
         Column::with_children(items).spacing(12).into()
-    }
-
-    pub(super) fn content_panel<'a>(
-        &'a self,
-        game_id: &'a str,
-        c: &'a ContentInfo,
-        busy: bool,
-    ) -> Element<'a, Message> {
-        let mut col = Column::new().spacing(10);
-        if c.languages.len() <= 1 {
-            col = col.push(
-                row![
-                    text("Language").size(14).color(tokens().muted),
-                    text(language_name(&c.language)).size(14),
-                ]
-                .spacing(12),
-            );
-            col = col.push(note(if c.language == "*" {
-                "One download holds every language; choose it in the game's own options."
-            } else {
-                "GOG offers this game in this language only. Games that hold several languages \
-                 in one download let you choose in their own options."
-            }));
-        } else {
-            let id = game_id.to_string();
-            col = col.push(
-                row![
-                    text("Language").size(14).color(tokens().muted),
-                    pick_list(
-                        c.languages
-                            .iter()
-                            .cloned()
-                            .map(Language)
-                            .collect::<Vec<_>>(),
-                        Some(Language(c.chosen_language.clone())),
-                        move |l| {
-                            Message::Maintenance(MaintenanceMsg::ChooseLanguage(id.clone(), l.0))
-                        }
-                    )
-                    .style(theme::select)
-                    .padding([8, 16]),
-                    button(text("Switch language").size(14))
-                        .padding([10, 16])
-                        .on_press_maybe(
-                            (!busy && !c.chosen_language.eq_ignore_ascii_case(&c.language)).then(
-                                || {
-                                    Message::Maintenance(MaintenanceMsg::Apply(
-                                        game_id.to_string(),
-                                        Change::Language(c.chosen_language.clone()),
-                                    ))
-                                }
-                            )
-                        )
-                        .style(theme::tonal),
-                ]
-                .spacing(12)
-                .align_y(Alignment::Center),
-            );
-        }
-        // Only the DLC the account owns: the others cannot be installed.
-        if c.dlcs.is_empty() {
-            col = col.push(note("This game has no DLC."));
-        } else if !c.dlcs.iter().any(|d| d.owned) {
-            col = col.push(note("You own none of this game's DLC."));
-        } else {
-            col = col.push(text("DLC").size(15).font(SEMIBOLD));
-            for d in c.dlcs.iter().filter(|d| d.owned) {
-                let (id, dlc) = (game_id.to_string(), d.id.clone());
-                col = col.push(dlc_row(d, c.chosen_dlcs.contains(&d.id), true, move |_| {
-                    Message::Maintenance(MaintenanceMsg::ToggleContentDlc(id.clone(), dlc.clone()))
-                }));
-            }
-            col = col.push(
-                button(text("Apply DLC changes").size(14))
-                    .padding([10, 16])
-                    .on_press_maybe((!busy && c.dlcs_changed()).then(|| {
-                        Message::Maintenance(MaintenanceMsg::Apply(
-                            game_id.to_string(),
-                            Change::Dlcs(c.chosen_dlcs.clone()),
-                        ))
-                    }))
-                    .style(theme::tonal),
-            );
-        }
-        col.into()
     }
 
     pub(super) fn cloud_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {

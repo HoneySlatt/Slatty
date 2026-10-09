@@ -4,6 +4,7 @@ mod achievements;
 mod edit;
 pub mod format;
 mod game;
+mod game_settings;
 mod install;
 mod library;
 mod panels;
