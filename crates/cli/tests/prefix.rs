@@ -12,6 +12,7 @@ async fn fresh_prefix_is_initialised_with_user_folders() {
     let root = std::env::temp_dir().join(format!("slatty-prefix-{}", std::process::id()));
     std::fs::create_dir_all(root.join("game")).unwrap();
     let install = Install {
+        umu_id: None,
         game_id: "0".into(),
         title: "[FAKE]".into(),
         platform: Platform::Windows,
@@ -61,6 +62,7 @@ async fn galaxy_service_is_registered_and_stops_with_the_session() {
     let root = std::env::temp_dir().join(format!("slatty-service-{}", std::process::id()));
     std::fs::create_dir_all(root.join("game")).unwrap();
     let install = Install {
+        umu_id: None,
         game_id: "0".into(),
         title: "[FAKE]".into(),
         platform: Platform::Windows,

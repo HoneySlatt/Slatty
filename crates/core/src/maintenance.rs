@@ -507,6 +507,7 @@ mod tests {
             )
             .unwrap();
             Install {
+                umu_id: None,
                 game_id: "1".into(),
                 title: "[FAKE] Game".into(),
                 platform: Platform::Windows,

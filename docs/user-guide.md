@@ -152,7 +152,12 @@ slatty launch <game-id>
 
 A launch goes through these steps:
 
-1. On the first launch of a fresh install, the Wine prefix is created (`wineboot`), so that save
+1. On the first launch, SlattyLauncher looks the game up in umu's public database, as Heroic does,
+   and keeps the answer. umu then applies the fixes its community wrote for that game (protonfixes);
+   a game the database does not list runs without them. Only the GOG product id is sent. If the
+   database cannot be reached, the game starts without fixes and the lookup is tried again next
+   time.
+   On the first launch of a fresh install, the Wine prefix is created (`wineboot`), so that save
    folders exist.
    The post-install setup that GOG Galaxy performs runs once per installed build: GOG's script
    interpreter or each product's setup program (registry entries and similar), then the shared

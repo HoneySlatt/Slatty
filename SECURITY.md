@@ -22,5 +22,7 @@ Include the steps to reproduce and the version or commit you tested.
 
 ## Scope
 
-SlattyLauncher talks only to GOG services and to the CDN addresses GOG returns. It runs games with
-your user rights; it does not sandbox them beyond what umu and Proton provide.
+SlattyLauncher talks to GOG services, to the CDN addresses GOG returns, and to umu's public game
+database (`umu.openwinecomponents.org`), which receives only a game's GOG product id, once, to pick
+the game's Proton fixes. It runs games with your user rights; it does not sandbox them beyond what
+umu and Proton provide.

@@ -158,6 +158,7 @@ mod tests {
 
     fn install(root: &std::path::Path) -> Install {
         Install {
+            umu_id: None,
             game_id: "1".into(),
             title: "G".into(),
             platform: Platform::Windows,

@@ -59,6 +59,7 @@ fn library_app() -> App {
     app.installs.insert(
         "3".into(),
         Install {
+            umu_id: None,
             game_id: "3".into(),
             title: "[FAKE] Game 3".into(),
             platform: Platform::Windows,

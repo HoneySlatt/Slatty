@@ -84,21 +84,11 @@ pub fn windows_command(install: &Install, args: Vec<String>, cwd: PathBuf) -> Re
             }
             let umu = find_in_path("umu-run")
                 .ok_or_else(|| Error::NotFound("umu-run is not in PATH".into()))?;
-            let env = vec![
-                ("WINEPREFIX".into(), prefix.display().to_string()),
-                ("PROTONPATH".into(), proton.display().to_string()),
-                ("GAMEID".into(), "umu-0".into()),
-                ("STORE".into(), "gog".into()),
-                (
-                    "STEAM_COMPAT_INSTALL_PATH".into(),
-                    install.path.display().to_string(),
-                ),
-            ];
             Ok(LaunchSpec {
                 program: umu,
                 args,
                 cwd,
-                env,
+                env: umu_env(install, proton, prefix),
             })
         }
         Runner::Wine { wine, prefix } => Ok(LaunchSpec {
@@ -136,4 +126,50 @@ fn windows_task(install: &Install) -> Result<(PathBuf, Vec<String>, PathBuf)> {
         .map(gameinfo::split_args)
         .unwrap_or_default();
     Ok((exe, args, cwd))
+}
+
+/// What umu needs: the prefix, the Proton build, and the game's id so umu applies its fixes.
+fn umu_env(install: &Install, proton: &Path, prefix: &Path) -> Vec<(String, String)> {
+    let game_id = install
+        .umu_id
+        .clone()
+        .unwrap_or_else(|| crate::umu::UNKNOWN.into());
+    vec![
+        ("WINEPREFIX".into(), prefix.display().to_string()),
+        ("PROTONPATH".into(), proton.display().to_string()),
+        ("GAMEID".into(), game_id),
+        ("STORE".into(), "gog".into()),
+        (
+            "STEAM_COMPAT_INSTALL_PATH".into(),
+            install.path.display().to_string(),
+        ),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::install::Platform;
+
+    #[test]
+    fn umu_gets_the_games_id_or_the_unknown_one() {
+        let mut install = Install {
+            game_id: "1423049311".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: "/games/Game".into(),
+            client_id: None,
+            runner: Runner::Native,
+            umu_id: None,
+        };
+        let game_id = |install: &Install| {
+            umu_env(install, Path::new("/proton"), Path::new("/prefix"))
+                .into_iter()
+                .find(|(k, _)| k == "GAMEID")
+                .map(|(_, v)| v)
+        };
+        assert_eq!(game_id(&install).as_deref(), Some("umu-0"));
+        install.umu_id = Some("umu-1091500".into());
+        assert_eq!(game_id(&install).as_deref(), Some("umu-1091500"));
+    }
 }

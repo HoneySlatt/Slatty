@@ -30,6 +30,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `maintenance` | Verify, repair, uninstall, updates and content changes |
 | `patches` | GOG's binary patches between builds: lookup, delta download, xdelta3 application |
 | `runner` | Launch commands for umu/Proton, Wine and native games; prefix creation |
+| `umu` | Game id in umu's database, looked up once per game, so umu applies its fixes for it |
 | `session` | Session supervisor (subreaper), session records, play time |
 | `play` | Full play flow: prefix, cloud, Comet, session, upload, achievement diff |
 | `cloud` | Save locations, local scan, three-way plan, transport, sync executor, diagnostics |

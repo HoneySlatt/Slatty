@@ -24,6 +24,7 @@ Proton-CachyOS.
 | 2026-10-09 | Binary patches | OK | Hollow Knight 1.5.12618 → 1.5.12620: 11 real GOG deltas (60 KB to 5.9 MB files, 111 to 390 bytes of delta) applied by oxidelta to the old files downloaded from GOG, each matching GOG's target MD5. Not yet a full update of an installed game |
 | 2026-10-09 | CDN endpoint choice | OK | On a 17 MB/s connection, GOG listed fastly first and gcore second. fastly gave 0.8 to 1 MB/s on Baldur's Gate 3 and timed out on Cyberpunk 2077; gcore gave 3.6 to 13 MB/s. Measuring each endpoint and using the fastest brought 24-chunk samples from 1 to 2 MB/s to 5 to 7.4 MB/s |
 | 2026-10-09 | Late chunks asked again | OK | Same connection, idle (14 to 18 MB/s raw). Most chunks take 0.6 to 1.5 s, a few 6 to 17 s; an endpoint can also stall for tens of seconds. Twelve alternated 24-chunk downloads through the install code: 15.3 MB/s on average and 14.0 MB/s at worst with copies of late chunks and writes at their offset, against 14.1 and 9.3 MB/s without. Four chunks per file instead of two was slower (13.8 against 15.8 MB/s) |
+| 2026-10-09 | umu game ids | OK | umu's database answered for GOG ids: Cyberpunk 2077 umu-1091500, Baldur's Gate 3 umu-1086940; Hollow Knight is not listed (umu-0). Not yet checked in a game that needs a fix |
 
 ## Runners
 

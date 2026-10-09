@@ -163,6 +163,7 @@ pub async fn install(
     .save(dirs, &req.game_id)?;
 
     let install = Install {
+        umu_id: None,
         game_id: req.game_id.clone(),
         title: plan.title.clone(),
         platform: Platform::Windows,

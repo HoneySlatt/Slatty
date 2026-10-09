@@ -19,6 +19,7 @@ fn fake_native_game(name: &str, script: &str) -> (PathBuf, Dirs, Db) {
     let dirs = Dirs::under(&root.join("app"));
     let db = Db::open(&dirs.db_file()).unwrap();
     Install {
+        umu_id: None,
         game_id: "7".into(),
         title: "Fake".into(),
         platform: Platform::Linux,

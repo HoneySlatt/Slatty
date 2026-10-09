@@ -25,6 +25,9 @@ pub struct Install {
     pub path: PathBuf,
     pub client_id: Option<String>,
     pub runner: Runner,
+    /// Id in umu's database, which selects the game's Proton fixes: [`crate::umu::UNKNOWN`] when
+    /// the game is not listed, `None` until it has been looked up.
+    pub umu_id: Option<String>,
 }
 
 impl Install {
@@ -33,10 +36,11 @@ impl Install {
         let platform =
             serde_json::to_value(self.platform).map_err(|e| Error::parse("platform", e))?;
         db.conn().execute(
-            "INSERT INTO installs (game_id, title, platform, path, client_id, runner, added_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO installs (game_id, title, platform, path, client_id, runner, added_at, umu_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(game_id) DO UPDATE SET title = excluded.title, platform = excluded.platform,
-                path = excluded.path, client_id = excluded.client_id, runner = excluded.runner",
+                path = excluded.path, client_id = excluded.client_id, runner = excluded.runner,
+                umu_id = excluded.umu_id",
             params![
                 self.game_id,
                 self.title,
@@ -44,7 +48,8 @@ impl Install {
                 self.path.to_string_lossy(),
                 self.client_id,
                 runner,
-                Utc::now().timestamp()
+                Utc::now().timestamp(),
+                self.umu_id
             ],
         )?;
         Ok(())
@@ -97,13 +102,14 @@ pub fn set_proton(db: &Db, game_id: &str, proton: &Path) -> Result<Install> {
     Ok(install)
 }
 
-const SELECT: &str = "SELECT game_id, title, platform, path, client_id, runner FROM installs";
+const SELECT: &str =
+    "SELECT game_id, title, platform, path, client_id, runner, umu_id FROM installs";
 
 fn from_row(row: &Row<'_>) -> rusqlite::Result<Result<Install>> {
     let platform: String = row.get(2)?;
     let runner: String = row.get(5)?;
     let path: String = row.get(3)?;
-    let (game_id, title, client_id) = (row.get(0)?, row.get(1)?, row.get(4)?);
+    let (game_id, title, client_id, umu_id) = (row.get(0)?, row.get(1)?, row.get(4)?, row.get(6)?);
     Ok((|| {
         Ok(Install {
             game_id,
@@ -113,6 +119,7 @@ fn from_row(row: &Row<'_>) -> rusqlite::Result<Result<Install>> {
             path: PathBuf::from(path),
             client_id,
             runner: serde_json::from_str(&runner).map_err(|e| Error::parse("runner", e))?,
+            umu_id,
         })
     })())
 }
@@ -136,6 +143,7 @@ pub fn from_dir(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Ins
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| id.to_string());
         return Ok(Install {
+            umu_id: None,
             game_id: id.into(),
             title,
             platform: Platform::Linux,
@@ -151,6 +159,7 @@ pub fn from_dir(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Ins
         ));
     }
     Ok(Install {
+        umu_id: None,
         game_id: info.game_id,
         title: info.name,
         platform: Platform::Windows,
@@ -218,7 +227,8 @@ mod tests {
             proton: "/p".into(),
             prefix: "/x".into(),
         };
-        let install = from_dir(&root.join("Game"), None, runner).unwrap();
+        let mut install = from_dir(&root.join("Game"), None, runner).unwrap();
+        install.umu_id = Some("umu-42".into());
         assert_eq!(
             (install.game_id.as_str(), install.client_id.as_deref()),
             ("42", Some("777"))

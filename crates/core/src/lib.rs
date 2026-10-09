@@ -27,5 +27,6 @@ pub mod secret;
 pub mod session;
 pub mod settings;
 pub mod setup;
+pub mod umu;
 
 pub use error::{Error, Result};

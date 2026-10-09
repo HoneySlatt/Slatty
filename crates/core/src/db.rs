@@ -68,6 +68,9 @@ ALTER TABLE install_jobs ADD COLUMN dlcs TEXT NOT NULL DEFAULT '';
     r#"
 ALTER TABLE sessions ADD COLUMN reported INTEGER NOT NULL DEFAULT 0;
 "#,
+    r#"
+ALTER TABLE installs ADD COLUMN umu_id TEXT;
+"#,
 ];
 
 pub struct Db {
