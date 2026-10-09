@@ -359,7 +359,7 @@ async fn cloud_sync(
 ) -> Result<Option<CloudSummary>> {
     let tokens = tokens(db, dirs, http).await?;
     let outcomes =
-        cloud::sync_game(db, dirs, http, &tokens, install, SyncOptions::default()).await?;
+        cloud::sync_held(db, dirs, http, &tokens, install, SyncOptions::default()).await?;
     Ok(outcomes.map(|o| CloudSummary::from_outcomes(&o)))
 }
 

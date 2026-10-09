@@ -511,3 +511,41 @@ async fn nothing_is_written_into_a_prefix_proton_has_not_created_yet() {
         "the prefix stays untouched for Proton to create"
     );
 }
+
+#[tokio::test]
+async fn saves_are_not_synced_while_the_game_is_in_use() {
+    use crate::auth::Tokens;
+    use crate::install::{Install, Platform};
+    use crate::runner::Runner;
+    use crate::secret::Secret;
+
+    let root = std::env::temp_dir().join(format!("slatty-cloud-busy-{}", std::process::id()));
+    let dirs = Dirs::under(&root.join("app"));
+    let db = Db::in_memory().unwrap();
+    std::fs::create_dir_all(root.join("pfx/drive_c/users")).unwrap();
+    let install = Install {
+        game_id: "1".into(),
+        title: "[FAKE] Game".into(),
+        platform: Platform::Windows,
+        path: root.join("game"),
+        client_id: Some("c".into()),
+        runner: Runner::Umu {
+            proton: "/p".into(),
+            prefix: root.join("pfx"),
+        },
+        umu_id: None,
+    };
+    let tokens = Tokens {
+        user_id: "u".into(),
+        access_token: Secret::new("[FAKE]"),
+        refresh_token: Secret::new("[FAKE]"),
+        expires_at: i64::MAX,
+    };
+    let http = crate::http::client().unwrap();
+    let playing = crate::lock::game(&dirs, "1").unwrap();
+    let result =
+        super::sync_game(&db, &dirs, &http, &tokens, &install, SyncOptions::default()).await;
+    assert!(matches!(result, Err(crate::Error::Refused(_))));
+    drop(playing);
+    std::fs::remove_dir_all(&root).unwrap();
+}

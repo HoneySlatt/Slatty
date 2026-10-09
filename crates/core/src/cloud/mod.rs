@@ -64,8 +64,26 @@ impl LocationOutcome {
     }
 }
 
-/// Syncs every save location of a game. `None` when GOG has no cloud saves for it.
+/// Syncs every save location of a game. `None` when GOG has no cloud saves for it. A sync that
+/// writes is refused while the game is played, changed or synced by another operation.
 pub async fn sync_game(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    tokens: &Tokens,
+    install: &Install,
+    opts: SyncOptions,
+) -> Result<Option<Vec<LocationOutcome>>> {
+    let _busy = if opts.dry_run || !crate::runner::prefix_ready(install) {
+        None
+    } else {
+        Some(crate::lock::game(dirs, &install.game_id)?)
+    };
+    sync_held(db, dirs, http, tokens, install, opts).await
+}
+
+/// `sync_game` for the play flow, which already holds the game's lock.
+pub(crate) async fn sync_held(
     db: &Db,
     dirs: &Dirs,
     http: &Client,

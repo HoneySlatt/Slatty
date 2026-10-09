@@ -85,10 +85,10 @@ same way before asking for new links.
 ### One operation per game
 
 Installing, discarding an unfinished install, verifying or repairing, updating or changing content,
-uninstalling and playing each hold `~/.local/state/slatty/locks/game-<id>.lock` while they run. A
-second one on the same game, from the same process or another one (CLI and interface), is refused
-instead of touching files in use. A session left without an end (crash) still blocks changes until
-the next launch records it.
+uninstalling, syncing cloud saves (checking them does not) and playing each hold
+`~/.local/state/slatty/locks/game-<id>.lock` while they run. A second one on the same game, from
+the same process or another one (CLI and interface), is refused instead of touching files in use. A
+session left without an end (crash) still blocks changes until the next launch records it.
 
 ### Install
 
@@ -158,8 +158,9 @@ resumes it with the pinned build.
 
 ### Game sessions
 
-A launch spawns the running binary again with a hidden argument. That copy becomes the supervisor
-for the session:
+A launch spawns the running binary again (through `/proc/self/exe`, which still works after the
+file was replaced by an update or a rebuild) with a hidden argument. That copy becomes the
+supervisor for the session:
 
 - It marks itself `PR_SET_CHILD_SUBREAPER`, starts the game in its own process group and reports
   events as JSON lines.
