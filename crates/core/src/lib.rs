@@ -15,6 +15,7 @@ pub mod install;
 pub mod installer;
 pub mod library;
 pub mod lock;
+pub mod maintenance;
 pub mod paths;
 pub mod play;
 pub mod runner;

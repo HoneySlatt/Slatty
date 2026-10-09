@@ -5,6 +5,7 @@ mod games;
 mod install;
 mod launch;
 mod library;
+mod maintenance;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -38,6 +39,10 @@ enum Command {
     LaunchSpec { game_id: String },
     /// Remove a game from slatty's records; files, prefix and saves are left untouched
     Forget { game_id: String },
+    /// Delete a game installed by slatty (saves are kept unless asked otherwise)
+    Uninstall(maintenance::UninstallArgs),
+    /// Check an installed game's files, optionally repairing them
+    Verify(maintenance::VerifyArgs),
     /// Launch a game and follow its session until every process has exited
     Launch(launch::LaunchArgs),
     /// Cloud saves
@@ -98,6 +103,8 @@ async fn run() -> Result<()> {
         Command::Installs => games::list(&ctx).and_then(|()| install::list_jobs(&ctx)),
         Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),
         Command::Forget { game_id } => games::forget(&ctx, &game_id),
+        Command::Uninstall(args) => maintenance::uninstall(&ctx, args),
+        Command::Verify(args) => maintenance::verify(&ctx, args).await,
         Command::Launch(args) => launch::run(&ctx, args).await,
         Command::Cloud(cmd) => cloud::run(&ctx, cmd).await,
         Command::Achievements(args) => achievements::run(&ctx, args).await,

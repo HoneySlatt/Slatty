@@ -370,3 +370,56 @@ fn plan_refuses_unsafe_install_directory() {
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn check_finds_damaged_files_and_repair_fetches_only_those() {
+    let env = Env::new("repair");
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    let game = env.target();
+    std::fs::write(game.join("data/level1.pak"), b"0123456789abcdefghiX").unwrap();
+    std::fs::remove_file(game.join("goggame-1.info")).unwrap();
+    std::fs::write(game.join("saves/mine.sav"), b"keep me").unwrap();
+
+    let set = collect_files(&env.source, &env.depots).await.unwrap();
+    let free_space = |_: &Path| Ok(PLENTY);
+    let dl = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    };
+
+    let before = env.source.fetched.load(Ordering::SeqCst);
+    let bad = dl.check_installed(&set, &game, false).await.unwrap();
+    assert_eq!(
+        bad,
+        vec![
+            PathBuf::from("data/level1.pak"),
+            PathBuf::from("goggame-1.info")
+        ]
+    );
+    assert_eq!(
+        env.source.fetched.load(Ordering::SeqCst),
+        before,
+        "checking downloads nothing"
+    );
+
+    let repaired = dl.check_installed(&set, &game, true).await.unwrap();
+    assert_eq!(repaired, bad);
+    let fetched = env.source.fetched.load(Ordering::SeqCst) - before;
+    assert_eq!(fetched, 5 + 1, "only the chunks of the two damaged files");
+    assert_eq!(
+        std::fs::read(game.join("data/level1.pak")).unwrap(),
+        b"0123456789abcdefghij"
+    );
+    assert_eq!(
+        std::fs::read(game.join("saves/mine.sav")).unwrap(),
+        b"keep me"
+    );
+    assert!(
+        dl.check_installed(&set, &game, false)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

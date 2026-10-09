@@ -221,18 +221,51 @@ impl<S: ContentSource> Download<'_, S> {
             )));
         }
         crate::paths::ensure_dir(partial)?;
+        self.check_space(set, partial)?;
+        self.fill(set, partial, true).await?;
+        for dir in &set.dirs {
+            crate::paths::ensure_dir(&partial.join(dir))?;
+        }
+        std::fs::rename(partial, target).map_err(|e| {
+            Error::io(
+                format!("publish {} as {}", partial.display(), target.display()),
+                e,
+            )
+        })
+    }
+
+    /// Checks an installed game in place; with `repair`, re-downloads only the bad files.
+    pub async fn check_installed(
+        &self,
+        set: &FileSet,
+        dir: &Path,
+        repair: bool,
+    ) -> Result<Vec<PathBuf>> {
+        if repair {
+            self.check_space(set, dir)?;
+        }
+        let bad = self.fill(set, dir, repair).await?;
+        if repair {
+            for d in &set.dirs {
+                crate::paths::ensure_dir(&dir.join(d))?;
+            }
+        }
+        Ok(bad)
+    }
+
+    fn check_space(&self, set: &FileSet, dir: &Path) -> Result<()> {
         let present: u64 = set
             .files
             .iter()
             .filter_map(|(rel, f)| {
-                std::fs::metadata(partial.join(rel))
+                std::fs::metadata(dir.join(rel))
                     .ok()
                     .filter(|m| m.len() == f.size())
             })
             .map(|m| m.len())
             .sum();
         let needed = set.disk_size().saturating_sub(present);
-        let free = (self.free_space)(partial)?;
+        let free = (self.free_space)(dir)?;
         if needed + needed / 50 > free {
             return Err(Error::Refused(format!(
                 "not enough disk space: {} MiB needed, {} MiB free",
@@ -240,7 +273,13 @@ impl<S: ContentSource> Download<'_, S> {
                 free >> 20
             )));
         }
+        Ok(())
+    }
 
+    /// Verifies every file under `dir`; returns those that were missing or wrong.
+    /// With `download`, they are fetched again (atomically replaced).
+    async fn fill(&self, set: &FileSet, dir: &Path, download: bool) -> Result<Vec<PathBuf>> {
+        let bad: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
         let total = Progress {
             files_total: set.files.len(),
             bytes_total: set.disk_size(),
@@ -263,8 +302,9 @@ impl<S: ContentSource> Download<'_, S> {
         futures::stream::iter(0..set.files.len())
             .for_each_concurrent(FILE_CONCURRENCY, |i| {
                 let (rel, file) = &set.files[i];
-                let dest = partial.join(rel);
+                let dest = dir.join(rel);
                 let first_error = &first_error;
+                let bad = &bad;
                 async move {
                     if self.cancel.is_cancelled() {
                         first_error.lock().unwrap().get_or_insert(Error::Cancelled);
@@ -281,8 +321,11 @@ impl<S: ContentSource> Download<'_, S> {
                             report(1, file.size());
                             return Ok(());
                         }
-                        self.download_file(&dest, file, &|n| report(0, n)).await?;
-                        report(1, 0);
+                        bad.lock().unwrap().push(rel.clone());
+                        if download {
+                            self.download_file(&dest, file, &|n| report(0, n)).await?;
+                        }
+                        report(1, if download { 0 } else { file.size() });
                         Ok::<(), Error>(())
                     }
                     .await;
@@ -295,16 +338,9 @@ impl<S: ContentSource> Download<'_, S> {
         if let Some(e) = first_error.into_inner().unwrap() {
             return Err(e);
         }
-
-        for dir in &set.dirs {
-            crate::paths::ensure_dir(&partial.join(dir))?;
-        }
-        std::fs::rename(partial, target).map_err(|e| {
-            Error::io(
-                format!("publish {} as {}", partial.display(), target.display()),
-                e,
-            )
-        })
+        let mut bad = bad.into_inner().unwrap();
+        bad.sort();
+        Ok(bad)
     }
 
     async fn download_file(
@@ -538,18 +574,44 @@ pub enum InstallEvent {
     },
 }
 
-#[derive(Serialize)]
-struct InstalledManifest<'a> {
-    build_id: &'a str,
-    version: &'a str,
-    language: &'a str,
-    files: Vec<InstalledFile<'a>>,
+/// What slatty wrote for a game. Its presence is what marks a game as installed by slatty.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallRecord {
+    pub build_id: String,
+    pub version: String,
+    pub language: String,
+    #[serde(default)]
+    pub path: Option<PathBuf>,
+    pub files: Vec<RecordedFile>,
 }
 
-#[derive(Serialize)]
-struct InstalledFile<'a> {
-    path: std::borrow::Cow<'a, str>,
-    size: u64,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecordedFile {
+    pub path: String,
+    pub size: u64,
+}
+
+impl InstallRecord {
+    pub fn file(dirs: &Dirs, game_id: &str) -> PathBuf {
+        dirs.data.join("manifests").join(format!("{game_id}.json"))
+    }
+
+    pub fn load(dirs: &Dirs, game_id: &str) -> Result<Option<InstallRecord>> {
+        let path = Self::file(dirs, game_id);
+        match std::fs::read(&path) {
+            Ok(bytes) => serde_json::from_slice(&bytes)
+                .map(Some)
+                .map_err(|e| Error::parse("install record", e)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(Error::io(format!("read {}", path.display()), e)),
+        }
+    }
+
+    pub fn save(&self, dirs: &Dirs, game_id: &str) -> Result<()> {
+        let json =
+            serde_json::to_vec_pretty(self).map_err(|e| Error::parse("install record", e))?;
+        fsutil::write_atomic(&Self::file(dirs, game_id), &json)
+    }
 }
 
 /// Downloads, verifies and registers a Windows build. An interrupted install is resumed with
@@ -637,28 +699,21 @@ pub async fn install(
         }
     };
 
-    let record = InstalledManifest {
-        build_id: &plan.build.build_id,
-        version: &plan.build.version_name,
-        language: &plan.language,
+    InstallRecord {
+        build_id: plan.build.build_id.clone(),
+        version: plan.build.version_name.clone(),
+        language: plan.language.clone(),
+        path: Some(target.clone()),
         files: set
             .files
             .iter()
-            .map(|(p, f)| InstalledFile {
-                path: p.to_string_lossy(),
+            .map(|(p, f)| RecordedFile {
+                path: p.to_string_lossy().into_owned(),
                 size: f.size(),
             })
             .collect(),
-    };
-    let json =
-        serde_json::to_vec_pretty(&record).map_err(|e| Error::parse("install manifest", e))?;
-    fsutil::write_atomic(
-        &dirs
-            .data
-            .join("manifests")
-            .join(format!("{}.json", req.game_id)),
-        &json,
-    )?;
+    }
+    .save(dirs, &req.game_id)?;
 
     let install = Install {
         game_id: req.game_id.clone(),

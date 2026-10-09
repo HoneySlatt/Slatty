@@ -1,0 +1,352 @@
+use std::path::{Path, PathBuf};
+
+use chrono::Utc;
+use reqwest::Client;
+use tokio_util::sync::CancellationToken;
+
+use crate::auth::Tokens;
+use crate::db::Db;
+use crate::error::{Error, Result};
+use crate::galaxy::GogContent;
+use crate::install::Install;
+use crate::installer::{self, Download, InstallJob, InstallRecord, Progress};
+use crate::paths::Dirs;
+use crate::session;
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct UninstallReport {
+    pub removed_files: usize,
+    /// Files that slatty did not install (saves, mods, configs), left in place.
+    pub kept: Vec<PathBuf>,
+    pub folder_removed: bool,
+    pub prefix_backup: Option<PathBuf>,
+    pub prefix_removed: bool,
+}
+
+fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, InstallRecord)> {
+    let install = Install::get(db, game_id)?
+        .ok_or_else(|| Error::NotFound(format!("{game_id} is not installed")))?;
+    let record = InstallRecord::load(dirs, game_id)?.ok_or_else(|| {
+        Error::Refused(format!(
+            "{} was not installed by slatty; use `forget` to drop it without touching its files",
+            install.title
+        ))
+    })?;
+    if record.path.as_ref().is_some_and(|p| p != &install.path) {
+        return Err(Error::Refused(
+            "the install record points to another folder".into(),
+        ));
+    }
+    if session::unfinished(db)?
+        .iter()
+        .any(|s| s.game_id == game_id)
+    {
+        return Err(Error::Refused(format!("{} is running", install.title)));
+    }
+    Ok((install, record))
+}
+
+/// Removes the files slatty installed and keeps everything else. The Wine prefix (where most
+/// saves live) is deleted only on request, after its `users` folder is copied to the backups.
+pub fn uninstall(
+    db: &Db,
+    dirs: &Dirs,
+    game_id: &str,
+    delete_prefix: bool,
+) -> Result<UninstallReport> {
+    let (install, record) = installed_by_slatty(db, dirs, game_id)?;
+    let prefix = install.runner.prefix().filter(|_| delete_prefix);
+    if let Some(p) = prefix
+        && !p.starts_with(dirs.data.join("prefixes"))
+    {
+        return Err(Error::Refused(format!(
+            "{} was not created by slatty; nothing was deleted",
+            p.display()
+        )));
+    }
+    let files = record
+        .files
+        .iter()
+        .map(|f| installer::safe_relative(&f.path))
+        .collect::<Result<Vec<_>>>()?;
+
+    let mut report = UninstallReport::default();
+    let root = &install.path;
+    for rel in files {
+        let path = root.join(rel);
+        if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+            std::fs::remove_file(&path)
+                .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
+            report.removed_files += 1;
+        }
+    }
+    if root.is_dir() {
+        remove_empty_dirs(root)?;
+        report.kept = leftovers(root, root);
+        if report.kept.is_empty() {
+            std::fs::remove_dir(root)
+                .map_err(|e| Error::io(format!("delete {}", root.display()), e))?;
+            report.folder_removed = true;
+        }
+    } else {
+        report.folder_removed = true;
+    }
+
+    if let Some(prefix) = prefix
+        && prefix.exists()
+    {
+        let users = prefix.join("drive_c/users");
+        if users.is_dir() {
+            let backup = dirs
+                .data
+                .join("backups/prefixes")
+                .join(game_id)
+                .join(Utc::now().format("%Y%m%d-%H%M%S").to_string());
+            copy_dir(&users, &backup)?;
+            report.prefix_backup = Some(backup);
+        }
+        std::fs::remove_dir_all(prefix)
+            .map_err(|e| Error::io(format!("delete {}", prefix.display()), e))?;
+        report.prefix_removed = true;
+    }
+
+    Install::remove(db, game_id)?;
+    InstallJob::delete(db, game_id)?;
+    let _ = std::fs::remove_file(InstallRecord::file(dirs, game_id));
+    Ok(report)
+}
+
+/// Verifies an installed game against the build it was installed from; with `repair`,
+/// bad or missing files are downloaded again. Returns the files that were not right.
+#[allow(clippy::too_many_arguments)]
+pub async fn check(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    tokens: &Tokens,
+    game_id: &str,
+    repair: bool,
+    progress: &(dyn Fn(Progress) + Send + Sync),
+    cancel: CancellationToken,
+) -> Result<Vec<PathBuf>> {
+    let (install, record) = installed_by_slatty(db, dirs, game_id)?;
+    let plan = installer::plan_for(
+        http,
+        tokens,
+        game_id,
+        Some(&record.language),
+        Some(&record.build_id),
+    )
+    .await?;
+    let source = GogContent::new(http.clone(), tokens.clone(), game_id).await?;
+    let set = installer::collect_files(&source, &plan.depots).await?;
+    Download {
+        source: &source,
+        cancel,
+        progress,
+        free_space: &installer::free_space,
+    }
+    .check_installed(&set, &install.path, repair)
+    .await
+}
+
+fn remove_empty_dirs(dir: &Path) -> Result<bool> {
+    let mut empty = true;
+    for entry in
+        std::fs::read_dir(dir).map_err(|e| Error::io(format!("list {}", dir.display()), e))?
+    {
+        let entry = entry.map_err(|e| Error::io(format!("list {}", dir.display()), e))?;
+        let ft = entry.file_type().map_err(|e| Error::io("stat", e))?;
+        if ft.is_dir() && remove_empty_dirs(&entry.path())? {
+            std::fs::remove_dir(entry.path())
+                .map_err(|e| Error::io(format!("delete {}", entry.path().display()), e))?;
+        } else {
+            empty = false;
+        }
+    }
+    Ok(empty)
+}
+
+fn leftovers(root: &Path, dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            out.extend(leftovers(root, &path));
+        } else {
+            out.push(path.strip_prefix(root).unwrap_or(&path).to_path_buf());
+        }
+    }
+    out.sort();
+    out
+}
+
+fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
+    crate::paths::ensure_dir(dst)?;
+    for entry in
+        std::fs::read_dir(src).map_err(|e| Error::io(format!("list {}", src.display()), e))?
+    {
+        let entry = entry.map_err(|e| Error::io(format!("list {}", src.display()), e))?;
+        let ft = entry.file_type().map_err(|e| Error::io("stat", e))?;
+        let to = dst.join(entry.file_name());
+        if ft.is_dir() {
+            copy_dir(&entry.path(), &to)?;
+        } else if ft.is_file() {
+            std::fs::copy(entry.path(), &to)
+                .map_err(|e| Error::io(format!("copy {}", entry.path().display()), e))?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::install::Platform;
+    use crate::installer::RecordedFile;
+    use crate::runner::Runner;
+
+    struct Env {
+        root: PathBuf,
+        dirs: Dirs,
+        db: Db,
+    }
+
+    impl Env {
+        fn new(name: &str, record: bool) -> Env {
+            let root =
+                std::env::temp_dir().join(format!("slatty-maint-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            let dirs = Dirs::under(&root.join("app"));
+            let db = Db::in_memory().unwrap();
+            let game = root.join("games/Game");
+            std::fs::create_dir_all(game.join("data")).unwrap();
+            std::fs::create_dir_all(game.join("saves")).unwrap();
+            std::fs::write(game.join("Game.exe"), b"exe").unwrap();
+            std::fs::write(game.join("data/a.pak"), b"pak").unwrap();
+            std::fs::write(game.join("saves/slot1.sav"), b"my progress").unwrap();
+            let prefix = dirs.data.join("prefixes/1");
+            std::fs::create_dir_all(prefix.join("drive_c/users/steamuser/Documents")).unwrap();
+            std::fs::write(
+                prefix.join("drive_c/users/steamuser/Documents/save.dat"),
+                b"prefix save",
+            )
+            .unwrap();
+            Install {
+                game_id: "1".into(),
+                title: "[FICTIF] Jeu".into(),
+                platform: Platform::Windows,
+                path: game.clone(),
+                client_id: None,
+                runner: Runner::Umu {
+                    proton: "/p".into(),
+                    prefix,
+                },
+            }
+            .save(&db)
+            .unwrap();
+            if record {
+                InstallRecord {
+                    build_id: "b".into(),
+                    version: "1".into(),
+                    language: "en-US".into(),
+                    path: Some(game),
+                    files: ["Game.exe", "data/a.pak"]
+                        .iter()
+                        .map(|p| RecordedFile {
+                            path: p.to_string(),
+                            size: 3,
+                        })
+                        .collect(),
+                }
+                .save(&dirs, "1")
+                .unwrap();
+            }
+            Env { root, dirs, db }
+        }
+
+        fn game(&self) -> PathBuf {
+            self.root.join("games/Game")
+        }
+    }
+
+    impl Drop for Env {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[test]
+    fn removes_installed_files_but_keeps_saves_in_the_game_folder() {
+        let env = Env::new("keep", true);
+        let r = uninstall(&env.db, &env.dirs, "1", false).unwrap();
+        assert_eq!(r.removed_files, 2);
+        assert_eq!(r.kept, vec![PathBuf::from("saves/slot1.sav")]);
+        assert!(!r.folder_removed);
+        assert_eq!(
+            std::fs::read(env.game().join("saves/slot1.sav")).unwrap(),
+            b"my progress"
+        );
+        assert!(!env.game().join("data").exists());
+        assert!(
+            env.dirs.data.join("prefixes/1/drive_c").exists(),
+            "prefix kept by default"
+        );
+        assert!(Install::get(&env.db, "1").unwrap().is_none());
+    }
+
+    #[test]
+    fn deleting_the_prefix_backs_up_its_user_folder_first() {
+        let env = Env::new("prefix", true);
+        std::fs::remove_dir_all(env.game().join("saves")).unwrap();
+        let r = uninstall(&env.db, &env.dirs, "1", true).unwrap();
+        assert!(r.folder_removed && r.prefix_removed);
+        let backup = r.prefix_backup.unwrap();
+        assert_eq!(
+            std::fs::read(backup.join("steamuser/Documents/save.dat")).unwrap(),
+            b"prefix save"
+        );
+        assert!(!env.dirs.data.join("prefixes/1").exists());
+    }
+
+    #[test]
+    fn games_not_installed_by_slatty_are_never_deleted() {
+        let env = Env::new("imported", false);
+        assert!(matches!(
+            uninstall(&env.db, &env.dirs, "1", true),
+            Err(Error::Refused(_))
+        ));
+        assert!(env.game().join("Game.exe").exists());
+        assert!(Install::get(&env.db, "1").unwrap().is_some());
+    }
+
+    #[test]
+    fn running_game_cannot_be_uninstalled() {
+        let env = Env::new("running", true);
+        session::record_start(&env.db, "1", None).unwrap();
+        assert!(matches!(
+            uninstall(&env.db, &env.dirs, "1", false),
+            Err(Error::Refused(_))
+        ));
+        assert!(env.game().join("Game.exe").exists());
+    }
+
+    #[test]
+    fn foreign_prefix_is_kept_even_when_asked() {
+        let env = Env::new("foreign", true);
+        let mut install = Install::get(&env.db, "1").unwrap().unwrap();
+        let foreign = env.root.join("heroic-prefix");
+        std::fs::create_dir_all(&foreign).unwrap();
+        install.runner = Runner::Umu {
+            proton: "/p".into(),
+            prefix: foreign.clone(),
+        };
+        install.save(&env.db).unwrap();
+        assert!(uninstall(&env.db, &env.dirs, "1", true).is_err());
+        assert!(foreign.exists());
+        assert!(
+            env.game().join("Game.exe").exists(),
+            "a refusal must not leave a half-done uninstall"
+        );
+    }
+}
