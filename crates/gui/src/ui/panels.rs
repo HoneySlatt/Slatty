@@ -2,7 +2,7 @@
 
 use iced::widget::{
     Column, Space, button, center, checkbox, column, container, mouse_area, opaque, pick_list,
-    progress_bar, row, scrollable, space, stack, text, text_input,
+    progress_bar, row, scrollable, space, stack, text,
 };
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::cloud::sync::Prefer;
@@ -14,17 +14,15 @@ use slatty_core::runner::Runner;
 
 use super::achievements::unlock_all_button;
 use super::format::*;
-use super::game::download_controls;
 use super::{inner, note, round_button};
 use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
-use crate::install::{InstallMsg, InstallView};
 use crate::maintenance::{ContentInfo, MaintenanceMsg};
 use crate::settings::{ProtonChoice, SettingsMsg};
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, CloudRequest, Loadable, Message, Panel};
 
-/// Width of the achievements drawer beside the game page.
+/// Width of the drawers beside the game page.
 const DRAWER_WIDTH: f32 = 500.0;
 /// Narrowest game page the drawer opens beside.
 const PAGE_BESIDE_DRAWER: f32 = 760.0;
@@ -37,7 +35,7 @@ impl App {
         g: &'a LibraryGame,
     ) -> Element<'a, Message> {
         let (title, content) = match panel {
-            Panel::Install => ("Install", self.install_panel(g)),
+            Panel::Install => return self.install_drawer(page, g),
             Panel::GameSettings => ("Game settings", self.game_settings_panel(g)),
             Panel::Manage => ("Manage", self.manage_panel(g)),
             Panel::Cloud => ("Cloud saves", self.cloud_panel(g)),
@@ -76,200 +74,6 @@ impl App {
             center(opaque(boxed)),
         ]
         .into()
-    }
-
-    pub(super) fn install_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let prepare = |label| {
-            button(text(label).size(14))
-                .padding([10, 18])
-                .on_press(Message::Install(InstallMsg::Prepare(g.id.clone(), None)))
-                .style(theme::tonal)
-        };
-        let mut items: Vec<Element<'_, Message>> = Vec::new();
-        match self.install_views.get(&g.id) {
-            None | Some(InstallView::Planning) => {
-                items.push(note("Reading build information from GOG…"));
-            }
-            Some(InstallView::Failed(e)) => {
-                items.push(note(format!("Failed: {e}")));
-                items.push(prepare("Retry").into());
-            }
-            Some(InstallView::Running {
-                progress,
-                cancelling,
-                rate,
-                ..
-            }) => items.push(download_controls(
-                g,
-                *progress,
-                *cancelling,
-                rate.per_second(),
-                true,
-            )),
-            Some(InstallView::Ready(info)) => {
-                items.push(
-                    text(format!("Version {}", info.version))
-                        .size(15)
-                        .font(SEMIBOLD)
-                        .into(),
-                );
-                let mut sizes = format!(
-                    "Download {} · on disk {}",
-                    human_size(info.total_download()),
-                    human_size(info.total_disk())
-                );
-                match info.free {
-                    Some(free) if free < info.total_disk() => items.push(
-                        text(format!(
-                            "{sizes} · only {} free on this drive",
-                            human_size(free)
-                        ))
-                        .size(14)
-                        .color(tokens().danger)
-                        .into(),
-                    ),
-                    Some(free) => {
-                        sizes += &format!(" · {} free", human_size(free));
-                        items.push(note(sizes));
-                    }
-                    None => items.push(note(sizes)),
-                }
-                if info.resumable {
-                    items.push(note(format!("Folder: {}", info.folder().display())));
-                } else {
-                    let id = g.id.clone();
-                    items.push(
-                        row![
-                            text("Install in").size(14).color(tokens().muted),
-                            text_input("/home/…/Games/GOG", &info.root)
-                                .on_input(move |v| {
-                                    Message::Install(InstallMsg::RootInput(id.clone(), v))
-                                })
-                                .style(theme::field)
-                                .padding([8, 12]),
-                            button(
-                                row![
-                                    icon(Icon::FolderOpen, 16.0, tokens().text),
-                                    text("Browse").size(14)
-                                ]
-                                .spacing(8)
-                                .align_y(Alignment::Center)
-                            )
-                            .padding([8, 16])
-                            .on_press(Message::Install(InstallMsg::Browse(g.id.clone())))
-                            .style(theme::tonal),
-                        ]
-                        .spacing(10)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    );
-                    items.push(note(format!("Game folder: {}", info.folder().display())));
-                }
-                if info.resumable {
-                    items.push(note(format!(
-                        "Resuming an interrupted install ({}).",
-                        language_name(&info.language)
-                    )));
-                } else if info.language == "*" {
-                    items.push(note(
-                        "Language: one download holds every language; choose it in the game.",
-                    ));
-                } else if info.languages.len() <= 1 {
-                    items.push(note(format!(
-                        "Language: {} (the only one GOG offers)",
-                        language_name(&info.language)
-                    )));
-                } else {
-                    let id = g.id.clone();
-                    items.push(
-                        row![
-                            text("Language").size(14).color(tokens().muted),
-                            pick_list(
-                                info.languages
-                                    .iter()
-                                    .cloned()
-                                    .map(Language)
-                                    .collect::<Vec<_>>(),
-                                Some(Language(info.language.clone())),
-                                move |l| {
-                                    Message::Install(InstallMsg::Prepare(id.clone(), Some(l.0)))
-                                }
-                            )
-                            .style(theme::select)
-                            .padding([8, 16]),
-                        ]
-                        .spacing(12)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    );
-                }
-                for d in &info.dlcs {
-                    items.push(dlc_row(d, d.selected, !info.resumable, {
-                        let (id, dlc) = (g.id.clone(), d.id.clone());
-                        move |_| Message::Install(InstallMsg::ToggleDlc(id.clone(), dlc.clone()))
-                    }));
-                }
-                if !info.dependencies.is_empty() {
-                    items.push(note(format!(
-                        "Redistributables set up at first launch: {}",
-                        info.dependencies.join(", ")
-                    )));
-                }
-                let id = g.id.clone();
-                items.push(
-                    row![
-                        text("Proton").size(14).color(tokens().muted),
-                        pick_list(
-                            self.proton_choices
-                                .iter()
-                                .cloned()
-                                .map(ProtonChoice)
-                                .collect::<Vec<_>>(),
-                            info.proton.clone().map(ProtonChoice),
-                            move |c| Message::Install(InstallMsg::Proton(id.clone(), c)),
-                        )
-                        .placeholder("No Proton build found (Steam or compatibilitytools.d)")
-                        .style(theme::select)
-                        .padding([8, 16]),
-                    ]
-                    .spacing(12)
-                    .align_y(Alignment::Center)
-                    .into(),
-                );
-                let busy = self.installing().is_some();
-                let mut actions = row![
-                    button(
-                        text(if info.resumable {
-                            "Resume install"
-                        } else {
-                            "Start install"
-                        })
-                        .size(15)
-                        .font(SEMIBOLD)
-                    )
-                    .padding([12, 22])
-                    .on_press_maybe(
-                        (!busy && info.proton.is_some())
-                            .then(|| Message::Install(InstallMsg::Start(g.id.clone()))),
-                    )
-                    .style(theme::primary)
-                ]
-                .spacing(10);
-                if info.resumable {
-                    actions = actions.push(
-                        button(text("Discard download").size(14))
-                            .padding([12, 18])
-                            .on_press_maybe(
-                                (!busy)
-                                    .then(|| Message::Install(InstallMsg::Discard(g.id.clone()))),
-                            )
-                            .style(theme::danger),
-                    );
-                }
-                items.push(actions.into());
-            }
-        }
-        Column::with_children(items).spacing(12).into()
     }
 
     pub(super) fn game_settings_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
@@ -603,19 +407,6 @@ impl App {
                 .height(1)
                 .style(theme::divider)
         };
-        let close = button(container(icon(Icon::X, 20.0, tokens().text)).center(24))
-            .padding(10)
-            .on_press(Message::ClosePanel)
-            .style(theme::tonal);
-        let header = row![
-            column![
-                text("Achievements").size(32).font(BOLD),
-                text(&g.title).size(18).color(tokens().accent),
-            ]
-            .spacing(4)
-            .width(Length::Fill),
-            close,
-        ];
         let body: Element<'_, Message> = match self.achievements.get(&g.id) {
             Some(Loadable::Ready(list)) => {
                 let unlocked = list.iter().filter(|a| a.date_unlocked.is_some()).count();
@@ -649,7 +440,44 @@ impl App {
             }
             _ => note("Loading…"),
         };
-        let drawer = container(column![header, body].spacing(22))
+        let subtitle = text(&g.title).size(18).color(tokens().accent);
+        self.drawer(page, "Achievements", subtitle.into(), body, None)
+    }
+
+    /// A panel docked to the right of the game page: beside it while the page keeps room for its
+    /// cards, over it in a narrow window. The footer stays at the bottom, under a rule.
+    pub(super) fn drawer<'a>(
+        &self,
+        page: Element<'a, Message>,
+        title: &'a str,
+        subtitle: Element<'a, Message>,
+        body: Element<'a, Message>,
+        footer: Option<Element<'a, Message>>,
+    ) -> Element<'a, Message> {
+        let close = button(container(icon(Icon::X, 20.0, tokens().text)).center(24))
+            .padding(10)
+            .on_press(Message::ClosePanel)
+            .style(theme::tonal);
+        let header = row![
+            column![text(title).size(32).font(BOLD), subtitle]
+                .spacing(4)
+                .width(Length::Fill),
+            close,
+        ];
+        let mut content = column![header, container(body).height(Length::Fill)].spacing(22);
+        if let Some(footer) = footer {
+            content = content.push(
+                column![
+                    container(Space::new())
+                        .width(Length::Fill)
+                        .height(1)
+                        .style(theme::divider),
+                    footer,
+                ]
+                .spacing(22),
+            );
+        }
+        let drawer = container(content)
             .padding([22, 24])
             .width(DRAWER_WIDTH)
             .height(Length::Fill)

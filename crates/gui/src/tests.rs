@@ -588,7 +588,10 @@ fn a_resumed_install_keeps_its_folder() {
     );
     let _ = app.update_install(InstallMsg::RootInput("5".into(), "/elsewhere".into()));
     let mut ui = render(&app);
-    assert!(ui.find("Folder: /games/Game 5").is_ok());
+    assert!(
+        ui.find("/games/Game 5 (an interrupted install resumes where it started)")
+            .is_ok()
+    );
     assert!(ui.find("Browse").is_err());
 }
 
@@ -720,10 +723,8 @@ fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
     app.install_views
         .insert("5".into(), InstallView::Ready(fake_plan()));
     let mut ui = render(&app);
-    assert!(
-        ui.find("Download 4.00 GiB · on disk 7.00 GiB · 100.00 GiB free")
-            .is_ok()
-    );
+    assert!(ui.find("4.00 GiB").is_ok() && ui.find("7.00 GiB").is_ok());
+    assert!(ui.find("100.00 GiB").is_ok(), "free space");
     assert!(ui.find("[FAKE] Other DLC (2.00 GiB) — not owned").is_ok());
     snapshot(&mut ui, "install-dlc");
     ui.click("[FAKE] Owned DLC (2.00 GiB)").unwrap();
@@ -734,11 +735,8 @@ fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
     for m in messages {
         let _ = app.update(m);
     }
-    assert!(
-        render(&app)
-            .find("Download 3.00 GiB · on disk 5.00 GiB · 100.00 GiB free")
-            .is_ok()
-    );
+    let mut ui = render(&app);
+    assert!(ui.find("3.00 GiB").is_ok() && ui.find("5.00 GiB").is_ok());
 }
 
 #[test]
@@ -1453,18 +1451,9 @@ fn install_panel_shows_the_free_space_and_warns_when_short() {
     let mut app = library_app();
     open(&mut app, "5", Some(Panel::Install));
     let plan = fake_plan();
-    let sizes = format!(
-        "Download {} · on disk {}",
-        human_size(plan.total_download()),
-        human_size(plan.total_disk())
-    );
     app.install_views
         .insert("5".into(), InstallView::Ready(plan.clone()));
-    assert!(
-        render(&app)
-            .find(format!("{sizes} · 100.00 GiB free"))
-            .is_ok()
-    );
+    assert!(render(&app).find("100.00 GiB").is_ok());
 
     // Another folder: its drive is measured again, and an answer for the old one is ignored.
     let _ = app.update(Message::Install(InstallMsg::RootInput(
@@ -1476,7 +1465,7 @@ fn install_panel_shows_the_free_space_and_warns_when_short() {
         "/games".into(),
         Some(100 << 30),
     )));
-    assert!(render(&app).find(sizes.clone()).is_ok(), "unknown yet");
+    assert!(render(&app).find("—").is_ok(), "unknown yet");
     let _ = app.update(Message::Install(InstallMsg::FreeSpace(
         "5".into(),
         "/small".into(),
@@ -1484,8 +1473,11 @@ fn install_panel_shows_the_free_space_and_warns_when_short() {
     )));
     let mut ui = render(&app);
     assert!(
-        ui.find(format!("{sizes} · only 1.00 GiB free on this drive"))
-            .is_ok()
+        ui.find(format!(
+            "Not enough space on this drive: 1.00 GiB free, {} needed.",
+            human_size(plan.total_disk())
+        ))
+        .is_ok()
     );
     snapshot(&mut ui, "install-short-of-space");
 }
