@@ -32,6 +32,9 @@ pub struct InstallArgs {
     /// Discard an interrupted install of this game and start over
     #[arg(long)]
     restart: bool,
+    /// Abandon an unfinished install: delete its partial download and forget it
+    #[arg(long, conflicts_with_all = ["info", "restart"])]
+    cancel: bool,
     /// Install only the base game (by default every owned DLC is installed)
     #[arg(long, conflicts_with = "dlc")]
     no_dlc: bool,
@@ -53,6 +56,17 @@ impl InstallArgs {
 }
 
 pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
+    if args.cancel {
+        match installer::discard(&ctx.db, &args.game_id)? {
+            Some(partial) => println!(
+                "Install of {} cancelled; deleted {}",
+                args.game_id,
+                partial.display()
+            ),
+            None => println!("No unfinished install of {}.", args.game_id),
+        }
+        return Ok(());
+    }
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
 

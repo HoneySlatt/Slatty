@@ -72,6 +72,8 @@ pub enum InstallMsg {
     Done(String, Result<Install, Option<String>>),
     Pause(String),
     ToggleDlc(String, String),
+    Discard(String),
+    Discarded(String, Result<(), String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,6 +175,34 @@ impl App {
                 }
             }
             InstallMsg::Event(_, _) => {}
+            InstallMsg::Discard(game_id) => {
+                if matches!(
+                    self.install_views.get(&game_id),
+                    Some(InstallView::Running { .. })
+                ) {
+                    return Task::none();
+                }
+                self.install_views
+                    .insert(game_id.clone(), InstallView::Planning);
+                let id = game_id.clone();
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            installer::discard(&core.db, &id).map(drop)
+                        })
+                        .await
+                        .map_err(err)?
+                        .map_err(err)
+                    },
+                    move |r| Message::Install(InstallMsg::Discarded(game_id.clone(), r)),
+                );
+            }
+            InstallMsg::Discarded(game_id, result) => {
+                self.install_views.remove(&game_id);
+                if let Err(e) = result {
+                    self.notify_error(e);
+                }
+            }
             InstallMsg::ToggleDlc(game_id, dlc) => {
                 if let Some(InstallView::Ready(info)) = self.install_views.get_mut(&game_id)
                     && !info.resumable

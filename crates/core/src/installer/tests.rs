@@ -635,3 +635,29 @@ async fn support_files_stay_out_of_the_game_folder_and_dependencies_come_from_th
         b"icon"
     );
 }
+
+#[test]
+fn discarding_an_unfinished_install_removes_only_its_partial_folder() {
+    let root = std::env::temp_dir().join(format!("slatty-discard-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let db = Db::in_memory().unwrap();
+    std::fs::create_dir_all(partial_dir(&root, "Game").join("data")).unwrap();
+    std::fs::create_dir_all(root.join("Other")).unwrap();
+    InstallJob {
+        game_id: "1".into(),
+        build_id: "b".into(),
+        language: "en-US".into(),
+        root: root.clone(),
+        directory: "Game".into(),
+        state: "downloading".into(),
+        dlcs: vec![],
+    }
+    .save(&db)
+    .unwrap();
+    assert_eq!(discard(&db, "1").unwrap(), Some(partial_dir(&root, "Game")));
+    assert!(!partial_dir(&root, "Game").exists());
+    assert!(root.join("Other").exists());
+    assert!(InstallJob::load(&db, "1").unwrap().is_none());
+    assert_eq!(discard(&db, "1").unwrap(), None);
+    std::fs::remove_dir_all(root).unwrap();
+}

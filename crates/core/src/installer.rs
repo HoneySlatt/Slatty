@@ -619,6 +619,26 @@ impl InstallJob {
     }
 }
 
+/// Abandons an unfinished install: deletes its hidden partial folder and its job. An unfinished
+/// update is refused here, since its files are the installed game itself.
+pub fn discard(db: &Db, game_id: &str) -> Result<Option<PathBuf>> {
+    let Some(job) = InstallJob::load(db, game_id)? else {
+        return Ok(None);
+    };
+    if Install::get(db, game_id)?.is_some() {
+        return Err(Error::Refused(format!(
+            "{game_id} is installed; an unfinished update must be completed, not discarded"
+        )));
+    }
+    let partial = partial_dir(&job.root, &job.directory);
+    if partial.exists() {
+        std::fs::remove_dir_all(&partial)
+            .map_err(|e| Error::io(format!("delete {}", partial.display()), e))?;
+    }
+    InstallJob::delete(db, game_id)?;
+    Ok(Some(partial))
+}
+
 /// Public build by default; a pinned build id (from an interrupted job) must still exist.
 pub async fn plan_for(
     http: &reqwest::Client,

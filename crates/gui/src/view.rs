@@ -353,6 +353,17 @@ impl App {
                     .style(button::success)
                     .into(),
                 );
+                if info.resumable {
+                    items.push(
+                        button(text("Discard download"))
+                            .on_press_maybe(
+                                (!busy)
+                                    .then(|| Message::Install(InstallMsg::Discard(g.id.clone()))),
+                            )
+                            .style(button::danger)
+                            .into(),
+                    );
+                }
             }
         }
         section("Installation", items)

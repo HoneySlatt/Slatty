@@ -85,6 +85,8 @@ How an install behaves:
 - **Safety refusals.** Missing disk space, an existing destination folder, or a file path that
   would escape the game folder are refused before anything is downloaded.
 - `slatty installs` lists installed games and interrupted installs.
+- `slatty install <game-id> --cancel` abandons an interrupted install. It deletes only its hidden
+  partial folder. In the interface, use **Discard download**.
 
 Dependencies that ship files into the game folder are installed with the game. GOG's installer
 scripts ("support" files) are kept in `~/.local/share/slatty/support/<id>/`; they are used by the
