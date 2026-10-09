@@ -342,6 +342,25 @@ pub fn block(_: &Theme) -> container::Style {
     }
 }
 
+/// A small menu floating over the page.
+pub fn menu(_: &Theme) -> container::Style {
+    let t = tokens();
+    container::Style {
+        background: Some(Background::Color(t.surface)),
+        border: round(t.radius).color(t.outline).width(1.0),
+        text_color: Some(t.text),
+        shadow: Shadow {
+            color: Color {
+                a: 0.4,
+                ..Color::BLACK
+            },
+            offset: iced::Vector::new(0.0, 6.0),
+            blur_radius: 18.0,
+        },
+        ..Default::default()
+    }
+}
+
 /// An outlined box around a field (the search box).
 pub fn outlined(_: &Theme) -> container::Style {
     let t = tokens();

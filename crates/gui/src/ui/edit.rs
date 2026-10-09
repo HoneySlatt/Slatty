@@ -1,14 +1,14 @@
 //! The dialog that changes a game's title, sorting title, cover and background.
 
 use iced::widget::{
-    Space, button, center, column, container, image, mouse_area, opaque, row, space, stack, text,
-    text_input,
+    Space, button, center, column, container, image, mouse_area, opaque, pin, row, space, stack,
+    text, text_input,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::custom::ImageChange;
 
 use super::note;
-use crate::edit::{Art, EditDraft, EditMsg};
+use crate::edit::{Art, ContextMenu, EditDraft, EditMsg, MENU_WIDTH};
 use crate::icons::{Icon, icon};
 use crate::theme::{self, BOLD, tokens};
 use crate::{App, Message};
@@ -147,3 +147,38 @@ impl App {
 }
 
 const PICTURE_HEIGHT: f32 = 200.0;
+
+/// The menu a right click on a cover opens, at the pointer. A click beside it closes it.
+pub(super) fn context_menu<'a>(
+    page: Element<'a, Message>,
+    menu: &'a ContextMenu,
+) -> Element<'a, Message> {
+    let edit = button(
+        row![
+            icon(Icon::Pencil, 16.0, tokens().text),
+            text("Edit game").size(14)
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center),
+    )
+    .width(Length::Fill)
+    .padding([8, 12])
+    .on_press(Message::Edit(EditMsg::Open(menu.game_id.clone())))
+    .style(theme::ghost);
+    stack![
+        page,
+        mouse_area(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fill)
+        )
+        .on_press(Message::Edit(EditMsg::CloseMenu)),
+        pin(container(edit)
+            .padding(6)
+            .width(MENU_WIDTH)
+            .style(theme::menu))
+        .x(menu.at.x)
+        .y(menu.at.y),
+    ]
+    .into()
+}

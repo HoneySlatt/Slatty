@@ -248,7 +248,7 @@ impl App {
             .width(Length::Fill)
             .style(theme::cover_overlay),
         ];
-        // A right click opens the edit dialog (title, sorting title, cover, background).
+        // A right click opens the cover's menu (edit the title, sorting title, cover, background).
         mouse_area(hover(
             base,
             container(overlay)
@@ -256,7 +256,7 @@ impl App {
                 .height(Length::Fill)
                 .style(theme::cover_frame),
         ))
-        .on_right_press(Message::Edit(EditMsg::Open(g.id.clone())))
+        .on_right_press(Message::Edit(EditMsg::Menu(g.id.clone())))
         .into()
     }
 }

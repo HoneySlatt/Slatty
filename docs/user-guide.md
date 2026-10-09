@@ -65,9 +65,9 @@ dot says you are signed in.
 Hovering a cover shows its title, a settings button and a play (or install) button. Clicking it
 opens the game page.
 
-Right-click a cover to edit the game: its **Title**, its **Sorting title** (used when the library
-is sorted by name, for example "Witcher 3" for "The Witcher 3"), its **Cover** and its
-**Background** (the key art of the game page). Click a picture to choose an image file (PNG, JPEG,
+Right-click a cover and choose **Edit game** to change its **Title**, its **Sorting title** (used
+when the library is sorted by name, for example "Witcher 3" for "The Witcher 3"), its **Cover**
+and its **Background** (the key art of the game page). Click a picture to choose an image file (PNG, JPEG,
 WebP, GIF, BMP or AVIF); it is copied into SlattyLauncher's data, so the original can be moved or
 deleted. Nothing changes until **Save**; **Reset to default** goes back to GOG's title and images.
 These changes are kept apart from GOG's data, so refreshing the library keeps them.

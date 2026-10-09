@@ -60,7 +60,7 @@ live under `ui/`.
 | `install` | Install plan, download with progress, pause, discard |
 | `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
 | `settings` | Default installation path, default Proton, and the Proton build of each installed game |
-| `edit` | The edit dialog opened by right-clicking a cover: draft, file picker, saving |
+| `edit` | The menu a right click on a cover opens, and the edit dialog: draft, file picker, saving. `ui/pointer.rs` reports where a right click happened, without a message per mouse move |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
 | `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages; `format` for text shown to the user |
 | `theme`, `icons` | Design tokens (`Tokens`: every colour, and the corner radii of the redesigned pages) and the widget styles built from them; Lucide icons. Views never name a colour, so a custom theme is another `Tokens` |

@@ -3,8 +3,8 @@
 
 use std::path::PathBuf;
 
-use iced::Task;
 use iced::widget::image;
+use iced::{Point, Size, Task};
 use slatty_core::custom::{self, ImageChange};
 use slatty_core::library::LibraryGame;
 
@@ -25,8 +25,23 @@ pub struct EditDraft {
     pub background: ImageChange,
 }
 
+/// The context menu of a cover, opened by a right click where the pointer was.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContextMenu {
+    pub game_id: String,
+    pub at: Point,
+}
+
+pub const MENU_WIDTH: f32 = 190.0;
+const MENU_HEIGHT: f32 = 52.0;
+
 #[derive(Debug, Clone)]
 pub enum EditMsg {
+    /// A cover was right-clicked; the position follows in `At`.
+    Menu(String),
+    /// Where a right click happened, and the window's size.
+    At(Point, Size),
+    CloseMenu,
     Open(String),
     Title(String),
     SortTitle(String),
@@ -41,7 +56,20 @@ pub enum EditMsg {
 impl App {
     pub fn update_edit(&mut self, msg: EditMsg) -> Task<Message> {
         match msg {
+            EditMsg::Menu(game_id) => self.menu_for = Some(game_id),
+            EditMsg::At(at, window) => {
+                // A right click anywhere else closes the menu. Near an edge the menu opens inward.
+                self.context_menu = self.menu_for.take().map(|game_id| ContextMenu {
+                    game_id,
+                    at: Point::new(
+                        at.x.min(window.width - MENU_WIDTH - 8.0).max(0.0),
+                        at.y.min(window.height - MENU_HEIGHT - 8.0).max(0.0),
+                    ),
+                });
+            }
+            EditMsg::CloseMenu => self.context_menu = None,
             EditMsg::Open(game_id) => {
+                self.context_menu = None;
                 let custom = self.customs.get(&game_id).cloned().unwrap_or_default();
                 self.edit = Some(EditDraft {
                     title: self.title_of(&game_id),

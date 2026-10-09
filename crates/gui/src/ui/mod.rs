@@ -6,6 +6,7 @@ pub mod format;
 mod game;
 mod library;
 mod panels;
+mod pointer;
 mod settings;
 mod widgets;
 
@@ -16,6 +17,7 @@ use iced::widget::{
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 
+use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
 use crate::theme::{self, BOLD, tokens};
 use crate::{App, Message, Page};
@@ -62,14 +64,19 @@ impl App {
             (Some(panel), Some(game)) => self.with_panel(page, panel, game),
             _ => page,
         };
+        let page = match &self.context_menu {
+            Some(menu) => edit::context_menu(page, menu),
+            None => page,
+        };
         let page = match &self.edit {
             Some(d) => self.edit_dialog(page, d),
             None => page,
         };
-        match &self.quit_confirm {
+        let page = match &self.quit_confirm {
             Some(work) => quit_dialog(page, work),
             None => page,
-        }
+        };
+        pointer::right_clicks(page, |at, window| Message::Edit(EditMsg::At(at, window))).into()
     }
 
     fn selected_game(&self) -> Option<&LibraryGame> {

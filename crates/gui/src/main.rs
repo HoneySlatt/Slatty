@@ -170,6 +170,8 @@ pub struct App {
     pub customs: HashMap<String, slatty_core::custom::Custom>,
     pub gog_titles: HashMap<String, String>,
     pub edit: Option<edit::EditDraft>,
+    pub menu_for: Option<String>,
+    pub context_menu: Option<edit::ContextMenu>,
 }
 
 impl Default for App {
@@ -218,6 +220,8 @@ impl Default for App {
             customs: HashMap::new(),
             gog_titles: HashMap::new(),
             edit: None,
+            menu_for: None,
+            context_menu: None,
         }
     }
 }
@@ -475,6 +479,9 @@ impl App {
     /// Escape: closes the panel, else the game page, else the per-game achievements page.
     fn go_back(&mut self) {
         if self.quit_confirm.take().is_some() {
+            return;
+        }
+        if self.context_menu.take().is_some() {
             return;
         }
         if self.edit.take().is_some() {
