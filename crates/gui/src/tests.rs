@@ -286,3 +286,25 @@ fn uninstall_requires_an_explicit_choice() {
         |m| matches!(m, Message::Maintenance(MaintenanceMsg::Uninstall(id, true)) if id == "3")
     ));
 }
+
+#[test]
+fn update_button_appears_only_when_an_update_exists() {
+    use crate::installs::MaintenanceMsg;
+    let mut app = library_app();
+    app.selected = Some("3".into());
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    assert!(ui.find("Update now").is_err());
+    drop(ui);
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::UpdateChecked(
+        "3".into(),
+        Ok(Some("1.0 → 1.1".into())),
+    )));
+    let mut ui = Simulator::with_size(Default::default(), SIZE, app.view());
+    assert!(ui.find("Update available: 1.0 → 1.1").is_ok());
+    snapshot(&mut ui, "update-available");
+    ui.click("Update now").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::Maintenance(MaintenanceMsg::Update(id)) if id == "3"))
+    );
+}

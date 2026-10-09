@@ -18,6 +18,7 @@ Proton-CachyOS.
 | 2026-10-08 | Library | OK | full gamesdb metadata; listing from cache |
 | 2026-10-09 | Install plan (`slatty install --info`) | OK | Tomb Raider, DOOM (2016), Horizon Zero Dawn, Cyberpunk 2077: builds and metadata read |
 | 2026-10-09 | Manual achievement unlock | OK | Hollow Knight, `--unlock NEGLECT`; read back from GOG with its date |
+| 2026-10-09 | Update check (`slatty update`) | OK | Undertale reported up to date |
 
 ## Games
 
@@ -36,5 +37,6 @@ Proton-CachyOS.
 
 - Pausing and resuming an install.
 - Repair and uninstall.
+- Applying an update (no installed game had one yet).
 - Cloud deletions.
 - An achievement earned in game and reported through Comet.

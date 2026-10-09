@@ -423,3 +423,69 @@ async fn check_finds_damaged_files_and_repair_fetches_only_those() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
+    let mut env = Env::new("update");
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    let game = env.target();
+    std::fs::write(game.join("saves/mine.sav"), b"keep me").unwrap();
+    let old_set = collect_files(&env.source, &env.depots).await.unwrap();
+    let old_record = InstallRecord {
+        build_id: "b1".into(),
+        version: "1.0".into(),
+        language: "en-US".into(),
+        path: Some(game.clone()),
+        files: recorded_files(&old_set),
+    };
+
+    let items = vec![
+        env.source
+            .file("Game.exe", b"[FAKE] executable bytes", &["executable"]),
+        env.source
+            .file("data\\level1.pak", b"0123456789 version two", &[]),
+        env.source.file("data\\level2.pak", b"brand new level", &[]),
+        env.source.file("empty.txt", b"", &[]),
+        DepotItem::DepotDirectory {
+            path: "saves".into(),
+        },
+    ];
+    env.source.manifests.insert("m2".into(), items);
+    let depots = vec![Depot {
+        manifest: "m2".into(),
+        ..env.depots[0].clone()
+    }];
+    let new_set = collect_files(&env.source, &depots).await.unwrap();
+
+    let free_space = |_: &Path| Ok(PLENTY);
+    let dl = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    };
+    let before = env.source.fetched.load(Ordering::SeqCst);
+    let report = crate::maintenance::apply_update(&dl, &new_set, &old_record, &game)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        report.downloaded,
+        vec![
+            PathBuf::from("data/level1.pak"),
+            PathBuf::from("data/level2.pak")
+        ]
+    );
+    assert_eq!(report.removed, vec![PathBuf::from("goggame-1.info")]);
+    let fetched = env.source.fetched.load(Ordering::SeqCst) - before;
+    assert_eq!(fetched, 6 + 4, "only chunks of changed and new files");
+    assert_eq!(
+        std::fs::read(game.join("data/level1.pak")).unwrap(),
+        b"0123456789 version two"
+    );
+    assert_eq!(
+        std::fs::read(game.join("saves/mine.sav")).unwrap(),
+        b"keep me"
+    );
+    assert!(!game.join("goggame-1.info").exists());
+}

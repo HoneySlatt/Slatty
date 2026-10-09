@@ -293,6 +293,7 @@ pub struct MaintenanceView {
     pub busy: bool,
     pub lines: Vec<String>,
     pub confirm_uninstall: bool,
+    pub update_available: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -303,6 +304,10 @@ pub enum MaintenanceMsg {
     CancelUninstall(String),
     Uninstall(String, bool),
     Uninstalled(String, Result<Vec<String>, String>),
+    CheckUpdate(String),
+    UpdateChecked(String, Result<Option<String>, String>),
+    Update(String),
+    Updated(String, Result<String, String>),
 }
 
 impl App {
@@ -443,6 +448,96 @@ impl App {
                 let view = self.maintenance.entry(game_id).or_default();
                 view.busy = false;
                 view.lines = vec![format!("Uninstall refused: {e}")];
+            }
+            MaintenanceMsg::CheckUpdate(game_id) => {
+                let view = self.maintenance.entry(game_id.clone()).or_default();
+                view.busy = true;
+                view.lines = vec!["Checking for updates…".into()];
+                let id = game_id.clone();
+                return Task::perform(
+                    async move {
+                        let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
+                        let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
+                        if slatty_core::maintenance::update_pending(&core.db, &id)
+                            .map_err(err)?
+                            .is_some()
+                        {
+                            return Ok(Some("an unfinished update".to_string()));
+                        }
+                        slatty_core::maintenance::check_update(
+                            &core.db, &core.dirs, &core.http, &tokens, &id,
+                        )
+                        .await
+                        .map(|u| {
+                            u.map(|u| format!("{} → {}", u.installed_version, u.available_version))
+                        })
+                        .map_err(err)
+                    },
+                    move |r| {
+                        Message::Maintenance(MaintenanceMsg::UpdateChecked(game_id.clone(), r))
+                    },
+                );
+            }
+            MaintenanceMsg::UpdateChecked(game_id, result) => {
+                let view = self.maintenance.entry(game_id).or_default();
+                view.busy = false;
+                view.update_available = matches!(result, Ok(Some(_)));
+                view.lines = vec![match result {
+                    Ok(Some(what)) => format!("Update available: {what}"),
+                    Ok(None) => "Up to date.".into(),
+                    Err(e) => format!("Error: {e}"),
+                }];
+            }
+            MaintenanceMsg::Update(game_id) => {
+                if self
+                    .play
+                    .as_ref()
+                    .is_some_and(|p| p.running && p.game_id == game_id)
+                {
+                    self.notify_error("The game is running.".into());
+                    return Task::none();
+                }
+                let view = self.maintenance.entry(game_id.clone()).or_default();
+                view.busy = true;
+                view.update_available = false;
+                view.lines =
+                    vec!["Updating… the game cannot be launched until this finishes.".into()];
+                let id = game_id.clone();
+                return Task::perform(
+                    async move {
+                        let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
+                        let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
+                        slatty_core::maintenance::update(
+                            &core.db,
+                            &core.dirs,
+                            &core.http,
+                            &tokens,
+                            &id,
+                            &|_| {},
+                            CancellationToken::new(),
+                        )
+                        .await
+                        .map(|r| {
+                            format!(
+                                "Updated {} → {}: {} file(s) downloaded, {} removed.",
+                                r.from_version,
+                                r.to_version,
+                                r.downloaded.len(),
+                                r.removed.len()
+                            )
+                        })
+                        .map_err(err)
+                    },
+                    move |r| Message::Maintenance(MaintenanceMsg::Updated(game_id.clone(), r)),
+                );
+            }
+            MaintenanceMsg::Updated(game_id, result) => {
+                let view = self.maintenance.entry(game_id).or_default();
+                view.busy = false;
+                view.lines = vec![match result {
+                    Ok(summary) => summary,
+                    Err(e) => format!("Update failed: {e}. Run it again to resume."),
+                }];
             }
         }
         Task::none()

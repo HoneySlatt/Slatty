@@ -27,16 +27,17 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   - Staged and verified downloads, pause and resume.
   - Wine prefix created at first launch.
 - **Maintenance.** Verify, repair, uninstall.
+- **Updates.** Detect a newer build; update in place, file by file, resumable.
 
 ## In progress
 
-- **Updates.** Detect a newer build and download only what changed.
 - **DLC and languages.** Install owned DLC; switch the language of an installed game.
 - **GOG installer scripts.** Apply what the "support" files do (registry entries, for example) so the
   games that need them run.
 
 ## Planned
 
+- **Smaller updates.** Reuse unchanged chunks of changed files, or GOG's binary patches.
 - **Store-like game pages.** Description, screenshots, changelog. GOG's descriptions are HTML,
   rendered through Iced's Markdown support.
 - **Galaxy dummy service.** Some games report achievements only when it is registered in the

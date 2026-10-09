@@ -130,6 +130,11 @@ pub async fn check(
     cancel: CancellationToken,
 ) -> Result<Vec<PathBuf>> {
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
+    if update_pending(db, game_id)?.is_some() {
+        return Err(Error::Refused(
+            "an update is unfinished; run the update again first".into(),
+        ));
+    }
     let plan = installer::plan_for(
         http,
         tokens,
@@ -148,6 +153,163 @@ pub async fn check(
     }
     .check_installed(&set, &install.path, repair)
     .await
+}
+
+const UPDATING: &str = "updating";
+
+/// Build id of an update that started but did not finish.
+pub fn update_pending(db: &Db, game_id: &str) -> Result<Option<String>> {
+    Ok(InstallJob::load(db, game_id)?
+        .filter(|j| j.state == UPDATING)
+        .map(|j| j.build_id))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdateCheck {
+    pub installed_version: String,
+    pub available_version: String,
+    pub available_build: String,
+}
+
+impl UpdateCheck {
+    pub fn is_available(&self, installed_build: &str) -> bool {
+        self.available_build != installed_build
+    }
+}
+
+/// The newest public build for the installed language, or `None` when already up to date.
+pub async fn check_update(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    tokens: &Tokens,
+    game_id: &str,
+) -> Result<Option<UpdateCheck>> {
+    let (_, record) = installed_by_slatty(db, dirs, game_id)?;
+    let plan = installer::plan_for(http, tokens, game_id, Some(&record.language), None).await?;
+    let check = UpdateCheck {
+        installed_version: record.version.clone(),
+        available_version: plan.build.version_name.clone(),
+        available_build: plan.build.build_id.clone(),
+    };
+    Ok(check.is_available(&record.build_id).then_some(check))
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct UpdateReport {
+    pub from_version: String,
+    pub to_version: String,
+    pub downloaded: Vec<PathBuf>,
+    pub removed: Vec<PathBuf>,
+}
+
+/// Brings an installed game to the newest build in place: changed and new files are downloaded
+/// and atomically replaced, files slatty installed that the new build dropped are removed, and
+/// nothing else in the folder is touched. An interrupted update resumes with the same build.
+pub async fn update(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    tokens: &Tokens,
+    game_id: &str,
+    progress: &(dyn Fn(Progress) + Send + Sync),
+    cancel: CancellationToken,
+) -> Result<UpdateReport> {
+    let (install, record) = installed_by_slatty(db, dirs, game_id)?;
+    let pinned = update_pending(db, game_id)?;
+    let plan = installer::plan_for(
+        http,
+        tokens,
+        game_id,
+        Some(&record.language),
+        pinned.as_deref(),
+    )
+    .await?;
+    if plan.build.build_id == record.build_id {
+        return Err(Error::Refused(format!(
+            "{} is already up to date",
+            install.title
+        )));
+    }
+    InstallJob {
+        game_id: game_id.to_string(),
+        build_id: plan.build.build_id.clone(),
+        language: plan.language.clone(),
+        root: install
+            .path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default(),
+        directory: install
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        state: UPDATING.into(),
+    }
+    .save(db)?;
+    let source = GogContent::new(http.clone(), tokens.clone(), game_id).await?;
+    let set = installer::collect_files(&source, &plan.depots).await?;
+    let dl = Download {
+        source: &source,
+        cancel,
+        progress,
+        free_space: &installer::free_space,
+    };
+    let report = apply_update(&dl, &set, &record, &install.path).await?;
+    InstallRecord {
+        build_id: plan.build.build_id.clone(),
+        version: plan.build.version_name.clone(),
+        language: plan.language.clone(),
+        path: Some(install.path.clone()),
+        files: installer::recorded_files(&set),
+    }
+    .save(dirs, game_id)?;
+    InstallJob::delete(db, game_id)?;
+    Ok(UpdateReport {
+        from_version: record.version,
+        to_version: plan.build.version_name,
+        ..report
+    })
+}
+
+pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
+    dl: &Download<'_, S>,
+    set: &installer::FileSet,
+    old: &InstallRecord,
+    dir: &Path,
+) -> Result<UpdateReport> {
+    let downloaded = dl.check_installed(set, dir, true).await?;
+    let kept: std::collections::HashSet<String> = set
+        .files
+        .iter()
+        .map(|(p, _)| p.to_string_lossy().to_lowercase())
+        .collect();
+    let mut removed = Vec::new();
+    for f in &old.files {
+        let rel = installer::safe_relative(&f.path)?;
+        if kept.contains(&rel.to_string_lossy().to_lowercase()) {
+            continue;
+        }
+        let path = dir.join(&rel);
+        if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+            std::fs::remove_file(&path)
+                .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
+            removed.push(rel.clone());
+            let mut parent = path.parent();
+            while let Some(p) = parent.filter(|p| *p != dir) {
+                if std::fs::remove_dir(p).is_err() {
+                    break;
+                }
+                parent = p.parent();
+            }
+        }
+    }
+    Ok(UpdateReport {
+        downloaded,
+        removed,
+        ..Default::default()
+    })
 }
 
 fn remove_empty_dirs(dir: &Path) -> Result<bool> {

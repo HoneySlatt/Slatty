@@ -591,6 +591,16 @@ pub struct RecordedFile {
     pub size: u64,
 }
 
+pub fn recorded_files(set: &FileSet) -> Vec<RecordedFile> {
+    set.files
+        .iter()
+        .map(|(p, f)| RecordedFile {
+            path: p.to_string_lossy().into_owned(),
+            size: f.size(),
+        })
+        .collect()
+}
+
 impl InstallRecord {
     pub fn file(dirs: &Dirs, game_id: &str) -> PathBuf {
         dirs.data.join("manifests").join(format!("{game_id}.json"))
@@ -704,14 +714,7 @@ pub async fn install(
         version: plan.build.version_name.clone(),
         language: plan.language.clone(),
         path: Some(target.clone()),
-        files: set
-            .files
-            .iter()
-            .map(|(p, f)| RecordedFile {
-                path: p.to_string_lossy().into_owned(),
-                size: f.size(),
-            })
-            .collect(),
+        files: recorded_files(&set),
     }
     .save(dirs, &req.game_id)?;
 

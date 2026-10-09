@@ -125,3 +125,91 @@ fn confirm() -> Result<bool> {
     std::io::stdin().lock().read_line(&mut line)?;
     Ok(matches!(line.trim(), "y" | "Y" | "yes" | "o" | "oui"))
 }
+
+#[derive(Args)]
+pub struct UpdateArgs {
+    /// Game to update; without it, every game installed by slatty is checked
+    game_id: Option<String>,
+    /// Only report whether an update is available
+    #[arg(long)]
+    check: bool,
+}
+
+pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
+    let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
+    let tokens = account.tokens(&ctx.http).await?.clone();
+    let Some(game_id) = args.game_id else {
+        for install in slatty_core::install::Install::list(&ctx.db)? {
+            match maintenance::check_update(
+                &ctx.db,
+                &ctx.dirs,
+                &ctx.http,
+                &tokens,
+                &install.game_id,
+            )
+            .await
+            {
+                Ok(Some(u)) => println!(
+                    "{:>12}  {:<40} {} -> {}",
+                    install.game_id, install.title, u.installed_version, u.available_version
+                ),
+                Ok(None) => println!("{:>12}  {:<40} up to date", install.game_id, install.title),
+                Err(slatty_core::Error::Refused(_)) => {
+                    println!(
+                        "{:>12}  {:<40} not installed by slatty",
+                        install.game_id, install.title
+                    )
+                }
+                Err(e) => println!("{:>12}  {:<40} error: {e}", install.game_id, install.title),
+            }
+        }
+        return Ok(());
+    };
+    if args.check {
+        match maintenance::check_update(&ctx.db, &ctx.dirs, &ctx.http, &tokens, &game_id).await? {
+            Some(u) => println!(
+                "Update available: {} -> {}",
+                u.installed_version, u.available_version
+            ),
+            None => println!("Up to date."),
+        }
+        return Ok(());
+    }
+    let cancel = CancellationToken::new();
+    let on_ctrl_c = cancel.clone();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            on_ctrl_c.cancel();
+        }
+    });
+    let last = Mutex::new(Instant::now() - Duration::from_secs(10));
+    let progress = |p: Progress| {
+        let mut last = last.lock().unwrap();
+        if last.elapsed() >= Duration::from_secs(1) {
+            *last = Instant::now();
+            println!("  files {}/{}", p.files_done, p.files_total);
+        }
+    };
+    match maintenance::update(
+        &ctx.db, &ctx.dirs, &ctx.http, &tokens, &game_id, &progress, cancel,
+    )
+    .await
+    {
+        Ok(r) => {
+            println!("Updated {} -> {}.", r.from_version, r.to_version);
+            println!(
+                "{} file(s) downloaded, {} removed.",
+                r.downloaded.len(),
+                r.removed.len()
+            );
+            Ok(())
+        }
+        Err(slatty_core::Error::Cancelled) => {
+            println!(
+                "Paused. The game cannot be launched until `slatty update {game_id}` completes."
+            );
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
+    }
+}

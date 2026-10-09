@@ -114,6 +114,11 @@ pub async fn play(
 ) -> Result<()> {
     let install = Install::get(db, &req.game_id)?
         .ok_or_else(|| Error::NotFound(format!("{} is not imported", req.game_id)))?;
+    if crate::maintenance::update_pending(db, &req.game_id)?.is_some() {
+        return Err(Error::Refused(
+            "an update of this game is unfinished; finish it before playing".into(),
+        ));
+    }
     let spec = runner::launch_spec(&install)?;
     let user_id = Account::active(db)?.map(|a| a.user_id);
 

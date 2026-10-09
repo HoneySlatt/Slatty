@@ -159,6 +159,27 @@ Achievements are matched by key, id or exact name. You are asked to confirm befo
 written. Manual changes appear on your public GOG profile, dated today, and are probably against
 GOG's terms of use.
 
+## Updates
+
+```sh
+slatty update                  # check every game installed by SlattyLauncher
+slatty update <game-id> --check
+slatty update <game-id>        # apply
+```
+
+An update compares each file of the new build with the one on disk:
+
+- unchanged files are kept;
+- changed and new files are downloaded and replaced one by one, atomically;
+- files the new build no longer contains are removed, but only those SlattyLauncher installed.
+  Anything else in the game folder is left alone.
+
+If an update is interrupted, the game cannot be launched until `slatty update <game-id>` completes
+it. The command resumes with the same build and only downloads what is still missing. A changed file
+is downloaded whole, even when only part of it changed.
+
+The interface offers **Check for update** and **Update now** in the game's Maintenance section.
+
 ## Maintenance
 
 ```sh

@@ -67,6 +67,20 @@ refresh token is not rotated on refresh.
 An interrupted install keeps its job in the database, and resumes with the same build, language and
 folder.
 
+### Update
+
+`maintenance::update` plans the newest public build for the installed language and records an
+"updating" job. Then:
+
+1. The new file list is checked in place with the same fill routine as installs and repairs: only
+   files that are missing or differ are downloaded, each written to a temporary name and renamed.
+2. Files listed in the old install record but absent from the new build are deleted. Their parent
+   folders are removed only if they end up empty.
+3. The install record is rewritten for the new build.
+
+While the job exists, launching the game and verifying it are refused, and running the update again
+resumes it with the pinned build.
+
 ### Game sessions
 
 A launch spawns the running binary again with a hidden argument. That copy becomes the supervisor

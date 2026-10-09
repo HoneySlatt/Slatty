@@ -499,11 +499,26 @@ impl App {
             row![
                 action("Verify files", MaintenanceMsg::Check(g.id.clone(), false)),
                 action("Repair", MaintenanceMsg::Check(g.id.clone(), true)),
+                action(
+                    "Check for update",
+                    MaintenanceMsg::CheckUpdate(g.id.clone())
+                ),
                 action("Uninstall…", MaintenanceMsg::AskUninstall(g.id.clone())),
             ]
             .spacing(8)
+            .wrap()
             .into(),
         ];
+        if view.is_some_and(|v| v.update_available) {
+            items.push(
+                button(text("Update now"))
+                    .on_press_maybe(
+                        (!busy).then(|| Message::Maintenance(MaintenanceMsg::Update(g.id.clone()))),
+                    )
+                    .style(button::success)
+                    .into(),
+            );
+        }
         if let Some(v) = view {
             items.extend(v.lines.iter().map(|l| text(l).size(13).into()));
             if v.confirm_uninstall && !v.busy {

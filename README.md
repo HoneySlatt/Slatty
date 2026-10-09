@@ -29,8 +29,9 @@ against real GOG services; details are in [docs/compatibility.md](docs/compatibi
 | Achievements: list, report unlocks made in game through Comet | listing yes, in-game unlock not yet |
 | Achievements: unlock or clear manually | yes |
 | Verify, repair and uninstall installed games | verify yes, repair and uninstall not yet |
+| Updates: detect a newer build, update in place | detection yes, applying not yet |
 
-Not supported yet: updates, DLC, native Linux installers, macOS and Windows hosts, GOG installer
+Not supported yet: DLC, native Linux installers, macOS and Windows hosts, GOG installer
 scripts and redistributables, the Galaxy dummy service some games need for achievements.
 See [docs/roadmap.md](docs/roadmap.md).
 
