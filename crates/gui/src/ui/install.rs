@@ -85,9 +85,13 @@ impl App {
                     .font(semibold()),
             );
         }
+        // The title, game and version centred against the cover; the close button stays at the top.
         let top = row![
             cover,
-            header,
+            container(header)
+                .height(125)
+                .center_y(125)
+                .width(Length::Fill),
             round_button(Icon::X, Message::Install(InstallMsg::CloseDialog))
         ]
         .spacing(22)
