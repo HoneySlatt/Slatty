@@ -302,11 +302,14 @@ impl App {
                 .align_y(Alignment::Center),
             );
         }
+        // Only the DLC the account owns: the others cannot be installed.
         if c.dlcs.is_empty() {
             col = col.push(note("This game has no DLC."));
+        } else if !c.dlcs.iter().any(|d| d.owned) {
+            col = col.push(note("You own none of this game's DLC."));
         } else {
             col = col.push(text("DLC").size(15).font(SEMIBOLD));
-            for d in &c.dlcs {
+            for d in c.dlcs.iter().filter(|d| d.owned) {
                 let (id, dlc) = (game_id.to_string(), d.id.clone());
                 col = col.push(dlc_row(d, c.chosen_dlcs.contains(&d.id), true, move |_| {
                     Message::Maintenance(MaintenanceMsg::ToggleContentDlc(id.clone(), dlc.clone()))
@@ -532,12 +535,8 @@ pub(super) fn dlc_row<'a>(
     editable: bool,
     on_toggle: impl Fn(bool) -> Message + 'a,
 ) -> Element<'a, Message> {
-    let label = format!("{} ({})", d.name, human_size(d.disk_size));
-    if !d.owned {
-        return note(format!("{label} — not owned"));
-    }
     checkbox(checked)
-        .label(label)
+        .label(format!("{} ({})", d.name, human_size(d.disk_size)))
         .text_size(14)
         .on_toggle_maybe(editable.then_some(on_toggle))
         .into()

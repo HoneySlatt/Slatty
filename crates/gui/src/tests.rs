@@ -725,7 +725,10 @@ fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
     let mut ui = render(&app);
     assert!(ui.find("4.00 GiB").is_ok() && ui.find("7.00 GiB").is_ok());
     assert!(ui.find("100.00 GiB").is_ok(), "free space");
-    assert!(ui.find("[FAKE] Other DLC (2.00 GiB) — not owned").is_ok());
+    assert!(
+        ui.find("[FAKE] Other DLC (2.00 GiB)").is_err(),
+        "not owned: not listed"
+    );
     snapshot(&mut ui, "install-dlc");
     ui.click("[FAKE] Owned DLC (2.00 GiB)").unwrap();
     let messages: Vec<Message> = ui.into_messages().collect();
@@ -1480,4 +1483,45 @@ fn install_panel_shows_the_free_space_and_warns_when_short() {
         .is_ok()
     );
     snapshot(&mut ui, "install-short-of-space");
+}
+
+#[test]
+fn game_settings_list_only_owned_dlc() {
+    use crate::maintenance::ContentInfo;
+    let mut app = library_app();
+    open(&mut app, "3", Some(Panel::GameSettings));
+    let content = |dlcs| ContentInfo {
+        language: "en-US".into(),
+        languages: vec!["en-US".into()],
+        chosen_language: "en-US".into(),
+        dlcs,
+        chosen_dlcs: vec!["21".into()],
+    };
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ContentLoaded(
+        "3".into(),
+        Ok(content(vec![
+            fake_dlc("21", "[FAKE] Owned DLC", true, true),
+            fake_dlc("22", "[FAKE] Other DLC", false, false),
+        ])),
+    )));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("[FAKE] Owned DLC (2.00 GiB)").is_ok());
+        assert!(ui.find("[FAKE] Other DLC (2.00 GiB)").is_err());
+    }
+
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::ContentLoaded(
+        "3".into(),
+        Ok(content(vec![fake_dlc(
+            "22",
+            "[FAKE] Other DLC",
+            false,
+            false,
+        )])),
+    )));
+    assert!(
+        render(&app)
+            .find("You own none of this game's DLC.")
+            .is_ok()
+    );
 }

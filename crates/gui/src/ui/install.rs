@@ -154,9 +154,10 @@ impl App {
         };
         items = items.push(section("Language", language));
 
-        if !info.dlcs.is_empty() {
+        // Only the DLC the account owns: the others cannot be installed.
+        if info.dlcs.iter().any(|d| d.owned) {
             items = items.push(Space::new().height(12));
-            let dlcs = Column::with_children(info.dlcs.iter().map(|d| {
+            let dlcs = Column::with_children(info.dlcs.iter().filter(|d| d.owned).map(|d| {
                 dlc_row(d, d.selected, !info.resumable, {
                     let (id, dlc) = (g.id.clone(), d.id.clone());
                     move |_| Message::Install(InstallMsg::ToggleDlc(id.clone(), dlc.clone()))
