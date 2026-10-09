@@ -21,6 +21,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
 
 # Dependencies (hashing, decompression, image decoding, rendering) are optimised even in debug
-# builds; slatty's own crates stay quick to rebuild.
+# builds, without debug info; slatty's own crates stay quick to rebuild and keep theirs.
 [profile.dev.package."*"]
 opt-level = 3
+debug = false
