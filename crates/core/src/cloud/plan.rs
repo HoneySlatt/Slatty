@@ -109,22 +109,30 @@ pub fn plan(inputs: &Inputs<'_>) -> Plan {
         .chain(remote.keys())
         .chain(base.keys())
         .collect();
-    let files = paths
-        .into_iter()
-        .map(|p| {
-            (
-                p.clone(),
-                classify(local.get(p), remote.get(p), base.get(p)),
-            )
-        })
-        .collect();
-
     let mut warnings = Vec::new();
     if !inputs.local_root_exists {
         warnings.push(Warning::LocalRootMissing);
     } else if local.is_empty() && !base.is_empty() {
         warnings.push(Warning::LocalEmptyWithHistory);
     }
+    // A missing or emptied folder (a new prefix after a reinstall, a folder deleted by hand) was
+    // not emptied file by file on purpose: what the cloud holds is brought back.
+    let local_lost = !warnings.is_empty();
+    let files = paths
+        .into_iter()
+        .map(|p| {
+            let action = match classify(local.get(p), remote.get(p), base.get(p)) {
+                Action::DeleteRemote
+                | Action::Conflict(ConflictKind::LocalDeletedRemoteModified)
+                    if local_lost =>
+                {
+                    Action::Download
+                }
+                action => action,
+            };
+            (p.clone(), action)
+        })
+        .collect();
     if remote.is_empty() && !base.is_empty() {
         warnings.push(Warning::RemoteEmptyWithHistory);
     }
@@ -253,15 +261,27 @@ mod tests {
     }
 
     #[test]
-    fn missing_local_root_blocks_remote_deletions() {
-        let p = run(&[], false, &[("s1", "x")], &[("s1", "a", "x")]);
-        assert_eq!(p.files["s1"], Action::DeleteRemote);
+    fn missing_local_root_brings_the_cloud_back() {
+        // Hollow Knight after a reinstall: the new prefix has no save folder, the history remains.
+        let p = run(
+            &[],
+            false,
+            &[("s1", "x"), ("s2", "y2")],
+            &[("s1", "a", "x"), ("s2", "b", "y")],
+        );
+        assert_eq!(p.files["s1"], Action::Download);
+        assert_eq!(
+            p.files["s2"],
+            Action::Download,
+            "changed in the cloud since"
+        );
+        assert_eq!(p.count(Action::DeleteRemote), 0);
         assert!(p.remote_deletions_blocked());
         assert!(!p.local_deletions_blocked());
     }
 
     #[test]
-    fn empty_local_dir_with_history_blocks_remote_deletions() {
+    fn empty_local_dir_with_history_brings_the_cloud_back() {
         let p = run(
             &[],
             true,
@@ -269,6 +289,7 @@ mod tests {
             &[("s1", "a", "x"), ("s2", "b", "y")],
         );
         assert_eq!(p.warnings, vec![Warning::LocalEmptyWithHistory]);
+        assert_eq!(p.count(Action::Download), 2);
         assert!(p.remote_deletions_blocked());
     }
 

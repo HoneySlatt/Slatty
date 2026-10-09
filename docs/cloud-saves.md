@@ -61,8 +61,9 @@ Modification dates are never used to decide.
 - **Deletions need permission.** They are applied only with `--allow-deletions`, file by file.
 - **A suspicious folder blocks deletions.** In these cases deletions are refused, even with
   permission:
-  - the local folder is missing or empty while history says it had saves (wrong prefix, game never
-    run, folder moved);
+  - the local folder is missing or empty while history says it had saves (a new prefix after a
+    reinstall, a folder deleted or moved). The cloud copies are then downloaded back instead, as
+    if the machine were new: a folder that disappeared as a whole was not emptied on purpose;
   - the cloud is empty while history says it had saves (wrong account, service problem);
   - the save folder path changed since the last sync. Its history is then ignored, and files that
     differ become conflicts.

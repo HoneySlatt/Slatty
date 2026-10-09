@@ -195,7 +195,9 @@ async fn keeping_local_version_preserves_remote_copy() {
 }
 
 #[tokio::test]
-async fn missing_or_empty_local_folder_never_deletes_the_cloud() {
+async fn missing_or_empty_local_folder_gets_the_cloud_back() {
+    // As after uninstalling a game with its prefix and installing it again: the history of the
+    // saves remains, the folder is gone.
     let env = Env::new("emptylocal");
     env.write("a.sav", "1");
     env.write("b.sav", "2");
@@ -205,12 +207,19 @@ async fn missing_or_empty_local_folder_never_deletes_the_cloud() {
     let r = env.sync(ALLOW_DELETIONS).await;
     assert!(r.plan.warnings.contains(&Warning::LocalRootMissing));
     assert!(r.deleted_remote.is_empty());
-    assert_eq!(r.pending_deletions.len(), 2);
+    assert_eq!(r.downloaded.len(), 2);
+    assert_eq!(
+        std::fs::read_to_string(env.root().join("a.sav")).unwrap(),
+        "1"
+    );
 
-    std::fs::create_dir_all(env.root()).unwrap();
+    for f in ["a.sav", "b.sav"] {
+        std::fs::remove_file(env.root().join(f)).unwrap();
+    }
     let r = env.sync(ALLOW_DELETIONS).await;
     assert!(r.plan.warnings.contains(&Warning::LocalEmptyWithHistory));
     assert!(r.deleted_remote.is_empty());
+    assert_eq!(r.downloaded.len(), 2);
     assert!(env.remote("a.sav").is_some() && env.remote("b.sav").is_some());
 }
 

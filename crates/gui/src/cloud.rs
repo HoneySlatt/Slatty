@@ -141,13 +141,16 @@ async fn cloud_task(
                 );
                 if opts.dry_run {
                     let p = &r.plan;
-                    pending += p.count(Action::Upload) + p.count(Action::Download);
+                    pending += p.count(Action::Upload)
+                        + p.count(Action::Download)
+                        + p.count(Action::Compare);
                     lines.push(format!(
-                        "  to upload {} · to download {} · to compare {} · unchanged {}",
+                        "  to upload {} · to download {} · to compare {} · unchanged {} · deleted on one side {}",
                         p.count(Action::Upload),
                         p.count(Action::Download),
                         p.count(Action::Compare),
-                        p.count(Action::Keep)
+                        p.count(Action::Keep),
+                        p.count(Action::DeleteRemote) + p.count(Action::DeleteLocal)
                     ));
                     for (path, _) in p.conflicts() {
                         lines.push(format!("  conflict: {path}"));

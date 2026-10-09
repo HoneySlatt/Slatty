@@ -49,6 +49,7 @@ Proton-CachyOS.
 | 2026-10-09 | Hollow Knight (1308320804) | 1.5.12620 | Installed by slatty | First launch with cloud saves | OK | Before the first launch Check found 9 cloud files and a sync was refused (no prefix yet); at the first launch the prefix was created, the 9 files downloaded, and the user's game was there |
 | 2026-10-09 | Hollow Knight (1308320804) | 1.5.12620 | Installed by slatty | Controller (DualSense, USB) | OK | Played with the DualSense outside Steam; reported working perfectly by the user |
 | 2026-10-09 | Alan Wake (1207659037) | — | Download from the interface | Cancel while downloading | OK | Stopped at about 1 GB; the hidden partial folder and the install job were deleted, nothing else touched |
+| 2026-10-09 | Hollow Knight (1308320804) | 1.5.12620 | Uninstalled with its prefix, installed again | Cloud saves | Fixed | The save history outlived the prefix: the new, empty save folder read as "deleted by the user", nothing was downloaded at first launch and the game started from scratch. Nothing was lost (prefix backup, cloud untouched); the save was put back from the backup. A missing or emptied save folder now downloads the cloud copies |
 
 ## Not tested against GOG yet
 
