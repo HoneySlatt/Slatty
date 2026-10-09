@@ -205,7 +205,7 @@ impl App {
                 return Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
-                            installer::discard(&core.db, &id).map(drop)
+                            installer::discard(&core.db, &core.dirs, &id).map(drop)
                         })
                         .await
                         .map_err(err)?

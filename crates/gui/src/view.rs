@@ -428,11 +428,10 @@ impl App {
             .on_press(Message::Select(g.id.clone()))
             .style(theme::plain);
         let installed = self.installs.contains_key(&g.id);
-        let running = self.play.as_ref().is_some_and(|p| p.running);
         let action = if installed {
             button(icon(Icon::Play, 16.0, ON_ACCENT))
                 .padding([8, 14])
-                .on_press_maybe((!running).then(|| Message::Play(g.id.clone())))
+                .on_press_maybe(self.can_play(&g.id).then(|| Message::Play(g.id.clone())))
                 .style(theme::primary)
         } else {
             button(icon(Icon::Download, 16.0, ON_ACCENT))

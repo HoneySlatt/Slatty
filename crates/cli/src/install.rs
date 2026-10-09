@@ -57,7 +57,7 @@ impl InstallArgs {
 
 pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     if args.cancel {
-        match installer::discard(&ctx.db, &args.game_id)? {
+        match installer::discard(&ctx.db, &ctx.dirs, &args.game_id)? {
             Some(partial) => println!(
                 "Install of {} cancelled; deleted {}",
                 args.game_id,

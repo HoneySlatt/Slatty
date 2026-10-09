@@ -620,7 +620,7 @@ impl App {
                 let Some(core) = self.core.clone() else {
                     return Task::none();
                 };
-                if self.play.as_ref().is_some_and(|p| p.running) {
+                if !self.can_play(&game_id) {
                     return Task::none();
                 }
                 let (stop_tx, stop_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -866,6 +866,13 @@ impl App {
             .map(|g| g.title.clone())
             .or_else(|| self.installs.get(game_id).map(|i| i.title.clone()))
             .unwrap_or_else(|| game_id.to_string())
+    }
+
+    /// No game is running and nothing else is working on this game's files or saves.
+    pub fn can_play(&self, game_id: &str) -> bool {
+        !self.play.as_ref().is_some_and(|p| p.running)
+            && !self.maintenance.get(game_id).is_some_and(|m| m.busy)
+            && !self.cloud.get(game_id).is_some_and(|c| c.busy)
     }
 
     /// What closing the window would interrupt, described for the user.

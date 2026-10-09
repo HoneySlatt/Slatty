@@ -53,6 +53,14 @@ GOG accepts only its Galaxy client's redirect URI (`https://embed.gog.com/on_log
 Refreshes take a file lock, so the CLI and the interface never refresh concurrently. Tests showed the
 refresh token is not rotated on refresh.
 
+### One operation per game
+
+Installing, discarding an unfinished install, verifying or repairing, updating or changing content,
+uninstalling and playing each hold `~/.local/state/slatty/locks/game-<id>.lock` while they run. A
+second one on the same game, from the same process or another one (CLI and interface), is refused
+instead of touching files in use. A session left without an end (crash) still blocks changes until
+the next launch records it.
+
 ### Install
 
 1. `plan_for` picks the public Windows build of generation 2 and reads its metadata. It keeps the

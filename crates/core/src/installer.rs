@@ -703,7 +703,8 @@ impl InstallJob {
 
 /// Abandons an unfinished install: deletes its hidden partial folder and its job. An unfinished
 /// update is refused here, since its files are the installed game itself.
-pub fn discard(db: &Db, game_id: &str) -> Result<Option<PathBuf>> {
+pub fn discard(db: &Db, dirs: &Dirs, game_id: &str) -> Result<Option<PathBuf>> {
+    let _busy = crate::lock::game(dirs, game_id)?;
     let Some(job) = InstallJob::load(db, game_id)? else {
         return Ok(None);
     };
@@ -870,6 +871,7 @@ pub async fn install(
     emit: impl Fn(InstallEvent) + Send + Sync,
     cancel: CancellationToken,
 ) -> Result<Install> {
+    let _busy = crate::lock::game(dirs, &req.game_id)?;
     if Install::get(db, &req.game_id)?.is_some() {
         return Err(Error::Refused(format!(
             "{} is already installed",

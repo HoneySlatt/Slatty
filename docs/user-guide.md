@@ -333,3 +333,4 @@ Comet's log may contain game client identifiers; review it before sharing.
 | Achievements are not reported | `~/.local/state/slatty/logs/comet.log`. `slatty doctor` must find `GalaxyCommunication.exe`; the launch output says whether the Galaxy service was registered. |
 | A cloud conflict blocks the launch | `slatty cloud diff <id>`, then `slatty cloud sync <id> --prefer local` or `--prefer remote`. |
 | The session was interrupted (crash, power loss) | The next launch reports it. Check `slatty cloud status <id>` before playing. |
+| "another operation on this game is running" | An install, update, repair, uninstall or game session of that game is still running, maybe in another SlattyLauncher window or terminal. Wait for it to finish. |

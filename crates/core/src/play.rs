@@ -123,6 +123,7 @@ pub async fn play(
     emit: impl Fn(PlayEvent) + Send + Sync,
     mut stop: UnboundedReceiver<()>,
 ) -> Result<()> {
+    let _busy = crate::lock::game(dirs, &req.game_id)?;
     let install = Install::get(db, &req.game_id)?
         .ok_or_else(|| Error::NotFound(format!("{} is not imported", req.game_id)))?;
     if crate::maintenance::update_pending(db, &req.game_id)?.is_some() {

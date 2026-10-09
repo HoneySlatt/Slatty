@@ -137,7 +137,7 @@ impl App {
                 big(
                     Icon::Play,
                     "Play".into(),
-                    running.is_none().then(|| Message::Play(g.id.clone())),
+                    self.can_play(&g.id).then(|| Message::Play(g.id.clone())),
                     false,
                 )
             }

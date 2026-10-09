@@ -25,6 +25,16 @@ pub fn try_acquire(path: &Path) -> Result<Option<FileLock>> {
     }
 }
 
+/// Held while a game is installed, changed, repaired, uninstalled or played, so that two of
+/// these never touch the same game at once, even from different processes.
+pub fn game(dirs: &crate::paths::Dirs, game_id: &str) -> Result<FileLock> {
+    try_acquire(&dirs.locks().join(format!("game-{game_id}.lock")))?.ok_or_else(|| {
+        Error::Refused(
+            "another operation on this game is running (install, update, repair or play)".into(),
+        )
+    })
+}
+
 pub async fn acquire(path: &Path, timeout: Duration) -> Result<FileLock> {
     let deadline = tokio::time::Instant::now() + timeout;
     loop {

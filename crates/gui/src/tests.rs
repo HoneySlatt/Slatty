@@ -243,6 +243,23 @@ fn installed_game_page_can_be_played_and_shows_no_store_text() {
         ui.into_messages()
             .any(|m| matches!(m, Message::Play(id) if id == "3"))
     );
+
+    app.maintenance.insert(
+        "3".into(),
+        crate::installs::MaintenanceView {
+            busy: true,
+            lines: Vec::new(),
+            confirm_uninstall: false,
+            update_available: false,
+            content: None,
+        },
+    );
+    let mut ui = render(&app);
+    let _ = ui.click("Play");
+    assert!(
+        !ui.into_messages().any(|m| matches!(m, Message::Play(_))),
+        "no launch while the game's files are being changed"
+    );
 }
 
 #[test]

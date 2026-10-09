@@ -54,6 +54,7 @@ pub fn uninstall(
     game_id: &str,
     delete_prefix: bool,
 ) -> Result<UninstallReport> {
+    let _busy = crate::lock::game(dirs, game_id)?;
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
     let prefix = install.runner.prefix().filter(|_| delete_prefix);
     if let Some(p) = prefix
@@ -130,6 +131,7 @@ pub async fn check(
     progress: &(dyn Fn(Progress) + Send + Sync),
     cancel: CancellationToken,
 ) -> Result<installer::Checked> {
+    let _busy = crate::lock::game(dirs, game_id)?;
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
     if update_pending(db, game_id)?.is_some() {
         return Err(Error::Refused(
@@ -264,6 +266,7 @@ pub async fn reconfigure(
     progress: &(dyn Fn(Progress) + Send + Sync),
     cancel: CancellationToken,
 ) -> Result<UpdateReport> {
+    let _busy = crate::lock::game(dirs, game_id)?;
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
     let pending = InstallJob::load(db, game_id)?.filter(|j| j.state == UPDATING);
     let (build, language, dlcs) = match (&pending, &change) {
@@ -602,6 +605,19 @@ mod tests {
             Err(Error::Refused(_))
         ));
         assert!(env.game().join("Game.exe").exists());
+    }
+
+    #[test]
+    fn a_game_busy_with_another_operation_is_left_alone() {
+        let env = Env::new("busy", true);
+        let busy = crate::lock::game(&env.dirs, "1").unwrap();
+        assert!(matches!(
+            uninstall(&env.db, &env.dirs, "1", false),
+            Err(Error::Refused(_))
+        ));
+        assert!(env.game().join("Game.exe").exists());
+        drop(busy);
+        uninstall(&env.db, &env.dirs, "1", false).unwrap();
     }
 
     #[test]
