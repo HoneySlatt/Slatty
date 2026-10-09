@@ -321,6 +321,16 @@ pub fn hero_fade(_: &Theme) -> container::Style {
     }
 }
 
+/// A panel docked to the right of the page.
+pub fn drawer(_: &Theme) -> container::Style {
+    let t = tokens();
+    container::Style {
+        background: Some(Background::Color(t.surface)),
+        text_color: Some(t.text),
+        ..Default::default()
+    }
+}
+
 /// A plain block of a list (an achievement), with the controls' corner radius.
 pub fn block(_: &Theme) -> container::Style {
     let t = tokens();

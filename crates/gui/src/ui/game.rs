@@ -1,7 +1,9 @@
 //! Game page: key art, play button, stats, cloud and achievements summaries.
 
+use iced::widget::text::Wrapping;
 use iced::widget::{
-    Space, button, column, container, image, progress_bar, row, space, stack, text, tooltip,
+    Space, button, column, container, image, progress_bar, responsive, row, space, stack, text,
+    tooltip,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
@@ -56,14 +58,14 @@ impl App {
             container(self.stats(g))
                 .padding([0, 18])
                 .align_y(Alignment::Center)
-                .width(Length::FillPortion(9))
+                .width(Length::FillPortion(10))
                 .height(CARD_HEIGHT)
                 .style(theme::block),
             container(self.cloud_card(g))
-                .width(Length::FillPortion(8))
+                .width(Length::FillPortion(7))
                 .height(CARD_HEIGHT),
             container(self.achievements_card(g))
-                .width(Length::FillPortion(10))
+                .width(Length::FillPortion(9))
                 .height(CARD_HEIGHT),
         ]
         .spacing(14);
@@ -216,15 +218,18 @@ impl App {
         let stat = |ic: Icon, value: String, label: &'a str| {
             row![
                 container(icon(ic, 20.0, tokens().text))
-                    .center(44)
+                    .center(40)
                     .style(theme::circle),
                 column![
-                    text(value).size(18).font(SEMIBOLD),
-                    text(label).size(13).color(tokens().muted)
+                    text(value).size(18).font(SEMIBOLD).wrapping(Wrapping::None),
+                    text(label)
+                        .size(13)
+                        .color(tokens().muted)
+                        .wrapping(Wrapping::None)
                 ]
                 .spacing(2),
             ]
-            .spacing(14)
+            .spacing(12)
             .align_y(Alignment::Center)
             .width(Length::Fill)
         };
@@ -295,21 +300,29 @@ impl App {
         };
         let mut content = row![
             container(icon(Icon::Cloud, 22.0, tokens().text))
-                .center(48)
+                .center(40)
                 .style(theme::circle),
             column![
-                text("Cloud saves").size(15).font(SEMIBOLD),
-                row![
-                    icon(ic, 16.0, color),
-                    text(status).size(14).color(tokens().muted)
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
+                text("Cloud saves")
+                    .size(15)
+                    .font(SEMIBOLD)
+                    .wrapping(Wrapping::None),
+                // The state icon matters once there are saves to keep in step.
+                row![]
+                    .push(installed.then(|| icon(ic, 16.0, color)))
+                    .push(
+                        text(status)
+                            .size(14)
+                            .color(tokens().muted)
+                            .wrapping(Wrapping::None),
+                    )
+                    .spacing(8)
+                    .align_y(Alignment::Center),
             ]
             .spacing(4)
             .width(Length::Fill),
         ]
-        .spacing(16)
+        .spacing(14)
         .align_y(Alignment::Center);
         if installed {
             content = content.push(
@@ -336,7 +349,7 @@ impl App {
 
     pub(super) fn achievements_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let trophy = container(icon(Icon::Trophy, 22.0, tokens().text))
-            .center(48)
+            .center(40)
             .style(theme::circle);
         let body: Element<'_, Message> = match self.achievements.get(&g.id) {
             None | Some(Loadable::Loading) => text("Loading achievements…")
@@ -362,10 +375,28 @@ impl App {
             Some(Loadable::Ready(list)) => {
                 let done = list.iter().filter(|a| a.date_unlocked.is_some()).count();
                 let share = done as f32 / list.len() as f32;
-                // The latest unlocks, named on hover so the card stays one line high.
-                let latest: Vec<Element<'_, Message>> = latest_unlocked(list)
-                    .into_iter()
-                    .map(|a| {
+                // The latest unlocks, named on hover, only when the card is wide enough for them
+                // (the achievements drawer narrows the page).
+                responsive(move |size| {
+                    let summary = column![
+                        text("Achievements").size(15).font(SEMIBOLD),
+                        row![
+                            text(format!("{done} / {}", list.len())).size(14),
+                            space().width(Length::Fill),
+                            text(format!("{:.0}%", share * 100.0))
+                                .size(14)
+                                .color(tokens().muted),
+                        ],
+                        progress_bar(0.0..=1.0, share)
+                            .girth(8)
+                            .style(theme::progress),
+                    ]
+                    .spacing(6)
+                    .width(Length::Fill);
+                    if size.width < 320.0 {
+                        return container(summary).center_y(Length::Fill).into();
+                    }
+                    let latest = latest_unlocked(list).into_iter().map(|a| {
                         tooltip(
                             container(self.achievement_icon(&a.image_url_unlocked, 44.0))
                                 .id(format!("latest-unlock-{}", a.achievement_id)),
@@ -375,32 +406,13 @@ impl App {
                             tooltip::Position::Top,
                         )
                         .into()
-                    })
-                    .collect();
-                row![
-                    column![
-                        row![
-                            text("Achievements").size(15).font(SEMIBOLD),
-                            text(format!("{done} / {}", list.len()))
-                                .size(15)
-                                .font(SEMIBOLD),
-                            space().width(Length::Fill),
-                            text(format!("{:.0}%", share * 100.0))
-                                .size(14)
-                                .color(tokens().muted),
-                        ]
+                    });
+                    row![summary, row(latest).spacing(8)]
                         .spacing(20)
-                        .align_y(Alignment::Center),
-                        progress_bar(0.0..=1.0, share)
-                            .girth(8)
-                            .style(theme::progress),
-                    ]
-                    .spacing(12)
-                    .width(Length::Fill),
-                    row(latest).spacing(8),
-                ]
-                .spacing(20)
-                .align_y(Alignment::Center)
+                        .height(Length::Fill)
+                        .align_y(Alignment::Center)
+                        .into()
+                })
                 .into()
             }
         };

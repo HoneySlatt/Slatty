@@ -4,7 +4,7 @@ use iced::widget::{
     Column, Space, button, center, checkbox, column, container, mouse_area, opaque, pick_list,
     progress_bar, row, scrollable, space, stack, text, text_input,
 };
-use iced::{Alignment, Element, Length};
+use iced::{Alignment, Element, Length, Padding};
 use slatty_core::cloud::sync::Prefer;
 use slatty_core::install::Install;
 use slatty_core::installer::DlcChoice;
@@ -21,6 +21,9 @@ use crate::maintenance::{ContentInfo, MaintenanceMsg};
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, CloudRequest, Loadable, Message, Panel};
 
+/// Width of the achievements drawer beside the game page.
+const DRAWER_WIDTH: f32 = 500.0;
+
 impl App {
     pub fn with_panel<'a>(
         &'a self,
@@ -33,7 +36,7 @@ impl App {
             Panel::GameSettings => ("Game settings", self.game_settings_panel(g)),
             Panel::Manage => ("Manage", self.manage_panel(g)),
             Panel::Cloud => ("Cloud saves", self.cloud_panel(g)),
-            Panel::Achievements => ("Achievements", self.achievements_panel(g)),
+            Panel::Achievements => return self.achievements_drawer(page, g),
             Panel::Session => ("Session", self.session_panel(g)),
         };
         let boxed = container(
@@ -495,25 +498,78 @@ impl App {
         Column::with_children(items).spacing(10).into()
     }
 
-    pub(super) fn achievements_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let Some(Loadable::Ready(list)) = self.achievements.get(&g.id) else {
-            return note("Loading…");
+    /// Achievements open in a drawer beside the game page, which stays visible.
+    fn achievements_drawer<'a>(
+        &'a self,
+        page: Element<'a, Message>,
+        g: &'a LibraryGame,
+    ) -> Element<'a, Message> {
+        let rule = || {
+            container(Space::new())
+                .width(Length::Fill)
+                .height(1)
+                .style(theme::divider)
         };
-        let unlocked = list.iter().filter(|a| a.date_unlocked.is_some()).count();
-        let mut items: Vec<Element<'_, Message>> = vec![
-            row![
-                text(format!("{unlocked} / {} unlocked", list.len()))
-                    .size(15)
-                    .font(SEMIBOLD)
-                    .width(Length::Fill),
-                unlock_all_button(&g.id, list),
+        let close = button(container(icon(Icon::X, 20.0, tokens().text)).center(24))
+            .padding(10)
+            .on_press(Message::ClosePanel)
+            .style(theme::tonal);
+        let header = row![
+            column![
+                text("Achievements").size(32).font(BOLD),
+                text(&g.title).size(18).color(tokens().accent),
             ]
-            .align_y(Alignment::Center)
-            .into(),
+            .spacing(4)
+            .width(Length::Fill),
+            close,
         ];
-        items.extend(self.pending_confirmation(&g.id));
-        items.extend(list.iter().map(|a| self.achievement_row(&g.id, a, 48.0)));
-        Column::with_children(items).spacing(12).into()
+        let body: Element<'_, Message> = match self.achievements.get(&g.id) {
+            Some(Loadable::Ready(list)) => {
+                let unlocked = list.iter().filter(|a| a.date_unlocked.is_some()).count();
+                let mut items = Column::new();
+                for (i, a) in list.iter().enumerate() {
+                    if i > 0 {
+                        items = items.push(rule());
+                    }
+                    items = items
+                        .push(container(self.achievement_row(&g.id, a, 56.0)).padding([14, 0]));
+                }
+                column![
+                    row![
+                        text(format!("{unlocked} / {} unlocked", list.len()))
+                            .size(16)
+                            .font(SEMIBOLD)
+                            .width(Length::Fill),
+                        unlock_all_button(&g.id, list),
+                    ]
+                    .align_y(Alignment::Center),
+                ]
+                .extend(self.pending_confirmation(&g.id))
+                .push(rule())
+                .push(
+                    scrollable(container(items).padding(Padding::ZERO.right(14)))
+                        .style(theme::scroller)
+                        .height(Length::Fill),
+                )
+                .spacing(14)
+                .into()
+            }
+            _ => note("Loading…"),
+        };
+        let drawer = container(column![header, body].spacing(22))
+            .padding([22, 24])
+            .width(DRAWER_WIDTH)
+            .height(Length::Fill)
+            .style(theme::drawer);
+        row![
+            container(page).width(Length::Fill),
+            container(Space::new())
+                .width(1)
+                .height(Length::Fill)
+                .style(theme::divider),
+            drawer,
+        ]
+        .into()
     }
 
     pub(super) fn session_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
