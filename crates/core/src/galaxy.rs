@@ -15,6 +15,8 @@ use crate::error::{Error, Result};
 use crate::http;
 use crate::paths::Dirs;
 
+mod speeds;
+
 const CONTENT_SYSTEM: &str = "https://content-system.gog.com";
 const CDN: &str = "https://gog-cdn-fastly.gog.com";
 
@@ -188,8 +190,25 @@ pub async fn meta(http: &Client, build: &Build) -> Result<Meta> {
 
 #[derive(Debug, Clone, Deserialize)]
 struct Endpoint {
+    #[serde(default)]
+    endpoint_name: String,
     url_format: String,
     parameters: serde_json::Map<String, Value>,
+}
+
+impl Endpoint {
+    /// Name under which its speed is remembered.
+    fn key(&self) -> String {
+        if self.endpoint_name.is_empty() {
+            self.parameters
+                .get("base")
+                .and_then(Value::as_str)
+                .unwrap_or(&self.url_format)
+                .to_string()
+        } else {
+            self.endpoint_name.clone()
+        }
+    }
 }
 
 /// CDN access for a game and its DLC. Each product has its own download links, fetched on first
@@ -200,6 +219,7 @@ pub struct GogContent {
     dirs: Dirs,
     tokens: tokio::sync::Mutex<Tokens>,
     endpoints: tokio::sync::RwLock<HashMap<String, Vec<Endpoint>>>,
+    speeds: std::sync::Mutex<speeds::Speeds>,
 }
 
 impl GogContent {
@@ -209,6 +229,7 @@ impl GogContent {
             dirs: dirs.clone(),
             tokens: tokio::sync::Mutex::new(tokens),
             endpoints: tokio::sync::RwLock::new(HashMap::new()),
+            speeds: std::sync::Mutex::default(),
         }
     }
 
@@ -229,6 +250,10 @@ impl GogContent {
             .await
             .insert(product_id.to_string(), fresh.clone());
         Ok(fresh)
+    }
+
+    fn speeds(&self) -> std::sync::MutexGuard<'_, speeds::Speeds> {
+        self.speeds.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     async fn access(&self) -> Result<Tokens> {
@@ -396,6 +421,7 @@ async fn dependency_link(http: &Client, tokens: &Tokens) -> Result<Vec<Endpoint>
             );
             parameters.insert("path".into(), Value::String(String::new()));
             Endpoint {
+                endpoint_name: String::new(),
                 url_format: "{base}{path}".into(),
                 parameters,
             }
@@ -445,13 +471,25 @@ impl ContentSource for GogContent {
     async fn chunk(&self, product_id: &str, compressed_md5: &str) -> Result<Vec<u8>> {
         let mut endpoints = self.endpoints_for(product_id, false).await?;
         let mut last = None;
+        let mut failed_here = Vec::new();
         for attempt in 0..6 {
-            let url = chunk_url(&endpoints[attempt % endpoints.len()], compressed_md5);
-            match http::send(self.http.get(url), "downloading a chunk").await {
-                Ok(resp) => match resp.bytes().await {
-                    Ok(b) => return Ok(b.to_vec()),
-                    Err(e) => last = Some(Error::network("downloading a chunk", e)),
-                },
+            let keys: Vec<String> = endpoints.iter().map(Endpoint::key).collect();
+            let names: Vec<&str> = keys.iter().map(String::as_str).collect();
+            let i = self.speeds().pick(&names, &failed_here);
+            let url = chunk_url(&endpoints[i], compressed_md5);
+            let started = std::time::Instant::now();
+            let result = match http::send(self.http.get(url), "downloading a chunk").await {
+                Ok(resp) => resp
+                    .bytes()
+                    .await
+                    .map_err(|e| Error::network("downloading a chunk", e)),
+                Err(e) => Err(e),
+            };
+            match result {
+                Ok(b) => {
+                    self.speeds().record(names[i], b.len(), started.elapsed());
+                    return Ok(b.to_vec());
+                }
                 Err(Error::Http {
                     status: 401 | 403, ..
                 }) => {
@@ -461,7 +499,11 @@ impl ContentSource for GogContent {
                         status: 403,
                     });
                 }
-                Err(e) => last = Some(e),
+                Err(e) => {
+                    self.speeds().failed(names[i]);
+                    failed_here.push(i);
+                    last = Some(e);
+                }
             }
             tokio::time::sleep(std::time::Duration::from_millis(500 * (attempt as u64 + 1))).await;
         }

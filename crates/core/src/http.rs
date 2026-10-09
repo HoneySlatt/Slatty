@@ -14,6 +14,7 @@ pub fn client() -> Result<Client> {
         .user_agent(USER_AGENT)
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(120))
+        .read_timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| Error::network("building the HTTP client", e))
 }

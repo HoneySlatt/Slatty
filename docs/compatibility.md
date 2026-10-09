@@ -22,6 +22,7 @@ Proton-CachyOS.
 | 2026-10-09 | Owned DLC detection (`slatty install --info`) | OK | Cyberpunk 2077: Phantom Liberty owned and selected; free REDmod listed as not owned (not added to the account). The Witcher 3 GOTY: no separate DLC |
 | 2026-10-09 | Play time | OK | Total read from GOG matches GOG Galaxy (Hollow Knight); a 4-minute Undertale session launched by slatty was accepted and counted; a 13-second one was not sent |
 | 2026-10-09 | Binary patches | OK | Hollow Knight 1.5.12618 → 1.5.12620: 11 real GOG deltas (60 KB to 5.9 MB files, 111 to 390 bytes of delta) applied by oxidelta to the old files downloaded from GOG, each matching GOG's target MD5. Not yet a full update of an installed game |
+| 2026-10-09 | CDN endpoint choice | OK | On a 17 MB/s connection, GOG listed fastly first and gcore second. fastly gave 0.8 to 1 MB/s on Baldur's Gate 3 and timed out on Cyberpunk 2077; gcore gave 3.6 to 13 MB/s. Measuring each endpoint and using the fastest brought 24-chunk samples from 1 to 2 MB/s to 5 to 7.4 MB/s |
 
 ## Runners
 

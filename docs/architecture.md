@@ -25,7 +25,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `library` | Galaxy library and gamesdb metadata, per-account cache, covers, key art and images |
 | `gameinfo` | `goggame-<id>.info` parsing, case-insensitive Windows path resolution |
 | `install` | Installed-game records |
-| `galaxy` | Content system: builds, build metadata, depot manifests, secure links, chunks |
+| `galaxy` | Content system: builds, build metadata, depot manifests, secure links, chunks from the fastest CDN endpoint |
 | `installer` | Install plans, staged verified downloads, resumable jobs, install records |
 | `maintenance` | Verify, repair, uninstall, updates and content changes |
 | `patches` | GOG's binary patches between builds: lookup, delta download, xdelta3 application |
@@ -95,6 +95,8 @@ the next launch records it.
 2. `collect_files` reads the depot manifests. It rejects unsafe paths, merges paths that differ only
    by case, and skips "support" files and links.
 3. `Download::run` checks disk space, then fills `.<Game>.slatty-partial`:
+   - chunks come from the fastest of the CDN endpoints GOG lists: each is measured on a first
+     request, and one that fails is avoided for the retries of that chunk;
    - each file is verified first and downloaded only if missing or wrong;
    - when a file is replaced (update, repair, resumed install), the file already there is hashed at
      the new chunk offsets, and chunks whose MD5 matches are copied from it and checked again
