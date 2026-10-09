@@ -638,14 +638,48 @@ impl App {
         match view.and_then(|v| v.content.as_ref()) {
             Some(c) => col = col.push(self.content_panel(&g.id, c, busy)),
             None => {
-                col = col.extend(
-                    view.into_iter()
-                        .flat_map(|v| &v.lines)
-                        .map(|l| note(l.as_str())),
-                )
+                col = col
+                    .extend(
+                        view.into_iter()
+                            .flat_map(|v| &v.lines)
+                            .map(|l| note(l.as_str())),
+                    )
+                    .extend(self.maintenance_progress(&g.id));
             }
         }
         col.into()
+    }
+
+    /// Progress bar and Pause button of a running verify, repair or update.
+    fn maintenance_progress(&self, game_id: &str) -> Option<Element<'_, Message>> {
+        let v = self.maintenance.get(game_id)?;
+        let p = v.progress?;
+        Some(
+            column![
+                progress_bar(0.0..=1.0, fraction(p))
+                    .girth(10)
+                    .style(theme::progress),
+                row![
+                    note(format!(
+                        "{} / {} · files {}/{}",
+                        human_size(p.bytes_done),
+                        human_size(p.bytes_total),
+                        p.files_done,
+                        p.files_total
+                    )),
+                    space().width(Length::Fill),
+                    button(text("Pause").size(14))
+                        .padding([8, 16])
+                        .on_press(Message::Maintenance(MaintenanceMsg::Pause(
+                            game_id.to_string()
+                        )))
+                        .style(theme::tonal),
+                ]
+                .align_y(Alignment::Center),
+            ]
+            .spacing(8)
+            .into(),
+        )
     }
 
     fn maintenance_busy(&self, game_id: &str) -> bool {
@@ -692,6 +726,7 @@ impl App {
         }
         if let Some(v) = view {
             items.extend(v.lines.iter().map(|l| note(l.as_str())));
+            items.extend(self.maintenance_progress(&g.id));
             if v.confirm_uninstall && !v.busy {
                 items.push(
                     container(

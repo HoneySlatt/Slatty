@@ -248,10 +248,7 @@ fn installed_game_page_can_be_played_and_shows_no_store_text() {
         "3".into(),
         crate::installs::MaintenanceView {
             busy: true,
-            lines: Vec::new(),
-            confirm_uninstall: false,
-            update_available: false,
-            content: None,
+            ..Default::default()
         },
     );
     let mut ui = render(&app);
@@ -566,6 +563,41 @@ fn update_button_appears_only_when_an_update_exists() {
 }
 
 #[test]
+fn an_update_shows_its_progress_and_can_be_paused() {
+    let mut app = library_app();
+    open(&mut app, "3", Some(Panel::Manage));
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Apply(
+        "3".into(),
+        slatty_core::maintenance::Change::Update,
+    )));
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Progress(
+        "3".into(),
+        slatty_core::installer::Progress {
+            bytes_done: 1 << 30,
+            bytes_total: 4 << 30,
+            files_done: 3,
+            files_total: 10,
+        },
+    )));
+    let mut ui = render(&app);
+    assert!(ui.find("1.00 GiB / 4.00 GiB · files 3/10").is_ok());
+    snapshot(&mut ui, "update-progress");
+    ui.click("Pause").unwrap();
+    for m in ui.into_messages().collect::<Vec<_>>() {
+        let _ = app.update(m);
+    }
+    assert!(app.maintenance["3"].cancel.as_ref().unwrap().is_cancelled());
+
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Updated(
+        "3".into(),
+        Err(None),
+    )));
+    let mut ui = render(&app);
+    assert!(ui.find("Paused. Apply it again to resume.").is_ok());
+    assert!(ui.find("Pause").is_err());
+}
+
+#[test]
 fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
     let mut app = library_app();
     open(&mut app, "5", Some(Panel::Install));
@@ -807,7 +839,7 @@ fn interrupted_work_is_listed_with_a_way_to_finish_it() {
 
     let _ = app.update(Message::Maintenance(MaintenanceMsg::Updated(
         "3".into(),
-        Err("[FAKE] network down before anything changed".into()),
+        Err(Some("[FAKE] network down before anything changed".into())),
     )));
     let _ = app.update(Message::Install(InstallMsg::Done(
         "8".into(),

@@ -73,7 +73,7 @@ pub enum InstallMsg {
     Prepare(String, Option<String>),
     Planned(String, Result<PlanInfo, String>),
     Start(String),
-    Event(String, InstallEvent),
+    Progress(String, Progress),
     /// `Err(None)` means paused by the user.
     Done(String, Result<Install, Option<String>>),
     Pause(String),
@@ -184,14 +184,13 @@ impl App {
                 );
                 return Task::run(install_stream(core, req, cancel), |m| m);
             }
-            InstallMsg::Event(game_id, InstallEvent::Progress(p)) => {
+            InstallMsg::Progress(game_id, p) => {
                 if let Some(InstallView::Running { progress, .. }) =
                     self.install_views.get_mut(&game_id)
                 {
                     *progress = p;
                 }
             }
-            InstallMsg::Event(_, _) => {}
             InstallMsg::Discard(game_id) => {
                 if matches!(
                     self.install_views.get(&game_id),
@@ -363,60 +362,87 @@ async fn plan(
     })
 }
 
+/// Passes progress from the core to the interface at most four times a second.
+pub struct Throttle {
+    tx: tokio::sync::mpsc::UnboundedSender<Progress>,
+    last: std::sync::Mutex<Option<Instant>>,
+}
+
+impl Throttle {
+    pub fn report(&self, p: Progress) {
+        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        if last.is_none_or(|t| t.elapsed() >= Duration::from_millis(250)) {
+            *last = Some(Instant::now());
+            let _ = self.tx.send(p);
+        }
+    }
+}
+
+/// Runs `work` and streams its progress, then the message it ends with.
+fn progress_stream<F, Fut>(
+    work: F,
+    on_progress: impl Fn(Progress) -> Message + Send + 'static,
+) -> impl Stream<Item = Message>
+where
+    F: FnOnce(Throttle) -> Fut + Send + 'static,
+    Fut: Future<Output = Message> + Send,
+{
+    iced::stream::channel(64, async move |mut output| {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let run = work(Throttle {
+            tx,
+            last: std::sync::Mutex::new(None),
+        });
+        let mut forward_out = output.clone();
+        let forward = async move {
+            while let Some(p) = rx.recv().await {
+                let _ = forward_out.send(on_progress(p)).await;
+            }
+        };
+        let (done, ()) = tokio::join!(run, forward);
+        let _ = output.send(done).await;
+    })
+}
+
 fn install_stream(
     core: Core,
     req: InstallRequest,
     cancel: CancellationToken,
 ) -> impl Stream<Item = Message> {
-    iced::stream::channel(64, async move |mut output| {
-        let game_id = req.game_id.clone();
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let run = async {
-            let mut account = Account::load(&core.db, &core.dirs)
-                .await
-                .map_err(|e| Some(e.to_string()))?;
-            let tokens = account
-                .tokens(&core.http)
-                .await
-                .map_err(|e| Some(e.to_string()))?
-                .clone();
-            match installer::install(
-                &core.db,
-                &core.dirs,
-                &core.http,
-                &tokens,
-                req,
-                move |e| drop(tx.send(e)),
-                cancel.clone(),
-            )
-            .await
-            {
-                Ok(i) => Ok(i),
-                Err(slatty_core::Error::Cancelled) => Err(None),
-                Err(e) => Err(Some(e.to_string())),
+    let game_id = req.game_id.clone();
+    let id = game_id.clone();
+    progress_stream(
+        async move |throttle| {
+            let result = async {
+                let tokens = tokens(&core).await.map_err(Some)?;
+                let emit = move |e| {
+                    if let InstallEvent::Progress(p) = e {
+                        throttle.report(p);
+                    }
+                };
+                installer::install(&core.db, &core.dirs, &core.http, &tokens, req, emit, cancel)
+                    .await
+                    .map_err(paused_or)
             }
-        };
-        let mut forward_out = output.clone();
-        let id = game_id.clone();
-        let forward = async move {
-            let mut last = Instant::now() - Duration::from_secs(1);
-            while let Some(e) = rx.recv().await {
-                if matches!(e, InstallEvent::Progress(_))
-                    && last.elapsed() < Duration::from_millis(250)
-                {
-                    continue;
-                }
-                last = Instant::now();
-                let _ = forward_out
-                    .send(Message::Install(InstallMsg::Event(id.clone(), e)))
-                    .await;
-            }
-        };
-        let (result, ()) = tokio::join!(run, forward);
-        let _ = output
-            .send(Message::Install(InstallMsg::Done(game_id, result)))
             .await;
-    })
+            Message::Install(InstallMsg::Done(game_id, result))
+        },
+        move |p| Message::Install(InstallMsg::Progress(id.clone(), p)),
+    )
+}
+
+/// Valid GOG tokens of the signed-in account.
+pub async fn tokens(core: &Core) -> Result<slatty_core::auth::Tokens, String> {
+    let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
+    account.tokens(&core.http).await.map_err(err).cloned()
+}
+
+/// `None` when the user paused the work, else the error to show.
+fn paused_or(e: slatty_core::Error) -> Option<String> {
+    match e {
+        slatty_core::Error::Cancelled => None,
+        e => Some(e.to_string()),
+    }
 }
 
 pub fn human_size(bytes: u64) -> String {
@@ -434,6 +460,27 @@ pub struct MaintenanceView {
     pub confirm_uninstall: bool,
     pub update_available: bool,
     pub content: Option<ContentInfo>,
+    /// Progress of a verify, repair or update, which `cancel` stops.
+    pub progress: Option<Progress>,
+    pub cancel: Option<CancellationToken>,
+}
+
+impl MaintenanceView {
+    fn start(&mut self, line: &str) -> CancellationToken {
+        let cancel = CancellationToken::new();
+        self.busy = true;
+        self.lines = vec![line.into()];
+        self.progress = Some(Progress::default());
+        self.cancel = Some(cancel.clone());
+        cancel
+    }
+
+    fn finish(&mut self, lines: Vec<String>) {
+        self.busy = false;
+        self.lines = lines;
+        self.progress = None;
+        self.cancel = None;
+    }
 }
 
 /// Language and DLC choices of an installed game, being edited.
@@ -467,7 +514,10 @@ impl ContentInfo {
 #[derive(Debug, Clone)]
 pub enum MaintenanceMsg {
     Check(String, bool),
-    Checked(String, bool, Result<Vec<PathBuf>, String>),
+    /// `Err(None)` means stopped by the user.
+    Checked(String, bool, Result<Vec<PathBuf>, Option<String>>),
+    Progress(String, Progress),
+    Pause(String),
     AskUninstall(String),
     CancelUninstall(String),
     Uninstall(String, bool),
@@ -475,7 +525,8 @@ pub enum MaintenanceMsg {
     CheckUpdate(String),
     UpdateChecked(String, Result<Option<String>, String>),
     Apply(String, Change),
-    Updated(String, Result<String, String>),
+    /// `Err(None)` means paused by the user.
+    Updated(String, Result<String, Option<String>>),
     LoadContent(String),
     ContentLoaded(String, Result<ContentInfo, String>),
     ChooseLanguage(String, String),
@@ -497,44 +548,62 @@ impl App {
                     self.notify_error("The game is running.".into());
                     return Task::none();
                 }
-                let view = self.maintenance.entry(game_id.clone()).or_default();
-                view.busy = true;
-                view.lines = vec![
-                    if repair {
-                        "Repairing…"
-                    } else {
-                        "Checking…"
-                    }
-                    .into(),
-                ];
+                let cancel =
+                    self.maintenance
+                        .entry(game_id.clone())
+                        .or_default()
+                        .start(if repair {
+                            "Repairing…"
+                        } else {
+                            "Checking…"
+                        });
                 let id = game_id.clone();
-                return Task::perform(
-                    async move {
-                        let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-                        let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
-                        slatty_core::maintenance::check(
-                            &core.db,
-                            &core.dirs,
-                            &core.http,
-                            &tokens,
-                            &id,
-                            repair,
-                            &|_| {},
-                            CancellationToken::new(),
-                        )
-                        .await
-                        .map(|c| c.bad)
-                        .map_err(err)
-                    },
-                    move |r| {
-                        Message::Maintenance(MaintenanceMsg::Checked(game_id.clone(), repair, r))
-                    },
+                return Task::run(
+                    progress_stream(
+                        async move |throttle| {
+                            let result = async {
+                                let tokens = tokens(&core).await.map_err(Some)?;
+                                slatty_core::maintenance::check(
+                                    &core.db,
+                                    &core.dirs,
+                                    &core.http,
+                                    &tokens,
+                                    &game_id,
+                                    repair,
+                                    &|p| throttle.report(p),
+                                    cancel,
+                                )
+                                .await
+                                .map(|c| c.bad)
+                                .map_err(paused_or)
+                            }
+                            .await;
+                            Message::Maintenance(MaintenanceMsg::Checked(game_id, repair, result))
+                        },
+                        move |p| Message::Maintenance(MaintenanceMsg::Progress(id.clone(), p)),
+                    ),
+                    |m| m,
                 );
+            }
+            MaintenanceMsg::Progress(game_id, p) => {
+                if let Some(v) = self.maintenance.get_mut(&game_id)
+                    && v.busy
+                {
+                    v.progress = Some(p);
+                }
+            }
+            MaintenanceMsg::Pause(game_id) => {
+                if let Some(cancel) = self
+                    .maintenance
+                    .get(&game_id)
+                    .and_then(|v| v.cancel.as_ref())
+                {
+                    cancel.cancel();
+                }
             }
             MaintenanceMsg::Checked(game_id, repair, result) => {
                 let view = self.maintenance.entry(game_id).or_default();
-                view.busy = false;
-                view.lines = match result {
+                view.finish(match result {
                     Ok(bad) if bad.is_empty() => vec!["All files are intact.".into()],
                     Ok(bad) => std::iter::once(format!(
                         "{} file(s) {}:",
@@ -547,8 +616,9 @@ impl App {
                     ))
                     .chain(bad.iter().take(20).map(|b| format!("  {}", b.display())))
                     .collect(),
-                    Err(e) => vec![format!("Error: {e}")],
-                };
+                    Err(None) => vec!["Stopped.".into()],
+                    Err(Some(e)) => vec![format!("Error: {e}")],
+                });
             }
             MaintenanceMsg::AskUninstall(game_id) => {
                 self.maintenance
@@ -673,57 +743,36 @@ impl App {
                     return Task::none();
                 }
                 let view = self.maintenance.entry(game_id.clone()).or_default();
-                view.busy = true;
                 view.update_available = false;
                 view.content = None;
-                view.lines =
-                    vec!["Applying… the game cannot be launched until this finishes.".into()];
+                let cancel =
+                    view.start("Applying… the game cannot be launched until this finishes.");
                 let id = game_id.clone();
-                return Task::perform(
-                    async move {
-                        let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-                        let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
-                        slatty_core::maintenance::reconfigure(
-                            &core.db,
-                            &core.dirs,
-                            &core.http,
-                            &tokens,
-                            &id,
-                            change,
-                            &|_| {},
-                            CancellationToken::new(),
-                        )
-                        .await
-                        .map(|r| {
-                            let mut summary = format!(
-                                "{}Now at {}: {} file(s) downloaded, {} removed.",
-                                if r.resumed {
-                                    "An unfinished change was completed first. "
-                                } else {
-                                    ""
-                                },
-                                r.to_version,
-                                r.downloaded.len(),
-                                r.removed.len(),
-                            );
-                            if !r.patched.is_empty() {
-                                summary += &format!(
-                                    " {} file(s) rebuilt from GOG patches ({}).",
-                                    r.patched.len(),
-                                    human_size(r.patch_bytes)
-                                );
+                return Task::run(
+                    progress_stream(
+                        async move |throttle| {
+                            let result = async {
+                                let tokens = tokens(&core).await.map_err(Some)?;
+                                slatty_core::maintenance::reconfigure(
+                                    &core.db,
+                                    &core.dirs,
+                                    &core.http,
+                                    &tokens,
+                                    &game_id,
+                                    change,
+                                    &|p| throttle.report(p),
+                                    cancel,
+                                )
+                                .await
+                                .map(|r| update_summary(&r))
+                                .map_err(paused_or)
                             }
-                            if r.reused_bytes > 0 {
-                                summary += &format!(
-                                    " {} reused from installed files.",
-                                    human_size(r.reused_bytes)
-                                );
-                            }
-                            summary
-                        })
-                        .map_err(err)
-                    },
-                    move |r| Message::Maintenance(MaintenanceMsg::Updated(game_id.clone(), r)),
+                            .await;
+                            Message::Maintenance(MaintenanceMsg::Updated(game_id, result))
+                        },
+                        move |p| Message::Maintenance(MaintenanceMsg::Progress(id.clone(), p)),
+                    ),
+                    |m| m,
                 );
             }
             MaintenanceMsg::LoadContent(game_id) => {
@@ -796,13 +845,41 @@ impl App {
                 }
                 self.refresh_record(&game_id);
                 let view = self.maintenance.entry(game_id).or_default();
-                view.busy = false;
-                view.lines = vec![match result {
+                view.finish(vec![match result {
                     Ok(summary) => summary,
-                    Err(e) => format!("Update failed: {e}. Run it again to resume."),
-                }];
+                    Err(None) => "Paused. Apply it again to resume.".into(),
+                    Err(Some(e)) => format!("Update failed: {e}. Run it again to resume."),
+                }]);
             }
         }
         Task::none()
     }
+}
+
+fn update_summary(r: &slatty_core::maintenance::UpdateReport) -> String {
+    let mut summary = format!(
+        "{}Now at {}: {} file(s) downloaded, {} removed.",
+        if r.resumed {
+            "An unfinished change was completed first. "
+        } else {
+            ""
+        },
+        r.to_version,
+        r.downloaded.len(),
+        r.removed.len(),
+    );
+    if !r.patched.is_empty() {
+        summary += &format!(
+            " {} file(s) rebuilt from GOG patches ({}).",
+            r.patched.len(),
+            human_size(r.patch_bytes)
+        );
+    }
+    if r.reused_bytes > 0 {
+        summary += &format!(
+            " {} reused from installed files.",
+            human_size(r.reused_bytes)
+        );
+    }
+    summary
 }

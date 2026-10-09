@@ -832,6 +832,9 @@ impl App {
                         cancel.cancel();
                     }
                 }
+                for cancel in self.maintenance.values().filter_map(|v| v.cancel.as_ref()) {
+                    cancel.cancel();
+                }
                 return iced::exit();
             }
             Message::Key(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
