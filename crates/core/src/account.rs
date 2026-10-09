@@ -22,6 +22,24 @@ pub struct AccountInfo {
     pub username: String,
 }
 
+/// Avatar picture of a GOG user, from the public profile (no token needed).
+pub async fn avatar_url(http: &Client, user_id: &str) -> Result<Option<String>> {
+    #[derive(Deserialize)]
+    struct Profile {
+        avatar: Option<Avatar>,
+    }
+    #[derive(Deserialize)]
+    struct Avatar {
+        medium_2x: Option<String>,
+    }
+    let profile: Profile = http::json(
+        http.get(format!("https://users.gog.com/users/{user_id}")),
+        "fetching the avatar",
+    )
+    .await?;
+    Ok(profile.avatar.and_then(|a| a.medium_2x))
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct RotationReport {
     pub rotated: bool,

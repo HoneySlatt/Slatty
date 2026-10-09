@@ -51,8 +51,8 @@ slatty library list witcher   # filter by title
 
 ## The interface
 
-`slatty-gui` has three tabs: **Library**, **Achievements** and **Settings**. The avatar at the top
-right opens Settings.
+`slatty-gui` has three tabs: **Library**, **Achievements** and **Settings**. Your GOG avatar, top
+right, opens Settings. It comes from your public GOG profile.
 
 **Library** shows your games as covers. Above the grid:
 
@@ -78,7 +78,8 @@ only sessions started by SlattyLauncher. The tools open in panels:
 
 Escape closes the panel, then the game page.
 
-**Achievements** lists every game with achievements, by completion. SlattyLauncher reads which games
+**Achievements** lists every game with achievements, by completion. Clicking a game opens its own
+achievements page in the same tab, where you can unlock or clear them. SlattyLauncher reads which games
 have achievements and cloud saves from GOG in the background and keeps the answer in
 `~/.cache/slatty/<user id>/overview.json`; **Refresh** reads it again.
 

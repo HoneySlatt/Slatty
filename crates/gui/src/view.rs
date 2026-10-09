@@ -9,10 +9,11 @@ use slatty_core::installer::Progress;
 use slatty_core::library::LibraryGame;
 use slatty_core::play::{CloudSummary, PlayEvent};
 
+use crate::game::{round_button, unlock_all_button};
 use crate::icons::{Icon, icon};
 use crate::installs::{ProtonChoice, SettingsMsg};
 use crate::theme::{self, ACCENT, BOLD, MUTED, ON_ACCENT, SEMIBOLD, TEXT};
-use crate::{App, Filters, Message, Page, Panel, Shelf, Sort};
+use crate::{App, Filters, Loadable, Message, Page, Panel, Shelf, Sort};
 
 pub fn fraction(p: Progress) -> f32 {
     if p.bytes_total == 0 {
@@ -41,7 +42,14 @@ impl App {
                 self.top_bar(&account.username),
                 match self.page {
                     Page::Library => self.library_page(),
-                    Page::Achievements => self.achievements_page(),
+                    Page::Achievements => match self
+                        .achievements_game
+                        .as_ref()
+                        .and_then(|id| self.library.iter().find(|g| &g.id == id))
+                    {
+                        Some(game) => self.achievements_game_page(game),
+                        None => self.achievements_page(),
+                    },
                     Page::Settings => self.settings_page(),
                 }
             ]
@@ -130,14 +138,23 @@ impl App {
             .next()
             .map(|c| c.to_lowercase().to_string())
             .unwrap_or_default();
-        let avatar = button(
-            container(text(initial).size(17).font(BOLD))
-                .center(38)
-                .style(theme::avatar),
-        )
-        .padding(0)
-        .on_press(Message::ShowPage(Page::Settings))
-        .style(theme::plain);
+        let picture: Element<'_, Message> =
+            match self.avatar.as_ref().and_then(|u| self.images.get(u)) {
+                Some(h) => image(h.clone())
+                    .content_fit(ContentFit::Cover)
+                    .width(38)
+                    .height(38)
+                    .border_radius(19)
+                    .into(),
+                None => container(text(initial).size(17).font(BOLD))
+                    .center(38)
+                    .style(theme::avatar)
+                    .into(),
+            };
+        let avatar = button(picture)
+            .padding(0)
+            .on_press(Message::ShowPage(Page::Settings))
+            .style(theme::plain);
         row![
             logo(),
             Space::new().width(18),
@@ -475,7 +492,7 @@ impl App {
                 )
                 .padding([10, 16])
                 .width(Length::Fill)
-                .on_press(Message::SelectWith(g.id.clone(), Panel::Achievements))
+                .on_press(Message::OpenAchievements(g.id.clone()))
                 .style(theme::row_button)
                 .into()
             })
@@ -490,6 +507,101 @@ impl App {
         .spacing(20)
         .padding(Padding::ZERO.top(10))
         .into()
+    }
+
+    fn achievements_game_page<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let header = row![
+            round_button(Icon::ChevronLeft, Message::ShowPage(Page::Achievements)),
+            text("All games").size(16),
+            space().width(Length::Fill),
+            button(
+                row![
+                    text("Game page").size(14),
+                    icon(Icon::ArrowRight, 16.0, ACCENT)
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center)
+            )
+            .on_press(Message::Select(g.id.clone()))
+            .style(theme::link),
+        ]
+        .spacing(12)
+        .align_y(Alignment::Center);
+        let cover: Element<'_, Message> = match self.covers.get(&g.id) {
+            Some(h) => image(h.clone())
+                .content_fit(ContentFit::Cover)
+                .width(72)
+                .height(96)
+                .border_radius(10)
+                .into(),
+            None => container(Space::new())
+                .width(72)
+                .height(96)
+                .style(theme::placeholder)
+                .into(),
+        };
+        let body: Element<'_, Message> = match self.achievements.get(&g.id) {
+            None | Some(Loadable::Loading) => text("Loading achievements…").color(MUTED).into(),
+            Some(Loadable::Failed(e)) => column![
+                text(format!("Unavailable: {e}")).color(MUTED),
+                button(text("Retry").size(14))
+                    .on_press(Message::LoadAchievements(g.id.clone()))
+                    .style(theme::link),
+            ]
+            .spacing(8)
+            .into(),
+            Some(Loadable::Ready(list)) => {
+                let done = list.iter().filter(|a| a.date_unlocked.is_some()).count();
+                let share = if list.is_empty() {
+                    0.0
+                } else {
+                    done as f32 / list.len() as f32
+                };
+                let summary = row![
+                    cover,
+                    column![
+                        text(&g.title).size(30).font(BOLD),
+                        row![
+                            text(format!("{done} / {} unlocked", list.len()))
+                                .size(15)
+                                .font(SEMIBOLD),
+                            text(format!("{:.0}%", share * 100.0)).size(14).color(MUTED),
+                        ]
+                        .spacing(16),
+                        progress_bar(0.0..=1.0, share)
+                            .girth(8)
+                            .style(theme::progress),
+                    ]
+                    .spacing(10)
+                    .width(Length::Fill),
+                    unlock_all_button(&g.id, list),
+                ]
+                .spacing(20)
+                .align_y(Alignment::Center);
+                let mut rows = Column::new().spacing(8);
+                rows = rows.extend(self.pending_confirmation(&g.id));
+                rows = rows.extend(list.iter().map(|a| {
+                    container(self.achievement_row(&g.id, a))
+                        .padding([12, 16])
+                        .width(Length::Fill)
+                        .style(theme::card)
+                        .into()
+                }));
+                column![
+                    summary,
+                    scrollable(rows)
+                        .spacing(8)
+                        .style(theme::scroller)
+                        .height(Length::Fill)
+                ]
+                .spacing(20)
+                .into()
+            }
+        };
+        column![header, body]
+            .spacing(18)
+            .padding(Padding::ZERO.top(10))
+            .into()
     }
 
     fn settings_page(&self) -> Element<'_, Message> {

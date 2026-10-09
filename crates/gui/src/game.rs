@@ -384,7 +384,7 @@ impl App {
         .into()
     }
 
-    fn achievement_icon<'a>(&'a self, url: &str, size: f32) -> Element<'a, Message> {
+    pub fn achievement_icon<'a>(&'a self, url: &str, size: f32) -> Element<'a, Message> {
         match self.images.get(url) {
             Some(h) => image(h.clone())
                 .width(size)
@@ -834,77 +834,76 @@ impl App {
             return note("Loading…");
         };
         let unlocked = list.iter().filter(|a| a.date_unlocked.is_some()).count();
-        let locked: Vec<AchievementChange> = list
-            .iter()
-            .filter(|a| a.date_unlocked.is_none())
-            .map(|a| change(a, true))
-            .collect();
-        let mut items: Vec<Element<'_, Message>> =
-            vec![
-                row![
-                    text(format!("{unlocked} / {} unlocked", list.len()))
-                        .size(15)
-                        .font(SEMIBOLD)
-                        .width(Length::Fill),
-                    button(text("Unlock all").size(14))
-                        .padding([8, 16])
-                        .on_press_maybe((!locked.is_empty()).then(|| {
-                            Message::AskAchievementChange(g.id.clone(), locked.clone())
-                        }))
-                        .style(theme::tonal),
-                ]
-                .align_y(Alignment::Center)
-                .into(),
-            ];
-        if let Some(p) = self.pending_change.as_ref().filter(|p| p.game_id == g.id) {
-            items.push(confirmation(p));
-        }
-        for a in list {
-            let done = a.date_unlocked.is_some();
-            let shown = a.visible || done;
-            let url = if done {
-                &a.image_url_unlocked
-            } else {
-                &a.image_url_locked
-            };
-            let mut details = column![
-                text(if shown {
-                    a.name.as_str()
-                } else {
-                    "Hidden achievement"
-                })
-                .size(15)
-                .font(SEMIBOLD)
-                .color(if done { TEXT } else { MUTED })
+        let mut items: Vec<Element<'_, Message>> = vec![
+            row![
+                text(format!("{unlocked} / {} unlocked", list.len()))
+                    .size(15)
+                    .font(SEMIBOLD)
+                    .width(Length::Fill),
+                unlock_all_button(&g.id, list),
             ]
-            .spacing(2)
-            .width(Length::Fill);
-            if shown && !a.description.is_empty() {
-                details = details.push(text(&a.description).size(13).color(MUTED));
-            }
-            details = details.push(
-                text(format!("{:.1}% of players", a.rarity))
-                    .size(12)
-                    .color(MUTED),
-            );
-            items.push(
-                row![
-                    self.achievement_icon(url, 48.0),
-                    details,
-                    button(text(if done { "Clear" } else { "Unlock" }).size(13))
-                        .padding([6, 12])
-                        .on_press(Message::AskAchievementChange(
-                            g.id.clone(),
-                            vec![change(a, !done)],
-                        ))
-                        .style(theme::tonal),
-                ]
-                .spacing(14)
-                .align_y(Alignment::Center)
-                .into(),
-            );
-        }
+            .align_y(Alignment::Center)
+            .into(),
+        ];
+        items.extend(self.pending_confirmation(&g.id));
+        items.extend(list.iter().map(|a| self.achievement_row(&g.id, a)));
         Column::with_children(items).spacing(12).into()
+    }
+
+    pub fn pending_confirmation(&self, game_id: &str) -> Option<Element<'_, Message>> {
+        self.pending_change
+            .as_ref()
+            .filter(|p| p.game_id == game_id)
+            .map(confirmation)
+    }
+
+    /// One achievement with its icon, description, rarity and Unlock or Clear.
+    pub fn achievement_row<'a>(
+        &'a self,
+        game_id: &'a str,
+        a: &'a Achievement,
+    ) -> Element<'a, Message> {
+        let done = a.date_unlocked.is_some();
+        let shown = a.visible || done;
+        let url = if done {
+            &a.image_url_unlocked
+        } else {
+            &a.image_url_locked
+        };
+        let mut details = column![
+            text(if shown {
+                a.name.as_str()
+            } else {
+                "Hidden achievement"
+            })
+            .size(15)
+            .font(SEMIBOLD)
+            .color(if done { TEXT } else { MUTED })
+        ]
+        .spacing(2)
+        .width(Length::Fill);
+        if shown && !a.description.is_empty() {
+            details = details.push(text(&a.description).size(13).color(MUTED));
+        }
+        details = details.push(
+            text(format!("{:.1}% of players", a.rarity))
+                .size(12)
+                .color(MUTED),
+        );
+        row![
+            self.achievement_icon(url, 48.0),
+            details,
+            button(text(if done { "Clear" } else { "Unlock" }).size(13))
+                .padding([6, 12])
+                .on_press(Message::AskAchievementChange(
+                    game_id.to_string(),
+                    vec![change(a, !done)],
+                ))
+                .style(theme::tonal),
+        ]
+        .spacing(14)
+        .align_y(Alignment::Center)
+        .into()
     }
 
     fn session_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
@@ -924,7 +923,7 @@ impl App {
     }
 }
 
-fn round_button<'a>(ic: Icon, msg: Message) -> Element<'a, Message> {
+pub fn round_button<'a>(ic: Icon, msg: Message) -> Element<'a, Message> {
     button(container(icon(ic, 20.0, TEXT)).center(24))
         .padding(10)
         .on_press(msg)
@@ -1023,4 +1022,20 @@ fn runner_label(install: &Install) -> String {
         ),
         Runner::Wine { wine, .. } => format!("Wine: {}", wine.display()),
     }
+}
+
+pub fn unlock_all_button<'a>(game_id: &str, list: &[Achievement]) -> Element<'a, Message> {
+    let locked: Vec<AchievementChange> = list
+        .iter()
+        .filter(|a| a.date_unlocked.is_none())
+        .map(|a| change(a, true))
+        .collect();
+    let game_id = game_id.to_string();
+    button(text("Unlock all").size(14))
+        .padding([8, 16])
+        .on_press_maybe(
+            (!locked.is_empty()).then(|| Message::AskAchievementChange(game_id, locked)),
+        )
+        .style(theme::tonal)
+        .into()
 }

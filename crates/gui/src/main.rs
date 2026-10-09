@@ -174,6 +174,7 @@ pub struct App {
     pub core: Option<Core>,
     pub fatal: Option<String>,
     pub account: Option<AccountInfo>,
+    pub avatar: Option<String>,
     pub login_input: String,
     pub login_busy: bool,
     pub library: Vec<LibraryGame>,
@@ -188,6 +189,8 @@ pub struct App {
     pub filters_open: bool,
     pub selected: Option<String>,
     pub panel: Option<Panel>,
+    /// Game whose achievements fill the Achievements tab.
+    pub achievements_game: Option<String>,
     pub installs: HashMap<String, Install>,
     pub records: HashMap<String, InstallSummary>,
     pub favorites: HashSet<String>,
@@ -215,6 +218,7 @@ impl Default for App {
             core: None,
             fatal: None,
             account: None,
+            avatar: None,
             login_input: String::new(),
             login_busy: false,
             library: Vec::new(),
@@ -229,6 +233,7 @@ impl Default for App {
             filters_open: false,
             selected: None,
             panel: None,
+            achievements_game: None,
             installs: HashMap::new(),
             records: HashMap::new(),
             favorites: HashSet::new(),
@@ -302,6 +307,8 @@ pub enum Message {
     ToggleFavorite(String),
     Select(String),
     SelectWith(String, Panel),
+    OpenAchievements(String),
+    Avatar(Option<String>),
     CloseDetail,
     OpenPanel(Panel),
     ClosePanel,
@@ -402,9 +409,11 @@ impl App {
                         ),
                     });
                 }
+                let avatar = self.fetch_avatar();
                 if let Some(cache) = boot.library {
-                    return self.set_library(cache);
+                    return Task::batch([avatar, self.set_library(cache)]);
                 }
+                return avatar;
             }
             Message::Booted(Err(e)) => self.fatal = Some(e),
             Message::OpenLoginPage => {
@@ -451,10 +460,14 @@ impl App {
                                 overview::load(&core.dirs, &info.user_id).unwrap_or_default();
                         }
                         self.account = Some(info);
-                        return match cache {
-                            Some(c) => self.set_library(c),
-                            None => Task::done(Message::SyncLibrary),
-                        };
+                        let avatar = self.fetch_avatar();
+                        return Task::batch([
+                            avatar,
+                            match cache {
+                                Some(c) => self.set_library(c),
+                                None => Task::done(Message::SyncLibrary),
+                            },
+                        ]);
                     }
                     Err(e) => self.notify_error(e),
                 }
@@ -473,6 +486,8 @@ impl App {
             }
             Message::LoggedOut(Ok(())) => {
                 self.account = None;
+                self.avatar = None;
+                self.achievements_game = None;
                 self.library.clear();
                 self.covers.clear();
                 self.images.clear();
@@ -517,6 +532,7 @@ impl App {
             }
             Message::ShowPage(page) => {
                 self.page = page;
+                self.achievements_game = None;
                 self.selected = None;
                 self.panel = None;
             }
@@ -544,6 +560,12 @@ impl App {
             }
             Message::Select(id) => return self.open_game(id, None),
             Message::SelectWith(id, panel) => return self.open_game(id, Some(panel)),
+            Message::OpenAchievements(id) => return self.open_achievements(id),
+            Message::Avatar(Some(url)) => {
+                self.avatar = Some(url.clone());
+                return self.request_images(vec![url]);
+            }
+            Message::Avatar(None) => {}
             Message::CloseDetail => {
                 self.selected = None;
                 self.panel = None;
@@ -688,7 +710,10 @@ impl App {
                 let task = match &result {
                     Ok(list) => {
                         self.achievements_loaded(&id, list);
-                        self.request_images(achievement_icons(list, self.panel_shows_all(&id)))
+                        self.request_images(achievement_icons(
+                            list,
+                            self.shows_all_achievements(&id),
+                        ))
                     }
                     Err(_) => Task::none(),
                 };
@@ -758,10 +783,7 @@ impl App {
                         return operation::focus_previous();
                     }
                     keyboard::Key::Named(Named::Tab) => return operation::focus_next(),
-                    keyboard::Key::Named(Named::Escape) => match self.panel.take() {
-                        Some(_) => {}
-                        None => self.selected = None,
-                    },
+                    keyboard::Key::Named(Named::Escape) => self.go_back(),
                     _ => {}
                 }
             }
@@ -770,8 +792,16 @@ impl App {
         Task::none()
     }
 
+    /// Escape: closes the panel, else the game page, else the per-game achievements page.
+    fn go_back(&mut self) {
+        if self.panel.take().is_none() && self.selected.take().is_none() {
+            self.achievements_game = None;
+        }
+    }
+
     fn open_game(&mut self, id: String, panel: Option<Panel>) -> Task<Message> {
         self.page = Page::Library;
+        self.achievements_game = None;
         self.selected = Some(id.clone());
         self.panel = None;
         let mut tasks = Vec::new();
@@ -820,8 +850,42 @@ impl App {
         }
     }
 
-    fn panel_shows_all(&self, game_id: &str) -> bool {
-        self.panel == Some(Panel::Achievements) && self.selected.as_deref() == Some(game_id)
+    fn shows_all_achievements(&self, game_id: &str) -> bool {
+        let page = self.selected.is_none()
+            && self.page == Page::Achievements
+            && self.achievements_game.as_deref() == Some(game_id);
+        let panel =
+            self.panel == Some(Panel::Achievements) && self.selected.as_deref() == Some(game_id);
+        page || panel
+    }
+
+    /// Full-page achievement list of one game, inside the Achievements tab.
+    fn open_achievements(&mut self, id: String) -> Task<Message> {
+        self.page = Page::Achievements;
+        self.selected = None;
+        self.panel = None;
+        self.achievements_game = Some(id.clone());
+        match self.achievements.get(&id) {
+            Some(Loadable::Ready(list)) => self.request_images(achievement_icons(list, true)),
+            Some(Loadable::Loading) => Task::none(),
+            _ => Task::done(Message::LoadAchievements(id)),
+        }
+    }
+
+    fn fetch_avatar(&self) -> Task<Message> {
+        let (Some(core), Some(account)) = (self.core.clone(), self.account.as_ref()) else {
+            return Task::none();
+        };
+        let user_id = account.user_id.clone();
+        Task::perform(
+            async move {
+                slatty_core::account::avatar_url(&core.http, &user_id)
+                    .await
+                    .ok()
+                    .flatten()
+            },
+            Message::Avatar,
+        )
     }
 
     /// Keeps the cached overview in step with a freshly read achievement list.

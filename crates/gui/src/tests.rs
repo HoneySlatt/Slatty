@@ -352,7 +352,7 @@ fn achievements_tab_lists_games_by_completion() {
     ui.click("[FAKE] Game 6").unwrap();
     assert!(
         ui.into_messages()
-            .any(|m| matches!(m, Message::SelectWith(id, Panel::Achievements) if id == "6"))
+            .any(|m| matches!(m, Message::OpenAchievements(id) if id == "6"))
     );
 }
 
@@ -588,4 +588,28 @@ fn settings_page_holds_account_library_and_install_options() {
         assert!(ui.find(label).is_ok(), "{label}");
     }
     snapshot(&mut ui, "settings");
+}
+
+#[test]
+fn achievements_tab_opens_a_dedicated_page_per_game() {
+    let mut app = app_with_achievements();
+    app.selected = None;
+    app.panel = None;
+    let _ = app.update(Message::OpenAchievements("5".into()));
+    assert_eq!(
+        (app.page, app.achievements_game.as_deref()),
+        (Page::Achievements, Some("5"))
+    );
+    let mut ui = render(&app);
+    assert!(ui.find("1 / 2 unlocked").is_ok());
+    assert!(ui.find("Time played").is_err(), "not the game page");
+    snapshot(&mut ui, "achievements-game");
+    ui.click("Unlock").unwrap();
+    assert!(
+        ui.into_messages().any(
+            |m| matches!(m, Message::AskAchievementChange(id, c) if id == "5" && c.len() == 1)
+        )
+    );
+    let _ = app.update(Message::ShowPage(Page::Achievements));
+    assert_eq!(app.achievements_game, None);
 }
