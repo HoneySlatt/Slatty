@@ -1192,31 +1192,64 @@ fn right_clicking_a_cover_opens_a_menu_with_edit_game() {
 }
 
 #[test]
-fn right_clicking_the_key_art_of_a_game_page_opens_the_same_menu() {
+fn right_clicking_the_key_art_of_a_game_page_opens_the_edit_drawer() {
     use crate::edit::EditMsg;
     use iced::mouse::{Button, Event as Mouse};
     let mut app = library_app();
-    open(&mut app, "7", None);
-    let messages: Vec<Message> = {
-        let mut ui = render(&app);
-        ui.point_at(iced::Point::new(700.0, 300.0));
+    open(&mut app, "3", None);
+    let right_click = |app: &App, at: iced::Point| -> Vec<Message> {
+        let mut ui = render(app);
+        ui.point_at(at);
         let _ = ui.simulate([iced::Event::Mouse(Mouse::ButtonPressed(Button::Right))]);
         ui.into_messages().collect()
     };
+    // The title and the buttons over the art keep the menu closed.
+    for label in ["[FAKE] Game 3", "Play"] {
+        let at = render(&app).find(label).unwrap().bounds().center();
+        let messages = right_click(&app, at);
+        assert!(
+            !messages
+                .iter()
+                .any(|m| matches!(m, Message::Edit(EditMsg::Menu(_)))),
+            "{label}: {messages:?}"
+        );
+    }
+    app.panel = Some(Panel::GameSettings);
+    let messages = right_click(&app, iced::Point::new(500.0, 300.0));
     assert!(
-        matches!(&messages[..], [Message::Edit(EditMsg::Menu(id)), Message::Edit(EditMsg::At(..))] if id == "7"),
+        matches!(&messages[..], [Message::Edit(EditMsg::Menu(id)), Message::Edit(EditMsg::At(..))] if id == "3"),
         "{messages:?}"
     );
     for m in messages {
         let _ = app.update(m);
     }
-    let mut ui = render(&app);
-    ui.click("Edit game").unwrap();
-    for m in ui.into_messages().collect::<Vec<_>>() {
-        let _ = app.update(m);
+    {
+        let mut ui = render(&app);
+        ui.click("Edit game").unwrap();
+        for m in ui.into_messages().collect::<Vec<_>>() {
+            let _ = app.update(m);
+        }
     }
-    assert_eq!(app.edit.as_ref().map(|d| d.game_id.as_str()), Some("7"));
-    assert_eq!(app.selected.as_deref(), Some("7"), "the game page stays");
+    assert_eq!(app.edit.as_ref().map(|d| d.game_id.as_str()), Some("3"));
+    assert_eq!(app.selected.as_deref(), Some("3"), "the game page stays");
+    assert_eq!(
+        app.panel, None,
+        "the edit drawer takes the open panel's place"
+    );
+    {
+        let mut ui = render(&app);
+        snapshot(&mut ui, "edit-drawer");
+        assert!(ui.find("Sorting title").is_ok());
+        assert!(ui.find("Cancel").is_ok());
+    }
+
+    // Its close button drops the draft; so does opening a panel.
+    let _ = app.update(Message::ClosePanel);
+    assert!(app.edit.is_none());
+    let _ = app.update(Message::Edit(EditMsg::Open("3".into())));
+    let _ = app.update(Message::OpenPanel(Panel::GameSettings));
+    assert!(app.edit.is_none());
+    assert_eq!(app.panel, Some(Panel::GameSettings));
 }
 
 #[test]

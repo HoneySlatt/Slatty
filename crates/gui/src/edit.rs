@@ -71,6 +71,7 @@ impl App {
             EditMsg::CloseMenu => self.context_menu = None,
             EditMsg::Open(game_id) => {
                 self.context_menu = None;
+                self.panel = None;
                 let custom = self.customs.get(&game_id).cloned().unwrap_or_default();
                 self.edit = Some(EditDraft {
                     title: self.title_of(&game_id),

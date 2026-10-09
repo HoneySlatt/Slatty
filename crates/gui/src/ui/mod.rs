@@ -67,8 +67,10 @@ impl App {
             .into(),
         };
         let page = self.with_notice(body);
-        let page = match (self.panel, self.selected_game()) {
-            (Some(panel), Some(game)) => self.with_panel(page, panel, game),
+        // On the game page, the edit form is a drawer like the panels.
+        let page = match (&self.edit, self.panel, self.selected_game()) {
+            (Some(d), _, Some(_)) => self.edit_drawer(page, d),
+            (None, Some(panel), Some(game)) => self.with_panel(page, panel, game),
             _ => page,
         };
         let dialog = self
@@ -85,7 +87,7 @@ impl App {
             Some(menu) => edit::context_menu(page, menu),
             None => page,
         };
-        let page = match &self.edit {
+        let page = match self.edit.as_ref().filter(|_| self.selected.is_none()) {
             Some(d) => self.edit_dialog(page, d),
             None => page,
         };

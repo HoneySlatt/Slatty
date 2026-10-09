@@ -1,31 +1,40 @@
-//! The dialog that changes a game's title, sorting title, cover and background.
+//! The dialog (library) and the drawer (game page) that change a game's title, sorting title,
+//! cover and background.
 
 use crate::theme::text;
 use iced::widget::{
-    Space, button, center, column, container, image, mouse_area, opaque, pin, row, space, stack,
-    text_input,
+    Space, button, center, column, container, image, mouse_area, opaque, pin, row, scrollable,
+    space, stack, text_input,
 };
-use iced::{Alignment, ContentFit, Element, Length};
+use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::custom::ImageChange;
 
 use super::note;
+use super::panels::DRAWER_WIDTH;
 use crate::edit::{Art, ContextMenu, EditDraft, EditMsg, MENU_WIDTH};
 use crate::icons::{Icon, icon};
 use crate::theme::{self, bold, tokens};
 use crate::{App, Message};
 
+/// The parts of the edit form, laid out differently by the dialog and the drawer.
+struct Form<'a> {
+    fields: Element<'a, Message>,
+    cover: Element<'a, Message>,
+    background: Element<'a, Message>,
+    actions: Element<'a, Message>,
+}
+
 impl App {
+    /// Over the library, opened from a cover.
     pub(super) fn edit_dialog<'a>(
         &'a self,
         page: Element<'a, Message>,
         d: &'a EditDraft,
     ) -> Element<'a, Message> {
         let gog_title = self.gog_titles.get(&d.game_id).map_or("", String::as_str);
-        let msg = |m| Message::Edit(m);
-        let label = |t| text(t).size(14).color(tokens().muted);
         let close = button(container(icon(Icon::X, 20.0, tokens().text)).center(24))
             .padding(10)
-            .on_press(msg(EditMsg::Cancel))
+            .on_press(Message::Edit(EditMsg::Cancel))
             .style(theme::tonal);
         let header = row![
             column![
@@ -36,6 +45,82 @@ impl App {
             .width(Length::Fill),
             close,
         ];
+        let form = self.edit_form(
+            d,
+            (PICTURE_HEIGHT * 3.0 / 4.0, PICTURE_HEIGHT),
+            (PICTURE_HEIGHT * 16.0 / 9.0, PICTURE_HEIGHT),
+        );
+        let dialog = container(
+            column![
+                header,
+                form.fields,
+                row![form.cover, form.background].spacing(24),
+                note("Click a picture to choose a file."),
+                form.actions
+            ]
+            .spacing(20),
+        )
+        .padding(26)
+        .max_width(720)
+        .style(theme::card);
+        stack![
+            page,
+            mouse_area(
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(theme::backdrop)
+            )
+            .on_press(Message::Edit(EditMsg::Cancel)),
+            center(opaque(dialog)),
+        ]
+        .into()
+    }
+
+    /// Beside the game page, opened from its key art.
+    pub(super) fn edit_drawer<'a>(
+        &'a self,
+        page: Element<'a, Message>,
+        d: &'a EditDraft,
+    ) -> Element<'a, Message> {
+        let gog_title = self.gog_titles.get(&d.game_id).map_or("", String::as_str);
+        let subtitle = text(gog_title).size(18).color(tokens().muted);
+        let form = self.edit_form(
+            d,
+            (DRAWER_PICTURE * 0.3, DRAWER_PICTURE * 0.4),
+            (DRAWER_PICTURE, DRAWER_PICTURE * 9.0 / 16.0),
+        );
+        let body = scrollable(
+            column![
+                form.fields,
+                form.cover,
+                form.background,
+                note("Click a picture to choose a file."),
+            ]
+            .spacing(20)
+            .padding(Padding::ZERO.right(14)),
+        )
+        .style(theme::scroller)
+        .height(Length::Fill);
+        self.drawer(
+            page,
+            "Edit game",
+            subtitle.into(),
+            body.into(),
+            Some(form.actions),
+        )
+    }
+
+    /// Cover and background pictures are `(width, height)`.
+    fn edit_form<'a>(
+        &'a self,
+        d: &'a EditDraft,
+        cover: (f32, f32),
+        background: (f32, f32),
+    ) -> Form<'a> {
+        let gog_title = self.gog_titles.get(&d.game_id).map_or("", String::as_str);
+        let msg = |m| Message::Edit(m);
+        let label = |t| text(t).size(14).color(tokens().muted);
         let fields = column![
             label("Title"),
             text_input(gog_title, &d.title)
@@ -52,38 +137,30 @@ impl App {
             note("Used when the library is sorted by name."),
         ]
         .spacing(8);
-        let picture = |art: Art, width: f32| {
+        let picture = |art: Art, title, (width, height): (f32, f32)| -> Element<'a, Message> {
             let content: Element<'_, Message> = match self.edit_preview(d, art) {
                 Some(h) => image(h)
                     .content_fit(ContentFit::Cover)
                     .width(width)
-                    .height(PICTURE_HEIGHT)
+                    .height(height)
                     .border_radius(tokens().cover_radius)
                     .into(),
                 None => container(text("Choose an image").size(14).color(tokens().muted))
                     .center_x(width)
-                    .center_y(PICTURE_HEIGHT)
+                    .center_y(height)
                     .style(theme::placeholder)
                     .into(),
             };
-            button(content)
-                .padding(0)
-                .on_press(msg(EditMsg::Pick(art)))
-                .style(theme::plain)
+            column![
+                label(title),
+                button(content)
+                    .padding(0)
+                    .on_press(msg(EditMsg::Pick(art)))
+                    .style(theme::plain)
+            ]
+            .spacing(8)
+            .into()
         };
-        let art = row![
-            column![
-                label("Cover"),
-                picture(Art::Cover, PICTURE_HEIGHT * 3.0 / 4.0)
-            ]
-            .spacing(8),
-            column![
-                label("Background"),
-                picture(Art::Background, PICTURE_HEIGHT * 16.0 / 9.0)
-            ]
-            .spacing(8),
-        ]
-        .spacing(24);
         let actions = row![
             button(text("Reset to default").size(14))
                 .padding([10, 16])
@@ -101,31 +178,12 @@ impl App {
         ]
         .spacing(10)
         .align_y(Alignment::Center);
-        let dialog = container(
-            column![
-                header,
-                fields,
-                art,
-                note("Click a picture to choose a file."),
-                actions
-            ]
-            .spacing(20),
-        )
-        .padding(26)
-        .max_width(720)
-        .style(theme::card);
-        stack![
-            page,
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(theme::backdrop)
-            )
-            .on_press(msg(EditMsg::Cancel)),
-            center(opaque(dialog)),
-        ]
-        .into()
+        Form {
+            fields: fields.into(),
+            cover: picture(Art::Cover, "Cover", cover),
+            background: picture(Art::Background, "Background", background),
+            actions: actions.into(),
+        }
     }
 
     /// The picture the game would have once saved.
@@ -150,6 +208,8 @@ impl App {
 }
 
 const PICTURE_HEIGHT: f32 = 200.0;
+/// Width of the background in the drawer: the drawer less its padding and the room of its scrollbar.
+const DRAWER_PICTURE: f32 = DRAWER_WIDTH - 48.0 - 14.0;
 
 /// The menu a right click on a cover opens, at the pointer. A click beside it closes it.
 pub(super) fn context_menu<'a>(

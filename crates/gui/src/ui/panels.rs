@@ -21,7 +21,7 @@ use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Loadable, Message, Panel};
 
 /// Width of the drawers beside the game page.
-const DRAWER_WIDTH: f32 = 500.0;
+pub(super) const DRAWER_WIDTH: f32 = 500.0;
 /// Narrowest game page the drawer opens beside.
 const PAGE_BESIDE_DRAWER: f32 = 760.0;
 

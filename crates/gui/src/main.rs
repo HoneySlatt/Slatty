@@ -534,9 +534,14 @@ impl App {
             Message::CloseDetail => {
                 self.selected = None;
                 self.panel = None;
+                self.edit = None;
             }
             Message::OpenPanel(panel) => return self.open_panel(panel),
-            Message::ClosePanel => self.panel = None,
+            // The edit drawer closes like the panels, without saving.
+            Message::ClosePanel => {
+                self.panel = None;
+                self.edit = None;
+            }
             Message::Cover(id, Some(bytes)) => {
                 self.covers.insert(id, image::Handle::from_bytes(bytes));
             }
@@ -689,6 +694,7 @@ impl App {
 
     fn open_game(&mut self, id: String, panel: Option<Panel>) -> Task<Message> {
         self.dialog = None;
+        self.edit = None;
         self.page = Page::Library;
         self.achievements_game = None;
         self.selected = Some(id.clone());
@@ -715,6 +721,7 @@ impl App {
         let Some(id) = self.selected.clone() else {
             return Task::none();
         };
+        self.edit = None;
         // A running download shows on the game page itself.
         if panel == Panel::Install
             && matches!(

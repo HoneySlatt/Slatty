@@ -3,8 +3,8 @@
 use crate::theme::text;
 use iced::widget::text::Wrapping;
 use iced::widget::{
-    Space, button, column, container, image, mouse_area, progress_bar, responsive, row, space,
-    stack, tooltip,
+    Space, button, column, container, image, mouse_area, opaque, progress_bar, responsive, row,
+    space, stack, tooltip,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::installer::Progress;
@@ -114,12 +114,13 @@ impl App {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(theme::hero_fade);
+        // What is drawn over the art keeps its right clicks from the art's menu.
         let front = container(
             column![
-                text(&g.title).size(52).font(bold()).line_height(1.05),
-                self.play_row(g),
-                self.session_line(g),
-                self.download_line(g),
+                opaque(text(&g.title).size(52).font(bold()).line_height(1.05)),
+                opaque(self.play_row(g)),
+                opaque(self.session_line(g)),
+                opaque(self.download_line(g)),
             ]
             .spacing(16)
             .max_width(720),
@@ -128,7 +129,7 @@ impl App {
         .width(Length::Fill)
         .height(Length::Fill)
         .align_y(Alignment::End);
-        // A right click opens the same menu as on a cover in the library.
+        // A right click on the art opens the same menu as on a cover in the library.
         mouse_area(
             stack![base, fade, front]
                 .width(Length::Fill)
