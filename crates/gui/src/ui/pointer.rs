@@ -9,13 +9,12 @@ use iced::{Element, Event, Length, Point, Rectangle, Size, Vector};
 
 pub struct RightClicks<'a, Message, Theme, Renderer> {
     content: Element<'a, Message, Theme, Renderer>,
-    /// Gets the pointer and the window's size.
-    on_press: Box<dyn Fn(Point, Size) -> Message + 'a>,
+    on_press: Box<dyn Fn(Point) -> Message + 'a>,
 }
 
 pub fn right_clicks<'a, Message, Theme, Renderer>(
     content: impl Into<Element<'a, Message, Theme, Renderer>>,
-    on_press: impl Fn(Point, Size) -> Message + 'a,
+    on_press: impl Fn(Point) -> Message + 'a,
 ) -> RightClicks<'a, Message, Theme, Renderer> {
     RightClicks {
         content: content.into(),
@@ -88,7 +87,7 @@ where
         if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) = event
             && let Some(position) = cursor.position_over(layout.bounds())
         {
-            shell.publish((self.on_press)(position, layout.bounds().size()));
+            shell.publish((self.on_press)(position));
         }
     }
 

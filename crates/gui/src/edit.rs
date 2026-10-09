@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use iced::widget::image;
-use iced::{Point, Size, Task};
+use iced::{Point, Task};
 use slatty_core::custom::{self, ImageChange};
 use slatty_core::library::LibraryGame;
 
@@ -39,8 +39,8 @@ const MENU_HEIGHT: f32 = 52.0;
 pub enum EditMsg {
     /// A cover was right-clicked; the position follows in `At`.
     Menu(String),
-    /// Where a right click happened, and the window's size.
-    At(Point, Size),
+    /// Where a right click happened.
+    At(Point),
     CloseMenu,
     Open(String),
     Title(String),
@@ -57,7 +57,8 @@ impl App {
     pub fn update_edit(&mut self, msg: EditMsg) -> Task<Message> {
         match msg {
             EditMsg::Menu(game_id) => self.menu_for = Some(game_id),
-            EditMsg::At(at, window) => {
+            EditMsg::At(at) => {
+                let window = self.window;
                 // A right click anywhere else closes the menu. Near an edge the menu opens inward.
                 self.context_menu = self.menu_for.take().map(|game_id| ContextMenu {
                     game_id,

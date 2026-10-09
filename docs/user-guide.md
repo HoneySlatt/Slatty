@@ -84,7 +84,7 @@ panels:
 | Sliders button (top right) | Game settings: folder, Proton build (used from the next launch), language and DLC |
 | ⋮ button (top right) | Manage: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
 | Cloud saves, **Manage →** | Check, sync, resolve conflicts |
-| Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page |
+| Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page (over it in a narrow window) |
 | Install button | Version, size, folder, language, DLC, Proton, start, pause, discard |
 
 Escape closes the panel, then the game page.

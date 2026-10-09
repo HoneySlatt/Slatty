@@ -27,7 +27,7 @@ use play::{PlayMsg, PlayState};
 use settings::SettingsMsg;
 
 use iced::widget::{image, operation};
-use iced::{Subscription, Task, keyboard};
+use iced::{Size, Subscription, Task, keyboard};
 use slatty_core::account::{Account, AccountInfo};
 use slatty_core::achievements::Achievement;
 use slatty_core::db::Db;
@@ -55,7 +55,11 @@ fn main() -> iced::Result {
         .title("SlattyLauncher")
         .subscription(App::subscription)
         .theme(App::theme)
-        .window_size((1440.0, 900.0))
+        .window(iced::window::Settings {
+            size: Size::new(1440.0, 900.0),
+            min_size: Some(Size::new(800.0, 560.0)),
+            ..Default::default()
+        })
         .exit_on_close_request(false)
         .run()
 }
@@ -172,6 +176,8 @@ pub struct App {
     pub edit: Option<edit::EditDraft>,
     pub menu_for: Option<String>,
     pub context_menu: Option<edit::ContextMenu>,
+    /// Size of the window, for layouts that change with it.
+    pub window: Size,
 }
 
 impl Default for App {
@@ -222,6 +228,7 @@ impl Default for App {
             edit: None,
             menu_for: None,
             context_menu: None,
+            window: Size::new(1440.0, 900.0),
         }
     }
 }
@@ -279,6 +286,7 @@ pub enum Message {
     ConfirmQuit,
     CancelQuit,
     Edit(edit::EditMsg),
+    WindowResized(Size),
     Key(keyboard::Event),
 }
 
@@ -325,6 +333,7 @@ impl App {
         Subscription::batch([
             keyboard::listen().map(Message::Key),
             iced::window::close_requests().map(|_| Message::CloseRequested),
+            iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),
         ])
     }
 
@@ -440,6 +449,7 @@ impl App {
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Edit(msg) => return self.update_edit(msg),
+            Message::WindowResized(size) => self.window = size,
             Message::DismissNotice => self.notice = None,
             Message::CloseRequested => {
                 let running = self.running_work();

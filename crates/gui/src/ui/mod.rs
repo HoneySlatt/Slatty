@@ -76,7 +76,7 @@ impl App {
             Some(work) => quit_dialog(page, work),
             None => page,
         };
-        pointer::right_clicks(page, |at, window| Message::Edit(EditMsg::At(at, window))).into()
+        pointer::right_clicks(page, |at| Message::Edit(EditMsg::At(at))).into()
     }
 
     fn selected_game(&self) -> Option<&LibraryGame> {
@@ -146,7 +146,8 @@ impl App {
             .align_y(Alignment::Center),
         )
         .padding([9, 14])
-        .width(360)
+        // Narrower in a small window, so the account button stays in view.
+        .width((self.window.width - 580.0).clamp(180.0, 360.0))
         .style(theme::outlined);
         let initial = username
             .chars()

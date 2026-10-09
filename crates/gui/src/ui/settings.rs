@@ -116,6 +116,7 @@ impl App {
         .spacing(16)
         .max_width(860);
         scrollable(container(content).padding(Padding::ZERO.top(10)))
+            .spacing(8)
             .style(theme::scroller)
             .height(Length::Fill)
             .into()

@@ -1135,17 +1135,42 @@ fn right_clicking_a_cover_opens_a_menu_with_edit_game() {
     assert_eq!(app.edit.as_ref().map(|d| d.game_id.as_str()), Some("7"));
 
     // A right click elsewhere closes the menu; near the right edge it opens inward.
-    let window = iced::Size::new(1440.0, 900.0);
     let _ = app.update(Message::Edit(EditMsg::Menu("7".into())));
-    let _ = app.update(Message::Edit(EditMsg::At(
-        iced::Point::new(1435.0, 10.0),
-        window,
-    )));
+    let _ = app.update(Message::Edit(EditMsg::At(iced::Point::new(1435.0, 10.0))));
     let menu = app.context_menu.clone().unwrap();
-    assert!(menu.at.x + crate::edit::MENU_WIDTH <= window.width);
-    let _ = app.update(Message::Edit(EditMsg::At(
-        iced::Point::new(50.0, 50.0),
-        window,
-    )));
+    assert!(menu.at.x + crate::edit::MENU_WIDTH <= app.window.width);
+    let _ = app.update(Message::Edit(EditMsg::At(iced::Point::new(50.0, 50.0))));
     assert!(app.context_menu.is_none());
+}
+
+#[test]
+fn a_narrow_window_lays_the_achievements_drawer_over_the_page() {
+    use iced::mouse::{Button, Event as Mouse};
+    let mut app = app_with_achievements();
+    let click_page = |app: &App| -> Vec<Message> {
+        let mut ui = Simulator::with_size(Default::default(), app.window, app.view());
+        ui.point_at(iced::Point::new(100.0, 300.0));
+        let _ = ui.simulate([
+            iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
+            iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+        ]);
+        ui.into_messages().collect()
+    };
+    assert!(
+        !click_page(&app)
+            .iter()
+            .any(|m| matches!(m, Message::ClosePanel)),
+        "beside the page in a wide window"
+    );
+    let _ = app.update(Message::WindowResized(Size::new(800.0, 560.0)));
+    {
+        let mut ui = Simulator::with_size(Default::default(), app.window, app.view());
+        snapshot(&mut ui, "drawer-narrow");
+    }
+    assert!(
+        click_page(&app)
+            .iter()
+            .any(|m| matches!(m, Message::ClosePanel)),
+        "over the page in a narrow window, closed by a click beside it"
+    );
 }

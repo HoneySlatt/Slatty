@@ -25,6 +25,8 @@ use crate::{App, CloudRequest, Loadable, Message, Panel};
 
 /// Width of the achievements drawer beside the game page.
 const DRAWER_WIDTH: f32 = 500.0;
+/// Narrowest game page the drawer opens beside.
+const PAGE_BESIDE_DRAWER: f32 = 760.0;
 
 impl App {
     pub fn with_panel<'a>(
@@ -614,6 +616,21 @@ impl App {
             .width(DRAWER_WIDTH)
             .height(Length::Fill)
             .style(theme::drawer);
+        // Beside the page while it keeps room for its cards, over it in a narrow window.
+        if self.window.width - DRAWER_WIDTH < PAGE_BESIDE_DRAWER {
+            return stack![
+                page,
+                mouse_area(
+                    container(Space::new())
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .style(theme::backdrop)
+                )
+                .on_press(Message::ClosePanel),
+                container(opaque(drawer)).align_right(Length::Fill),
+            ]
+            .into();
+        }
         row![
             container(page).width(Length::Fill),
             container(Space::new())
