@@ -12,7 +12,8 @@ use slatty_core::paths::Dirs;
 use slatty_core::runner::Runner;
 use slatty_core::session::Playtime;
 
-use crate::installs::{InstallMsg, InstallView, MaintenanceMsg};
+use crate::install::{InstallMsg, InstallView};
+use crate::maintenance::MaintenanceMsg;
 use crate::{App, Core, Filters, Message, Page, Panel, Shelf, Sort};
 
 const SIZE: Size = Size::new(1440.0, 900.0);
@@ -246,7 +247,7 @@ fn installed_game_page_can_be_played_and_shows_no_store_text() {
 
     app.maintenance.insert(
         "3".into(),
-        crate::installs::MaintenanceView {
+        crate::maintenance::MaintenanceView {
             busy: true,
             ..Default::default()
         },
@@ -422,8 +423,8 @@ fn games_known_only_by_play_time_are_read_again() {
     );
 }
 
-fn fake_plan() -> crate::installs::PlanInfo {
-    crate::installs::PlanInfo {
+fn fake_plan() -> crate::install::PlanInfo {
+    crate::install::PlanInfo {
         title: "[FAKE] Game 5".into(),
         version: "1.0".into(),
         language: "en-US".into(),
@@ -516,7 +517,7 @@ fn a_resumed_install_keeps_its_folder() {
     open(&mut app, "5", Some(Panel::Install));
     app.install_views.insert(
         "5".into(),
-        InstallView::Ready(crate::installs::PlanInfo {
+        InstallView::Ready(crate::install::PlanInfo {
             resumable: true,
             ..fake_plan()
         }),
@@ -664,7 +665,7 @@ fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
 
 #[test]
 fn game_settings_panel_applies_dlc_changes_only_when_something_changed() {
-    use crate::installs::ContentInfo;
+    use crate::maintenance::ContentInfo;
     use slatty_core::maintenance::Change;
     let mut app = library_app();
     open(&mut app, "3", Some(Panel::GameSettings));

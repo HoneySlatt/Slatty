@@ -1,17 +1,23 @@
 mod game;
 mod icons;
-mod installs;
+mod install;
+mod maintenance;
+mod settings;
 #[cfg(test)]
 mod tests;
 mod theme;
 mod view;
+mod work;
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use installs::{InstallMsg, InstallView, MaintenanceMsg, MaintenanceView, SettingsMsg};
+use install::{InstallMsg, InstallView};
+use maintenance::{MaintenanceMsg, MaintenanceView};
+use settings::SettingsMsg;
+use work::tokens;
 
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::widget::{image, operation};
@@ -540,8 +546,7 @@ impl App {
                 self.library_busy = true;
                 return Task::perform(
                     async move {
-                        let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-                        let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
+                        let tokens = tokens(&core).await?;
                         let games = library::fetch(&core.http, &tokens).await.map_err(err)?;
                         library::save_cache(&core.dirs, &tokens.user_id, games).map_err(err)
                     },
@@ -1040,12 +1045,7 @@ impl App {
         }
         Task::perform(
             async move {
-                let Ok(tokens) = async {
-                    let mut account = Account::load(&core.db, &core.dirs).await?;
-                    account.tokens(&core.http).await.cloned()
-                }
-                .await
-                else {
+                let Ok(tokens) = tokens(&core).await else {
                     return Vec::new();
                 };
                 let (http, tokens) = (&core.http, &tokens);
@@ -1239,8 +1239,7 @@ async fn achievement_access(
     game_id: &str,
     install: Option<Install>,
 ) -> Result<(String, String, slatty_core::secret::Secret), String> {
-    let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-    let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
+    let tokens = tokens(core).await?;
     let (client_id, token) = match &install {
         Some(i) => achievements::game_token(&core.http, &tokens, i).await,
         None => achievements::product_token(&core.http, &tokens, game_id).await,
@@ -1309,11 +1308,7 @@ async fn boot() -> Result<Boot, String> {
 
 fn overview_stream(core: Core, ids: Vec<String>) -> impl Stream<Item = Message> {
     iced::stream::channel(16, async move |mut output| {
-        let tokens = async {
-            let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-            account.tokens(&core.http).await.map_err(err).cloned()
-        }
-        .await;
+        let tokens = tokens(&core).await;
         if let Ok(tokens) = tokens {
             let (http, tokens) = (&core.http, &tokens);
             let mut results = iced::futures::stream::iter(ids)
@@ -1389,8 +1384,7 @@ async fn cloud_task(
             ..Default::default()
         },
     };
-    let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-    let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
+    let tokens = tokens(&core).await?;
     let Some(outcomes) =
         cloud::sync_game(&core.db, &core.dirs, &core.http, &tokens, &install, opts)
             .await

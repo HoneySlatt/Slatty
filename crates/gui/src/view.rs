@@ -12,7 +12,9 @@ use slatty_core::play::{CloudSummary, PlayEvent};
 
 use crate::game::{round_button, unlock_all_button};
 use crate::icons::{Icon, icon};
-use crate::installs::{InstallMsg, MaintenanceMsg, ProtonChoice, SettingsMsg};
+use crate::install::InstallMsg;
+use crate::maintenance::MaintenanceMsg;
+use crate::settings::{ProtonChoice, SettingsMsg};
 use crate::theme::{self, ACCENT, BOLD, MUTED, ON_ACCENT, SEMIBOLD, TEXT};
 use crate::{App, Filters, Interrupted, Loadable, Message, Page, Panel, Shelf, Sort};
 

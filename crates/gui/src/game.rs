@@ -14,9 +14,11 @@ use slatty_core::maintenance::Change;
 use slatty_core::runner::Runner;
 
 use crate::icons::{Icon, icon};
-use crate::installs::{ContentInfo, InstallMsg, InstallView, MaintenanceMsg, human_size};
+use crate::install::{InstallMsg, InstallView};
+use crate::maintenance::{ContentInfo, MaintenanceMsg};
 use crate::theme::{self, ACCENT, BOLD, MUTED, ON_ACCENT, SEMIBOLD, TEXT};
 use crate::view::{duration, fraction, latest_unlocked, logo, relative_day};
+use crate::work::human_size;
 use crate::{
     AchievementChange, App, CloudRequest, CloudStatus, Loadable, Message, Panel, PendingChange,
 };
