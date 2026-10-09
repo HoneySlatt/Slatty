@@ -944,15 +944,12 @@ impl App {
         )
     }
 
-    /// Seconds played: GOG's total, or the sessions slatty recorded if they add up to more.
+    /// Seconds played, as GOG records them.
     pub fn played_seconds(&self, game_id: &str) -> i64 {
-        let remote = self
-            .overview
+        self.overview
             .get(game_id)
             .and_then(|o| o.playtime_minutes)
-            .map_or(0, |m| m as i64 * 60);
-        let local = self.playtime.get(game_id).map_or(0, |p| p.seconds);
-        remote.max(local)
+            .map_or(0, |m| m as i64 * 60)
     }
 
     fn save_overview(&mut self) {
