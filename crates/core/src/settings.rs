@@ -45,21 +45,131 @@ pub fn set_favorites(db: &Db, ids: &[String]) -> Result<()> {
 }
 
 /// Proton builds already on disk (Steam compatibility tools folder).
+/// Proton builds that can run games: custom ones in Steam's `compatibilitytools.d`, Valve's own
+/// (Proton Experimental, stable, Hotfix) in every Steam library, and those umu downloaded. A build
+/// found twice (`~/.steam/steam` is the same folder, or the same name in two places) is listed once.
 pub fn proton_candidates() -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> =
-        std::fs::read_dir(home().join(".local/share/Steam/compatibilitytools.d"))
+    proton_candidates_in(&home())
+}
+
+fn proton_candidates_in(home: &Path) -> Vec<PathBuf> {
+    let mut places = Vec::new();
+    for steam in steam_roots(home) {
+        places.push(steam.join("compatibilitytools.d"));
+    }
+    for steam in steam_roots(home) {
+        places.extend(
+            steam_libraries(&steam)
+                .into_iter()
+                .map(|l| l.join("steamapps/common")),
+        );
+    }
+    places.push(home.join(".local/share/umu/compatibilitytools"));
+
+    let mut seen_dirs = std::collections::HashSet::new();
+    let mut seen_names = std::collections::HashSet::new();
+    let mut found = Vec::new();
+    for place in places {
+        let mut builds: Vec<PathBuf> = std::fs::read_dir(&place)
             .into_iter()
             .flatten()
             .flatten()
             .map(|e| e.path())
             .filter(|p| p.join("proton").is_file())
             .collect();
-    found.sort();
+        builds.sort();
+        for build in builds {
+            let real = build.canonicalize().unwrap_or_else(|_| build.clone());
+            if seen_dirs.insert(real) && seen_names.insert(build.file_name().map(|n| n.to_owned()))
+            {
+                found.push(build);
+            }
+        }
+    }
     found
+}
+
+/// Where Steam keeps its data: native, the `~/.steam/steam` link, and the Flatpak.
+fn steam_roots(home: &Path) -> Vec<PathBuf> {
+    [
+        ".local/share/Steam",
+        ".steam/steam",
+        ".var/app/com.valvesoftware.Steam/data/Steam",
+    ]
+    .iter()
+    .map(|p| home.join(p))
+    .filter(|p| p.is_dir())
+    .collect()
+}
+
+/// Library folders listed in Steam's `libraryfolders.vdf` (the main one included).
+fn steam_libraries(steam: &Path) -> Vec<PathBuf> {
+    let vdf =
+        std::fs::read_to_string(steam.join("steamapps/libraryfolders.vdf")).unwrap_or_default();
+    let mut libraries = vec![steam.to_path_buf()];
+    for line in vdf.lines() {
+        let mut quoted = line.split('"').skip(1).step_by(2);
+        if quoted.next() == Some("path")
+            && let Some(path) = quoted.next()
+        {
+            libraries.push(PathBuf::from(path.replace("\\\\", "\\")));
+        }
+    }
+    libraries
 }
 
 fn home() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build(dir: &Path) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("proton"), b"").unwrap();
+    }
+
+    #[test]
+    fn proton_builds_come_from_steam_libraries_and_umu_once_each() {
+        let home = std::env::temp_dir().join(format!("slatty-protons-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let steam = home.join(".local/share/Steam");
+        let nas = home.join("games/SteamLibrary");
+        build(&steam.join("compatibilitytools.d/GE-Proton"));
+        build(&steam.join("steamapps/common/Proton - Experimental"));
+        build(&nas.join("steamapps/common/Proton 10.0"));
+        std::fs::create_dir_all(nas.join("steamapps/common/Some Game")).unwrap();
+        build(&home.join(".local/share/umu/compatibilitytools/GE-Proton"));
+        build(&home.join(".local/share/umu/compatibilitytools/UMU-Proton-10.0-4"));
+        std::fs::write(
+            steam.join("steamapps/libraryfolders.vdf"),
+            format!(
+                "\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{}\"\n\t}}\n\t\"1\"\n\t{{\n\t\t\"path\"\t\t\"{}\"\n\t}}\n}}\n",
+                steam.display(),
+                nas.display()
+            ),
+        )
+        .unwrap();
+        std::fs::create_dir_all(home.join(".steam")).unwrap();
+        std::os::unix::fs::symlink(&steam, home.join(".steam/steam")).unwrap();
+
+        let names: Vec<String> = proton_candidates_in(&home)
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "GE-Proton",
+                "Proton - Experimental",
+                "Proton 10.0",
+                "UMU-Proton-10.0-4"
+            ]
+        );
+        std::fs::remove_dir_all(home).unwrap();
+    }
 }

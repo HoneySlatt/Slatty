@@ -91,7 +91,7 @@ impl App {
                         pick_list(choices, selected, |c| Message::Settings(
                             SettingsMsg::Proton(c)
                         ))
-                        .placeholder("No Proton found in compatibilitytools.d")
+                        .placeholder("No Proton build found (Steam or compatibilitytools.d)")
                         .style(theme::select)
                         .padding([8, 16]),
                     ]

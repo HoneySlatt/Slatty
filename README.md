@@ -40,8 +40,10 @@ See [docs/roadmap.md](docs/roadmap.md).
 
 - Linux with Wayland or X11. Development and testing happen on NixOS with niri.
 - A Secret Service keyring (GNOME Keyring, KeePassXC, KWallet with its Secret Service bridge).
-- [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and a Proton build
-  (GE-Proton, Proton-CachyOS, …) in `~/.local/share/Steam/compatibilitytools.d`.
+- [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and a Proton build: a custom one
+  (GE-Proton, Proton-CachyOS, …) in `~/.local/share/Steam/compatibilitytools.d`, one of Valve's
+  (Proton Experimental, stable, Hotfix) downloaded by Steam in any of its libraries, or one umu
+  downloaded.
 - [Comet](https://github.com/imLinguin/comet) for achievements.
 - Comet's `GalaxyCommunication.exe` dummy service, which some games need to report achievements.
 - An XDG desktop portal with a file chooser (xdg-desktop-portal-gtk, -gnome, -kde…) and libdbus

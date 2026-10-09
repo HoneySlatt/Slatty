@@ -313,8 +313,11 @@ The interface's **Settings** tab holds the account (log out), the library refres
 
 - **Default installation path:** where new games are installed unless the Install panel says
   otherwise.
-- **Default Proton:** the build new installs start with, picked from
-  `~/.local/share/Steam/compatibilitytools.d`. Each game can use another one.
+- **Default Proton:** the build new installs start with. The menus list custom builds from
+  `~/.local/share/Steam/compatibilitytools.d`, Valve's builds (Proton Experimental, stable,
+  Hotfix) that Steam downloaded in any of its libraries, and those umu downloaded. Valve's builds
+  are kept up to date by Steam; a game set to one that Steam removes needs another one chosen in its
+  settings. Each game can use another build.
 
 `slatty install --dir` and `--proton` set the same values.
 

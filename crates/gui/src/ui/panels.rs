@@ -206,7 +206,7 @@ impl App {
                             info.proton.clone().map(ProtonChoice),
                             move |c| Message::Install(InstallMsg::Proton(id.clone(), c)),
                         )
-                        .placeholder("No Proton found in compatibilitytools.d")
+                        .placeholder("No Proton build found (Steam or compatibilitytools.d)")
                         .style(theme::select)
                         .padding([8, 16]),
                     ]
