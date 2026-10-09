@@ -113,11 +113,16 @@ impl App {
         Task::none()
     }
 
+    /// Saved once the scan is done: writing the cache after each game stalls the interface.
     pub fn overview_fetched(&mut self, id: String, result: Result<GameOverview, String>) {
         if let Ok(o) = result {
             self.overview.insert(id, o);
-            self.save_overview();
         }
+    }
+
+    pub fn overview_done(&mut self) {
+        self.overview_busy = false;
+        self.save_overview();
     }
 
     pub fn playtimes_fetched(&mut self, times: Vec<(String, u64)>) {

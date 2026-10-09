@@ -404,7 +404,7 @@ impl App {
             }
             Message::ScanOverview => return self.scan_overview(true),
             Message::OverviewFetched(id, result) => self.overview_fetched(id, result),
-            Message::OverviewDone => self.overview_busy = false,
+            Message::OverviewDone => self.overview_done(),
             Message::PlaytimesFetched(times) => self.playtimes_fetched(times),
             Message::Play(game_id) => return self.start_game(game_id),
             Message::Playing(msg) => return self.on_play(msg),
