@@ -2,7 +2,7 @@
 
 use iced::widget::{
     Column, Space, button, center, checkbox, column, container, image, mouse_area, opaque,
-    pick_list, progress_bar, row, scrollable, space, stack, text,
+    pick_list, progress_bar, row, scrollable, space, stack, text, text_input,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::achievements::Achievement;
@@ -520,7 +520,34 @@ impl App {
                     human_size(info.total_download()),
                     human_size(info.total_disk())
                 )));
-                items.push(note(format!("Folder: {}", info.folder.display())));
+                if info.resumable {
+                    items.push(note(format!("Folder: {}", info.folder().display())));
+                } else {
+                    let id = g.id.clone();
+                    items.push(
+                        row![
+                            text("Install in").size(14).color(MUTED),
+                            text_input("/home/…/Games/GOG", &info.root)
+                                .on_input(move |v| {
+                                    Message::Install(InstallMsg::RootInput(id.clone(), v))
+                                })
+                                .style(theme::field)
+                                .padding([8, 12]),
+                            button(
+                                row![icon(Icon::FolderOpen, 16.0, TEXT), text("Browse").size(14)]
+                                    .spacing(8)
+                                    .align_y(Alignment::Center)
+                            )
+                            .padding([8, 16])
+                            .on_press(Message::Install(InstallMsg::Browse(g.id.clone())))
+                            .style(theme::tonal),
+                        ]
+                        .spacing(10)
+                        .align_y(Alignment::Center)
+                        .into(),
+                    );
+                    items.push(note(format!("Game folder: {}", info.folder().display())));
+                }
                 if info.resumable {
                     items.push(note(format!(
                         "Resuming an interrupted install ({}).",

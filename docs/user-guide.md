@@ -76,7 +76,7 @@ panels:
 | ⋮ button (top right) | Manage: verify, repair, check for update, uninstall |
 | Cloud saves, **Manage →** | Check, sync, resolve conflicts |
 | Achievements card | Full list, unlock or clear |
-| Install button | Version, size, language, DLC, start, pause, discard |
+| Install button | Version, size, folder, language, DLC, start, pause, discard |
 
 Escape closes the panel, then the game page.
 
@@ -111,6 +111,11 @@ slatty install <game-id> --proton ~/.local/share/Steam/compatibilitytools.d/<Pro
 
 `--proton` and `--dir` are remembered, so later installs need only the game id. The default folder
 is `~/Games/GOG`. Use `--language fr-FR` (or any language listed by `--info`) for another language.
+
+In the interface, the Install panel starts from the games folder set in Settings. **Install in**
+changes it for this game only: type a path, or use **Browse** to pick a folder with your desktop's
+file chooser (through the XDG desktop portal). The game gets its own subfolder there, shown below
+the field. An interrupted install keeps the folder it started in.
 
 **DLC.** Every owned DLC is installed by default, as Galaxy does. Use `--no-dlc` for the base game
 only, or `--dlc <id>…` to pick. `--info` lists the DLC of the build, with their size and whether you

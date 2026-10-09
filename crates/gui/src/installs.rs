@@ -1,5 +1,5 @@
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use iced::Task;
@@ -23,13 +23,19 @@ pub struct PlanInfo {
     pub languages: Vec<String>,
     pub download_size: u64,
     pub disk_size: u64,
-    pub folder: PathBuf,
+    /// Folder the game goes into, as typed; the game gets its own subfolder there.
+    pub root: String,
+    pub directory: String,
     pub dependencies: Vec<String>,
     pub resumable: bool,
     pub dlcs: Vec<DlcChoice>,
 }
 
 impl PlanInfo {
+    pub fn folder(&self) -> PathBuf {
+        Path::new(self.root.trim()).join(&self.directory)
+    }
+
     pub fn total_download(&self) -> u64 {
         self.download_size
             + self
@@ -71,6 +77,9 @@ pub enum InstallMsg {
     /// `Err(None)` means paused by the user.
     Done(String, Result<Install, Option<String>>),
     Pause(String),
+    RootInput(String, String),
+    Browse(String),
+    Browsed(String, Option<PathBuf>),
     ToggleDlc(String, String),
     Discard(String),
     Discarded(String, Result<(), String>),
@@ -113,9 +122,12 @@ impl App {
         };
         match msg {
             InstallMsg::Prepare(game_id, language) => {
+                let root = match self.install_views.get(&game_id) {
+                    Some(InstallView::Ready(info)) => PathBuf::from(info.root.trim()),
+                    _ => PathBuf::from(&self.library_root),
+                };
                 self.install_views
                     .insert(game_id.clone(), InstallView::Planning);
-                let root = PathBuf::from(&self.library_root);
                 let id = game_id.clone();
                 return Task::perform(plan(core, id, language, root), move |r| {
                     Message::Install(InstallMsg::Planned(game_id.clone(), r))
@@ -140,10 +152,15 @@ impl App {
                 let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
                     return Task::none();
                 };
+                let root = PathBuf::from(info.root.trim());
+                if !root.is_absolute() {
+                    self.notify_error("The install folder must be an absolute path.".into());
+                    return Task::none();
+                }
                 let req = InstallRequest {
                     game_id: game_id.clone(),
                     language: Some(info.language.clone()),
-                    root: PathBuf::from(&self.library_root),
+                    root,
                     proton,
                     dlcs: DlcSelection::Only(
                         info.dlcs
@@ -204,6 +221,34 @@ impl App {
                     Err(e) => self.notify_error(e),
                 }
             }
+            InstallMsg::RootInput(game_id, root) => {
+                if let Some(InstallView::Ready(info)) = self.install_views.get_mut(&game_id)
+                    && !info.resumable
+                {
+                    info.root = root;
+                }
+            }
+            InstallMsg::Browse(game_id) => {
+                let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
+                    return Task::none();
+                };
+                let start = PathBuf::from(info.root.trim());
+                return Task::perform(
+                    async move {
+                        let mut dialog = rfd::AsyncFileDialog::new().set_title("Install in");
+                        if start.is_dir() {
+                            dialog = dialog.set_directory(&start);
+                        }
+                        dialog.pick_folder().await.map(|f| f.path().to_path_buf())
+                    },
+                    move |picked| Message::Install(InstallMsg::Browsed(game_id.clone(), picked)),
+                );
+            }
+            InstallMsg::Browsed(game_id, Some(folder)) => {
+                return self
+                    .update_install(InstallMsg::RootInput(game_id, folder.display().to_string()));
+            }
+            InstallMsg::Browsed(_, None) => {}
             InstallMsg::ToggleDlc(game_id, dlc) => {
                 if let Some(InstallView::Ready(info)) = self.install_views.get_mut(&game_id)
                     && !info.resumable
@@ -292,7 +337,8 @@ async fn plan(
     .await
     .map_err(err)?;
     Ok(PlanInfo {
-        folder: root.join(plan.directory_name().map_err(err)?),
+        root: root.display().to_string(),
+        directory: plan.directory_name().map_err(err)?,
         title: plan.title,
         version: plan.build.version_name,
         language: plan.language,

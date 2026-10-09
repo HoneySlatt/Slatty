@@ -44,6 +44,8 @@ See [docs/roadmap.md](docs/roadmap.md).
   (GE-Proton, Proton-CachyOS, …) in `~/.local/share/Steam/compatibilitytools.d`.
 - [Comet](https://github.com/imLinguin/comet) for achievements.
 - Comet's `GalaxyCommunication.exe` dummy service, which some games need to report achievements.
+- An XDG desktop portal with a file chooser (xdg-desktop-portal-gtk, -gnome, -kde…) and libdbus
+  to browse for an install folder. Typing the path works without them.
 
 The Nix development shell provides umu-launcher, Comet, `GalaxyCommunication.exe` (built from
 Comet's sources) and every build dependency.
@@ -58,7 +60,7 @@ slatty-gui           # graphical interface
 ```
 
 `nix develop` puts `target/debug` on `PATH`, so `slatty` and `slatty-gui` are available right
-after `cargo build`. Without Nix you need Rust 1.89 or newer, `pkg-config`, the Wayland/X11 and
+after `cargo build`. Without Nix you need Rust 1.90 or newer, `pkg-config`, the Wayland/X11 and
 Vulkan development libraries, umu-launcher and Comet on `PATH`, and `GalaxyCommunication.exe` in
 `~/.local/share/slatty/` (or its path in `SLATTY_GALAXY_COMMUNICATION`).
 
@@ -96,6 +98,7 @@ SlattyLauncher stands on the work of others:
   for Galaxy depots, cloud storage and session handling. Parts of SlattyLauncher follow its logic.
 - [Lucide](https://lucide.dev) (ISC) provides the interface icons, in `crates/gui/assets/icons`.
 - [oxidelta](https://github.com/sockudo/oxidelta) (MIT) decodes GOG's xdelta3 patches.
+- [rfd](https://github.com/PolyMeilex/rfd) (MIT) opens the desktop's folder chooser.
 - [Heroic Games Launcher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) showed how
   save locations, Proton and Comet fit together.
 - [gogapidocs](https://gogapidocs.readthedocs.io) documents many GOG endpoints.

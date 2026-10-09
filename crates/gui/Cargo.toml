@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 chrono = "0.4.45"
 iced = { version = "0.14", features = ["image", "svg", "tokio"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 slatty-core.workspace = true
 tokio = { workspace = true, features = ["sync", "macros"] }
 tokio-util = "0.7"

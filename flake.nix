@@ -37,6 +37,7 @@
             libxcursor
             libxi
             libxrandr
+            dbus
           ];
         in
         {

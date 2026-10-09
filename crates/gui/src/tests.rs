@@ -85,7 +85,7 @@ fn snapshot(ui: &mut Simulator<'_, Message>, name: &str) {
     if let Ok(dir) = std::env::var("SLATTY_SNAPSHOT_DIR") {
         let snap = ui.snapshot(&crate::theme::theme()).unwrap();
         let path = PathBuf::from(dir).join(name);
-        let _ = std::fs::remove_file(path.with_extension("png"));
+        let _ = std::fs::remove_file(path.with_file_name(format!("{name}-wgpu.png")));
         snap.matches_image(path).unwrap();
     }
 }
@@ -377,7 +377,8 @@ fn fake_plan() -> crate::installs::PlanInfo {
         languages: vec!["en-US".into(), "fr-FR".into()],
         download_size: 3 << 30,
         disk_size: 5 << 30,
-        folder: "/games/Game 5".into(),
+        root: "/games".into(),
+        directory: "Game 5".into(),
         dependencies: vec!["MSVC2017".into()],
         resumable: false,
         dlcs: vec![
@@ -425,6 +426,52 @@ fn install_needs_a_proton_choice_then_starts() {
         ui.into_messages()
             .any(|m| matches!(m, Message::Install(InstallMsg::Start(id)) if id == "5"))
     );
+}
+
+#[test]
+fn install_folder_can_be_typed_or_browsed_but_must_be_absolute() {
+    let mut app = library_app();
+    app.proton = Some("/proton/GE-Proton".into());
+    open(&mut app, "5", Some(Panel::Install));
+    app.install_views
+        .insert("5".into(), InstallView::Ready(fake_plan()));
+    let mut ui = render(&app);
+    assert!(ui.find("Game folder: /games/Game 5").is_ok());
+    ui.click("Browse").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::Install(InstallMsg::Browse(id)) if id == "5"))
+    );
+
+    let _ = app.update_install(InstallMsg::Browsed("5".into(), Some("/mnt/ssd".into())));
+    assert!(render(&app).find("Game folder: /mnt/ssd/Game 5").is_ok());
+    let _ = app.update_install(InstallMsg::Browsed("5".into(), None));
+    assert!(render(&app).find("Game folder: /mnt/ssd/Game 5").is_ok());
+
+    let _ = app.update_install(InstallMsg::RootInput("5".into(), "games".into()));
+    let _ = app.update_install(InstallMsg::Start("5".into()));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Ready(_))
+    ));
+    assert!(app.notice.as_ref().is_some_and(|n| n.error));
+}
+
+#[test]
+fn a_resumed_install_keeps_its_folder() {
+    let mut app = library_app();
+    open(&mut app, "5", Some(Panel::Install));
+    app.install_views.insert(
+        "5".into(),
+        InstallView::Ready(crate::installs::PlanInfo {
+            resumable: true,
+            ..fake_plan()
+        }),
+    );
+    let _ = app.update_install(InstallMsg::RootInput("5".into(), "/elsewhere".into()));
+    let mut ui = render(&app);
+    assert!(ui.find("Folder: /games/Game 5").is_ok());
+    assert!(ui.find("Browse").is_err());
 }
 
 #[test]
