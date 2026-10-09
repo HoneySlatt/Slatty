@@ -69,7 +69,7 @@ opens the game page. The install button opens the install choices in a dialog ov
 which stays where it was, and so does the settings button of an installed game; the game page has
 the same choices in its drawers.
 
-Right-click a cover and choose **Edit game** to change its **Title**, its **Sorting title** (used
+Right-click a cover, or the key art of a game page, and choose **Edit game** to change its **Title**, its **Sorting title** (used
 when the library is sorted by name, for example "Witcher 3" for "The Witcher 3"), its **Cover**
 and its **Background** (the key art of the game page). Click a picture to choose an image file (PNG, JPEG,
 WebP, GIF, BMP or AVIF); it is copied into SlattyLauncher's data, so the original can be moved or

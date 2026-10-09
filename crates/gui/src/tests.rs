@@ -1192,6 +1192,34 @@ fn right_clicking_a_cover_opens_a_menu_with_edit_game() {
 }
 
 #[test]
+fn right_clicking_the_key_art_of_a_game_page_opens_the_same_menu() {
+    use crate::edit::EditMsg;
+    use iced::mouse::{Button, Event as Mouse};
+    let mut app = library_app();
+    open(&mut app, "7", None);
+    let messages: Vec<Message> = {
+        let mut ui = render(&app);
+        ui.point_at(iced::Point::new(700.0, 300.0));
+        let _ = ui.simulate([iced::Event::Mouse(Mouse::ButtonPressed(Button::Right))]);
+        ui.into_messages().collect()
+    };
+    assert!(
+        matches!(&messages[..], [Message::Edit(EditMsg::Menu(id)), Message::Edit(EditMsg::At(..))] if id == "7"),
+        "{messages:?}"
+    );
+    for m in messages {
+        let _ = app.update(m);
+    }
+    let mut ui = render(&app);
+    ui.click("Edit game").unwrap();
+    for m in ui.into_messages().collect::<Vec<_>>() {
+        let _ = app.update(m);
+    }
+    assert_eq!(app.edit.as_ref().map(|d| d.game_id.as_str()), Some("7"));
+    assert_eq!(app.selected.as_deref(), Some("7"), "the game page stays");
+}
+
+#[test]
 fn a_narrow_window_lays_the_achievements_drawer_over_the_page() {
     use iced::mouse::{Button, Event as Mouse};
     let mut app = app_with_achievements();
@@ -1889,10 +1917,7 @@ fn installing_from_the_library_stays_on_the_library() {
         snapshot(&mut ui, "install-dialog");
     }
     let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
-    assert_eq!(
-        app.dialog, None,
-        "the dialog gives way once started"
-    );
+    assert_eq!(app.dialog, None, "the dialog gives way once started");
     assert_eq!(app.selected, None, "still on the library");
     assert!(
         render(&app).find("Downloading [FAKE] Game 5").is_ok(),

@@ -3,7 +3,8 @@
 use crate::theme::text;
 use iced::widget::text::Wrapping;
 use iced::widget::{
-    Space, button, column, container, image, progress_bar, responsive, row, space, stack, tooltip,
+    Space, button, column, container, image, mouse_area, progress_bar, responsive, row, space,
+    stack, tooltip,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::installer::Progress;
@@ -13,6 +14,7 @@ use super::format::*;
 use super::panels::runner_label;
 use super::{inner, note};
 use crate::achievements::latest_unlocked;
+use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
 use crate::install::{Cancelling, InstallMsg, InstallView};
 use crate::theme::{self, bold, semibold, tokens};
@@ -126,10 +128,14 @@ impl App {
         .width(Length::Fill)
         .height(Length::Fill)
         .align_y(Alignment::End);
-        stack![base, fade, front]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        // A right click opens the same menu as on a cover in the library.
+        mouse_area(
+            stack![base, fade, front]
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .on_right_press(Message::Edit(EditMsg::Menu(g.id.clone())))
+        .into()
     }
 
     pub(super) fn play_row<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
