@@ -22,6 +22,12 @@ use crate::runner::LaunchSpec;
 /// First argument that turns a launcher binary into a session supervisor.
 pub const SUPERVISE_ARG: &str = "__slatty-supervise";
 
+/// The running binary, to start supervisors with. Unlike `current_exe`, it still works once the
+/// file was replaced on disk (an update or a rebuild while the launcher runs).
+pub fn supervisor_exe() -> PathBuf {
+    PathBuf::from("/proc/self/exe")
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SuperviseRequest {
     pub spec: LaunchSpec,

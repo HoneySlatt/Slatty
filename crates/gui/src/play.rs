@@ -92,18 +92,11 @@ fn play_stream(
     stop: tokio::sync::mpsc::UnboundedReceiver<()>,
 ) -> impl Stream<Item = PlayMsg> {
     iced::stream::channel(64, async move |mut output| {
-        let supervisor = match std::env::current_exe() {
-            Ok(p) => p,
-            Err(e) => {
-                let _ = output.send(PlayMsg::Done(Err(e.to_string()))).await;
-                return;
-            }
-        };
         let req = PlayRequest {
             game_id,
             cloud: true,
             comet: true,
-            supervisor,
+            supervisor: session::supervisor_exe(),
         };
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let run = async {

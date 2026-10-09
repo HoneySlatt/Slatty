@@ -351,7 +351,7 @@ pub async fn setup(ctx: &Ctx, args: SetupArgs) -> Result<()> {
         &ctx.http,
         &tokens,
         &install,
-        &std::env::current_exe()?,
+        &slatty_core::session::supervisor_exe(),
         args.force,
         &emit,
     )

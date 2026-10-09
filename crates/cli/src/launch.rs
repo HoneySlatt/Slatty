@@ -36,7 +36,7 @@ pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
         game_id: args.game_id,
         cloud: !args.no_cloud,
         comet: !args.no_comet,
-        supervisor: std::env::current_exe()?,
+        supervisor: slatty_core::session::supervisor_exe(),
     };
     play::play(
         &ctx.db,
