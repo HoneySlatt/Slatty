@@ -594,6 +594,11 @@ fn a_resumed_install_keeps_its_folder() {
 #[test]
 fn running_install_shows_progress_and_can_pause() {
     let mut app = library_app();
+    // 20 MiB in two seconds.
+    let mut rate = crate::install::Rate::default();
+    let start = std::time::Instant::now();
+    rate.record(start, 0);
+    rate.record(start + std::time::Duration::from_secs(2), 20 << 20);
     app.install_views.insert(
         "5".into(),
         InstallView::Running {
@@ -606,6 +611,7 @@ fn running_install_shows_progress_and_can_pause() {
             },
             cancel: tokio_util::sync::CancellationToken::new(),
             cancelling: crate::install::Cancelling::No,
+            rate,
         },
     );
     assert!(render(&app).find("Downloading [FAKE] Game 5").is_ok());
@@ -615,7 +621,8 @@ fn running_install_shows_progress_and_can_pause() {
     assert_eq!(app.panel, None);
     settle(&mut app);
     let mut ui = render(&app);
-    assert!(ui.find("1.00 GiB / 4.00 GiB · files 3/10 · 25 %").is_ok());
+    assert!(ui.find("1.00 GiB / 4.00 GiB · 10.0 MiB/s").is_ok());
+    assert!(ui.find("25 %").is_ok(), "at the end of the bar");
     snapshot(&mut ui, "install-running");
     ui.click("Pause").unwrap();
     assert!(
@@ -883,6 +890,7 @@ fn closing_asks_first_only_when_something_is_running() {
             },
             cancel: cancel.clone(),
             cancelling: crate::install::Cancelling::No,
+            rate: Default::default(),
         },
     );
     let _ = app.update(Message::CloseRequested);
@@ -1308,6 +1316,7 @@ fn cancelling_a_download_asks_then_deletes_it() {
             },
             cancel: cancel.clone(),
             cancelling: Cancelling::No,
+            rate: Default::default(),
         },
     );
     let cancelling = |app: &App| match app.install_views.get("5") {
@@ -1376,4 +1385,23 @@ fn a_build_without_language_packs_says_the_game_chooses() {
         ui.find("Language: one download holds every language; choose it in the game.")
             .is_ok()
     );
+}
+
+#[test]
+fn download_speed_follows_the_last_seconds() {
+    use std::time::Duration;
+    let mut rate = crate::install::Rate::default();
+    let start = std::time::Instant::now();
+    let at = |s: u64| start + Duration::from_millis(s * 250);
+    rate.record(at(0), 0);
+    assert_eq!(rate.per_second(), None, "not before a second");
+    rate.record(at(2), 1 << 20);
+    assert_eq!(rate.per_second(), None);
+    rate.record(at(4), 2 << 20);
+    assert_eq!(rate.per_second(), Some((2 << 20) as f64));
+    // A fast start no longer counts once it is more than three seconds old.
+    for i in 5..=40 {
+        rate.record(at(i), (2 << 20) + (i - 4) * (256 << 10));
+    }
+    assert_eq!(rate.per_second(), Some((1 << 20) as f64));
 }

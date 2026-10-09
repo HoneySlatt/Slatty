@@ -1,6 +1,8 @@
 //! Installing a game: plan, download with progress and pause, discard.
 
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use iced::Task;
 use iced::futures::Stream;
@@ -66,6 +68,7 @@ pub enum InstallView {
         progress: Progress,
         cancel: CancellationToken,
         cancelling: Cancelling,
+        rate: Rate,
     },
     Failed(String),
 }
@@ -178,6 +181,7 @@ impl App {
                         progress: Progress::default(),
                         cancel: cancel.clone(),
                         cancelling: Cancelling::No,
+                        rate: Rate::default(),
                     },
                 );
                 // The game page shows the download from here, so the window stays free.
@@ -189,10 +193,11 @@ impl App {
                 return Task::run(install_stream(core, req, cancel), |m| m);
             }
             InstallMsg::Progress(game_id, p) => {
-                if let Some(InstallView::Running { progress, .. }) =
+                if let Some(InstallView::Running { progress, rate, .. }) =
                     self.install_views.get_mut(&game_id)
                 {
                     *progress = p;
+                    rate.record(Instant::now(), p.bytes_done);
                 }
             }
             InstallMsg::Discard(game_id) => {
@@ -411,5 +416,31 @@ impl App {
         {
             *cancelling = to;
         }
+    }
+}
+
+/// Download speed over the last few seconds of progress.
+#[derive(Debug, Default)]
+pub struct Rate(VecDeque<(Instant, u64)>);
+
+impl Rate {
+    const WINDOW: Duration = Duration::from_secs(3);
+
+    pub fn record(&mut self, at: Instant, bytes: u64) {
+        self.0.push_back((at, bytes));
+        while self
+            .0
+            .get(1)
+            .is_some_and(|(t, _)| at.duration_since(*t) >= Self::WINDOW)
+        {
+            self.0.pop_front();
+        }
+    }
+
+    /// Bytes per second, once a second of progress has been seen.
+    pub fn per_second(&self) -> Option<f64> {
+        let (&(t0, b0), &(t1, b1)) = (self.0.front()?, self.0.back()?);
+        let seconds = t1.duration_since(t0).as_secs_f64();
+        (seconds >= 1.0).then(|| b1.saturating_sub(b0) as f64 / seconds)
     }
 }

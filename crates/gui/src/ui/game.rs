@@ -228,8 +228,9 @@ impl App {
             Some(InstallView::Running {
                 progress,
                 cancelling,
+                rate,
                 ..
-            }) => download_controls(g, *progress, *cancelling, false),
+            }) => download_controls(g, *progress, *cancelling, rate.per_second(), false),
             _ => Space::new().into(),
         }
     }
@@ -511,17 +512,19 @@ pub(super) fn download_controls<'a>(
     g: &'a LibraryGame,
     progress: Progress,
     cancelling: Cancelling,
+    speed: Option<f64>,
     pause: bool,
 ) -> Element<'a, Message> {
     let msg = |m: fn(String) -> InstallMsg| Message::Install(m(g.id.clone()));
-    let status = note(format!(
-        "{} / {} · files {}/{} · {:.0} %",
+    let mut status = format!(
+        "{} / {}",
         human_size(progress.bytes_done),
-        human_size(progress.bytes_total),
-        progress.files_done,
-        progress.files_total,
-        fraction(progress) * 100.0
-    ));
+        human_size(progress.bytes_total)
+    );
+    if let Some(speed) = speed {
+        status += &format!(" · {}/s", human_size(speed as u64));
+    }
+    let status = note(status);
     let buttons = (cancelling == Cancelling::No).then(|| {
         row![]
             .push(pause.then(|| {
@@ -571,9 +574,19 @@ pub(super) fn download_controls<'a>(
         Cancelling::Confirmed => Some(note("Cancelling… the downloaded files are deleted.")),
     };
     column![
-        progress_bar(0.0..=1.0, fraction(progress))
-            .girth(8)
-            .style(theme::progress),
+        row![
+            progress_bar(0.0..=1.0, fraction(progress))
+                .girth(8)
+                .style(theme::progress),
+            text(format!("{:.0} %", fraction(progress) * 100.0))
+                .size(14)
+                .font(SEMIBOLD)
+                // A fixed width, so the bar keeps its length as the digits change.
+                .width(48)
+                .align_x(Alignment::End),
+        ]
+        .spacing(14)
+        .align_y(Alignment::Center),
         row![container(status).width(Length::Fill)]
             .push(buttons)
             .align_y(Alignment::Center),

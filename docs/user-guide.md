@@ -87,8 +87,9 @@ panels:
 | Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page (over it in a narrow window) |
 | Install button | Version, size, folder, language, DLC, Proton, start, discard |
 
-Once started, a download shows on the game page itself: the big button pauses it (then resumes
-it), and **Cancel** beside its progress deletes it after asking. The rest of the launcher stays
+Once started, a download shows on the game page itself, with its progress, its percentage and its
+speed over the last seconds. The big button pauses it (then resumes it), and **Cancel** deletes it
+after asking. The rest of the launcher stays
 usable meanwhile; the banner at the top of the Library tab leads back to the game.
 
 Escape closes the panel, then the game page.

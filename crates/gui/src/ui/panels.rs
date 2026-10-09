@@ -97,8 +97,15 @@ impl App {
             Some(InstallView::Running {
                 progress,
                 cancelling,
+                rate,
                 ..
-            }) => items.push(download_controls(g, *progress, *cancelling, true)),
+            }) => items.push(download_controls(
+                g,
+                *progress,
+                *cancelling,
+                rate.per_second(),
+                true,
+            )),
             Some(InstallView::Ready(info)) => {
                 items.push(
                     text(format!("Version {}", info.version))
