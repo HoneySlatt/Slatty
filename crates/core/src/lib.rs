@@ -9,6 +9,7 @@ pub mod doctor;
 pub mod error;
 pub mod fsutil;
 pub mod galaxy;
+pub mod galaxy_service;
 pub mod gameinfo;
 pub mod http;
 pub mod install;

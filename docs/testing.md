@@ -37,8 +37,9 @@ This writes PNG snapshots of the tested screens.
 These are ignored by default:
 
 ```sh
-# Real Proton: a throwaway prefix, a detached Windows process, prefix creation
-TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored proton prefix
+# Real Proton: a throwaway prefix, a detached Windows process, prefix creation,
+# the Galaxy dummy service (needs SLATTY_GALAXY_COMMUNICATION, set by the dev shell)
+TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored proton prefix galaxy_service
 
 # Real Comet with fake tokens: tokens never in argv, handoff file removed, clean shutdown
 cargo test -- --ignored comet

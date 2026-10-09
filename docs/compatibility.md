@@ -21,6 +21,12 @@ Proton-CachyOS.
 | 2026-10-09 | Update check (`slatty update`) | OK | Undertale reported up to date |
 | 2026-10-09 | Owned DLC detection (`slatty install --info`) | OK | Cyberpunk 2077: Phantom Liberty owned and selected; free REDmod listed as not owned (not added to the account). The Witcher 3 GOTY: no separate DLC |
 
+## Runners
+
+| Date | Runner | Result | Notes |
+|---|---|---|---|
+| 2026-10-09 | Proton-GE (Steam Linux Runtime 4) with umu-launcher 1.4.4 | Fails | umu picks the `steamrt4-arm64` runtime on x86_64 and nothing starts. Use Proton-CachyOS or UMU-Proton |
+
 ## Games
 
 | Date | Game (id) | Version | Setup | Feature | Result | Notes |
@@ -45,3 +51,5 @@ Proton-CachyOS.
 - A game-folder dependency.
 - Cloud deletions.
 - An achievement earned in game and reported through Comet.
+- A game that needs the Galaxy dummy service. The registration itself was checked under
+  UMU-Proton 10.0-4 in a throwaway prefix.

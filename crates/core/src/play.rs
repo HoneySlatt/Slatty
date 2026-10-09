@@ -12,6 +12,7 @@ use crate::comet::Comet;
 use crate::db::Db;
 use crate::doctor::find_in_path;
 use crate::error::{Error, Result};
+use crate::galaxy_service;
 use crate::install::Install;
 use crate::paths::Dirs;
 use crate::runner;
@@ -176,6 +177,31 @@ pub async fn play(
         .await;
         if let Err(e) = result {
             emit(PlayEvent::SetupSkipped(e.to_string()));
+        }
+    }
+
+    if req.comet
+        && install
+            .runner
+            .prefix()
+            .is_some_and(|p| !galaxy_service::installed(p))
+    {
+        match galaxy_service::find(dirs) {
+            Some(exe) => {
+                emit(PlayEvent::SetupStep(
+                    "registering the Galaxy service".into(),
+                ));
+                if let Err(e) = galaxy_service::ensure(dirs, &install, &exe, &req.supervisor).await
+                {
+                    emit(PlayEvent::SetupWarning(format!(
+                        "Galaxy service not registered: {e}"
+                    )));
+                }
+            }
+            None => emit(PlayEvent::SetupWarning(format!(
+                "GalaxyCommunication.exe not found (see {}); some games will not report achievements",
+                galaxy_service::ENV
+            ))),
         }
     }
 

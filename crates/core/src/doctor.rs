@@ -64,9 +64,26 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
                 p.display().to_string()
             }),
     };
+    let service = match crate::galaxy_service::find(dirs) {
+        Some(p) => Check {
+            name: "galaxy service",
+            ok: true,
+            detail: p.display().to_string(),
+        },
+        None => Check {
+            name: "galaxy service",
+            ok: false,
+            detail: format!(
+                "GalaxyCommunication.exe not found: set {} or copy it to {}",
+                crate::galaxy_service::ENV,
+                dirs.data.display()
+            ),
+        },
+    };
     vec![
         tool("umu-launcher", "umu-run"),
         tool("comet", "comet"),
+        service,
         keyring,
         port,
         runtime,

@@ -33,8 +33,7 @@ against real GOG services; details are in [docs/compatibility.md](docs/compatibi
 | DLC and language: choose at install, add, remove or switch later | ownership detection yes, changes not yet |
 | Post-install setup: GOG scripts, game-folder dependencies, redistributables | GOG script yes (Undertale), redistributables not yet |
 
-Not supported yet: native Linux installers, macOS and Windows hosts, GOG installer
-scripts and redistributables, the Galaxy dummy service some games need for achievements.
+Not supported yet: native Linux installers, macOS and Windows hosts.
 See [docs/roadmap.md](docs/roadmap.md).
 
 ## Requirements
@@ -44,8 +43,10 @@ See [docs/roadmap.md](docs/roadmap.md).
 - [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and a Proton build
   (GE-Proton, Proton-CachyOS, …) in `~/.local/share/Steam/compatibilitytools.d`.
 - [Comet](https://github.com/imLinguin/comet) for achievements.
+- Comet's `GalaxyCommunication.exe` dummy service, which some games need to report achievements.
 
-The Nix development shell provides umu-launcher, Comet and every build dependency.
+The Nix development shell provides umu-launcher, Comet, `GalaxyCommunication.exe` (built from
+Comet's sources) and every build dependency.
 
 ## Build and run
 
@@ -58,7 +59,8 @@ slatty-gui           # graphical interface
 
 `nix develop` puts `target/debug` on `PATH`, so `slatty` and `slatty-gui` are available right
 after `cargo build`. Without Nix you need Rust 1.89 or newer, `pkg-config`, the Wayland/X11 and
-Vulkan development libraries, and umu-launcher and Comet on `PATH`.
+Vulkan development libraries, umu-launcher and Comet on `PATH`, and `GalaxyCommunication.exe` in
+`~/.local/share/slatty/` (or its path in `SLATTY_GALAXY_COMMUNICATION`).
 
 ## Quick start
 

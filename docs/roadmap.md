@@ -31,11 +31,11 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 - **DLC and languages.** Owned DLC installed by default; add, remove or switch language later.
 - **Post-install setup.** GOG script interpreter or setup programs, game-folder dependencies, shared
   redistributables.
+- **Galaxy dummy service.** Comet's `GalaxyCommunication` service registered in each prefix, for
+  games whose Galaxy SDK needs it to report achievements.
 
 ## Next
 
-- **Galaxy dummy service.** Some games report achievements only when it is registered in the
-  prefix.
 - **Smaller updates.** Reuse unchanged chunks of changed files, or GOG's binary patches.
 
 ## Planned

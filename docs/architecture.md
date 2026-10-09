@@ -33,6 +33,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `play` | Full play flow: prefix, cloud, Comet, session, upload, achievement diff |
 | `cloud` | Save locations, local scan, three-way plan, transport, sync executor, diagnostics |
 | `comet` | Supervised Comet process |
+| `galaxy_service` | Comet's dummy `GalaxyCommunication` service, registered in game prefixes |
 | `achievements` | Achievement list, manual unlock and clear |
 | `settings` | Games folder, default Proton |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
@@ -136,6 +137,13 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
 - **Shutdown.** Comet is stopped with SIGINT, so pending requests can finish.
 - **Achievement report.** Achievements are read before and after the session, so the report reflects
   what GOG actually recorded.
+- **Galaxy service.** Some Galaxy SDK versions only reach Comet when a `GalaxyCommunication` Windows
+  service exists, as GOG Galaxy installs one. Before the first session with Comet, the play flow
+  registers Comet's dummy service in the prefix (`sc create`, plus the `GalaxyClient\paths`
+  registry value), then copies the executable to
+  `C:\ProgramData\GOG.com\Galaxy\redists\`. The copy comes last, so its presence means the
+  registration completed. Wine stops the service with the last game process, so session tracking
+  is unaffected.
 
 ## Storage
 

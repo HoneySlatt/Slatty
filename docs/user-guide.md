@@ -109,7 +109,8 @@ A launch goes through these steps:
    --dry-run` shows what it would run; `--force` runs it again.
 2. Cloud saves are synchronised. If both sides changed, the launch stops and asks you to choose
    (see [cloud saves](#cloud-saves)). Offline, the game starts with your local saves.
-3. Comet starts, so the game can report achievements.
+3. Comet starts, so the game can report achievements. Before the first session, Comet's dummy
+   `GalaxyCommunication` service is registered in the prefix; some games need it to reach Comet.
 4. The game runs. SlattyLauncher waits until **every** game process has exited, not only the
    launcher.
 5. Cloud saves are uploaded, Comet stops, and newly recorded achievements are listed.
@@ -258,7 +259,7 @@ The interface's **Settings** panel holds:
 | `~/.local/share/slatty/diagnostics/` | Cloud copies downloaded by `slatty cloud diff` |
 | `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | Comet's data and configuration |
 | `~/.cache/slatty/<user id>/` | Library and covers; safe to delete |
-| `~/.local/state/slatty/logs/` | Game, prefix creation and Comet logs |
+| `~/.local/state/slatty/logs/` | Game, prefix creation, setup, Galaxy service and Comet logs |
 
 Comet's log may contain game client identifiers; review it before sharing.
 
@@ -270,6 +271,6 @@ Comet's log may contain game client identifiers; review it before sharing.
 | "secret storage unavailable" | A Secret Service keyring must be running and unlocked. |
 | A game does not start | `~/.local/state/slatty/logs/game-<id>.log`. `slatty launch-spec <id>` shows the exact command. |
 | The first launch fails while creating the prefix | `~/.local/state/slatty/logs/prefix-<id>.log` |
-| Achievements are not reported | `~/.local/state/slatty/logs/comet.log`; some games need the Galaxy dummy service, which is not supported yet. |
+| Achievements are not reported | `~/.local/state/slatty/logs/comet.log`. `slatty doctor` must find `GalaxyCommunication.exe`; the launch output says whether the Galaxy service was registered. |
 | A cloud conflict blocks the launch | `slatty cloud diff <id>`, then `slatty cloud sync <id> --prefer local` or `--prefer remote`. |
 | The session was interrupted (crash, power loss) | The next launch reports it. Check `slatty cloud status <id>` before playing. |
