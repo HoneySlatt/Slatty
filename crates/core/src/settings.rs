@@ -9,6 +9,7 @@ const FAVORITES: &str = "favorites";
 const INTERFACE_FONT: &str = "interface_font";
 const INTERFACE_THEME: &str = "interface_theme";
 const COVER_WIDTH: &str = "cover_width";
+const LIBRARY_SORT: &str = "library_sort";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -46,6 +47,15 @@ pub fn cover_width(db: &Db) -> Result<Option<f32>> {
 
 pub fn set_cover_width(db: &Db, width: f32) -> Result<()> {
     db.set_setting(COVER_WIDTH, Some(&width.round().to_string()))
+}
+
+/// Order of the library grid, by name.
+pub fn library_sort(db: &Db) -> Result<Option<String>> {
+    db.setting(LIBRARY_SORT)
+}
+
+pub fn set_library_sort(db: &Db, sort: &str) -> Result<()> {
+    db.set_setting(LIBRARY_SORT, Some(sort))
 }
 
 /// Built-in theme the interface starts from, by name; `None` for its own.

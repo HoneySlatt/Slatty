@@ -58,7 +58,8 @@ dot says you are signed in.
 **Library** shows your games as covers. Above the grid:
 
 - the shelf menu shows **All** games, the **Installed** ones or your **Favorites**;
-- the sort menu orders by name, most recently played or most played;
+- the sort menu orders by name, most recently played or most played, and is kept for the next
+  start;
 - the filter button shows games for Windows or Linux, with achievements, or with cloud saves.
 
 The size of the covers is set in Settings → Appearance.

@@ -361,6 +361,7 @@ pub struct Boot {
     jobs: Vec<(String, Interrupted)>,
     customs: HashMap<String, slatty_core::custom::Custom>,
     cover_width: Option<f32>,
+    sort: Option<Sort>,
 }
 
 impl std::fmt::Debug for Core {
@@ -450,6 +451,9 @@ impl App {
                 self.overview = boot.overview;
                 self.interrupted = boot.jobs;
                 self.customs = boot.customs;
+                if let Some(sort) = boot.sort {
+                    self.sort = sort;
+                }
                 if let Some(width) = boot.cover_width {
                     self.card_width = width.clamp(COVER_WIDTHS.0, COVER_WIDTHS.1);
                 }
@@ -501,7 +505,15 @@ impl App {
                 self.panel = None;
             }
             Message::ShowShelf(shelf) => self.shelf = shelf,
-            Message::SortBy(sort) => self.sort = sort,
+            Message::SortBy(sort) => {
+                self.sort = sort;
+                // Kept for the next start.
+                if let Some(core) = &self.core
+                    && let Err(e) = slatty_core::settings::set_library_sort(&core.db, sort.key())
+                {
+                    self.notify_error(e.to_string());
+                }
+            }
             Message::ToggleFilters => self.filters_open = !self.filters_open,
             Message::SetFilters(f) => return self.set_filters(f),
             Message::ToggleFavorite(id) => self.toggle_favorite(id),
@@ -778,6 +790,9 @@ async fn boot() -> Result<Boot, String> {
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let customs = slatty_core::custom::all(&db).map_err(err)?;
     let cover_width = slatty_core::settings::cover_width(&db).map_err(err)?;
+    let sort = slatty_core::settings::library_sort(&db)
+        .map_err(err)?
+        .and_then(|s| Sort::from_key(&s));
     let playtime = session::playtime(&db).map_err(err)?;
     InstallJob::forget_finished(&db).map_err(err)?;
     let jobs = InstallJob::list(&db)
@@ -807,5 +822,6 @@ async fn boot() -> Result<Boot, String> {
         jobs,
         customs,
         cover_width,
+        sort,
     })
 }

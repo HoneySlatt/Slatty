@@ -1853,3 +1853,18 @@ fn cover_size_is_set_in_settings_and_kept() {
     // A size saved by the former slider shows as the nearest one offered.
     assert_eq!(crate::settings::CoverSize::of(200.0).0, 130);
 }
+
+#[test]
+fn the_library_order_is_kept() {
+    let mut app = library_app();
+    let _ = app.update(Message::SortBy(Sort::MostPlayed));
+    let db = app.core.as_ref().unwrap().db.clone();
+    let saved = slatty_core::settings::library_sort(&db).unwrap();
+    assert_eq!(
+        saved.as_deref().and_then(Sort::from_key),
+        Some(Sort::MostPlayed)
+    );
+    for s in Sort::ALL {
+        assert_eq!(Sort::from_key(s.key()), Some(s));
+    }
+}

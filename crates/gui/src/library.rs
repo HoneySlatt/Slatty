@@ -49,6 +49,20 @@ impl Sort {
         Sort::RecentlyPlayed,
         Sort::MostPlayed,
     ];
+
+    /// How it is stored in the settings.
+    pub fn key(self) -> &'static str {
+        match self {
+            Sort::NameAsc => "name",
+            Sort::NameDesc => "name-desc",
+            Sort::RecentlyPlayed => "recently-played",
+            Sort::MostPlayed => "most-played",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Sort> {
+        Sort::ALL.into_iter().find(|s| s.key() == key)
+    }
 }
 
 impl fmt::Display for Sort {
