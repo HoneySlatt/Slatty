@@ -89,7 +89,7 @@ Cloud requests use a game-scoped token and the Galaxy user agent string used by 
 | Use | Request | Source | Status |
 |---|---|---|---|
 | Total play time | `GET https://gameplay.gog.com/games/{product_id}/users/{user_id}/sessions` with the account token; returns `{"time_sum": <minutes>}` only | Heroic | Verified (Hollow Knight: 3175 min, as shown by Galaxy) |
-| Report a session | `POST` to the same URL with `{"session_date": <start, Unix seconds>, "time": <minutes>}` | Heroic | Implemented; not yet checked against GOG |
+| Report a session | `POST` to the same URL with `{"session_date": <start, Unix seconds>, "time": <minutes>}` | Heroic | Verified (Undertale, 4 min, added to the GOG total) |
 | Last played date | None found: the endpoint above, `galaxy-library` releases and `gameplay.gog.com/users/{id}/games/stats` have no such field; profile stats need the website session | — | Not available |
 | Galaxy service for the SDK | `GalaxyCommunication` Windows service registered in the prefix, plus `HKLM\SOFTWARE\WOW6432Node\GOG.com\GalaxyClient\paths` `client` | Comet, Heroic | Registration verified under Proton; not yet with a game that needs it |
 

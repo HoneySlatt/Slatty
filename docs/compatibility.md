@@ -20,6 +20,7 @@ Proton-CachyOS.
 | 2026-10-09 | Manual achievement unlock | OK | Hollow Knight, `--unlock NEGLECT`; read back from GOG with its date |
 | 2026-10-09 | Update check (`slatty update`) | OK | Undertale reported up to date |
 | 2026-10-09 | Owned DLC detection (`slatty install --info`) | OK | Cyberpunk 2077: Phantom Liberty owned and selected; free REDmod listed as not owned (not added to the account). The Witcher 3 GOTY: no separate DLC |
+| 2026-10-09 | Play time | OK | Total read from GOG matches GOG Galaxy (Hollow Knight); a 4-minute Undertale session launched by slatty was accepted and counted; a 13-second one was not sent |
 
 ## Runners
 
@@ -53,6 +54,5 @@ Proton-CachyOS.
 - A game-folder dependency.
 - Cloud deletions.
 - An achievement earned in game and reported through Comet.
-- Reporting a session's play time to GOG.
 - A game that needs the Galaxy dummy service. The registration itself was checked under
   UMU-Proton 10.0-4 in a throwaway prefix.
