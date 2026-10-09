@@ -4794,7 +4794,6 @@ dependencies = [
  "slatty-core",
  "tokio",
  "tokio-util",
- "tracing",
  "tracing-subscriber",
 ]
 
