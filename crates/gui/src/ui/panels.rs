@@ -19,6 +19,7 @@ use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
 use crate::install::{InstallMsg, InstallView};
 use crate::maintenance::{ContentInfo, MaintenanceMsg};
+use crate::settings::{ProtonChoice, SettingsMsg};
 use crate::theme::{self, BOLD, SEMIBOLD, tokens};
 use crate::{App, CloudRequest, Loadable, Message, Panel};
 
@@ -192,9 +193,27 @@ impl App {
                         info.dependencies.join(", ")
                     )));
                 }
-                if self.proton.is_none() {
-                    items.push(note("Choose a Proton version in Settings."));
-                }
+                let id = g.id.clone();
+                items.push(
+                    row![
+                        text("Proton").size(14).color(tokens().muted),
+                        pick_list(
+                            self.proton_choices
+                                .iter()
+                                .cloned()
+                                .map(ProtonChoice)
+                                .collect::<Vec<_>>(),
+                            info.proton.clone().map(ProtonChoice),
+                            move |c| Message::Install(InstallMsg::Proton(id.clone(), c)),
+                        )
+                        .placeholder("No Proton found in compatibilitytools.d")
+                        .style(theme::select)
+                        .padding([8, 16]),
+                    ]
+                    .spacing(12)
+                    .align_y(Alignment::Center)
+                    .into(),
+                );
                 let busy = self.installing().is_some();
                 let mut actions = row![
                     button(
@@ -208,7 +227,7 @@ impl App {
                     )
                     .padding([12, 22])
                     .on_press_maybe(
-                        (!busy && self.proton.is_some())
+                        (!busy && info.proton.is_some())
                             .then(|| Message::Install(InstallMsg::Start(g.id.clone()))),
                     )
                     .style(theme::primary)
@@ -237,11 +256,32 @@ impl App {
         };
         let view = self.maintenance.get(&g.id);
         let busy = self.maintenance_busy(&g.id);
-        let mut col = column![
-            note(format!("Folder: {}", install.path.display())),
-            note(runner_label(install)),
-        ]
-        .spacing(10);
+        let runner: Element<'_, Message> = match &install.runner {
+            Runner::Umu { proton, .. } => {
+                let id = g.id.clone();
+                row![
+                    text("Proton").size(14).color(tokens().muted),
+                    pick_list(
+                        self.proton_choices
+                            .iter()
+                            .cloned()
+                            .map(ProtonChoice)
+                            .collect::<Vec<_>>(),
+                        Some(ProtonChoice(proton.clone())),
+                        move |c| Message::Settings(SettingsMsg::GameProton(id.clone(), c)),
+                    )
+                    .style(theme::select)
+                    .padding([8, 16]),
+                    note("Used from the next launch."),
+                ]
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .into()
+            }
+            _ => note(runner_label(install)),
+        };
+        let mut col =
+            column![note(format!("Folder: {}", install.path.display())), runner,].spacing(10);
         match view.and_then(|v| v.content.as_ref()) {
             Some(c) => col = col.push(self.content_panel(&g.id, c, busy)),
             None => {

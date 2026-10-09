@@ -468,6 +468,7 @@ fn fake_plan() -> crate::install::PlanInfo {
         disk_size: 5 << 30,
         root: "/games".into(),
         directory: "Game 5".into(),
+        proton: Some("/proton/GE-Proton".into()),
         dependencies: vec!["MSVC2017".into()],
         resumable: false,
         dlcs: vec![
@@ -497,17 +498,24 @@ fn fake_dlc(
 fn install_needs_a_proton_choice_then_starts() {
     let mut app = library_app();
     open(&mut app, "5", Some(Panel::Install));
-    app.install_views
-        .insert("5".into(), InstallView::Ready(fake_plan()));
+    app.install_views.insert(
+        "5".into(),
+        InstallView::Ready(crate::install::PlanInfo {
+            proton: None,
+            ..fake_plan()
+        }),
+    );
     let mut ui = render(&app);
-    assert!(ui.find("Choose a Proton version in Settings.").is_ok());
     let _ = ui.click("Start install");
     assert!(
         !ui.into_messages()
             .any(|m| matches!(m, Message::Install(InstallMsg::Start(_))))
     );
 
-    app.proton = Some("/proton/GE-Proton".into());
+    let _ = app.update(Message::Install(InstallMsg::Proton(
+        "5".into(),
+        crate::settings::ProtonChoice("/proton/GE-Proton".into()),
+    )));
     let mut ui = render(&app);
     snapshot(&mut ui, "install-ready");
     ui.click("Start install").unwrap();
@@ -766,8 +774,8 @@ fn settings_page_holds_account_library_and_install_options() {
         "testeur",
         "Log out",
         "Refresh library",
-        "Games folder",
-        "Proton",
+        "Default installation path",
+        "Default Proton",
     ] {
         assert!(ui.find(label).is_ok(), "{label}");
     }
@@ -969,4 +977,39 @@ fn achievements_go_from_the_most_common_to_the_rarest() {
     let mut ui = render(&app);
     let page: Vec<_> = expected.iter().map(|n| place(&mut ui, n)).collect();
     assert!(page.is_sorted(), "page, row by row: {page:?}");
+}
+
+#[test]
+fn an_installed_game_can_change_its_proton() {
+    let mut app = library_app();
+    let core = app.core.clone().unwrap();
+    app.installs["3"].save(&core.db).unwrap();
+    let other = std::env::temp_dir().join(format!("slatty-gui-proton-{}", std::process::id()));
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(other.join("proton"), b"").unwrap();
+    app.proton_choices = vec!["/proton/GE-Proton".into(), other.clone()];
+    open(&mut app, "3", Some(Panel::GameSettings));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Used from the next launch.").is_ok());
+        snapshot(&mut ui, "game-settings-proton");
+    }
+
+    let _ = app.update(Message::Settings(crate::settings::SettingsMsg::GameProton(
+        "3".into(),
+        crate::settings::ProtonChoice(other.clone()),
+    )));
+    let saved = slatty_core::install::Install::get(&core.db, "3")
+        .unwrap()
+        .unwrap();
+    for install in [&app.installs["3"], &saved] {
+        assert_eq!(
+            install.runner,
+            Runner::Umu {
+                proton: other.clone(),
+                prefix: "/prefixes/jeu3".into()
+            }
+        );
+    }
+    std::fs::remove_dir_all(other).unwrap();
 }

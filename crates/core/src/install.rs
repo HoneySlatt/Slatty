@@ -72,6 +72,31 @@ impl Install {
     }
 }
 
+/// Runs a game with another Proton build from its next launch on; its prefix is kept. A session
+/// already running keeps the build it started with.
+pub fn set_proton(db: &Db, game_id: &str, proton: &Path) -> Result<Install> {
+    let mut install = Install::get(db, game_id)?
+        .ok_or_else(|| Error::NotFound(format!("{game_id} is not installed")))?;
+    let Runner::Umu {
+        proton: current, ..
+    } = &mut install.runner
+    else {
+        return Err(Error::Refused(format!(
+            "{} does not run through Proton",
+            install.title
+        )));
+    };
+    if !proton.join("proton").is_file() {
+        return Err(Error::Refused(format!(
+            "{} is not a Proton build",
+            proton.display()
+        )));
+    }
+    *current = proton.to_path_buf();
+    install.save(db)?;
+    Ok(install)
+}
+
 const SELECT: &str = "SELECT game_id, title, platform, path, client_id, runner FROM installs";
 
 fn from_row(row: &Row<'_>) -> rusqlite::Result<Result<Install>> {
@@ -202,6 +227,37 @@ mod tests {
         install.save(&db).unwrap();
         assert_eq!(Install::get(&db, "42").unwrap(), Some(install));
         assert_eq!(Install::list(&db).unwrap().len(), 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn proton_can_be_changed_and_the_prefix_is_kept() {
+        let root = fixture("proton");
+        let db = Db::in_memory().unwrap();
+        let other = root.join("Proton-B");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("proton"), b"").unwrap();
+        let runner = Runner::Umu {
+            proton: "/p".into(),
+            prefix: "/x".into(),
+        };
+        from_dir(&root.join("Game"), None, runner)
+            .unwrap()
+            .save(&db)
+            .unwrap();
+
+        assert!(matches!(
+            set_proton(&db, "42", &root.join("not-proton")),
+            Err(Error::Refused(_))
+        ));
+        set_proton(&db, "42", &other).unwrap();
+        assert_eq!(
+            Install::get(&db, "42").unwrap().unwrap().runner,
+            Runner::Umu {
+                proton: other,
+                prefix: "/x".into()
+            }
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 

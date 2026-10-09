@@ -20,7 +20,7 @@ impl App {
             .map(ProtonChoice)
             .collect();
         let selected = self.proton.clone().map(ProtonChoice);
-        let label = |t| text(t).size(15).width(180).color(tokens().muted);
+        let label = |t| text(t).size(15).width(210).color(tokens().muted);
         let cache_note = match self.fetched_at {
             Some(ts) => format!("Last refreshed {}", local_time(ts)),
             None => "Never refreshed".into(),
@@ -72,7 +72,7 @@ impl App {
                 "Installs",
                 vec![
                     row![
-                        label("Games folder"),
+                        label("Default installation path"),
                         text_input("/home/…/Games/GOG", &self.library_root)
                             .on_input(|v| Message::Settings(SettingsMsg::RootInput(v)))
                             .on_submit(Message::Settings(SettingsMsg::SaveRoot))
@@ -87,7 +87,7 @@ impl App {
                     .align_y(Alignment::Center)
                     .into(),
                     row![
-                        label("Proton"),
+                        label("Default Proton"),
                         pick_list(choices, selected, |c| Message::Settings(
                             SettingsMsg::Proton(c)
                         ))

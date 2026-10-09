@@ -74,11 +74,11 @@ panels:
 
 | Where | Panel |
 |---|---|
-| Sliders button (top right) | Game settings: folder, Proton, language and DLC |
+| Sliders button (top right) | Game settings: folder, Proton build (used from the next launch), language and DLC |
 | ⋮ button (top right) | Manage: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
 | Cloud saves, **Manage →** | Check, sync, resolve conflicts |
 | Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page |
-| Install button | Version, size, folder, language, DLC, start, pause, discard |
+| Install button | Version, size, folder, language, DLC, Proton, start, pause, discard |
 
 Escape closes the panel, then the game page.
 
@@ -115,10 +115,12 @@ slatty install <game-id> --proton ~/.local/share/Steam/compatibilitytools.d/<Pro
 `--proton` and `--dir` are remembered, so later installs need only the game id. The default folder
 is `~/Games/GOG`. Use `--language fr-FR` (or any language listed by `--info`) for another language.
 
-In the interface, the Install panel starts from the games folder set in Settings. **Install in**
-changes it for this game only: type a path, or use **Browse** to pick a folder with your desktop's
-file chooser (through the XDG desktop portal). The game gets its own subfolder there, shown below
-the field. An interrupted install keeps the folder it started in.
+In the interface, the Install panel starts from the default installation path and the default
+Proton set in Settings. **Install in** changes the folder for this game only: type a path, or use
+**Browse** to pick a folder with your desktop's file chooser (through the XDG desktop portal). The
+game gets its own subfolder there, shown below the field. An interrupted install keeps the folder it
+started in. **Proton** picks the build this game runs with; the game settings panel can change it
+later, from the next launch on, keeping the game's prefix.
 
 **DLC.** Every owned DLC is installed by default, as Galaxy does. Use `--no-dlc` for the base game
 only, or `--dlc <id>…` to pick. `--info` lists the DLC of the build, with their size and whether you
@@ -304,8 +306,10 @@ belong to them.
 
 The interface's **Settings** tab holds the account (log out), the library refresh, and:
 
-- **Games folder:** where new games are installed.
-- **Proton:** the build used for new installs, picked from `~/.local/share/Steam/compatibilitytools.d`.
+- **Default installation path:** where new games are installed unless the Install panel says
+  otherwise.
+- **Default Proton:** the build new installs start with, picked from
+  `~/.local/share/Steam/compatibilitytools.d`. Each game can use another one.
 
 `slatty install --dir` and `--proton` set the same values.
 

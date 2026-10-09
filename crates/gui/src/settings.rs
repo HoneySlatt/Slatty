@@ -1,4 +1,4 @@
-//! Settings page actions: games folder and default Proton.
+//! Settings page actions: default installation path and default Proton.
 
 use std::fmt;
 use std::path::PathBuf;
@@ -27,6 +27,8 @@ pub enum SettingsMsg {
     RootInput(String),
     SaveRoot,
     Proton(ProtonChoice),
+    /// Proton build of one installed game, used from its next launch.
+    GameProton(String, ProtonChoice),
 }
 
 impl App {
@@ -39,7 +41,7 @@ impl App {
             SettingsMsg::SaveRoot => {
                 let path = PathBuf::from(self.library_root.trim());
                 if !path.is_absolute() {
-                    self.notify_error("The games folder must be an absolute path.".into());
+                    self.notify_error("The default installation path must be absolute.".into());
                 } else if let Err(e) = settings::set_library_root(&core.db, &path) {
                     self.notify_error(e.to_string());
                 }
@@ -47,6 +49,14 @@ impl App {
             SettingsMsg::Proton(choice) => {
                 match settings::set_default_proton(&core.db, &choice.0) {
                     Ok(()) => self.proton = Some(choice.0),
+                    Err(e) => self.notify_error(e.to_string()),
+                }
+            }
+            SettingsMsg::GameProton(game_id, choice) => {
+                match slatty_core::install::set_proton(&core.db, &game_id, &choice.0) {
+                    Ok(install) => {
+                        self.installs.insert(game_id, install);
+                    }
                     Err(e) => self.notify_error(e.to_string()),
                 }
             }

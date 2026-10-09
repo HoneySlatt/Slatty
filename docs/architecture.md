@@ -24,7 +24,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `db` | SQLite state database with versioned migrations |
 | `library` | Galaxy library and gamesdb metadata, per-account cache, covers, key art and images |
 | `gameinfo` | `goggame-<id>.info` parsing, case-insensitive Windows path resolution |
-| `install` | Installed-game records |
+| `install` | Installed-game records, Proton build of each game |
 | `galaxy` | Content system: builds, build metadata, depot manifests, secure links, chunks from the fastest CDN endpoint |
 | `installer` | Install plans, staged verified downloads, resumable jobs, install records |
 | `maintenance` | Verify, repair, uninstall, updates and content changes |
@@ -38,7 +38,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `achievements` | Achievement list, manual unlock and clear |
 | `overview` | Per-game achievement counts and cloud save support, cached per account |
 | `playtime` | Play time read from GOG, finished sessions reported to GOG |
-| `settings` | Games folder, default Proton, favorites |
+| `settings` | Default installation path, default Proton, favorites |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
 
 ## Interface modules
@@ -57,7 +57,7 @@ live under `ui/`.
 | `achievements` | Loading achievements, confirmed manual changes |
 | `install` | Install plan, download with progress, pause, discard |
 | `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
-| `settings` | Games folder and default Proton |
+| `settings` | Default installation path, default Proton, and the Proton build of each installed game |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
 | `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages; `format` for text shown to the user |
 | `theme`, `icons` | Design tokens (`Tokens`: every colour, and the corner radii of the redesigned pages) and the widget styles built from them; Lucide icons. Views never name a colour, so a custom theme is another `Tokens` |

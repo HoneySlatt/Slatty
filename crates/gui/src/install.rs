@@ -10,6 +10,7 @@ use slatty_core::installer::{
 };
 use tokio_util::sync::CancellationToken;
 
+use crate::settings::ProtonChoice;
 use crate::work::{paused_or, progress_stream, tokens};
 use crate::{App, Core, Message, err};
 
@@ -27,6 +28,8 @@ pub struct PlanInfo {
     pub dependencies: Vec<String>,
     pub resumable: bool,
     pub dlcs: Vec<DlcChoice>,
+    /// Proton build the game will run with: the default from Settings unless changed here.
+    pub proton: Option<PathBuf>,
 }
 
 impl PlanInfo {
@@ -76,6 +79,7 @@ pub enum InstallMsg {
     Done(String, Result<Install, Option<String>>),
     Pause(String),
     RootInput(String, String),
+    Proton(String, ProtonChoice),
     Browse(String),
     Browsed(String, Option<PathBuf>),
     ToggleDlc(String, String),
@@ -99,14 +103,16 @@ impl App {
         };
         match msg {
             InstallMsg::Prepare(game_id, language) => {
-                let root = match self.install_views.get(&game_id) {
-                    Some(InstallView::Ready(info)) => PathBuf::from(info.root.trim()),
-                    _ => PathBuf::from(&self.library_root),
+                let (root, proton) = match self.install_views.get(&game_id) {
+                    Some(InstallView::Ready(info)) => {
+                        (PathBuf::from(info.root.trim()), info.proton.clone())
+                    }
+                    _ => (PathBuf::from(&self.library_root), self.proton.clone()),
                 };
                 self.install_views
                     .insert(game_id.clone(), InstallView::Planning);
                 let id = game_id.clone();
-                return Task::perform(plan(core, id, language, root), move |r| {
+                return Task::perform(plan(core, id, language, root, proton), move |r| {
                     Message::Install(InstallMsg::Planned(game_id, r))
                 });
             }
@@ -122,11 +128,11 @@ impl App {
                     self.notify_error("Another install is already running.".into());
                     return Task::none();
                 }
-                let Some(proton) = self.proton.clone() else {
-                    self.notify_error("Choose a Proton version in Settings first.".into());
+                let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
                     return Task::none();
                 };
-                let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
+                let Some(proton) = info.proton.clone() else {
+                    self.notify_error("Choose a Proton version first.".into());
                     return Task::none();
                 };
                 let root = PathBuf::from(info.root.trim());
@@ -197,6 +203,11 @@ impl App {
                     Err(e) => self.notify_error(e),
                 }
             }
+            InstallMsg::Proton(game_id, choice) => {
+                if let Some(InstallView::Ready(info)) = self.install_views.get_mut(&game_id) {
+                    info.proton = Some(choice.0);
+                }
+            }
             InstallMsg::RootInput(game_id, root) => {
                 if let Some(InstallView::Ready(info)) = self.install_views.get_mut(&game_id)
                     && !info.resumable
@@ -265,6 +276,7 @@ async fn plan(
     game_id: String,
     language: Option<String>,
     root: PathBuf,
+    proton: Option<PathBuf>,
 ) -> Result<PlanInfo, String> {
     let tokens = tokens(&core).await?;
     let job = InstallJob::load(&core.db, &game_id).map_err(err)?;
@@ -289,6 +301,7 @@ async fn plan(
     .map_err(err)?;
     Ok(PlanInfo {
         root: root.display().to_string(),
+        proton,
         directory: plan.directory_name().map_err(err)?,
         title: plan.title,
         version: plan.build.version_name,
