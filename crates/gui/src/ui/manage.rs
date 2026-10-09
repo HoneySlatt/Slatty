@@ -1,6 +1,7 @@
 //! The Manage drawer: verify, repair, update and uninstall an installed game.
 
-use iced::widget::{Column, Space, button, column, container, row, scrollable, text};
+use crate::theme::text;
+use iced::widget::{Column, Space, button, column, container, row, scrollable};
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 use slatty_core::maintenance::Change;
@@ -8,7 +9,7 @@ use slatty_core::maintenance::Change;
 use super::{inner, note};
 use crate::icons::{Icon, icon};
 use crate::maintenance::MaintenanceMsg;
-use crate::theme::{self, SEMIBOLD, tokens};
+use crate::theme::{self, semibold, tokens};
 use crate::{App, Message};
 
 impl App {
@@ -48,7 +49,7 @@ impl App {
         if view.is_some_and(|v| v.update_available) {
             col = col.push(
                 button(
-                    container(text("Update now").size(16).font(SEMIBOLD)).center_x(Length::Fill),
+                    container(text("Update now").size(16).font(semibold())).center_x(Length::Fill),
                 )
                 .padding([14, 0])
                 .width(Length::Fill)

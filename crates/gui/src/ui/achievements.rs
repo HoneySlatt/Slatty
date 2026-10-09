@@ -1,8 +1,8 @@
 //! Achievements tab, the per-game achievements page, and the widgets they share with the game page.
 
+use crate::theme::text;
 use iced::widget::{
     Column, Space, button, column, container, grid, image, progress_bar, row, scrollable, space,
-    text,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::achievements::Achievement;
@@ -11,7 +11,7 @@ use slatty_core::library::LibraryGame;
 use super::{inner, note, round_button};
 use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
-use crate::theme::{self, BOLD, SEMIBOLD, tokens};
+use crate::theme::{self, bold, semibold, tokens};
 use crate::{AchievementChange, App, Loadable, Message, Page, PendingChange};
 
 /// Height of a game card on the Achievements tab.
@@ -30,7 +30,7 @@ impl App {
             .unwrap_or_else(|| format!("{} games", games.len()));
         let header = row![
             column![
-                text("Achievements").size(32).font(BOLD),
+                text("Achievements").size(32).font(bold()),
                 text(format!(
                     "{unlocked} / {total} unlocked · {scanning} · {perfect} completed"
                 ))
@@ -92,7 +92,7 @@ impl App {
         };
         let share = done as f32 / total as f32;
         let details = column![
-            text(&g.title).size(17).font(SEMIBOLD),
+            text(&g.title).size(17).font(semibold()),
             space().height(Length::Fill),
             row![
                 text(format!("{done} / {total}")).size(16),
@@ -170,11 +170,11 @@ impl App {
                 let summary = row![
                     cover,
                     column![
-                        text(&g.title).size(34).font(BOLD),
+                        text(&g.title).size(34).font(bold()),
                         row![
                             text(format!("{done} / {} unlocked", list.len()))
                                 .size(16)
-                                .font(SEMIBOLD),
+                                .font(semibold()),
                             text(format!("{:.0}%", share * 100.0))
                                 .size(15)
                                 .color(tokens().muted),
@@ -265,7 +265,7 @@ impl App {
                 "Hidden achievement"
             })
             .size(16)
-            .font(SEMIBOLD)
+            .font(semibold())
             .color(if done { tokens().text } else { tokens().muted })
         ]
         .spacing(3)

@@ -54,10 +54,14 @@ fn main() -> iced::Result {
         .with_writer(std::io::stderr)
         .init();
     // Before the first frame, so the window never shows another look first.
-    if let Ok(dirs) = Dirs::from_system()
-        && let Err(e) = theme::load(&theme::file(&dirs.config))
-    {
-        let _ = THEME_ERROR.set(e);
+    if let Ok(dirs) = Dirs::from_system() {
+        if let Err(e) = theme::load(&theme::file(&dirs.config)) {
+            let _ = THEME_ERROR.set(e);
+        }
+        let family = Db::open(&dirs.db_file())
+            .ok()
+            .and_then(|db| slatty_core::settings::interface_font(&db).ok().flatten());
+        theme::set_font(family.as_deref());
     }
     iced::application(App::boot, App::update, App::view)
         .title("SlattyLauncher")
@@ -68,6 +72,7 @@ fn main() -> iced::Result {
             min_size: Some(Size::new(800.0, 560.0)),
             ..Default::default()
         })
+        .default_font(theme::font())
         .exit_on_close_request(false)
         .run()
 }
@@ -199,6 +204,8 @@ pub struct App {
     pub context_menu: Option<edit::ContextMenu>,
     /// A download being planned again to resume on its own at start-up.
     pub auto_resume: Option<String>,
+    /// Font families of the system, listed when Settings first opens.
+    pub font_families: Vec<String>,
     /// Size of the window, for layouts that change with it.
     pub window: Size,
     /// Fade in a new page, and the key art of a game once downloaded; `now` is the time of the
@@ -257,6 +264,7 @@ impl Default for App {
             menu_for: None,
             context_menu: None,
             auto_resume: None,
+            font_families: Vec::new(),
             window: Size::new(1440.0, 900.0),
             page_shown: Animation::new(true),
             art_shown: Animation::new(true),
@@ -467,6 +475,9 @@ impl App {
                 self.panel = None;
             }
             Message::ShowPage(page) => {
+                if page == Page::Settings && self.font_families.is_empty() {
+                    self.font_families = theme::font_families();
+                }
                 self.page = page;
                 self.achievements_game = None;
                 self.selected = None;

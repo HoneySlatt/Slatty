@@ -22,6 +22,22 @@ impl fmt::Display for ProtonChoice {
     }
 }
 
+/// A font family to pick, or the system's default.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FontChoice {
+    Default,
+    Family(String),
+}
+
+impl fmt::Display for FontChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FontChoice::Default => f.write_str("System default"),
+            FontChoice::Family(name) => f.write_str(name),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum SettingsMsg {
     RootInput(String),
@@ -35,6 +51,8 @@ pub enum SettingsMsg {
     /// Opens the theme file in the desktop's editor.
     EditTheme,
     ReloadTheme,
+    /// The interface font, from the families installed on the system.
+    Font(FontChoice),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
 }
@@ -108,6 +126,16 @@ impl App {
                     .spawn();
                 if let Err(e) = opened {
                     self.notify_error(format!("Could not open the theme file: {e}"));
+                }
+            }
+            SettingsMsg::Font(choice) => {
+                let family = match &choice {
+                    FontChoice::Default => None,
+                    FontChoice::Family(name) => Some(name.as_str()),
+                };
+                match settings::set_interface_font(&core.db, family) {
+                    Ok(()) => theme::set_font(family),
+                    Err(e) => self.notify_error(e.to_string()),
                 }
             }
             SettingsMsg::ReloadTheme => match theme::load(&theme::file(&core.dirs.config)) {

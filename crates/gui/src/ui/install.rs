@@ -1,7 +1,8 @@
 //! The Install drawer: what will be downloaded, where, in which language, with which Proton.
 
+use crate::theme::text;
 use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
+    Column, Space, button, column, container, pick_list, row, scrollable, text_input,
 };
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
@@ -13,7 +14,7 @@ use super::panels::dlc_row;
 use crate::icons::{Icon, icon};
 use crate::install::{InstallMsg, InstallView, PlanInfo};
 use crate::settings::ProtonChoice;
-use crate::theme::{self, SEMIBOLD, tokens};
+use crate::theme::{self, semibold, tokens};
 use crate::{App, Message};
 
 impl App {
@@ -67,7 +68,7 @@ impl App {
         items = items.push(
             text(format!("Version {}", info.version))
                 .size(16)
-                .font(SEMIBOLD),
+                .font(semibold()),
         );
         items = items.push(Space::new().height(4));
         items = items.push(sizes(info));
@@ -100,6 +101,7 @@ impl App {
                 text_input("/home/…/Games/GOG", &info.root)
                     .on_input(move |v| Message::Install(InstallMsg::RootInput(id.clone(), v)))
                     .style(theme::field)
+                    .font(theme::font())
                     .padding([10, 14]),
                 button(
                     row![
@@ -148,6 +150,7 @@ impl App {
                 move |l| Message::Install(InstallMsg::Prepare(id.clone(), Some(l.0))),
             )
             .style(theme::select)
+            .font(theme::font())
             .padding([10, 14])
             .width(Length::Fill)
             .into()
@@ -182,6 +185,7 @@ impl App {
             )
             .placeholder("No Proton build found (Steam or compatibilitytools.d)")
             .style(theme::select)
+            .font(theme::font())
             .padding([10, 14])
             .width(Length::Fill)
             .into(),
@@ -202,6 +206,7 @@ impl App {
                 Message::Install(InstallMsg::Version(id.clone(), v.build_id))
             })
             .style(theme::select)
+            .font(theme::font())
             .padding([10, 14])
             .width(Length::Fill)
             .into()
@@ -233,7 +238,7 @@ impl App {
                     "Start install"
                 })
                 .size(17)
-                .font(SEMIBOLD),
+                .font(semibold()),
             )
             .center_x(Length::Fill),
         )
@@ -277,7 +282,7 @@ fn sizes<'a>(info: &PlanInfo) -> Element<'a, Message> {
             icon(ic, 24.0, tokens().text),
             Space::new().height(6),
             text(label).size(14).color(tokens().muted),
-            text(value).size(15).font(SEMIBOLD).color(if alert {
+            text(value).size(15).font(semibold()).color(if alert {
                 tokens().danger
             } else {
                 tokens().text

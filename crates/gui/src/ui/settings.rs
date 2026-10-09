@@ -1,16 +1,15 @@
 //! Settings tab and the sign-in screen.
 
-use iced::widget::{
-    Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
+use crate::theme::text;
+use iced::widget::{Space, button, column, container, pick_list, row, scrollable, text_input};
 use iced::{Alignment, Element, Length, Padding};
 
 use super::card;
 use super::format::*;
 use super::widgets::logo;
 use crate::icons::{Icon, icon};
-use crate::settings::{ProtonChoice, SettingsMsg};
-use crate::theme::{self, BOLD, SEMIBOLD, tokens};
+use crate::settings::{FontChoice, ProtonChoice, SettingsMsg};
+use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Message};
 
 impl App {
@@ -29,7 +28,7 @@ impl App {
             None => "Never refreshed".into(),
         };
         let content = column![
-            text("Settings").size(30).font(BOLD),
+            text("Settings").size(30).font(bold()),
             card(
                 "Account",
                 vec![
@@ -80,6 +79,7 @@ impl App {
                             .on_input(|v| Message::Settings(SettingsMsg::RootInput(v)))
                             .on_submit(Message::Settings(SettingsMsg::SaveRoot))
                             .style(theme::field)
+                            .font(theme::font())
                             .padding([8, 12]),
                         button(
                             row![
@@ -103,6 +103,7 @@ impl App {
                         ))
                         .placeholder("No Proton build found (Steam or compatibilitytools.d)")
                         .style(theme::select)
+                        .font(theme::font())
                         .padding([8, 16]),
                     ]
                     .spacing(10)
@@ -137,14 +138,14 @@ impl App {
         let busy = self.login_busy;
         let content = column![
             logo(72.0),
-            text("Sign in to GOG").size(30).font(BOLD),
+            text("Sign in to GOG").size(30).font(bold()),
             text(
                 "Sign-in happens in your browser; SlattyLauncher never sees your password. \
                  Once signed in, the browser shows an almost blank page on embed.gog.com: \
                  copy that page's full address and paste it below."
             )
             .color(tokens().muted),
-            button(text("Open the GOG sign-in page").font(SEMIBOLD))
+            button(text("Open the GOG sign-in page").font(semibold()))
                 .padding([12, 22])
                 .on_press(Message::OpenLoginPage)
                 .style(theme::primary),
@@ -156,6 +157,7 @@ impl App {
                 .on_input(Message::LoginInput)
                 .on_submit(Message::SubmitLogin)
                 .style(theme::field)
+                .font(theme::font())
                 .padding([10, 14])
                 .width(Length::Fill),
                 button(text("Paste"))
@@ -199,7 +201,26 @@ impl App {
         } else {
             row![action("Create theme file", SettingsMsg::CreateTheme)]
         };
+        let current = match theme::font().family {
+            iced::font::Family::Name(name) => FontChoice::Family(name.to_string()),
+            _ => FontChoice::Default,
+        };
+        let fonts: Vec<FontChoice> = std::iter::once(FontChoice::Default)
+            .chain(self.font_families.iter().cloned().map(FontChoice::Family))
+            .collect();
         column![
+            row![
+                text("Font").size(15).width(210).color(tokens().muted),
+                pick_list(fonts, Some(current), |f| Message::Settings(
+                    SettingsMsg::Font(f)
+                ))
+                .style(theme::select)
+                .font(theme::font())
+                .padding([8, 16])
+                .width(Length::Fill),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
             row![
                 text("Theme file").size(15).width(210).color(tokens().muted),
                 text(path.display().to_string())

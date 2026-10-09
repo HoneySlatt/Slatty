@@ -1,9 +1,9 @@
 //! Game page: key art, play b        let base: Element<'_, Message> = match self.hero_art(g) {tton, stats, cloud and achievements summaries.
 
+use crate::theme::text;
 use iced::widget::text::Wrapping;
 use iced::widget::{
-    Space, button, column, container, image, progress_bar, responsive, row, space, stack, text,
-    tooltip,
+    Space, button, column, container, image, progress_bar, responsive, row, space, stack, tooltip,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::installer::Progress;
@@ -15,7 +15,7 @@ use super::{inner, note};
 use crate::achievements::latest_unlocked;
 use crate::icons::{Icon, icon};
 use crate::install::{Cancelling, InstallMsg, InstallView};
-use crate::theme::{self, BOLD, SEMIBOLD, tokens};
+use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, CloudStatus, Loadable, Message, Panel};
 
 /// Height of the summary cards under the key art.
@@ -114,7 +114,7 @@ impl App {
             .style(theme::hero_fade);
         let front = container(
             column![
-                text(&g.title).size(52).font(BOLD).line_height(1.05),
+                text(&g.title).size(52).font(bold()).line_height(1.05),
                 self.play_row(g),
                 self.session_line(g),
                 self.download_line(g),
@@ -143,7 +143,7 @@ impl App {
             };
             button(
                 container(
-                    row![icon(ic, 22.0, color), text(label).size(20).font(BOLD)]
+                    row![icon(ic, 22.0, color), text(label).size(20).font(bold())]
                         .spacing(14)
                         .align_y(Alignment::Center),
                 )
@@ -260,7 +260,10 @@ impl App {
                     .center(40)
                     .style(theme::circle),
                 column![
-                    text(value).size(18).font(SEMIBOLD).wrapping(Wrapping::None),
+                    text(value)
+                        .size(18)
+                        .font(semibold())
+                        .wrapping(Wrapping::None),
                     text(label)
                         .size(13)
                         .color(tokens().muted)
@@ -309,7 +312,7 @@ impl App {
                 column![
                     text("Cloud saves")
                         .size(15)
-                        .font(SEMIBOLD)
+                        .font(semibold())
                         .wrapping(Wrapping::None),
                     // The state icon matters once there are saves to keep in step.
                     row![]
@@ -439,7 +442,7 @@ impl App {
                 // (the achievements drawer narrows the page).
                 responsive(move |size| {
                     let summary = column![
-                        text("Achievements").size(15).font(SEMIBOLD),
+                        text("Achievements").size(15).font(semibold()),
                         row![
                             text(format!("{done} / {}", list.len())).size(14),
                             space().width(Length::Fill),
@@ -592,7 +595,7 @@ pub(super) fn download_controls<'a>(
                 .style(theme::progress),
             text(format!("{:.0} %", fraction(progress) * 100.0))
                 .size(14)
-                .font(SEMIBOLD)
+                .font(semibold())
                 // A fixed width, so the bar keeps its length as the digits change.
                 .width(48)
                 .align_x(Alignment::End),

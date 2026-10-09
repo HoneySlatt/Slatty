@@ -346,8 +346,9 @@ The interface's **Settings** tab holds the account (log out), the library refres
 
 `slatty install --dir` and `--proton` set the same values.
 
-**Appearance** shows the theme file, `~/.config/slatty/theme.toml`: create it, edit it, and
-reload it to change colours, corners and the page transition. See [theming](theming.md).
+**Appearance** picks the interface font among those installed, applied at once, and shows the
+theme file, `~/.config/slatty/theme.toml`: create it, edit it, and reload it to change colours,
+corners and the page transition. See [theming](theming.md).
 
 ## Where data is stored
 

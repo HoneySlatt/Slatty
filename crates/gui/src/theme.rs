@@ -279,14 +279,78 @@ impl Tokens {
     }
 }
 
-pub const BOLD: Font = Font {
-    weight: font::Weight::Bold,
-    ..Font::DEFAULT
-};
-pub const SEMIBOLD: Font = Font {
-    weight: font::Weight::Semibold,
-    ..Font::DEFAULT
-};
+static FONT: RwLock<Font> = RwLock::new(Font::DEFAULT);
+/// The weight drawn for "semibold": many families only come in regular and bold.
+static SEMIBOLD: RwLock<font::Weight> = RwLock::new(font::Weight::Semibold);
+
+/// The font family of the interface, chosen in Settings; the system's sans-serif by default.
+pub fn font() -> Font {
+    *FONT.read().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Uses `family` from the next frame, or the default font with `None`.
+pub fn set_font(family: Option<&str>) {
+    let font = match family {
+        // Font names live as long as the process; a few bytes per change of font.
+        Some(name) => Font::with_name(Box::leak(name.to_string().into_boxed_str())),
+        None => Font::DEFAULT,
+    };
+    let semibold = match family {
+        Some(name) if !has_weight(name, 600) => font::Weight::Bold,
+        _ => font::Weight::Semibold,
+    };
+    *FONT.write().unwrap_or_else(|e| e.into_inner()) = font;
+    *SEMIBOLD.write().unwrap_or_else(|e| e.into_inner()) = semibold;
+}
+
+/// Whether the system has `family` in this weight (400 regular, 600 semibold, 700 bold).
+fn has_weight(family: &str, weight: u16) -> bool {
+    let mut system = iced::advanced::graphics::text::font_system()
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
+    system
+        .raw()
+        .db()
+        .faces()
+        .any(|f| f.weight.0 == weight && f.families.iter().any(|(name, _)| name == family))
+}
+
+pub fn bold() -> Font {
+    Font {
+        weight: font::Weight::Bold,
+        ..font()
+    }
+}
+
+pub fn semibold() -> Font {
+    Font {
+        weight: *SEMIBOLD.read().unwrap_or_else(|e| e.into_inner()),
+        ..font()
+    }
+}
+
+/// Text in the interface's font: use it instead of `iced::widget::text`.
+pub fn text<'a>(content: impl iced::widget::text::IntoFragment<'a>) -> iced::widget::Text<'a> {
+    iced::widget::text(content).font(font())
+}
+
+/// Font families installed on the system, by name, as the interface can use them.
+pub fn font_families() -> Vec<String> {
+    let mut system = iced::advanced::graphics::text::font_system()
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
+    let mut names: Vec<String> = system
+        .raw()
+        .db()
+        .faces()
+        .filter_map(|f| f.families.first().map(|(name, _)| name.clone()))
+        // Symbol and icon fonts have no letters to show.
+        .filter(|n| !["Icons", "Emoji", "Symbol"].iter().any(|s| n.contains(s)))
+        .collect();
+    names.sort_by_key(|n| n.to_lowercase());
+    names.dedup();
+    names
+}
 
 pub fn theme() -> Theme {
     Theme::custom(

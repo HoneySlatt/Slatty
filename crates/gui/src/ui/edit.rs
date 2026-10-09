@@ -1,8 +1,9 @@
 //! The dialog that changes a game's title, sorting title, cover and background.
 
+use crate::theme::text;
 use iced::widget::{
     Space, button, center, column, container, image, mouse_area, opaque, pin, row, space, stack,
-    text, text_input,
+    text_input,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::custom::ImageChange;
@@ -10,7 +11,7 @@ use slatty_core::custom::ImageChange;
 use super::note;
 use crate::edit::{Art, ContextMenu, EditDraft, EditMsg, MENU_WIDTH};
 use crate::icons::{Icon, icon};
-use crate::theme::{self, BOLD, tokens};
+use crate::theme::{self, bold, tokens};
 use crate::{App, Message};
 
 impl App {
@@ -28,7 +29,7 @@ impl App {
             .style(theme::tonal);
         let header = row![
             column![
-                text("Edit game").size(26).font(BOLD),
+                text("Edit game").size(26).font(bold()),
                 text(gog_title).size(14).color(tokens().muted),
             ]
             .spacing(4)
@@ -40,11 +41,13 @@ impl App {
             text_input(gog_title, &d.title)
                 .on_input(|v| Message::Edit(EditMsg::Title(v)))
                 .style(theme::field)
+                .font(theme::font())
                 .padding([10, 14]),
             label("Sorting title"),
             text_input(&d.title, &d.sort_title)
                 .on_input(|v| Message::Edit(EditMsg::SortTitle(v)))
                 .style(theme::field)
+                .font(theme::font())
                 .padding([10, 14]),
             note("Used when the library is sorted by name."),
         ]

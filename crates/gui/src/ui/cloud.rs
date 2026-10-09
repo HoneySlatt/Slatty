@@ -1,6 +1,7 @@
 //! The Cloud saves drawer: where the saves are, what a sync would do, and the sync itself.
 
-use iced::widget::{Column, Space, button, column, container, row, scrollable, text};
+use crate::theme::text;
+use iced::widget::{Column, Space, button, column, container, row, scrollable};
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::cloud::sync::Prefer;
 use slatty_core::library::LibraryGame;
@@ -8,7 +9,7 @@ use slatty_core::library::LibraryGame;
 use super::note;
 use crate::cloud::{CloudRequest, Counts, SaveLocation};
 use crate::icons::{Icon, icon};
-use crate::theme::{self, SEMIBOLD, tokens};
+use crate::theme::{self, semibold, tokens};
 use crate::{App, Message};
 
 impl App {
@@ -93,7 +94,7 @@ impl App {
             .get(&g.id)
             .is_some_and(slatty_core::runner::prefix_ready);
         let labelled = |ic, label, color| {
-            row![icon(ic, 20.0, color), text(label).size(16).font(SEMIBOLD)]
+            row![icon(ic, 20.0, color), text(label).size(16).font(semibold())]
                 .spacing(12)
                 .align_y(Alignment::Center)
         };
@@ -156,7 +157,7 @@ fn counts<'a>(c: Counts) -> Element<'a, Message> {
             icon(ic, 22.0, t.muted),
             text(label).size(15).width(Length::Fill),
             if n > 0 {
-                text(n.to_string()).size(15).font(SEMIBOLD)
+                text(n.to_string()).size(15).font(semibold())
             } else {
                 text(n.to_string()).size(15).color(t.muted)
             },

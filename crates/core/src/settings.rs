@@ -6,6 +6,7 @@ use crate::error::Result;
 const LIBRARY_ROOT: &str = "library_root";
 const DEFAULT_PROTON: &str = "default_proton";
 const FAVORITES: &str = "favorites";
+const INTERFACE_FONT: &str = "interface_font";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -25,6 +26,15 @@ pub fn default_proton(db: &Db) -> Result<Option<PathBuf>> {
 
 pub fn set_default_proton(db: &Db, path: &Path) -> Result<()> {
     db.set_setting(DEFAULT_PROTON, Some(&path.to_string_lossy()))
+}
+
+/// Font family the interface uses; `None` for the system's default.
+pub fn interface_font(db: &Db) -> Result<Option<String>> {
+    db.setting(INTERFACE_FONT)
+}
+
+pub fn set_interface_font(db: &Db, family: Option<&str>) -> Result<()> {
+    db.set_setting(INTERFACE_FONT, family)
 }
 
 /// Game ids marked as favorites.

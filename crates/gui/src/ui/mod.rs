@@ -14,8 +14,9 @@ mod pointer;
 mod settings;
 mod widgets;
 
+use crate::theme::text;
 use iced::widget::{
-    Column, Space, button, center, column, container, mouse_area, opaque, row, space, stack, text,
+    Column, Space, button, center, column, container, mouse_area, opaque, row, space, stack,
     text_input,
 };
 use iced::{Alignment, Element, Length, Padding};
@@ -23,7 +24,7 @@ use slatty_core::library::LibraryGame;
 
 use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
-use crate::theme::{self, BOLD, tokens};
+use crate::theme::{self, bold, tokens};
 use crate::{App, Message, Page};
 use widgets::{avatar, icon_tab, logo, nav_tab, vertical_rule};
 pub(super) use widgets::{card, inner, note, round_button};
@@ -145,6 +146,7 @@ impl App {
                 text_input("Search a game", &self.search)
                     .on_input(Message::Search)
                     .style(theme::input)
+                    .font(theme::font())
                     .size(15)
                     .padding(0),
             ]
@@ -202,7 +204,7 @@ fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a
     });
     let dialog = container(
         column![
-            text("Quit SlattyLauncher?").size(24).font(BOLD),
+            text("Quit SlattyLauncher?").size(24).font(bold()),
             Column::with_children(items).spacing(10),
             row![
                 space().width(Length::Fill),

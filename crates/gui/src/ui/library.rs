@@ -1,8 +1,9 @@
 //! Library tab: shelves, filters, the cover grid and unfinished work.
 
+use crate::theme::text;
 use iced::widget::{
     Column, Space, button, checkbox, column, container, grid, hover, image, mouse_area, pick_list,
-    progress_bar, row, scrollable, slider, space, text,
+    progress_bar, row, scrollable, slider, space,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::installer::Progress;
@@ -15,7 +16,7 @@ use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
 use crate::install::InstallMsg;
 use crate::maintenance::MaintenanceMsg;
-use crate::theme::{self, SEMIBOLD, tokens};
+use crate::theme::{self, semibold, tokens};
 use crate::{App, Filters, Interrupted, Message, Panel, Shelf, Sort};
 
 impl App {
@@ -36,6 +37,7 @@ impl App {
         let toolbar = row![
             pick_list(Shelf::ALL, Some(self.shelf), Message::ShowShelf)
                 .style(theme::dropdown)
+                .font(theme::font())
                 .padding([9, 16])
                 .text_size(14)
                 .width(150),
@@ -46,6 +48,7 @@ impl App {
             space().width(Length::Fill),
             pick_list(Sort::ALL, Some(self.sort), Message::SortBy)
                 .style(theme::dropdown)
+                .font(theme::font())
                 .padding([9, 16])
                 .text_size(14)
                 .width(170),
@@ -147,7 +150,7 @@ impl App {
             row![
                 icon(Icon::TriangleAlert, 18.0, theme::tokens().warning),
                 column![
-                    text(title).size(15).font(SEMIBOLD),
+                    text(title).size(15).font(semibold()),
                     text(status).size(13).color(tokens().muted)
                 ]
                 .spacing(2)
@@ -171,6 +174,7 @@ impl App {
             checkbox(on)
                 .label(label)
                 .text_size(14)
+                .font(theme::font())
                 .on_toggle(move |v| Message::SetFilters(set(f, v)))
         };
         let mut items = row![
@@ -207,7 +211,7 @@ impl App {
                 .height(Length::Fill)
                 .border_radius(tokens().cover_radius)
                 .into(),
-            None => container(text(&g.title).size(14).font(SEMIBOLD))
+            None => container(text(&g.title).size(14).font(semibold()))
                 .padding(12)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -245,7 +249,7 @@ impl App {
             space().height(Length::Fill),
             container(
                 column![
-                    text(&g.title).size(13).font(SEMIBOLD),
+                    text(&g.title).size(13).font(semibold()),
                     row![settings, space().width(Length::Fill), action].align_y(Alignment::Center),
                 ]
                 .spacing(4),

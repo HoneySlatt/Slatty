@@ -1,6 +1,7 @@
 //! The Game settings drawer: folder, Proton, language and DLC of an installed game.
 
-use iced::widget::{Column, Space, button, column, container, pick_list, row, scrollable, text};
+use crate::theme::text;
+use iced::widget::{Column, Space, button, column, container, pick_list, row, scrollable};
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 use slatty_core::maintenance::Change;
@@ -54,6 +55,7 @@ impl App {
                             move |c| Message::Settings(SettingsMsg::GameProton(id.clone(), c)),
                         )
                         .style(theme::select)
+                        .font(theme::font())
                         .padding([10, 14])
                         .width(Length::Fill),
                         note("Used from the next launch."),
@@ -143,6 +145,7 @@ fn language<'a>(game_id: &'a str, c: &'a ContentInfo, busy: bool) -> Element<'a,
             move |l| Message::Maintenance(MaintenanceMsg::ChooseLanguage(id.clone(), l.0)),
         )
         .style(theme::select)
+        .font(theme::font())
         .padding([10, 14])
         .width(Length::Fill),
         button(text("Switch language").size(14))
@@ -206,6 +209,7 @@ fn version<'a>(game_id: &'a str, c: &'a ContentInfo, busy: bool) -> Element<'a, 
             move |v| Message::Maintenance(MaintenanceMsg::ChooseVersion(id.clone(), v.build_id)),
         )
         .style(theme::select)
+        .font(theme::font())
         .padding([10, 14])
         .width(Length::Fill),
         button(text("Switch version").size(14))

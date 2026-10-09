@@ -1,8 +1,9 @@
 //! Tool panels opened over the game page.
 
+use crate::theme::text;
 use iced::widget::{
     Column, Space, button, center, checkbox, column, container, mouse_area, opaque, progress_bar,
-    row, scrollable, space, stack, text,
+    row, scrollable, space, stack,
 };
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::install::Install;
@@ -16,7 +17,7 @@ use super::{note, round_button};
 use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
 use crate::maintenance::MaintenanceMsg;
-use crate::theme::{self, BOLD, SEMIBOLD, tokens};
+use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Loadable, Message, Panel};
 
 /// Width of the drawers beside the game page.
@@ -43,7 +44,7 @@ impl App {
             column![
                 row![
                     column![
-                        text(title).size(24).font(BOLD),
+                        text(title).size(24).font(bold()),
                         text(&g.title).size(14).color(tokens().muted)
                     ]
                     .spacing(2)
@@ -140,7 +141,7 @@ impl App {
                     row![
                         text(format!("{unlocked} / {} unlocked", list.len()))
                             .size(16)
-                            .font(SEMIBOLD)
+                            .font(semibold())
                             .width(Length::Fill),
                         unlock_all_button(&g.id, list),
                     ]
@@ -177,7 +178,7 @@ impl App {
             .on_press(Message::ClosePanel)
             .style(theme::tonal);
         let header = row![
-            column![text(title).size(32).font(BOLD), subtitle]
+            column![text(title).size(32).font(bold()), subtitle]
                 .spacing(4)
                 .width(Length::Fill),
             close,
@@ -253,6 +254,7 @@ pub(super) fn dlc_row<'a>(
     checkbox(checked)
         .label(format!("{} ({})", d.name, human_size(d.disk_size)))
         .text_size(14)
+        .font(theme::font())
         .on_toggle_maybe(editable.then_some(on_toggle))
         .into()
 }

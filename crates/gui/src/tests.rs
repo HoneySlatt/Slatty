@@ -1807,3 +1807,17 @@ fn the_theme_file_can_be_created_from_settings() {
     let _ = app.update(Message::Settings(SettingsMsg::ReloadTheme));
     assert!(app.notice.as_ref().is_some_and(|n| !n.error));
 }
+
+#[test]
+fn the_interface_font_is_chosen_in_settings() {
+    use crate::settings::{FontChoice, SettingsMsg};
+    let mut app = library_app();
+    let _ = app.update(Message::ShowPage(Page::Settings));
+    assert!(!app.font_families.is_empty(), "listed when Settings opens");
+    assert!(render(&app).find("Font").is_ok());
+    // The default leaves the font every other test draws with.
+    let _ = app.update(Message::Settings(SettingsMsg::Font(FontChoice::Default)));
+    let db = app.core.as_ref().unwrap().db.clone();
+    assert_eq!(slatty_core::settings::interface_font(&db).unwrap(), None);
+    assert!(app.notice.is_none());
+}

@@ -10,6 +10,10 @@ Without that file, SlattyLauncher uses its own look. **Settings → Appearance �
 writes the default theme there, every key with its value, as a starting point. **Edit** opens the
 file in your desktop's text editor, and **Reload** applies it without restarting.
 
+The font is chosen in the interface instead: **Settings → Appearance → Font** lists the font
+families installed on the system and applies the one picked at once. A family without a semibold
+weight shows bold where the interface uses semibold.
+
 ## Format
 
 Every key is optional: one left out keeps its default. A mistake (a misspelled key, a colour that

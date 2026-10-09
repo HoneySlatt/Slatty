@@ -1,12 +1,13 @@
 //! Building blocks shared by the pages. They take their colours and shapes from the theme
 //! tokens only, so a custom theme changes them everywhere at once.
 
-use iced::widget::{Column, Space, button, column, container, image, row, stack, svg, text};
+use crate::theme::text;
+use iced::widget::{Column, Space, button, column, container, image, row, stack, svg};
 use iced::{Alignment, ContentFit, Element, Length};
 
 use crate::Message;
 use crate::icons::{Icon, icon};
-use crate::theme::{self, BOLD, SEMIBOLD, tokens};
+use crate::theme::{self, bold, semibold, tokens};
 
 /// SlattyLauncher's emblem, in the accent colour.
 pub fn logo<'a>(height: f32) -> Element<'a, Message> {
@@ -31,7 +32,7 @@ pub fn nav_tab<'a>(ic: Icon, label: &'a str, active: bool, msg: Message) -> Elem
     button(
         row![
             icon(ic, 18.0, color),
-            text(label).size(15).font(SEMIBOLD).color(color)
+            text(label).size(15).font(semibold()).color(color)
         ]
         .spacing(10)
         .align_y(Alignment::Center),
@@ -83,7 +84,7 @@ pub fn avatar<'a>(
             .height(size)
             .border_radius(size / 2.0)
             .into(),
-        None => container(text(initial).size(size * 0.45).font(BOLD))
+        None => container(text(initial).size(size * 0.45).font(bold()))
             .center(size)
             .style(theme::avatar)
             .into(),
@@ -107,7 +108,7 @@ pub fn avatar<'a>(
 pub fn card<'a>(title: &'a str, items: Vec<Element<'a, Message>>) -> Element<'a, Message> {
     container(
         column![
-            text(title).size(17).font(SEMIBOLD),
+            text(title).size(17).font(semibold()),
             Column::with_children(items).spacing(10)
         ]
         .spacing(14),
@@ -126,7 +127,7 @@ pub fn round_button<'a>(ic: Icon, msg: Message) -> Element<'a, Message> {
         .into()
 }
 
-pub fn note<'a>(s: impl text::IntoFragment<'a>) -> Element<'a, Message> {
+pub fn note<'a>(s: impl iced::widget::text::IntoFragment<'a>) -> Element<'a, Message> {
     text(s).size(14).color(tokens().muted).into()
 }
 
