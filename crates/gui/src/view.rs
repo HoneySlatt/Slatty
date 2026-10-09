@@ -378,12 +378,12 @@ impl App {
             .collect();
         let played = |g: &LibraryGame| self.playtime.get(&g.id).copied().unwrap_or_default();
         match self.sort {
-            Sort::NameAsc => games.sort_by_key(|g| g.title.to_lowercase()),
+            Sort::NameAsc => games.sort_by_cached_key(|g| g.title.to_lowercase()),
             Sort::NameDesc => {
-                games.sort_by_key(|g| std::cmp::Reverse(g.title.to_lowercase()));
+                games.sort_by_cached_key(|g| std::cmp::Reverse(g.title.to_lowercase()));
             }
             Sort::RecentlyPlayed => {
-                games.sort_by_key(|g| {
+                games.sort_by_cached_key(|g| {
                     (
                         std::cmp::Reverse(played(g).last_played),
                         g.title.to_lowercase(),
@@ -391,7 +391,7 @@ impl App {
                 });
             }
             Sort::MostPlayed => {
-                games.sort_by_key(|g| {
+                games.sort_by_cached_key(|g| {
                     (
                         std::cmp::Reverse(self.played_seconds(&g.id)),
                         g.title.to_lowercase(),

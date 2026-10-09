@@ -152,7 +152,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             on_ctrl_c.cancel();
         }
     });
-    let last = Mutex::new(Instant::now() - Duration::from_secs(10));
+    let last = Mutex::new(None::<Instant>);
     let emit = |e: InstallEvent| match e {
         InstallEvent::Planned {
             title,
@@ -174,8 +174,10 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         }
         InstallEvent::Progress(p) => {
             let mut last = last.lock().unwrap();
-            if last.elapsed() >= Duration::from_secs(1) || p.files_done == p.files_total {
-                *last = Instant::now();
+            if last.is_none_or(|t| t.elapsed() >= Duration::from_secs(1))
+                || p.files_done == p.files_total
+            {
+                *last = Some(Instant::now());
                 let pct = (p.bytes_done * 100)
                     .checked_div(p.bytes_total)
                     .unwrap_or(100);

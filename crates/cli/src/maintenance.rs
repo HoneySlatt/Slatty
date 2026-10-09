@@ -77,11 +77,13 @@ pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
             on_ctrl_c.cancel();
         }
     });
-    let last = Mutex::new(Instant::now() - Duration::from_secs(10));
+    let last = Mutex::new(None::<Instant>);
     let progress = |p: Progress| {
         let mut last = last.lock().unwrap();
-        if last.elapsed() >= Duration::from_secs(1) {
-            *last = Instant::now();
+        if last.is_none_or(|t| t.elapsed() >= Duration::from_secs(1))
+            || p.files_done == p.files_total
+        {
+            *last = Some(Instant::now());
             println!("  files {}/{}", p.files_done, p.files_total);
         }
     };
@@ -198,11 +200,13 @@ async fn apply_change(
             on_ctrl_c.cancel();
         }
     });
-    let last = Mutex::new(Instant::now() - Duration::from_secs(10));
+    let last = Mutex::new(None::<Instant>);
     let progress = |p: Progress| {
         let mut last = last.lock().unwrap();
-        if last.elapsed() >= Duration::from_secs(1) {
-            *last = Instant::now();
+        if last.is_none_or(|t| t.elapsed() >= Duration::from_secs(1))
+            || p.files_done == p.files_total
+        {
+            *last = Some(Instant::now());
             println!("  files {}/{}", p.files_done, p.files_total);
         }
     };
