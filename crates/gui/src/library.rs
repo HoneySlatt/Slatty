@@ -425,9 +425,71 @@ fn fit_image(bytes: Vec<u8>, cached: &std::path::Path) -> Vec<u8> {
     out
 }
 
+/// A title sorted the way people read it: case aside, and numbers by their value, so "Game 2"
+/// comes before "Game 10".
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct NaturalKey(Vec<Part>);
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum Part {
+    Number(u128),
+    Text(String),
+}
+
+impl NaturalKey {
+    pub fn of(title: &str) -> NaturalKey {
+        let mut parts = Vec::new();
+        let mut chars = title.chars().peekable();
+        while let Some(&c) = chars.peek() {
+            if c.is_ascii_digit() {
+                let mut digits = String::new();
+                while let Some(d) = chars.next_if(char::is_ascii_digit) {
+                    digits.push(d);
+                }
+                // Too long to be a number people read: kept as text.
+                match digits.parse() {
+                    Ok(n) => parts.push(Part::Number(n)),
+                    Err(_) => parts.push(Part::Text(digits)),
+                }
+            } else {
+                let mut text = String::new();
+                while let Some(t) = chars.next_if(|c| !c.is_ascii_digit()) {
+                    text.extend(t.to_lowercase());
+                }
+                parts.push(Part::Text(text));
+            }
+        }
+        NaturalKey(parts)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn titles_sort_with_their_numbers_read_as_numbers() {
+        let mut titles = vec![
+            "Game 10",
+            "game 2",
+            "Game 1",
+            "The Witcher 3: Wild Hunt",
+            "The Witcher 2",
+            "Alan Wake",
+        ];
+        titles.sort_by_key(|t| NaturalKey::of(t));
+        assert_eq!(
+            titles,
+            [
+                "Alan Wake",
+                "Game 1",
+                "game 2",
+                "Game 10",
+                "The Witcher 2",
+                "The Witcher 3: Wild Hunt"
+            ]
+        );
+    }
 
     fn jpeg(width: u32, height: u32) -> Vec<u8> {
         let mut out = Vec::new();

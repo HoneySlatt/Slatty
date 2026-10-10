@@ -280,6 +280,6 @@ impl App {
     ) -> Element<'a, Message> {
         // Content lines up with the section titles, past their icon.
         let body = self.game_settings(g, 34.0);
-        self.library_dialog(page, g, "Game settings", Vec::new(), body)
+        self.library_dialog(page, g, "Game settings", Vec::new(), body, None)
     }
 }

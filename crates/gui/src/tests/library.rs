@@ -116,7 +116,8 @@ fn shelves_filters_and_sort_select_games() {
     app.sort = Sort::MostPlayed;
     assert_eq!(titles(&app)[..2], ["Game 2", "Game 9"]);
     app.sort = Sort::NameDesc;
-    assert_eq!(titles(&app)[0], "Game 9");
+    // Numbers by their value: 14 comes after 9.
+    assert_eq!(titles(&app)[..2], ["Game 14", "Game 13"]);
 }
 
 #[test]

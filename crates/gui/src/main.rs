@@ -386,7 +386,6 @@ pub enum Message {
     Key(keyboard::Event),
 }
 
-
 impl std::fmt::Debug for Core {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Core")
@@ -825,4 +824,3 @@ impl App {
         self.notice = Some(Notice { error: true, text });
     }
 }
-

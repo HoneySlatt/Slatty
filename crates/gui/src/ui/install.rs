@@ -98,14 +98,12 @@ impl App {
                 if let Some(dlcs) = c.dlcs {
                     body = body.push(section("DLC", dlcs));
                 }
-                body.push(c.redistributables)
-                    .push(rule())
-                    .push(self.install_actions(g, info, false))
-                    .into()
+                body.push(c.redistributables).into()
             }
             None => self.install_state(g, self.install_views.get(&g.id)),
         };
-        self.library_dialog(page, g, "Install", details, body)
+        let actions = info.map(|info| self.install_actions(g, info, false));
+        self.library_dialog(page, g, "Install", details, body, actions)
     }
 
     /// Before the choices are known, or once the download runs.
@@ -451,14 +449,6 @@ impl App {
 /// A label above its control.
 fn section<'a>(title: &'a str, content: Element<'a, Message>) -> Column<'a, Message> {
     column![text(title).size(15).color(tokens().muted), content].spacing(10)
-}
-
-fn rule<'a>() -> Element<'a, Message> {
-    container(Space::new())
-        .width(Length::Fill)
-        .height(1)
-        .style(theme::divider)
-        .into()
 }
 
 /// Download, size on disk and free space, side by side; centred in the dialog.

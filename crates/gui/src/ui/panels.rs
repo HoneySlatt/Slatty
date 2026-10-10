@@ -265,6 +265,7 @@ impl App {
         title: &'a str,
         details: Vec<Element<'a, Message>>,
         body: Element<'a, Message>,
+        footer: Option<Element<'a, Message>>,
     ) -> Element<'a, Message> {
         const COVER: (f32, f32) = (94.0, 125.0);
         let cover: Element<'a, Message> = match self.cover(&g.id) {
@@ -293,7 +294,10 @@ impl App {
         ]
         .spacing(22)
         .align_y(Alignment::Start);
-        let dialog = container(
+        // The footer (actions) stays in view under the part that scrolls.
+        const FOOTER: f32 = 110.0;
+        let room = self.window.height - 60.0 - 56.0 - if footer.is_some() { FOOTER } else { 0.0 };
+        let scrolled = container(
             scrollable(
                 column![top, body]
                     .spacing(22)
@@ -301,10 +305,23 @@ impl App {
             )
             .style(theme::scroller),
         )
-        .padding(28)
-        .max_width(640)
-        .max_height(self.window.height - 60.0)
-        .style(theme::card);
+        .max_height(room.max(120.0));
+        let footer = footer.map(|f| {
+            column![
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(1)
+                    .style(theme::divider),
+                f
+            ]
+            .spacing(18)
+            .padding(Padding::ZERO.right(10))
+        });
+        let dialog = container(column![scrolled].push(footer).spacing(18))
+            .padding(28)
+            .max_width(640)
+            .max_height(self.window.height - 60.0)
+            .style(theme::card);
         stack![
             page,
             mouse_area(
