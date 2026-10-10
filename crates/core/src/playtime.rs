@@ -9,6 +9,7 @@ use crate::auth::Tokens;
 use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::http;
+use crate::paths::Dirs;
 
 fn url(user_id: &str, game_id: &str) -> String {
     format!("https://gameplay.gog.com/games/{game_id}/users/{user_id}/sessions")
@@ -99,8 +100,8 @@ pub fn keep_private(db: &Db, user_id: &str) -> Result<()> {
 
 /// Sends every pending session; stops at the first failure so the rest is retried later, except a
 /// session GOG refuses for good, which is skipped. Returns the minutes reported.
-pub async fn report_pending(db: &Db, http: &Client, tokens: &Tokens) -> Result<i64> {
-    send_pending(db, &tokens.user_id, |s| async move {
+pub async fn report_pending(db: &Db, dirs: &Dirs, http: &Client, tokens: &Tokens) -> Result<i64> {
+    send_pending(db, dirs, &tokens.user_id, |s| async move {
         report(http, tokens, &s.game_id, s.started_at, s.minutes).await
     })
     .await
@@ -108,9 +109,17 @@ pub async fn report_pending(db: &Db, http: &Client, tokens: &Tokens) -> Result<i
 
 async fn send_pending<F: Future<Output = Result<()>>>(
     db: &Db,
+    dirs: &Dirs,
     user_id: &str,
     send: impl Fn(Unreported) -> F,
 ) -> Result<i64> {
+    // One process at a time, the sessions read under the lock: two games ending together, one from
+    // the interface and one from the command line, would otherwise send the same sessions twice.
+    let _sending = crate::lock::acquire(
+        &dirs.locks().join(format!("playtime-{user_id}.lock")),
+        std::time::Duration::from_secs(60),
+    )
+    .await?;
     let mut minutes = 0;
     for s in unreported(db, user_id)? {
         let (id, played) = (s.id, s.minutes);
@@ -210,10 +219,46 @@ mod tests {
                 }
             }
         };
-        assert!(send_pending(&db, "me", answer(503)).await.is_err());
+        let dirs = Dirs::under(&std::env::temp_dir().join("slatty-playtime-unused"));
+        assert!(send_pending(&db, &dirs, "me", answer(503)).await.is_err());
         assert_eq!(unreported(&db, "me").unwrap().len(), 3, "tried again later");
-        assert_eq!(send_pending(&db, "me", answer(400)).await.unwrap(), 20);
+        assert_eq!(
+            send_pending(&db, &dirs, "me", answer(400)).await.unwrap(),
+            20
+        );
         assert!(unreported(&db, "me").unwrap().is_empty());
+    }
+
+    /// The interface and the command line, each at the end of a game, send the sessions waiting
+    /// one after the other: none is added to the play time on GOG twice.
+    #[tokio::test]
+    async fn two_processes_sending_at_once_send_each_session_once() {
+        let root = std::env::temp_dir().join(format!("slatty-playtime-{}", std::process::id()));
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        db.conn()
+            .execute_batch(
+                "INSERT INTO sessions (id, game_id, user_id, started_at, ended_at, state, reported) VALUES
+                   (1, '1', 'me', 1000, 1600, 'ended', 0),
+                   (2, '2', 'me', 2000, 2600, 'ended', 0);",
+            )
+            .unwrap();
+        let sent = std::sync::atomic::AtomicUsize::new(0);
+        let send = |_: Unreported| {
+            let sent = &sent;
+            async move {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                sent.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            }
+        };
+        let (a, b) = tokio::join!(
+            send_pending(&db, &dirs, "me", send),
+            send_pending(&db, &dirs, "me", send)
+        );
+        assert_eq!(a.unwrap() + b.unwrap(), 20);
+        assert_eq!(sent.load(std::sync::atomic::Ordering::SeqCst), 2);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

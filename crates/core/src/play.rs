@@ -418,7 +418,7 @@ async fn report_playtime(
         return Ok(0);
     }
     let tokens = tokens(db, dirs, http, Some(user_id)).await?;
-    crate::playtime::report_pending(db, http, &tokens).await
+    crate::playtime::report_pending(db, dirs, http, &tokens).await
 }
 
 async fn tokens(db: &Db, dirs: &Dirs, http: &Client, user_id: Option<&str>) -> Result<Tokens> {
