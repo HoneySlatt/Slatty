@@ -41,6 +41,9 @@ pub struct Boot {
     /// Whether Proton builds may be downloaded from GitHub, and those already downloaded.
     pub proton_downloads: bool,
     pub downloaded_protons: Vec<PathBuf>,
+    /// Whether followed Proton builds are kept up to date, and whether a check is due now.
+    pub proton_updates: bool,
+    pub proton_update_due: bool,
     pub favorites: Vec<String>,
     pub playtime: HashMap<String, Playtime>,
     pub overview: HashMap<String, GameOverview>,
@@ -114,9 +117,14 @@ pub async fn boot() -> Result<Boot, String> {
         None
     };
     // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
+    // A link it could not make only leaves that `-latest` entry out of the menus.
+    let _ = slatty_core::protons::link_newest(&dirs);
     let proton_choices = slatty_core::settings::proton_candidates(&dirs);
     let proton_downloads = slatty_core::settings::proton_downloads(&db).map_err(err)?;
     let downloaded_protons = slatty_core::protons::installed(&dirs);
+    let proton_updates = slatty_core::settings::proton_updates(&db).map_err(err)?;
+    let proton_update_due =
+        slatty_core::protons::update_due(&db, chrono::Utc::now().timestamp()).map_err(err)?;
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let customs = slatty_core::custom::all(&db).map_err(err)?;
     let cover_width = slatty_core::settings::cover_width(&db).map_err(err)?;
@@ -164,6 +172,8 @@ pub async fn boot() -> Result<Boot, String> {
         proton_choices,
         proton_downloads,
         downloaded_protons,
+        proton_updates,
+        proton_update_due,
         default_platform,
         umu_lookup,
         report_playtime,

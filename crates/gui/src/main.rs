@@ -537,6 +537,12 @@ impl App {
                 self.proton_choices = boot.proton_choices;
                 self.runners.downloads = boot.proton_downloads;
                 self.runners.downloaded = boot.downloaded_protons;
+                self.runners.updates = boot.proton_updates;
+                let proton_update = if boot.proton_update_due {
+                    self.update_runners(runners::RunnersMsg::Update)
+                } else {
+                    Task::none()
+                };
                 self.default_platform = boot.default_platform;
                 self.umu_lookup = boot.umu_lookup;
                 self.report_playtime = boot.report_playtime;
@@ -580,9 +586,9 @@ impl App {
                 let avatar = self.fetch_avatar();
                 let resume = self.resume_interrupted();
                 if let Some(cache) = boot.library {
-                    return Task::batch([avatar, resume, self.set_library(cache)]);
+                    return Task::batch([avatar, resume, proton_update, self.set_library(cache)]);
                 }
-                return Task::batch([avatar, resume]);
+                return Task::batch([avatar, resume, proton_update]);
             }
             Message::Booted(Err(e)) => self.fatal = Some(e),
             Message::OpenLoginPage => self.open_login_page(),

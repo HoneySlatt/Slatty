@@ -40,6 +40,18 @@ impl Source {
         }
     }
 
+    /// The project a downloaded build comes from, by the name of its folder.
+    fn of(name: &str) -> Option<Source> {
+        Source::ALL.into_iter().find(|s| {
+            let prefix = match s {
+                Source::GeProton => "GE-Proton",
+                Source::ProtonCachyOs => "proton-cachyos-",
+                Source::UmuProton => "UMU-Proton-",
+            };
+            name.starts_with(prefix)
+        })
+    }
+
     fn repo(self) -> &'static str {
         match self {
             Source::GeProton => "GloriousEggroll/proton-ge-custom",
@@ -93,7 +105,7 @@ pub fn dir(dirs: &Dirs) -> PathBuf {
     dirs.data.join("protons")
 }
 
-/// The downloaded builds, by name.
+/// The downloaded builds, by name, without the `-latest` links to them.
 pub fn installed(dirs: &Dirs) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = std::fs::read_dir(dir(dirs))
         .into_iter()
@@ -104,10 +116,143 @@ pub fn installed(dirs: &Dirs) -> Vec<PathBuf> {
             !p.file_name()
                 .is_some_and(|n| n.to_string_lossy().starts_with('.'))
         })
-        .filter(|p| p.join("proton").is_file())
+        .filter(|p| !p.is_symlink() && p.join("proton").is_file())
         .collect();
     found.sort();
     found
+}
+
+/// A link to the newest downloaded build of `source`: a game or the default set to it runs the
+/// newest build, and an update changes it at once.
+pub fn latest_link(dirs: &Dirs, source: Source) -> PathBuf {
+    dir(dirs).join(format!("{}-latest", source.name()))
+}
+
+/// Where the `-latest` link of `source` leads, if it exists.
+fn latest_target(dirs: &Dirs, source: Source) -> Option<PathBuf> {
+    std::fs::read_link(latest_link(dirs, source))
+        .ok()
+        .map(|t| dir(dirs).join(t))
+}
+
+/// Points the `-latest` link of `source` at the build named `name`, replacing the old link in one
+/// step.
+fn point_latest(dirs: &Dirs, source: Source, name: &str) -> Result<()> {
+    let link = latest_link(dirs, source);
+    let temp = crate::fsutil::temp_sibling(&link);
+    std::os::unix::fs::symlink(name, &temp)
+        .map_err(|e| Error::io(format!("link {}", link.display()), e))?;
+    std::fs::rename(&temp, &link).map_err(|e| {
+        let _ = std::fs::remove_file(&temp);
+        Error::io(format!("link {}", link.display()), e)
+    })
+}
+
+/// Gives each project that has downloaded builds but no `-latest` link one, to the build unpacked
+/// last (builds downloaded before the links existed).
+pub fn link_newest(dirs: &Dirs) -> Result<()> {
+    for source in Source::ALL {
+        if std::fs::symlink_metadata(latest_link(dirs, source)).is_ok() {
+            continue;
+        }
+        let newest = installed(dirs)
+            .into_iter()
+            .filter(|b| {
+                Source::of(&b.file_name().unwrap_or_default().to_string_lossy()) == Some(source)
+            })
+            .max_by_key(|b| std::fs::metadata(b).and_then(|m| m.modified()).ok());
+        if let Some(build) = newest {
+            point_latest(
+                dirs,
+                source,
+                &build.file_name().unwrap_or_default().to_string_lossy(),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// The Proton builds games and the default are set to.
+fn used(db: &Db) -> Result<Vec<PathBuf>> {
+    let mut used: Vec<PathBuf> = Install::list(db)?
+        .into_iter()
+        .filter_map(|i| match i.runner {
+            Runner::Umu { proton, .. } => Some(proton),
+            _ => None,
+        })
+        .collect();
+    used.extend(crate::settings::default_proton(db)?);
+    Ok(used)
+}
+
+/// The projects a game or the default follows through their `-latest` link.
+pub fn followed(db: &Db, dirs: &Dirs) -> Result<Vec<Source>> {
+    let used = used(db)?;
+    Ok(Source::ALL
+        .into_iter()
+        .filter(|s| used.contains(&latest_link(dirs, *s)))
+        .collect())
+}
+
+/// Whether the followed builds are due for a check: both switches on, and a day passed since the
+/// last one.
+pub fn update_due(db: &Db, now: i64) -> Result<bool> {
+    Ok(crate::settings::proton_downloads(db)?
+        && crate::settings::proton_updates(db)?
+        && crate::settings::proton_checked_at(db)?.is_none_or(|t| now - t >= 24 * 60 * 60))
+}
+
+/// Downloads the newest build of every followed project and points its `-latest` link at it. The
+/// build it led to before is kept, to go back to; older ones no game uses are deleted. Returns the
+/// builds installed.
+pub async fn update(
+    db: &Db,
+    http: &Client,
+    dirs: &Dirs,
+    api: &str,
+    progress: impl Fn(&str, Stage) + Send + Sync + 'static,
+    cancel: &CancellationToken,
+) -> Result<Vec<Release>> {
+    check_allowed(db)?;
+    let progress = std::sync::Arc::new(progress);
+    let mut updated = Vec::new();
+    for source in followed(db, dirs)? {
+        let release = latest(http, api, source).await?;
+        let previous = latest_target(dirs, source);
+        if previous.as_ref() == Some(&release.path(dirs)) {
+            continue;
+        }
+        let (report, name) = (progress.clone(), release.name.clone());
+        install(http, dirs, &release, move |s| report(&name, s), cancel).await?;
+        prune(db, dirs, source, &release.path(dirs), previous.as_deref())?;
+        updated.push(release);
+    }
+    crate::settings::set_proton_checked_at(db, chrono::Utc::now().timestamp())?;
+    Ok(updated)
+}
+
+/// Deletes the builds of `source` other than `newest` and `previous` that no game uses.
+fn prune(
+    db: &Db,
+    dirs: &Dirs,
+    source: Source,
+    newest: &Path,
+    previous: Option<&Path>,
+) -> Result<()> {
+    let _lock = lock(dirs)?;
+    let used = used(db)?;
+    for build in installed(dirs) {
+        let name = build.file_name().unwrap_or_default().to_string_lossy();
+        if Source::of(&name) == Some(source)
+            && build != newest
+            && Some(build.as_path()) != previous
+            && !used.contains(&build)
+        {
+            std::fs::remove_dir_all(&build)
+                .map_err(|e| Error::io(format!("delete {}", build.display()), e))?;
+        }
+    }
+    Ok(())
 }
 
 /// Refuses unless Proton downloads are turned on: GitHub is contacted only then.
@@ -194,7 +339,8 @@ pub enum Stage {
 }
 
 /// Downloads `release`, checks it against its SHA-512 sum and unpacks it, unless it is there
-/// already. A download stopped half way goes on from where it was.
+/// already, then points its project's `-latest` link at it. A download stopped half way goes on
+/// from where it was.
 pub async fn install(
     http: &Client,
     dirs: &Dirs,
@@ -203,9 +349,21 @@ pub async fn install(
     cancel: &CancellationToken,
 ) -> Result<PathBuf> {
     let dest = release.path(dirs);
-    if dest.join("proton").is_file() {
-        return Ok(dest);
+    if !dest.join("proton").is_file() {
+        unpack_release(http, dirs, release, progress, cancel).await?;
     }
+    point_latest(dirs, release.source, &release.name)?;
+    Ok(dest)
+}
+
+async fn unpack_release(
+    http: &Client,
+    dirs: &Dirs,
+    release: &Release,
+    progress: impl Fn(Stage) + Send + Sync + 'static,
+    cancel: &CancellationToken,
+) -> Result<()> {
+    let dest = release.path(dirs);
     let _lock = lock(dirs)?;
     let staging = dir(dirs).join(".staging");
     crate::paths::ensure_dir(&staging)?;
@@ -250,20 +408,37 @@ pub async fn install(
     std::fs::rename(&unpacked, &dest)
         .map_err(|e| Error::io(format!("move {}", dest.display()), e))?;
     let _ = std::fs::remove_file(&archive);
-    Ok(dest)
+    Ok(())
 }
 
 /// Deletes a downloaded build, unless a game or the default Proton uses it.
 pub fn remove(db: &Db, dirs: &Dirs, path: &Path) -> Result<()> {
     let root = dir(dirs);
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-    if path.parent() != Some(root.as_path()) || !name.as_deref().is_some_and(is_plain_name) {
+    if path.parent() != Some(root.as_path())
+        || !name.as_deref().is_some_and(is_plain_name)
+        || path.is_symlink()
+    {
         return Err(Error::Refused(format!(
             "{} is not a Proton build SlattyLauncher downloaded",
             path.display()
         )));
     }
     let _lock = lock(dirs)?;
+    let newest_of = Source::ALL
+        .into_iter()
+        .find(|s| latest_target(dirs, *s).as_deref() == Some(path));
+    if let Some(source) = newest_of
+        && followed(db, dirs)?.contains(&source)
+    {
+        return Err(Error::Refused(format!(
+            "{} is the newest {} build, which games set to {}-latest run; it goes once a newer \
+             one is downloaded",
+            name.unwrap_or_default(),
+            source.name(),
+            source.name()
+        )));
+    }
     let users: Vec<String> = Install::list(db)?
         .into_iter()
         .filter(|i| matches!(&i.runner, Runner::Umu { proton, .. } if proton == path))
@@ -282,7 +457,15 @@ pub fn remove(db: &Db, dirs: &Dirs, path: &Path) -> Result<()> {
             name.unwrap_or_default()
         )));
     }
-    std::fs::remove_dir_all(path).map_err(|e| Error::io(format!("delete {}", path.display()), e))
+    std::fs::remove_dir_all(path)
+        .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
+    // Nothing follows the link: it goes with the build it led to.
+    if let Some(source) = newest_of {
+        let link = latest_link(dirs, source);
+        std::fs::remove_file(&link)
+            .map_err(|e| Error::io(format!("delete {}", link.display()), e))?;
+    }
+    Ok(())
 }
 
 fn lock(dirs: &Dirs) -> Result<crate::lock::FileLock> {

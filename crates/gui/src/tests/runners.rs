@@ -72,10 +72,13 @@ fn the_newest_builds_can_be_installed_and_a_download_followed_and_stopped() {
 
     let _ = app.update(Message::Runners(RunnersMsg::Install(release.clone())));
     assert!(app.runners.installing.is_some());
-    let _ = app.update(Message::Runners(RunnersMsg::Progress(Stage::Downloading {
-        done: 50,
-        total: 100,
-    })));
+    let _ = app.update(Message::Runners(RunnersMsg::Progress(
+        release.name.clone(),
+        Stage::Downloading {
+            done: 50,
+            total: 100,
+        },
+    )));
     {
         let mut ui = render_window(&app);
         assert!(ui.find("Downloading 50 %").is_ok());
@@ -111,5 +114,57 @@ fn a_build_that_cannot_be_deleted_says_why() {
         app.notice
             .as_ref()
             .is_some_and(|n| n.error && n.text.contains("[FAKE] Game 1"))
+    );
+}
+
+#[test]
+fn followed_builds_are_kept_up_to_date_once_turned_on() {
+    let mut app = runners_page();
+    let db = app.core.as_ref().unwrap().db.clone();
+    let _ = app.update(Message::Runners(RunnersMsg::Downloads(true)));
+    assert!(!app.runners.updates, "off until turned on");
+    {
+        let mut ui = render_window(&app);
+        assert!(ui.find("Keep up to date").is_ok());
+        assert!(ui.find("Update now").is_ok());
+    }
+    let _ = app.update(Message::Runners(RunnersMsg::Updates(true)));
+    assert!(slatty_core::settings::proton_updates(&db).unwrap());
+
+    let release = release(&app);
+    let _ = app.update(Message::Runners(RunnersMsg::Update));
+    assert!(app.runners.updating);
+    {
+        let mut ui = render_window(&app);
+        assert!(ui.find("Checking GitHub…").is_ok());
+    }
+    let _ = app.update(Message::Runners(RunnersMsg::Progress(
+        release.name.clone(),
+        Stage::Downloading {
+            done: 30,
+            total: 100,
+        },
+    )));
+    {
+        let mut ui = render_window(&app);
+        assert!(ui.find("GE-Proton11-7-x86_64: Downloading 30 %").is_ok());
+        assert!(ui.find("Stop").is_ok());
+    }
+    let _ = app.update(Message::Runners(RunnersMsg::Updated(Ok(vec![release]))));
+    assert!(!app.runners.updating && app.runners.installing.is_none());
+    assert!(
+        app.notice
+            .as_ref()
+            .is_some_and(|n| !n.error && n.text == "Proton updated: GE-Proton11-7-x86_64.")
+    );
+
+    let _ = app.update(Message::Runners(RunnersMsg::Update));
+    let _ = app.update(Message::Runners(RunnersMsg::Updated(Err(Some(
+        "GitHub refuses more requests from this address for now; try again later".into(),
+    )))));
+    assert!(
+        app.notice
+            .as_ref()
+            .is_some_and(|n| n.error && n.text.starts_with("Proton update:"))
     );
 }

@@ -318,8 +318,8 @@ impl App {
                     .size(22),
                 note(
                     "Lists and downloads GE-Proton, Proton-CachyOS and UMU-Proton from their \
-                     GitHub releases, only when you ask. Each build is checked against the sum \
-                     its release publishes.",
+                     GitHub releases when you ask, and at start once Keep up to date is on. Each \
+                     build is checked against the sum its release publishes.",
                 ),
             ]
             .spacing(8)
@@ -327,6 +327,45 @@ impl App {
             None,
         )];
         if r.downloads {
+            let update: Element<'_, Message> = match &r.installing {
+                Some((name, stage, _)) if r.updating => column![
+                    text(if name.is_empty() {
+                        "Checking GitHub…".to_string()
+                    } else {
+                        format!("{name}: {}", stage_text(*stage))
+                    })
+                    .size(14),
+                    button(text("Stop").size(14))
+                        .padding([8, 16])
+                        .on_press(msg(RunnersMsg::Cancel))
+                        .style(theme::tonal),
+                ]
+                .spacing(8)
+                .into(),
+                _ => button(text("Update now").size(14))
+                    .padding([8, 16])
+                    .on_press_maybe(r.installing.is_none().then_some(msg(RunnersMsg::Update)))
+                    .style(theme::tonal)
+                    .into(),
+            };
+            rows.push(setting(
+                wide,
+                "Keep up to date",
+                column![
+                    toggler(r.updates)
+                        .on_toggle(move |on| msg(RunnersMsg::Updates(on)))
+                        .size(22),
+                    note(
+                        "Once a day at start, downloads the newest build of each project a game \
+                         or the default Proton follows as <project>-latest (chosen in the Proton \
+                         menus). The build before is kept to go back to; older ones no game uses \
+                         are deleted.",
+                    ),
+                ]
+                .spacing(8)
+                .into(),
+                Some(update),
+            ));
             rows.push(setting(
                 wide,
                 "Newest builds",

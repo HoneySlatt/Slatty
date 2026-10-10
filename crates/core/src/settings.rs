@@ -20,6 +20,8 @@ const MANUAL_ACHIEVEMENTS: &str = "manual_achievements";
 const STEAMGRIDDB: &str = "steamgriddb";
 const ISOLATE_NEW_GAMES: &str = "isolate_new_games";
 const PROTON_DOWNLOADS: &str = "proton_downloads";
+const PROTON_UPDATES: &str = "proton_updates";
+const PROTON_CHECKED_AT: &str = "proton_checked_at";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -124,6 +126,25 @@ pub fn set_proton_downloads(db: &Db, on: bool) -> Result<()> {
     db.set_setting(PROTON_DOWNLOADS, Some(if on { "on" } else { "off" }))
 }
 
+/// Whether the Proton builds games follow as `-latest` are updated at start, at most once a day.
+/// Off until turned on.
+pub fn proton_updates(db: &Db) -> Result<bool> {
+    Ok(db.setting(PROTON_UPDATES)?.as_deref() == Some("on"))
+}
+
+pub fn set_proton_updates(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(PROTON_UPDATES, Some(if on { "on" } else { "off" }))
+}
+
+/// When GitHub was last asked for newer Proton builds, in seconds since the epoch.
+pub fn proton_checked_at(db: &Db) -> Result<Option<i64>> {
+    Ok(db.setting(PROTON_CHECKED_AT)?.and_then(|v| v.parse().ok()))
+}
+
+pub fn set_proton_checked_at(db: &Db, at: i64) -> Result<()> {
+    db.set_setting(PROTON_CHECKED_AT, Some(&at.to_string()))
+}
+
 /// The way a game is started, among its launch options, once chosen.
 pub fn launch_choice(db: &Db, game_id: &str) -> Result<Option<String>> {
     db.setting(&format!("launch_task:{game_id}"))
@@ -212,7 +233,7 @@ pub fn proton_candidates(dirs: &crate::paths::Dirs) -> Vec<PathBuf> {
 }
 
 fn proton_candidates_in(downloaded: &Path, home: &Path) -> Vec<PathBuf> {
-    let mut places = vec![downloaded.to_path_buf()];
+    let mut places = Vec::new();
     for steam in steam_roots(home) {
         places.push(steam.join("compatibilitytools.d"));
     }
@@ -225,11 +246,8 @@ fn proton_candidates_in(downloaded: &Path, home: &Path) -> Vec<PathBuf> {
     }
     places.push(home.join(".local/share/umu/compatibilitytools"));
 
-    let mut seen_dirs = std::collections::HashSet::new();
-    let mut seen_names = std::collections::HashSet::new();
-    let mut found = Vec::new();
-    for place in places {
-        let mut builds: Vec<PathBuf> = std::fs::read_dir(&place)
+    let builds_in = |place: &Path| {
+        let mut builds: Vec<PathBuf> = std::fs::read_dir(place)
             .into_iter()
             .flatten()
             .flatten()
@@ -237,7 +255,20 @@ fn proton_candidates_in(downloaded: &Path, home: &Path) -> Vec<PathBuf> {
             .filter(|p| p.join("proton").is_file())
             .collect();
         builds.sort();
-        for build in builds {
+        builds
+    };
+    // Downloaded builds each, even the one a `-latest` link leads to, which is listed first.
+    let mut found = builds_in(downloaded);
+    let mut seen_dirs: std::collections::HashSet<PathBuf> = found
+        .iter()
+        .map(|b| b.canonicalize().unwrap_or_else(|_| b.clone()))
+        .collect();
+    let mut seen_names: std::collections::HashSet<_> = found
+        .iter()
+        .map(|b| b.file_name().map(|n| n.to_owned()))
+        .collect();
+    for place in places {
+        for build in builds_in(&place) {
             let real = build.canonicalize().unwrap_or_else(|_| build.clone());
             if seen_dirs.insert(real) && seen_names.insert(build.file_name().map(|n| n.to_owned()))
             {
@@ -319,6 +350,9 @@ mod tests {
         let downloaded = home.join("slatty/protons");
         build(&downloaded.join("GE-Proton11-7-x86_64"));
         std::fs::create_dir_all(downloaded.join(".staging/GE-Proton11-8-x86_64")).unwrap();
+        // The link to the newest is listed, and so is the build it leads to.
+        std::os::unix::fs::symlink("GE-Proton11-7-x86_64", downloaded.join("GE-Proton-latest"))
+            .unwrap();
 
         let names: Vec<String> = proton_candidates_in(&downloaded, &home)
             .iter()
@@ -327,6 +361,7 @@ mod tests {
         assert_eq!(
             names,
             [
+                "GE-Proton-latest",
                 "GE-Proton11-7-x86_64",
                 "GE-Proton",
                 "Proton - Experimental",

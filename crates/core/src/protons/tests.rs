@@ -437,3 +437,217 @@ fn github_is_asked_only_once_downloads_are_turned_on() {
     crate::settings::set_proton_downloads(&db, false).unwrap();
     assert!(matches!(check_allowed(&db), Err(Error::Refused(_))));
 }
+
+/// A downloaded build, as `install` leaves it.
+fn fake_build(dirs: &Dirs, name: &str) -> PathBuf {
+    let build = dir(dirs).join(name);
+    std::fs::create_dir_all(&build).unwrap();
+    std::fs::write(build.join("proton"), b"").unwrap();
+    build
+}
+
+fn game_on(db: &Db, root: &Path, id: &str, proton: &Path) {
+    Install {
+        game_id: id.into(),
+        title: format!("[FAKE] Game {id}"),
+        platform: Platform::Windows,
+        path: root.join(format!("game{id}")),
+        client_id: None,
+        runner: Runner::Umu {
+            proton: proton.to_path_buf(),
+            prefix: root.join(format!("pfx{id}")),
+        },
+        umu_id: None,
+        isolated: true,
+    }
+    .save(db)
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_followed_build_is_updated_and_the_one_before_kept_to_go_back_to() {
+    let root = root("update");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    crate::settings::set_proton_downloads(&db, true).unwrap();
+    let pinned = fake_build(&dirs, "GE-Proton11-4-x86_64");
+    let old = fake_build(&dirs, "GE-Proton11-5-x86_64");
+    let current = fake_build(&dirs, "GE-Proton11-6-x86_64");
+    let cachy = fake_build(&dirs, "proton-cachyos-11.0-20260602-slr-x86_64_v3");
+    std::os::unix::fs::symlink("GE-Proton11-6-x86_64", latest_link(&dirs, Source::GeProton))
+        .unwrap();
+    // One game follows GE-Proton, another stays on an older build.
+    game_on(&db, &root, "1", &latest_link(&dirs, Source::GeProton));
+    game_on(&db, &root, "2", &pinned);
+    assert_eq!(followed(&db, &dirs).unwrap(), [Source::GeProton]);
+
+    let archive = gz(&build_tar(|_| {}));
+    let (api, seen) = github(archive.clone(), sha512_hex(&archive)).await;
+    let http = crate::http::client().unwrap();
+    let names = Arc::new(Mutex::new(Vec::new()));
+    let log = names.clone();
+    let updated = update(
+        &db,
+        &http,
+        &dirs,
+        &api,
+        move |name, _| log.lock().unwrap().push(name.to_string()),
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.len(), 1);
+    let newest = dir(&dirs).join("GE-Proton11-7-x86_64");
+    assert!(
+        names
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|n| n == "GE-Proton11-7-x86_64")
+    );
+    assert_eq!(latest_target(&dirs, Source::GeProton), Some(newest.clone()));
+    assert!(
+        latest_link(&dirs, Source::GeProton)
+            .join("proton")
+            .is_file()
+    );
+    // The one before stays to go back to, as does a build a game is set to; an older one goes,
+    // and another project's builds are left alone.
+    assert!(current.is_dir() && pinned.is_dir() && cachy.is_dir());
+    assert!(!old.exists());
+    assert!(crate::settings::proton_checked_at(&db).unwrap().is_some());
+
+    // Up to date: GitHub is asked, nothing is downloaded.
+    let asked = seen.lock().unwrap().len();
+    let updated = update(
+        &db,
+        &http,
+        &dirs,
+        &api,
+        |_, _| {},
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert!(updated.is_empty());
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), asked + 1);
+    assert!(seen.last().unwrap().starts_with(LATEST));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn nothing_followed_asks_github_nothing() {
+    let root = root("unfollowed");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    crate::settings::set_proton_downloads(&db, true).unwrap();
+    let build = fake_build(&dirs, "GE-Proton11-6-x86_64");
+    game_on(&db, &root, "1", &build);
+    let (api, seen) = github(Vec::new(), String::new()).await;
+    let http = crate::http::client().unwrap();
+    let updated = update(
+        &db,
+        &http,
+        &dirs,
+        &api,
+        |_, _| {},
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert!(updated.is_empty());
+    assert!(seen.lock().unwrap().is_empty());
+    // Downloads off: refused before anything.
+    crate::settings::set_proton_downloads(&db, false).unwrap();
+    let result = update(
+        &db,
+        &http,
+        &dirs,
+        &api,
+        |_, _| {},
+        &CancellationToken::new(),
+    )
+    .await;
+    assert!(matches!(result, Err(Error::Refused(_))));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn builds_are_checked_at_most_once_a_day_and_only_once_both_switches_are_on() {
+    let db = Db::in_memory().unwrap();
+    let now = 1_791_600_000;
+    assert!(!update_due(&db, now).unwrap());
+    crate::settings::set_proton_updates(&db, true).unwrap();
+    assert!(!update_due(&db, now).unwrap(), "downloads still off");
+    crate::settings::set_proton_downloads(&db, true).unwrap();
+    assert!(update_due(&db, now).unwrap(), "never checked");
+    crate::settings::set_proton_checked_at(&db, now - 3600).unwrap();
+    assert!(!update_due(&db, now).unwrap());
+    crate::settings::set_proton_checked_at(&db, now - 24 * 3600).unwrap();
+    assert!(update_due(&db, now).unwrap());
+}
+
+#[test]
+fn the_newest_build_stays_while_games_follow_it_and_goes_with_its_link_otherwise() {
+    let root = root("remove-latest");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    let build = fake_build(&dirs, "GE-Proton11-7-x86_64");
+    let link = latest_link(&dirs, Source::GeProton);
+    std::os::unix::fs::symlink("GE-Proton11-7-x86_64", &link).unwrap();
+    assert_eq!(
+        installed(&dirs),
+        std::slice::from_ref(&build),
+        "the link is not a build"
+    );
+    // The link itself is not a build to delete.
+    assert!(matches!(remove(&db, &dirs, &link), Err(Error::Refused(_))));
+
+    game_on(&db, &root, "1", &link);
+    let result = remove(&db, &dirs, &build);
+    assert!(
+        matches!(&result, Err(Error::Refused(m)) if m.contains("GE-Proton-latest")),
+        "{result:?}"
+    );
+    assert!(build.is_dir());
+
+    db.conn().execute("DELETE FROM installs", []).unwrap();
+    remove(&db, &dirs, &build).unwrap();
+    assert!(!build.exists());
+    assert!(
+        std::fs::symlink_metadata(&link).is_err(),
+        "the link went with it"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn builds_downloaded_before_the_links_get_one_to_the_last_unpacked() {
+    let root = root("link-newest");
+    let dirs = Dirs::under(&root);
+    let at = |build: &Path, secs: u64| {
+        std::fs::File::open(build)
+            .unwrap()
+            .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+            .unwrap();
+    };
+    // By when it was unpacked, not by name: 11-10 sorts before 11-9.
+    at(&fake_build(&dirs, "GE-Proton11-10-x86_64"), 2_000);
+    at(&fake_build(&dirs, "GE-Proton11-9-x86_64"), 1_000);
+    let umu = fake_build(&dirs, "UMU-Proton-10.0-4");
+    std::os::unix::fs::symlink("elsewhere", latest_link(&dirs, Source::UmuProton)).unwrap();
+    link_newest(&dirs).unwrap();
+    assert_eq!(
+        latest_target(&dirs, Source::GeProton),
+        Some(dir(&dirs).join("GE-Proton11-10-x86_64"))
+    );
+    // A link already there is left as it is; a project without builds gets none.
+    assert_eq!(
+        latest_target(&dirs, Source::UmuProton),
+        Some(dir(&dirs).join("elsewhere"))
+    );
+    assert!(umu.is_dir());
+    assert!(std::fs::symlink_metadata(latest_link(&dirs, Source::ProtonCachyOs)).is_err());
+    std::fs::remove_dir_all(root).unwrap();
+}

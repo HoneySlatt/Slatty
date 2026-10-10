@@ -13,7 +13,10 @@ use crate::{App, Message, err};
 pub struct RunnersView {
     /// Whether GitHub may be asked, off until turned on.
     pub downloads: bool,
+    /// Whether the builds games follow as `-latest` are updated at start, off until turned on.
+    pub updates: bool,
     pub checking: bool,
+    pub updating: bool,
     /// The newest build of each project, once asked for.
     pub releases: Vec<(Source, Result<Release, String>)>,
     /// The build being downloaded, how far it is, and what stops it.
@@ -28,9 +31,15 @@ pub enum RunnersMsg {
     Check,
     Checked(Vec<(Source, Result<Release, String>)>),
     Install(Release),
-    Progress(Stage),
+    /// How far the download of the build named is.
+    Progress(String, Stage),
     /// `Err(None)` when the download was stopped.
     Installed(Result<PathBuf, Option<String>>),
+    Updates(bool),
+    /// Downloads the newest build of each project games follow as `-latest`.
+    Update,
+    /// The builds an update installed; `Err(None)` when it was stopped.
+    Updated(Result<Vec<Release>, Option<String>>),
     Cancel,
     Remove(PathBuf),
     Removed(Result<(), String>),
@@ -85,6 +94,7 @@ impl App {
                 }
                 let cancel = CancellationToken::new();
                 view.installing = Some((release.name.clone(), None, cancel.clone()));
+                let name = release.name.clone();
                 return Task::run(
                     progress_stream(
                         async move |throttle| {
@@ -98,14 +108,72 @@ impl App {
                                     .map_err(paused_or);
                             Message::Runners(RunnersMsg::Installed(result))
                         },
-                        |stage| Message::Runners(RunnersMsg::Progress(stage)),
+                        move |stage| Message::Runners(RunnersMsg::Progress(name.clone(), stage)),
                     ),
                     |m| m,
                 );
             }
-            RunnersMsg::Progress(stage) => {
-                if let Some((_, at, _)) = &mut view.installing {
+            RunnersMsg::Progress(name, stage) => {
+                if let Some((current, at, _)) = &mut view.installing {
+                    *current = name;
                     *at = Some(stage);
+                }
+            }
+            RunnersMsg::Updates(on) => {
+                view.updates = on;
+                if let Err(e) = slatty_core::settings::set_proton_updates(&core.db, on) {
+                    self.notify_error(e.to_string());
+                }
+            }
+            RunnersMsg::Update => {
+                if view.installing.is_some() || view.updating {
+                    return Task::none();
+                }
+                let cancel = CancellationToken::new();
+                view.updating = true;
+                view.installing = Some((String::new(), None, cancel.clone()));
+                return Task::run(
+                    progress_stream(
+                        async move |throttle| {
+                            let report = move |name: &str, stage| {
+                                let progress = (name.to_string(), stage);
+                                match stage {
+                                    Stage::Verifying => throttle.report_now(progress),
+                                    _ => throttle.report(progress),
+                                }
+                            };
+                            let result = protons::update(
+                                &core.db,
+                                &core.http,
+                                &core.dirs,
+                                protons::API,
+                                report,
+                                &cancel,
+                            )
+                            .await
+                            .map_err(paused_or);
+                            Message::Runners(RunnersMsg::Updated(result))
+                        },
+                        |(name, stage)| Message::Runners(RunnersMsg::Progress(name, stage)),
+                    ),
+                    |m| m,
+                );
+            }
+            RunnersMsg::Updated(result) => {
+                view.updating = false;
+                view.installing = None;
+                match result {
+                    Ok(updated) if updated.is_empty() => {}
+                    Ok(updated) => {
+                        let names: Vec<&str> = updated.iter().map(|r| r.name.as_str()).collect();
+                        self.notice = Some(crate::Notice {
+                            error: false,
+                            text: format!("Proton updated: {}.", names.join(", ")),
+                        });
+                        return list(&core);
+                    }
+                    Err(Some(e)) => self.notify_error(format!("Proton update: {e}")),
+                    Err(None) => {}
                 }
             }
             RunnersMsg::Installed(result) => {

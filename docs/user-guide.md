@@ -444,14 +444,28 @@ slatty proton available
 slatty proton install ge-proton        # or proton-cachyos, umu-proton
 slatty proton list
 slatty proton remove GE-Proton11-7-x86_64
+slatty proton updates on               # keep <project>-latest up to date, once a day at start
+slatty proton update                   # or now
 ```
 
 - Each archive is checked against the SHA-512 sum its release publishes before it is opened, then
   unpacked in `~/.local/share/slatty/protons/<name>`. A download stopped half way (Ctrl+C, a lost
   connection) goes on from where it was the next time.
-- Downloaded builds appear first in every Proton menu, beside those of Steam and umu.
-- A build is kept until you delete it, even once a newer one is out: games keep the build they were
-  set to. Deleting one is refused while a game or the default Proton uses it.
+- Downloaded builds appear first in every Proton menu, beside those of Steam and umu, with one
+  entry per project that always leads to its newest downloaded build: `GE-Proton-latest`,
+  `Proton-CachyOS-latest`, `UMU-Proton-latest`. A game or the default Proton set to one of them
+  runs the newest build from its next launch; one set to a numbered build keeps it.
+- **Keep up to date** (Settings → Runners, or `slatty proton updates on`), off until turned on,
+  checks once a day at start the projects a game or the default follows as `-latest`, downloads a
+  newer build in the background and switches to it once it is checked and unpacked. A game already
+  running keeps the build it started with. The build before stays, to choose it by its number for a
+  game a new build breaks; older builds no game uses are deleted. **Update now** and
+  `slatty proton update` do the same at once.
+- Proton upgrades a game's Wine prefix when its build changes, as under Steam; going back to an
+  older build afterwards usually works but is less tested.
+- A build is kept until you delete it, even once a newer one is out, unless an update deletes it as
+  above. Deleting one is refused while a game or the default Proton uses it, or while games follow
+  the `-latest` link that leads to it.
 
 ## Settings
 
@@ -477,7 +491,9 @@ library, and the size of the covers. **Installs** holds:
 **Runners** holds **Proton downloads**, off until turned on (see [Proton builds](#proton-builds)).
 Once on, **Check GitHub** shows the newest build of GE-Proton, Proton-CachyOS and UMU-Proton, each
 with **Install**; a download shows how far it is and can be stopped, and goes on from there the
-next time. **Downloaded** lists the builds SlattyLauncher downloaded, with **Delete**.
+next time. **Keep up to date**, off until turned on, updates the builds games follow as
+`<project>-latest`; **Update now** does it at once. **Downloaded** lists the builds SlattyLauncher
+downloaded, with **Delete**.
 
 **Privacy** has four switches, all on until turned off:
 

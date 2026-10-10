@@ -28,6 +28,14 @@ pub enum ProtonCommand {
     },
     /// Delete a build slatty downloaded (refused while a game or the default uses it)
     Remove { name: String },
+    /// Update, at most once a day at start, the builds games follow as <project>-latest (off
+    /// until turned on)
+    Updates {
+        #[arg(value_enum)]
+        state: State,
+    },
+    /// Download the newest build of each project games follow as <project>-latest, now
+    Update,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -54,6 +62,7 @@ impl From<SourceArg> for Source {
 }
 
 pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
+    protons::link_newest(&ctx.dirs)?;
     match cmd {
         ProtonCommand::List => {
             for build in settings::proton_candidates(&ctx.dirs) {
@@ -93,37 +102,88 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
                 release.name,
                 size(release.size)
             );
-            let cancel = CancellationToken::new();
-            let on_ctrl_c = cancel.clone();
-            tokio::spawn(async move {
-                if tokio::signal::ctrl_c().await.is_ok() {
-                    on_ctrl_c.cancel();
-                }
-            });
-            let last = Mutex::new(None::<Instant>);
-            let progress = move |stage: Stage| {
-                let (what, done, total) = match stage {
-                    Stage::Downloading { done, total } => ("Downloading", done, total),
-                    Stage::Verifying => {
-                        println!("  Checking the SHA-512 sum");
-                        return;
-                    }
-                    Stage::Unpacking { done, total } => ("Unpacking", done, total),
-                };
-                let mut last = last.lock().unwrap();
-                if last.is_none_or(|t| t.elapsed() >= Duration::from_secs(1)) || done == total {
-                    *last = Some(Instant::now());
-                    let pct = (done * 100).checked_div(total).unwrap_or(100);
-                    println!("  {what} {pct:>3}%");
-                }
-            };
-            let path = protons::install(&ctx.http, &ctx.dirs, &release, progress, &cancel).await?;
+            let progress = printer();
+            let path =
+                protons::install(&ctx.http, &ctx.dirs, &release, progress, &stop_on_ctrl_c())
+                    .await?;
             println!("Installed in {}", path.display());
         }
         ProtonCommand::Remove { name } => {
             protons::remove(&ctx.db, &ctx.dirs, &protons::dir(&ctx.dirs).join(&name))?;
             println!("Deleted {name}");
         }
+        ProtonCommand::Updates { state } => {
+            let on = matches!(state, State::On);
+            settings::set_proton_updates(&ctx.db, on)?;
+            println!(
+                "Proton builds followed as <project>-latest are {}",
+                if on {
+                    "updated at most once a day, at start"
+                } else {
+                    "updated only when asked"
+                }
+            );
+        }
+        ProtonCommand::Update => {
+            let followed = protons::followed(&ctx.db, &ctx.dirs)?;
+            if followed.is_empty() {
+                println!(
+                    "No game follows a <project>-latest build; set one in its settings, or with \
+                     slatty install --proton {}",
+                    protons::latest_link(&ctx.dirs, Source::GeProton).display()
+                );
+                return Ok(());
+            }
+            let print = printer();
+            let updated = protons::update(
+                &ctx.db,
+                &ctx.http,
+                &ctx.dirs,
+                protons::API,
+                move |_, stage| print(stage),
+                &stop_on_ctrl_c(),
+            )
+            .await?;
+            if updated.is_empty() {
+                println!("Up to date");
+            }
+            for release in updated {
+                println!("Updated to {}", release.name);
+            }
+        }
     }
     Ok(())
+}
+
+/// A token Ctrl+C cancels.
+fn stop_on_ctrl_c() -> CancellationToken {
+    let cancel = CancellationToken::new();
+    let on_ctrl_c = cancel.clone();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            on_ctrl_c.cancel();
+        }
+    });
+    cancel
+}
+
+/// Prints where a download stands, at most once a second.
+fn printer() -> impl Fn(Stage) + Send + Sync + 'static {
+    let last = Mutex::new(None::<Instant>);
+    move |stage: Stage| {
+        let (what, done, total) = match stage {
+            Stage::Downloading { done, total } => ("Downloading", done, total),
+            Stage::Verifying => {
+                println!("  Checking the SHA-512 sum");
+                return;
+            }
+            Stage::Unpacking { done, total } => ("Unpacking", done, total),
+        };
+        let mut last = last.lock().unwrap();
+        if last.is_none_or(|t| t.elapsed() >= Duration::from_secs(1)) || done == total {
+            *last = Some(Instant::now());
+            let pct = (done * 100).checked_div(total).unwrap_or(100);
+            println!("  {what} {pct:>3}%");
+        }
+    }
 }
