@@ -62,6 +62,16 @@ pressure-vessel from the Steam Linux Runtime, told to share less:
   umu's runtime and the setup files SlattyLauncher downloads for it;
 - your home folder, your `/tmp` and other disks stay out of view (checked with `/home` and a
   network share each mounted on their own), so Wine's `z:` drive shows nothing of your files;
+  so does your Steam installation (`~/.steam`, `~/.local/share/Steam`: the client's settings
+  and tokens), which the container otherwise shows every game, read-only;
+- your own environment cannot open it further: the variables umu and its container turn into
+  shared folders (`PRESSURE_VESSEL_SHARE_HOME`, `STEAM_COMPAT_*` paths, `PROTON_LOG_DIR`,
+  `WINEPREFIX` for a Linux game) are set by SlattyLauncher for every isolated launch;
+- a game cannot widen it from inside between two sessions: a file in its folder named like the
+  program umu is given (`sh`, `sc`, `Z:\…\game.exe`), or a link named as its working directory,
+  would have umu share the whole disk or the container where the link leads; the launch is
+  refused instead. The launcher's own work in the prefix and the game folder (cloud sync, the
+  Galaxy service, the backup made before deleting a prefix) refuses to follow a link out of them;
 - the D-Bus session and system buses stay out too: through them a program could have other
   services act for it, systemd starting a command outside the container among them, or, where
   your system's rules allow the active session, suspending the computer or mounting a drive.
@@ -71,10 +81,16 @@ pressure-vessel from the Steam Linux Runtime, told to share less:
 What isolation leaves open:
 
 - **Display, sound and devices.** Wayland or X11, PipeWire or PulseAudio, the GPU, `/dev` (gamepads)
-  and the network are shared, as games need them. Comet's port (127.0.0.1:9977) is reachable, as
+  and the network are shared, as games need them. The X11 socket lets any client read what other
+  X clients receive (keyboard included); under Wayland, that is Xwayland's clients only. The
+  PipeWire sockets include its manager socket (`pipewire-0-manager`), through which a program can
+  reach every stream, the microphone among them. Comet's port (127.0.0.1:9977) is reachable, as
   are Unix sockets other programs open in the abstract namespace, which goes with the network.
 - **Processes.** Other processes of yours are visible in `/proc`, though not their files or
   environment.
+- **What your environment loads into the game.** The modules in `LD_PRELOAD` (MangoHud,
+  GameMode) and the Vulkan layers of your user account are brought into the container, read-only,
+  as pressure-vessel does for every game.
 
 Isolation keeps a game out of your files; it is not a boundary against a program written to break
 out. Games that are not isolated, and Linux games by default, see your files: a Windows game

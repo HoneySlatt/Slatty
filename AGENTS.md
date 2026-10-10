@@ -238,10 +238,16 @@ The public documentation is in English and must match the code. Update it in the
 - **umu's runtime cannot see `/tmp/nix-shell.*`.** Point `TMPDIR` inside the home folder for
   tests that run Proton.
 - **umu and its container share more than they are told.** umu shares, writable, the whole
-  filesystem under `STEAM_COMPAT_INSTALL_PATH`, which it takes from the program's folder when the
-  program is a file; pressure-vessel shares the folders `TMPDIR`, `TMP`, `TEMP` and `TEMPDIR` name.
-  An isolated launch must keep all of these out (`runner::isolation_env`); check a change with the
-  ignored isolation tests, which also run the same launch not isolated as a control.
+  filesystem under `STEAM_COMPAT_INSTALL_PATH`, which it takes from the environment or from the
+  program's folder when the program is a file, relative to the working directory too (a planted
+  `sh` or `Z:\…\game.exe` in the game folder counts); pressure-vessel shares the folders
+  `TMPDIR`, `TMP`, `TEMP`, `TEMPDIR`, `PROTON_LOG_DIR`, the `STEAM_COMPAT_*` path variables and
+  `WINEPREFIX` (as `STEAM_COMPAT_DATA_PATH`) name, the working directory as it is on disk, and
+  the Steam installation from `$HOME/.steam`; `PRESSURE_VESSEL_SHARE_HOME=1` in the user's
+  environment wins over `PRESSURE_VESSEL_HOME`; its path lists know no escape for `:`. The launch
+  inherits the user's whole environment. An isolated launch must keep all of these out
+  (`runner::isolation_env`, `runner::check_shared`); check a change with the ignored isolation
+  tests, which also run the same launch without the measure, or not isolated, as a control.
 - **Comet listens on the fixed port 127.0.0.1:9977.** Another launcher's Comet (Heroic) makes it
   fail; `slatty doctor` reports it.
 - **The running binary can be replaced by a rebuild.** The session supervisor is started through

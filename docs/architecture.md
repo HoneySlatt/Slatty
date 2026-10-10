@@ -219,7 +219,21 @@ environment (`runner::isolation_env`) to share less:
   for no bus: the container then shares neither bus (an address to a missing socket stops it from
   starting). Proton and umu do not use them; Wine uses the system bus only in `mountmgr` (UDisks,
   NetworkManager) and `winebth` (BlueZ), and showed the same network adapters and drives without
-  it.
+  it;
+- `HOME` set to the game's own home as well: pressure-vessel shares the Steam installation
+  (`~/.steam` and where its links lead, `~/.local/share/Steam` with the client's settings and
+  tokens) read-only with every game, from the home folder `HOME` names (`wrap-home.c`,
+  `expose_steam`). umu keeps its runtimes and cache where they are through `XDG_DATA_HOME` and
+  `XDG_CACHE_HOME`, which the container replaces with the game's own;
+- `PRESSURE_VESSEL_SHARE_HOME=0`, `PROTON_LOG_DIR` (the game's home), and an empty
+  `STEAM_COMPAT_INSTALL_PATH`, `STEAM_COMPAT_LIBRARY_PATHS`, `STEAM_COMPAT_CLIENT_INSTALL_PATH`,
+  `STEAM_COMPAT_MOUNT_PATHS`, `STEAM_COMPAT_TOOL_PATH`, `STEAM_COMPAT_APP_LIBRARY_PATH(S)`,
+  `STEAM_EXTRA_COMPAT_TOOLS_PATHS` and `STEAM_RUNTIME_SCOUT`: the launch inherits the user's
+  environment, and pressure-vessel turns each of these into a writable mount
+  (`wrap-setup.c`, `known_required_env`), the first into the shared home folder, whatever the
+  other settings say. umu takes `STEAM_COMPAT_INSTALL_PATH` from the environment too;
+- for a Linux game, `WINEPREFIX` set to the game's home: without one umu takes `~/Games/umu/<id>`
+  (or the user's `$WINEPREFIX`), and the container shares it as `STEAM_COMPAT_DATA_PATH`.
 
 umu shares, writable, the whole filesystem a game is on (its "game drive": the first mount point
 above `STEAM_COMPAT_INSTALL_PATH`, which it otherwise takes from the program's folder). With `/home`
@@ -227,6 +241,23 @@ or a library disk mounted on its own, that is all of it. An isolated game is the
 without `STEAM_COMPAT_INSTALL_PATH`, and never by a path umu can open: a Windows program by its
 `Z:\…` path, which Proton resolves in the container, a Linux script through its interpreter
 (`bash start.sh`). Proton's fixes then find the game from the working directory.
+
+umu looks for that first argument on this computer too, relative to the working directory
+(`Path(cmd).absolute()`): a file named `sh`, `sc`, `wineboot` or `Z:\…\game.exe` in the game's
+folder, which the game writes, would make umu take the folder for the game's at the next launch.
+And pressure-vessel shares the working directory as it is on disk: a link the game made in its
+folder, named as the working directory in its `goggame-*.info`, would share where it leads.
+`runner::check_shared` refuses both, for every command run isolated (the game, `wineboot`, the
+setup programs, the Galaxy service), just before it starts; the play flow builds the game's
+command again after the setup steps. pressure-vessel splits its path lists on every `:`, escaped
+or not: a game folder with `:` in its path is refused rather than started without its folder.
+
+The launcher itself works in the prefix and the game folder outside the container, where a link
+the game planted could lead it out. When the game is isolated, cloud sync refuses a save folder
+that leads out of the prefix (or of the game folder), the Galaxy service registration refuses to
+copy through such a link, and an uninstall refuses to back up or delete a prefix whose `users`
+folder leads out of it. Games that are not isolated keep the old behaviour: Wine alone links the
+user folders to the real ones.
 
 A Linux game runs isolated in umu without Proton (the sniper runtime), on NixOS too, rather than in
 `steam-run`, which shares everything. Wine alone cannot isolate: such a game is refused while marked

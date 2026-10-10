@@ -283,6 +283,12 @@ slatty isolation <game-id> --on
   way, or asks GameMode for performance, no longer can; a Windows game no longer sees Bluetooth
   devices through Wine (gamepads are not affected).
 - A game run through Wine alone (imported with `--runner wine`) cannot be isolated.
+- An isolated launch is refused, with the reason, when the container could not keep its promise:
+  a game folder whose path contains `:` (the container cannot be told such a path), a file in the
+  game's folder named like the program umu is given (`sh`, `sc`, `Z:\…\game.exe`), or a working
+  directory that is a link out of the game folder. Rename or remove what the message names, or
+  turn isolation off for that game.
+- Proton's logs (`PROTON_LOG=1`) of an isolated game go to its own home folder.
 - Isolation keeps a game out of your files, not a hostile program out of your system: see
   [SECURITY.md](../SECURITY.md#scope).
 

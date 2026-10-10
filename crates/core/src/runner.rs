@@ -60,9 +60,16 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
             let (program, mut args, mut env) = native_command(&script, wrapper);
             if install.isolated {
                 env.extend(isolation_env(dirs, install)?);
+                // Without one, umu takes `~/Games/umu/<id>` or the user's `$WINEPREFIX` as the
+                // prefix, and the container shares it: the game's own home takes that place.
+                env.push((
+                    "WINEPREFIX".into(),
+                    isolated_home(dirs, &install.game_id)?.display().to_string(),
+                ));
                 // Given a file, umu would share the whole filesystem it is on: the script goes to
                 // its interpreter, which umu looks for inside the container.
                 args.insert(0, interpreter_name(&script));
+                check_shared(install, &args, &install.path)?;
             }
             Ok(LaunchSpec {
                 program,
@@ -202,6 +209,9 @@ pub fn windows_command(
             {
                 *program = windows_path(Path::new(program.as_str()));
             }
+            if install.isolated {
+                check_shared(install, &args, &cwd)?;
+            }
             Ok(LaunchSpec {
                 program: umu,
                 args,
@@ -319,30 +329,56 @@ pub fn isolated_home(dirs: &Dirs, game_id: &str) -> Result<PathBuf> {
 fn isolation_env(dirs: &Dirs, install: &Install) -> Result<Vec<(String, String)>> {
     let home = isolated_home(dirs, &install.game_id)?;
     crate::paths::ensure_dir(&home)?;
+    let home = home.display().to_string();
     let read_only = [
         umu_data(),
         crate::setup::redist_dir(dirs),
         crate::installer::support_dir(dirs, &install.game_id),
     ];
-    Ok(vec![
-        ("PRESSURE_VESSEL_HOME".into(), home.display().to_string()),
+    let mut env = vec![
+        ("PRESSURE_VESSEL_HOME".into(), home.clone()),
+        // The user's own environment could ask the container to share the home folder after all.
+        ("PRESSURE_VESSEL_SHARE_HOME".into(), "0".into()),
         (
             "PRESSURE_VESSEL_FILESYSTEMS_RW".into(),
-            path_list(std::slice::from_ref(&install.path)),
+            path_list(std::slice::from_ref(&install.path))?,
         ),
         (
             "PRESSURE_VESSEL_FILESYSTEMS_RO".into(),
-            path_list(&read_only),
+            path_list(&read_only)?,
         ),
+        // The container shares the user's Steam installation (`~/.steam` and where its links
+        // lead, the client's settings among them) with every game, read-only, from the home
+        // folder `HOME` names: the game's own home has none. umu still finds its runtimes and
+        // keeps its cache where they are.
+        ("HOME".into(), home.clone()),
+        ("XDG_DATA_HOME".into(), data_home().display().to_string()),
+        ("XDG_CACHE_HOME".into(), cache_home().display().to_string()),
         // The container shares the folders these name with the game (checked: any of them in the
-        // home folder showed all of it); its own `/tmp` is private. It would also share the last
-        // two, writable.
+        // home folder showed all of it); its own `/tmp` is private.
         ("TMPDIR".into(), "/tmp".into()),
         ("TMP".into(), "/tmp".into()),
         ("TEMP".into(), "/tmp".into()),
         ("TEMPDIR".into(), "/tmp".into()),
-        ("STEAM_COMPAT_LIBRARY_PATHS".into(), String::new()),
-        ("STEAM_COMPAT_CLIENT_INSTALL_PATH".into(), String::new()),
+        // Proton's logs, when asked for, go to the game's home rather than to a shared folder.
+        ("PROTON_LOG_DIR".into(), home),
+    ];
+    // Every other folder the container would share, writable, from the user's environment
+    // (pressure-vessel's `known_required_env`), and the one umu takes a game folder from.
+    for shared in [
+        "STEAM_COMPAT_INSTALL_PATH",
+        "STEAM_COMPAT_LIBRARY_PATHS",
+        "STEAM_COMPAT_CLIENT_INSTALL_PATH",
+        "STEAM_COMPAT_MOUNT_PATHS",
+        "STEAM_COMPAT_TOOL_PATH",
+        "STEAM_COMPAT_APP_LIBRARY_PATH",
+        "STEAM_COMPAT_APP_LIBRARY_PATHS",
+        "STEAM_EXTRA_COMPAT_TOOLS_PATHS",
+        "STEAM_RUNTIME_SCOUT",
+    ] {
+        env.push((shared.into(), String::new()));
+    }
+    env.extend([
         // Through the D-Bus buses a program could have other services act for it, outside the
         // container (systemd starts commands; the system's rules may let the session suspend or
         // mount drives). Wine, Proton and umu do not need them (checked: Wine saw the same network
@@ -350,31 +386,77 @@ fn isolation_env(dirs: &Dirs, install: &Install) -> Result<Vec<(String, String)>
         // out (a missing socket would stop the container).
         ("DBUS_SESSION_BUS_ADDRESS".into(), "disabled:".into()),
         ("DBUS_SYSTEM_BUS_ADDRESS".into(), "disabled:".into()),
-    ])
+    ]);
+    Ok(env)
+}
+
+/// What umu and its container would share with an isolated game beyond what it is given,
+/// refused. umu takes the game's folder from its first argument when that names a file of this
+/// computer, relative to the working directory or to the home folder (`~`), and shares the whole
+/// filesystem under it. The container shares the working directory as it is on disk, through
+/// any link. A game can plant either in its own folder between two sessions.
+fn check_shared(install: &Install, args: &[String], cwd: &Path) -> Result<()> {
+    if install.path.to_str().is_none() {
+        return Err(Error::Refused(format!(
+            "{} cannot be shared with the container: its path is not UTF-8",
+            install.path.display()
+        )));
+    }
+    if let Some(program) = args.first()
+        && (program.starts_with('~') || cwd.join(program).exists())
+    {
+        return Err(Error::Refused(format!(
+            "`{program}` names a file in {}, through which umu would share the whole disk with \
+             the isolated game",
+            cwd.display()
+        )));
+    }
+    if !crate::installer::leads_inside(&install.path, cwd) {
+        return Err(Error::Refused(format!(
+            "{} leads out of the game folder through a link; the container would share where it \
+             leads",
+            cwd.display()
+        )));
+    }
+    Ok(())
 }
 
 /// umu's own files (its runtimes and scripts), which it runs from inside the container.
 fn umu_data() -> PathBuf {
-    std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
-        .unwrap_or_default()
-        .join("umu")
+    data_home().join("umu")
 }
 
-/// Paths for pressure-vessel's lists: `:`-separated, with `:` and `\` escaped.
-fn path_list(paths: &[PathBuf]) -> String {
-    paths
-        .iter()
-        .map(|p| {
-            p.display()
-                .to_string()
-                .replace('\\', "\\\\")
-                .replace(':', "\\:")
-        })
-        .collect::<Vec<_>>()
-        .join(":")
+fn data_home() -> PathBuf {
+    xdg_home("XDG_DATA_HOME", ".local/share")
+}
+
+fn cache_home() -> PathBuf {
+    xdg_home("XDG_CACHE_HOME", ".cache")
+}
+
+fn xdg_home(var: &str, default: &str) -> PathBuf {
+    std::env::var_os(var)
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(default)))
+        .unwrap_or_default()
+}
+
+/// Paths for pressure-vessel's lists, `:`-separated. It knows no escape for `:` (it splits on
+/// every one), so such a path cannot be shared: the launch is refused rather than started
+/// without the folder.
+fn path_list(paths: &[PathBuf]) -> Result<String> {
+    let mut out = Vec::new();
+    for path in paths {
+        let path = path.display().to_string();
+        if path.contains(':') {
+            return Err(Error::Refused(format!(
+                "{path} cannot be shared with the container: its path contains `:`"
+            )));
+        }
+        out.push(path);
+    }
+    Ok(out.join(":"))
 }
 
 #[cfg(test)]
@@ -419,7 +501,7 @@ mod tests {
             game_id: "1423049311".into(),
             title: "[FAKE] Game".into(),
             platform: Platform::Windows,
-            path: "/games/Game: Remastered".into(),
+            path: "/games/Game Remastered".into(),
             client_id: None,
             runner: Runner::Native,
             umu_id: None,
@@ -427,14 +509,12 @@ mod tests {
         };
         let env = umu_env(&dirs, &install, Path::new("/proton"), Path::new("/prefix")).unwrap();
         let home = dirs.data.join("homes/1423049311");
-        assert_eq!(
-            value(&env, "PRESSURE_VESSEL_HOME"),
-            Some(home.to_str().unwrap())
-        );
+        let home_str = home.to_str().unwrap();
+        assert_eq!(value(&env, "PRESSURE_VESSEL_HOME"), Some(home_str));
         assert!(home.is_dir(), "made ready for the container");
         assert_eq!(
             value(&env, "PRESSURE_VESSEL_FILESYSTEMS_RW"),
-            Some("/games/Game\\: Remastered")
+            Some("/games/Game Remastered")
         );
         let read_only = value(&env, "PRESSURE_VESSEL_FILESYSTEMS_RO").unwrap();
         for shared in [
@@ -445,21 +525,102 @@ mod tests {
             assert!(read_only.contains(shared.to_str().unwrap()), "{read_only}");
         }
         // umu would share the whole filesystem under it, and the container `$TMPDIR`.
-        assert_eq!(value(&env, "STEAM_COMPAT_INSTALL_PATH"), None);
+        assert_eq!(value(&env, "STEAM_COMPAT_INSTALL_PATH"), Some(""));
         for temp in ["TMPDIR", "TMP", "TEMP", "TEMPDIR"] {
             assert_eq!(value(&env, temp), Some("/tmp"), "{temp}");
         }
         assert_eq!(value(&env, "DBUS_SESSION_BUS_ADDRESS"), Some("disabled:"));
         assert_eq!(value(&env, "DBUS_SYSTEM_BUS_ADDRESS"), Some("disabled:"));
+        // The user's environment could share the home folder or more folders through these.
+        assert_eq!(value(&env, "PRESSURE_VESSEL_SHARE_HOME"), Some("0"));
+        for shared in [
+            "STEAM_COMPAT_MOUNT_PATHS",
+            "STEAM_COMPAT_TOOL_PATH",
+            "STEAM_COMPAT_APP_LIBRARY_PATH",
+            "STEAM_COMPAT_APP_LIBRARY_PATHS",
+            "STEAM_EXTRA_COMPAT_TOOLS_PATHS",
+            "STEAM_RUNTIME_SCOUT",
+            "STEAM_COMPAT_LIBRARY_PATHS",
+            "STEAM_COMPAT_CLIENT_INSTALL_PATH",
+        ] {
+            assert_eq!(value(&env, shared), Some(""), "{shared}");
+        }
+        assert_eq!(value(&env, "PROTON_LOG_DIR"), Some(home_str));
+        // The container shares `~/.steam` from `$HOME`; umu keeps its data where it is.
+        assert_eq!(value(&env, "HOME"), Some(home_str));
+        assert_eq!(
+            value(&env, "XDG_DATA_HOME").map(Path::new),
+            umu_data().parent()
+        );
+        assert_eq!(
+            value(&env, "XDG_CACHE_HOME").map(Path::new),
+            Some(cache_home().as_path())
+        );
 
         install.isolated = false;
         let env = umu_env(&dirs, &install, Path::new("/proton"), Path::new("/prefix")).unwrap();
         assert_eq!(
             value(&env, "STEAM_COMPAT_INSTALL_PATH"),
-            Some("/games/Game: Remastered")
+            Some("/games/Game Remastered")
         );
         assert!(env.iter().all(|(k, _)| !k.starts_with("PRESSURE_VESSEL")));
+        assert!(env.iter().all(|(k, _)| k != "HOME"));
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_folder_the_container_cannot_be_told_is_refused() {
+        // pressure-vessel splits its lists on every `:`, escaped or not (checked: the folder
+        // was not shared and the game did not start).
+        assert!(matches!(
+            path_list(&["/games/Game: Remastered".into()]),
+            Err(Error::Refused(_))
+        ));
+        assert_eq!(
+            path_list(&["/games/Game\\Remastered".into(), "/b".into()]).unwrap(),
+            "/games/Game\\Remastered:/b"
+        );
+    }
+
+    #[test]
+    fn a_program_umu_could_find_on_disk_or_a_linked_working_directory_is_refused() {
+        let dir = std::env::temp_dir().join(format!("slatty-shared-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("game/sub")).unwrap();
+        std::fs::create_dir_all(dir.join("outside")).unwrap();
+        let install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: dir.join("game"),
+            client_id: None,
+            runner: Runner::Native,
+            umu_id: None,
+            isolated: true,
+        };
+        let check = |program: &str, cwd: &Path| check_shared(&install, &[program.into()], cwd);
+        let game = install.path.clone();
+        assert!(check("Z:\\games\\game.exe", &game).is_ok());
+        assert!(check("sh", &game.join("sub")).is_ok());
+        // Planted by the game in its folder: umu would take the folder for the game's and share
+        // the whole filesystem under it.
+        for planted in ["sh", "Z:\\games\\game.exe"] {
+            std::fs::write(game.join(planted), b"").unwrap();
+            assert!(
+                matches!(check(planted, &game), Err(Error::Refused(_))),
+                "{planted}"
+            );
+        }
+        assert!(matches!(check("~", &game), Err(Error::Refused(_))));
+        assert!(matches!(check("..", &game), Err(Error::Refused(_))));
+        // A working directory that is a link out of the game folder: the container shares where
+        // it leads.
+        std::os::unix::fs::symlink(dir.join("outside"), game.join("wd")).unwrap();
+        assert!(matches!(
+            check("wineboot", &game.join("wd")),
+            Err(Error::Refused(_))
+        ));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
