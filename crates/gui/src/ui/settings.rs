@@ -10,12 +10,14 @@ use super::format::*;
 use super::note;
 use super::widgets::logo;
 use crate::icons::{Icon, icon};
+use crate::runners::RunnersMsg;
 use crate::settings::{
     COVER_SIZES, CoverSize, FontChoice, PlatformChoice, ProtonChoice, SETTINGS_SCROLL, Section,
     SettingsMsg,
 };
 use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Message};
+use slatty_core::protons::{Release, Source, Stage};
 
 impl App {
     /// A side list of the parts of the page, and their cards; an entry brings its card to the top.
@@ -64,6 +66,7 @@ impl App {
                 Section::Account => self.account_rows(wide),
                 Section::Library => self.library_rows(wide),
                 Section::Installs => self.installs_rows(wide),
+                Section::Runners => self.runners_rows(wide),
                 Section::Appearance => self.appearance_rows(wide),
                 Section::Privacy => self.privacy_rows(wide),
                 Section::Advanced => self.advanced_rows(wide),
@@ -210,8 +213,8 @@ impl App {
             ),
             note(
                 "No telemetry: SlattyLauncher talks to GOG, to the download servers GOG names, \
-                 to umu's database when allowed above, and to SteamGridDB once turned on in \
-                 Advanced.",
+                 to umu's database when allowed above, to GitHub once Proton downloads are \
+                 turned on in Runners, and to SteamGridDB once turned on in Advanced.",
             ),
         ]
     }
@@ -297,6 +300,144 @@ impl App {
             ),
             None,
         )
+    }
+}
+
+impl App {
+    /// Proton builds from GitHub: the switch, the newest build of each project once asked for,
+    /// and the builds already downloaded.
+    fn runners_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
+        let r = &self.runners;
+        let msg = |m| Message::Runners(m);
+        let mut rows = vec![setting(
+            wide,
+            "Proton downloads",
+            column![
+                toggler(r.downloads)
+                    .on_toggle(move |on| msg(RunnersMsg::Downloads(on)))
+                    .size(22),
+                note(
+                    "Lists and downloads GE-Proton, Proton-CachyOS and UMU-Proton from their \
+                     GitHub releases, only when you ask. Each build is checked against the sum \
+                     its release publishes.",
+                ),
+            ]
+            .spacing(8)
+            .into(),
+            None,
+        )];
+        if r.downloads {
+            rows.push(setting(
+                wide,
+                "Newest builds",
+                note(if r.releases.is_empty() {
+                    "Not checked yet."
+                } else {
+                    "From GitHub, as of the last check."
+                }),
+                Some(
+                    button(
+                        text(if r.checking {
+                            "Checking…"
+                        } else {
+                            "Check GitHub"
+                        })
+                        .size(14),
+                    )
+                    .padding([8, 16])
+                    .on_press_maybe((!r.checking).then_some(msg(RunnersMsg::Check)))
+                    .style(theme::tonal)
+                    .into(),
+                ),
+            ));
+            for (source, release) in &r.releases {
+                rows.push(self.release_row(wide, *source, release));
+            }
+        }
+        if !r.downloaded.is_empty() {
+            let builds = r.downloaded.iter().map(|path| {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                row![
+                    text(name.into_owned()).size(15).width(Length::Fill),
+                    button(text("Delete").size(14))
+                        .padding([6, 14])
+                        .on_press(msg(RunnersMsg::Remove(path.clone())))
+                        .style(theme::tonal),
+                ]
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .into()
+            });
+            rows.push(setting(
+                wide,
+                "Downloaded",
+                Column::with_children(builds).spacing(8).into(),
+                Some(note("Kept until deleted. A build a game uses stays.")),
+            ));
+        }
+        rows
+    }
+
+    fn release_row<'a>(
+        &'a self,
+        wide: bool,
+        source: Source,
+        release: &'a Result<Release, String>,
+    ) -> Element<'a, Message> {
+        let r = &self.runners;
+        let release = match release {
+            Ok(release) => release,
+            Err(e) => return setting(wide, source.name(), note(e.clone()), None),
+        };
+        let what = format!("{} · {}", release.name, human_size(release.size));
+        let installing = r
+            .installing
+            .as_ref()
+            .filter(|(name, _, _)| *name == release.name);
+        let downloaded = self
+            .core
+            .as_ref()
+            .is_some_and(|c| r.downloaded.contains(&release.path(&c.dirs)));
+        let (control, after): (Element<'_, Message>, Element<'_, Message>) =
+            if let Some((_, stage, _)) = installing {
+                (
+                    text(stage_text(*stage)).size(15).into(),
+                    button(text("Stop").size(14))
+                        .padding([8, 16])
+                        .on_press(Message::Runners(RunnersMsg::Cancel))
+                        .style(theme::tonal)
+                        .into(),
+                )
+            } else if downloaded {
+                (text(what).size(15).into(), note("Installed"))
+            } else {
+                (
+                    text(what).size(15).into(),
+                    button(text("Install").size(14))
+                        .padding([8, 16])
+                        .on_press_maybe(
+                            r.installing
+                                .is_none()
+                                .then(|| Message::Runners(RunnersMsg::Install(release.clone()))),
+                        )
+                        .style(theme::tonal)
+                        .into(),
+                )
+            };
+        setting(wide, source.name(), control, Some(after))
+    }
+}
+
+/// Where a download stands, in words.
+fn stage_text(stage: Option<Stage>) -> String {
+    let percent = |done: u64, total: u64| (done * 100).checked_div(total).unwrap_or(100);
+    match stage {
+        None => "Starting…".into(),
+        Some(Stage::Downloading { done, total }) => {
+            format!("Downloading {} %", percent(done, total))
+        }
+        Some(Stage::Verifying) => "Checking the sum…".into(),
+        Some(Stage::Unpacking { done, total }) => format!("Unpacking {} %", percent(done, total)),
     }
 }
 
@@ -502,6 +643,7 @@ fn section_icon(s: Section) -> Icon {
         Section::Account => Icon::User,
         Section::Library => Icon::LayoutGrid,
         Section::Installs => Icon::Download,
+        Section::Runners => Icon::Package,
         Section::Appearance => Icon::Palette,
         Section::Privacy => Icon::Shield,
         Section::Advanced => Icon::Wrench,

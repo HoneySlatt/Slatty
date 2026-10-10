@@ -10,6 +10,7 @@ mod login;
 mod maintenance;
 mod play;
 mod presets;
+mod runners;
 mod settings;
 #[cfg(test)]
 mod tests;
@@ -247,6 +248,8 @@ pub struct App {
     pub installability: HashMap<String, Option<NotInstallable>>,
     pub proton: Option<PathBuf>,
     pub proton_choices: Vec<PathBuf>,
+    /// Proton builds from GitHub (Settings → Runners).
+    pub runners: runners::RunnersView,
     /// Work that closing the window would interrupt, waiting for the user's choice.
     pub quit_confirm: Option<Vec<String>>,
     pub interrupted: Vec<(String, Interrupted)>,
@@ -336,6 +339,7 @@ impl Default for App {
             settings_view: settings::SettingsView::default(),
             proton: None,
             proton_choices: Vec::new(),
+            runners: runners::RunnersView::default(),
             quit_confirm: None,
             interrupted: Vec::new(),
             queue: Vec::new(),
@@ -414,6 +418,7 @@ pub enum Message {
     Downloads(downloads::DownloadsMsg),
     Maintenance(MaintenanceMsg),
     Settings(SettingsMsg),
+    Runners(runners::RunnersMsg),
     DismissNotice,
     CloseRequested,
     ConfirmQuit,
@@ -530,6 +535,8 @@ impl App {
                 self.library_root = boot.library_root.display().to_string();
                 self.proton = boot.proton;
                 self.proton_choices = boot.proton_choices;
+                self.runners.downloads = boot.proton_downloads;
+                self.runners.downloaded = boot.downloaded_protons;
                 self.default_platform = boot.default_platform;
                 self.umu_lookup = boot.umu_lookup;
                 self.report_playtime = boot.report_playtime;
@@ -692,6 +699,7 @@ impl App {
             Message::Downloads(msg) => return self.update_downloads(msg),
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
+            Message::Runners(msg) => return self.update_runners(msg),
             Message::Edit(msg) => return self.update_edit(msg),
             Message::OpenDialog(id, panel) => {
                 self.dialog = Some((id.clone(), panel));

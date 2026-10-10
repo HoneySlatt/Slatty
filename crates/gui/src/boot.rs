@@ -38,6 +38,9 @@ pub struct Boot {
     pub steamgriddb_key: Option<bool>,
     pub proton: Option<PathBuf>,
     pub proton_choices: Vec<PathBuf>,
+    /// Whether Proton builds may be downloaded from GitHub, and those already downloaded.
+    pub proton_downloads: bool,
+    pub downloaded_protons: Vec<PathBuf>,
     pub favorites: Vec<String>,
     pub playtime: HashMap<String, Playtime>,
     pub overview: HashMap<String, GameOverview>,
@@ -112,6 +115,8 @@ pub async fn boot() -> Result<Boot, String> {
     };
     // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
     let proton_choices = slatty_core::settings::proton_candidates(&dirs);
+    let proton_downloads = slatty_core::settings::proton_downloads(&db).map_err(err)?;
+    let downloaded_protons = slatty_core::protons::installed(&dirs);
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let customs = slatty_core::custom::all(&db).map_err(err)?;
     let cover_width = slatty_core::settings::cover_width(&db).map_err(err)?;
@@ -157,6 +162,8 @@ pub async fn boot() -> Result<Boot, String> {
         library_root,
         proton,
         proton_choices,
+        proton_downloads,
+        downloaded_protons,
         default_platform,
         umu_lookup,
         report_playtime,

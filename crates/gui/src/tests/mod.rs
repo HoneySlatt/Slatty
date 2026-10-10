@@ -98,6 +98,11 @@ fn render(app: &App) -> Simulator<'_, Message> {
     Simulator::with_size(settings(), SIZE, app.view())
 }
 
+/// `render`, at the size of the app's own window: a tall one shows a whole long page.
+fn render_window(app: &App) -> Simulator<'_, Message> {
+    Simulator::with_size(settings(), app.window, app.view())
+}
+
 /// Every text shown, in one walk of the widget tree: a `find` per text walks all of it each time.
 fn texts(ui: &mut Simulator<'_, Message>) -> Vec<String> {
     use iced_test::selector::Candidate;
@@ -241,4 +246,5 @@ mod game_page;
 mod install;
 mod library;
 mod maintenance;
+mod runners;
 mod settings;

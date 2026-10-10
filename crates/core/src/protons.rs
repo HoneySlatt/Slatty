@@ -77,9 +77,9 @@ pub struct Release {
     /// The folder it is unpacked in: the archive's name without its extension.
     pub name: String,
     pub size: u64,
-    url: String,
-    archive: String,
-    checksum_url: String,
+    pub url: String,
+    pub archive: String,
+    pub checksum_url: String,
 }
 
 impl Release {

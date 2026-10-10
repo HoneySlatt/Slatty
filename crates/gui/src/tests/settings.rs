@@ -61,8 +61,10 @@ fn the_theme_file_can_be_created_from_settings() {
     app.page = Page::Settings;
     let path = crate::theme::file(&app.core.as_ref().unwrap().dirs.config);
     let _ = std::fs::remove_file(&path);
+    // Tall enough to show Appearance below Installs and Runners.
+    app.window = Size::new(1440.0, 1900.0);
     {
-        let mut ui = render(&app);
+        let mut ui = render_window(&app);
         ui.click("Create theme file").unwrap();
         for m in ui.into_messages().collect::<Vec<_>>() {
             let _ = app.update(m);
@@ -70,7 +72,7 @@ fn the_theme_file_can_be_created_from_settings() {
     }
     let written = std::fs::read_to_string(&path).unwrap();
     assert!(written.contains("[colors]") && written.contains("accent = \"#c4b1fa\""));
-    let mut ui = render(&app);
+    let mut ui = render_window(&app);
     assert!(ui.find("Edit").is_ok() && ui.find("Reload").is_ok());
     snapshot(&mut ui, "settings-appearance");
     drop(ui);

@@ -456,7 +456,7 @@ slatty proton remove GE-Proton11-7-x86_64
 ## Settings
 
 The interface's **Settings** tab lists its parts on the left (Account, Library, Installs,
-Appearance, Privacy, Advanced, About); choosing one brings it to the top, and the list follows the page as it
+Runners, Appearance, Privacy, Advanced, About); choosing one brings it to the top, and the list follows the page as it
 scrolls. **Account** shows who is signed in, with
 Log out. **Library** shows how many games you own and when the list was refreshed, with Refresh
 library, and the size of the covers. **Installs** holds:
@@ -473,6 +473,11 @@ library, and the size of the covers. **Installs** holds:
   settings. Each game can use another build.
 
 `slatty install --dir` and `--proton` set the same values.
+
+**Runners** holds **Proton downloads**, off until turned on (see [Proton builds](#proton-builds)).
+Once on, **Check GitHub** shows the newest build of GE-Proton, Proton-CachyOS and UMU-Proton, each
+with **Install**; a download shows how far it is and can be stopped, and goes on from there the
+next time. **Downloaded** lists the builds SlattyLauncher downloaded, with **Delete**.
 
 **Privacy** has four switches, all on until turned off:
 

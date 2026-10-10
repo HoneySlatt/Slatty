@@ -9,28 +9,34 @@ use slatty_core::installer::Progress;
 use crate::{Core, Message, err};
 
 /// Passes progress from the core to the interface at most four times a second.
-pub struct Throttle {
-    tx: tokio::sync::mpsc::UnboundedSender<Progress>,
+pub struct Throttle<P = Progress> {
+    tx: tokio::sync::mpsc::UnboundedSender<P>,
     last: std::sync::Mutex<Option<Instant>>,
 }
 
-impl Throttle {
-    pub fn report(&self, p: Progress) {
+impl<P> Throttle<P> {
+    pub fn report(&self, p: P) {
         let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
         if last.is_none_or(|t| t.elapsed() >= Duration::from_millis(250)) {
             *last = Some(Instant::now());
             let _ = self.tx.send(p);
         }
     }
+
+    /// Passes a change of step at once, whenever the last report was.
+    pub fn report_now(&self, p: P) {
+        let _ = self.tx.send(p);
+    }
 }
 
 /// Runs `work` and streams its progress, then the message it ends with.
-pub fn progress_stream<F, Fut>(
+pub fn progress_stream<P, F, Fut>(
     work: F,
-    on_progress: impl Fn(Progress) -> Message + Send + 'static,
+    on_progress: impl Fn(P) -> Message + Send + 'static,
 ) -> impl Stream<Item = Message>
 where
-    F: FnOnce(Throttle) -> Fut + Send + 'static,
+    P: Send + 'static,
+    F: FnOnce(Throttle<P>) -> Fut + Send + 'static,
     Fut: Future<Output = Message> + Send,
 {
     iced::stream::channel(64, async move |mut output| {
