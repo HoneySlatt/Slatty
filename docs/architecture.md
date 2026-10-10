@@ -42,7 +42,6 @@ core functions. Long operations report progress through callbacks or typed event
 | `settings` | Default installation path, default Proton and platform, favorites, the download queue, privacy switches, manual achievement changes, launch options |
 | `custom` | Titles, sorting titles, covers and backgrounds the user chose, and the games they hid, apart from GOG's data; chosen or downloaded images are copied into the data folder |
 | `steamgriddb` | SteamGridDB, once turned on: games searched by name, their grids (covers) and heroes (backgrounds), images downloaded from its servers only; the user's API key in a header |
-| `store` | Which store a game comes from, read from its id: GOG's product ids as they are, `steam-<app id>` for Steam (see [steam-plan.md](steam-plan.md)). Ids are checked before they name a file: locks, covers, customisations. Installs, install jobs and install records accept GOG games only, so nothing SlattyLauncher deletes or rewrites can belong to Steam |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
 
 ## Interface modules

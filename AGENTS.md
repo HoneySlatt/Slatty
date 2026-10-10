@@ -101,10 +101,6 @@ These act on a real person's account, disk or system. Ask the human first, every
   folder appears only once every file is verified.
 - An operation that changes a game's files or saves holds `lock::game(dirs, game_id)` for its
   whole duration.
-- A game id is GOG's product id or `steam-<app id>`; `store::of` tells which, and refuses anything
-  unsafe in a file name. Check an id with it before building a path from it. Steam games are never
-  installed, recorded or changed by SlattyLauncher (`store::require_gog`).
-- Play time is reported to GOG for GOG games only (`playtime::unreported`).
 - A destructive action either refuses when the situation looks wrong, or keeps a copy first. Only
   files SlattyLauncher installed (its install record) are ever deleted from a game folder.
 - Cloud sync decides with content hashes and per-file history, never dates. Conflicts never

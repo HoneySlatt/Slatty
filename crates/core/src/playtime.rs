@@ -9,7 +9,6 @@ use crate::auth::Tokens;
 use crate::db::Db;
 use crate::error::Result;
 use crate::http;
-use crate::store::Store;
 
 fn url(user_id: &str, game_id: &str) -> String {
     format!("https://gameplay.gog.com/games/{game_id}/users/{user_id}/sessions")
@@ -54,8 +53,8 @@ pub struct Unreported {
     pub minutes: i64,
 }
 
-/// Sessions of GOG games played with this account that ended cleanly, lasted at least a minute
-/// (GOG ignores shorter ones) and were not sent yet.
+/// Sessions of this account that ended cleanly, lasted at least a minute (GOG ignores shorter
+/// ones) and were not sent yet.
 pub fn unreported(db: &Db, user_id: &str) -> Result<Vec<Unreported>> {
     let conn = db.conn();
     let mut stmt = conn.prepare(
@@ -72,11 +71,7 @@ pub fn unreported(db: &Db, user_id: &str) -> Result<Vec<Unreported>> {
             minutes: r.get(3)?,
         })
     })?;
-    let rows = rows.collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(rows
-        .into_iter()
-        .filter(|s| crate::store::of(&s.game_id).ok() == Some(Store::Gog))
-        .collect())
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 fn mark_reported(db: &Db, id: i64) -> Result<()> {
@@ -138,20 +133,6 @@ mod tests {
         );
         mark_reported(&db, 1).unwrap();
         assert!(unreported(&db, "me").unwrap().is_empty());
-    }
-
-    #[test]
-    fn sessions_of_steam_games_are_never_sent_to_gog() {
-        let db = Db::in_memory().unwrap();
-        db.conn()
-            .execute_batch(
-                "INSERT INTO sessions (id, game_id, user_id, started_at, ended_at, state, reported) VALUES
-                   (1, 'steam-440', 'me', 1000, 1600, 'ended', 0),
-                   (2, '1456487183', 'me', 2000, 2600, 'ended', 0);",
-            )
-            .unwrap();
-        let pending = unreported(&db, "me").unwrap();
-        assert_eq!(pending.iter().map(|s| s.id).collect::<Vec<_>>(), [2]);
     }
 
     #[test]

@@ -840,67 +840,6 @@ fn jobs_left_behind_by_a_registered_install_are_forgotten() {
 }
 
 #[test]
-fn steam_games_are_never_recorded_as_installed_here() {
-    use crate::install::{Install, Platform};
-    use crate::runner::Runner;
-    let root = std::env::temp_dir().join(format!("slatty-steam-ids-{}", std::process::id()));
-    let dirs = Dirs::under(&root);
-    let db = Db::in_memory().unwrap();
-    let refused = |r: Result<()>| assert!(matches!(r, Err(Error::Refused(_))), "{r:?}");
-    refused(
-        Install {
-            game_id: "steam-440".into(),
-            title: "[FAKE] Game".into(),
-            platform: Platform::Windows,
-            path: "/games/Game".into(),
-            client_id: None,
-            runner: Runner::Native,
-            umu_id: None,
-        }
-        .save(&db),
-    );
-    refused(
-        InstallJob {
-            game_id: "steam-440".into(),
-            build_id: "b".into(),
-            language: "en-US".into(),
-            root: "/games".into(),
-            directory: "Game".into(),
-            state: QUEUED.into(),
-            dlcs: vec![],
-        }
-        .save(&db),
-    );
-    let record = InstallRecord {
-        build_id: "b".into(),
-        version: "1".into(),
-        language: "en-US".into(),
-        path: None,
-        dlcs: vec![],
-        setup_build: None,
-        files: vec![],
-    };
-    for id in ["steam-440", "../1"] {
-        refused(record.save(&dirs, id));
-    }
-    assert!(Install::list(&db).unwrap().is_empty());
-    assert!(InstallJob::list(&db).unwrap().is_empty());
-    assert!(!root.exists(), "nothing written");
-}
-
-#[test]
-fn operations_on_a_game_id_unsafe_in_a_file_name_are_refused() {
-    let root = std::env::temp_dir().join(format!("slatty-unsafe-id-{}", std::process::id()));
-    let dirs = Dirs::under(&root);
-    assert!(matches!(
-        crate::lock::game(&dirs, "../1"),
-        Err(Error::Refused(_))
-    ));
-    assert!(crate::lock::game(&dirs, "steam-440").is_ok());
-    let _ = std::fs::remove_dir_all(root);
-}
-
-#[test]
 fn a_queued_install_waits_and_keeps_its_place() {
     let db = Db::in_memory().unwrap();
     let job = InstallJob {

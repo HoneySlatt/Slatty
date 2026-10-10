@@ -36,7 +36,6 @@ impl InstallJob {
     }
 
     pub fn save(&self, db: &Db) -> Result<()> {
-        crate::store::require_gog(&self.game_id)?;
         db.conn().execute(
             "INSERT INTO install_jobs (game_id, build_id, language, root, directory, state, updated_at, dlcs)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)

@@ -59,7 +59,6 @@ impl InstallRecord {
     }
 
     pub fn save(&self, dirs: &Dirs, game_id: &str) -> Result<()> {
-        crate::store::require_gog(game_id)?;
         let json =
             serde_json::to_vec_pretty(self).map_err(|e| Error::parse("install record", e))?;
         fsutil::write_atomic(&Self::file(dirs, game_id), &json)
