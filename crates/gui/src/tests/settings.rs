@@ -143,6 +143,36 @@ fn the_default_platform_is_kept() {
     );
 }
 
+/// At the smallest window, notice shown or not, every part of the side list can be reached.
+#[test]
+fn the_side_list_of_settings_fits_the_smallest_window() {
+    use crate::settings::{Section, SettingsMsg};
+    let mut app = library_app();
+    app.page = Page::Settings;
+    app.window = Size::new(800.0, 560.0);
+    for notice in [false, true] {
+        app.notice = notice.then(|| crate::Notice {
+            error: true,
+            text: "[FAKE] Library not refreshed: GOG did not answer.".into(),
+        });
+        let mut ui = Simulator::with_size(settings(), app.window, app.view());
+        if notice {
+            snapshot(&mut ui, "settings-small-notice");
+        }
+        let about = ui.find("About").unwrap().bounds();
+        assert!(
+            about.height > 0.0 && about.y + about.height <= app.window.height,
+            "notice {notice}: {about:?}"
+        );
+        ui.click("About").unwrap();
+        assert!(
+            ui.into_messages()
+                .any(|m| matches!(m, Message::Settings(SettingsMsg::Show(Section::About)))),
+            "notice {notice}"
+        );
+    }
+}
+
 /// On a very wide window, settings keep lines short enough to read.
 #[test]
 fn settings_keep_a_readable_width_on_a_wide_window() {

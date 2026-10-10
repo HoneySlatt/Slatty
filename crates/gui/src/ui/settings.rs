@@ -23,6 +23,10 @@ use slatty_core::protons::{Release, Source, Stage};
 impl App {
     /// A side list of the parts of the page, and their cards; an entry brings its card to the top.
     pub(super) fn settings_page(&self) -> Element<'_, Message> {
+        // In a short window the entries are set closer, so that all of them show, notice or not;
+        // a scroll is left for anything taller still.
+        let short = self.window.height < SHORT_WINDOW;
+        let (marker_height, padding, spacing) = if short { (22, 5, 2) } else { (28, 10, 6) };
         let entries = Section::ALL.map(|s| {
             let active = self.settings_view.section == s;
             let color = if active {
@@ -33,7 +37,7 @@ impl App {
             let marker: Element<'_, Message> = if active {
                 container(Space::new())
                     .width(4)
-                    .height(28)
+                    .height(marker_height)
                     .style(theme::side_marker)
                     .into()
             } else {
@@ -48,17 +52,19 @@ impl App {
                 .spacing(14)
                 .align_y(Alignment::Center),
             )
-            .padding(Padding::from([10, 12]).left(0))
+            .padding(Padding::from([padding, 12]).left(0))
             .width(Length::Fill)
             .on_press(Message::Settings(SettingsMsg::Show(s)))
             .style(theme::side_entry(active))
             .into()
         });
-        let side = container(Column::with_children(entries).spacing(6))
-            .padding(10)
-            .width(SIDE_WIDTH)
-            .height(Length::Fill)
-            .style(theme::card);
+        let side = container(
+            scrollable(Column::with_children(entries).spacing(spacing)).style(theme::scroller),
+        )
+        .padding(10)
+        .width(SIDE_WIDTH)
+        .height(Length::Fill)
+        .style(theme::card);
         // Room for a name, a control and what follows it side by side, once the side list, the
         // margins and the indent are taken from the window.
         let wide = self.window.width - SIDE_WIDTH - 172.0 >= LABEL_WIDTH + AFTER_WIDTH + 330.0;
@@ -694,6 +700,8 @@ impl App {
 /// Width of the side list of the Settings page, and the widest the page grows.
 const SIDE_WIDTH: f32 = 236.0;
 const MAX_WIDTH: f32 = 1600.0;
+/// Window height under which the side list's entries are set closer.
+const SHORT_WINDOW: f32 = 720.0;
 /// Width of the labels, and of the space for what follows a setting, so the settings line up.
 const LABEL_WIDTH: f32 = 240.0;
 const AFTER_WIDTH: f32 = 250.0;
