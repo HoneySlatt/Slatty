@@ -59,7 +59,10 @@ fn the_theme_file_can_be_created_from_settings() {
     use crate::settings::SettingsMsg;
     let mut app = library_app();
     app.page = Page::Settings;
-    let path = crate::theme::file(&app.core.as_ref().unwrap().dirs.config);
+    // A config folder of its own: the theme file it writes would show in other tests' snapshots.
+    let core = app.core.as_mut().unwrap();
+    core.dirs = Dirs::under(&core.dirs.config.join("theme-test"));
+    let path = crate::theme::file(&core.dirs.config);
     let _ = std::fs::remove_file(&path);
     // Tall enough to show Appearance below Installs and Runners.
     app.window = Size::new(1440.0, 1900.0);
@@ -103,7 +106,7 @@ fn cover_size_is_set_in_settings_and_kept() {
     {
         let mut ui = render(&app);
         assert!(ui.find("Cover size").is_ok());
-        snapshot(&mut ui, "settings-appearance");
+        snapshot(&mut ui, "settings-cover-size");
     }
     let _ = app.update(Message::Settings(SettingsMsg::CoverSize(
         crate::settings::CoverSize(130),
