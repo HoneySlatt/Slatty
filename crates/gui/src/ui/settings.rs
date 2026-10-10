@@ -66,6 +66,7 @@ impl App {
                 Section::Installs => self.installs_rows(wide),
                 Section::Appearance => self.appearance_rows(wide),
                 Section::Privacy => self.privacy_rows(wide),
+                Section::Advanced => self.advanced_rows(wide),
                 Section::About => vec![note(format!(
                     "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL)",
                     env!("CARGO_PKG_VERSION")
@@ -160,17 +161,6 @@ impl App {
 impl App {
     /// What leaves the computer besides GOG's own services, each with its switch.
     fn privacy_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
-        // The switch, with what it lets out below it.
-        let switch = |on: bool, msg: fn(bool) -> SettingsMsg, what: &'static str| {
-            column![
-                toggler(on)
-                    .on_toggle(move |v| Message::Settings(msg(v)))
-                    .size(22),
-                note(what),
-            ]
-            .spacing(8)
-            .into()
-        };
         vec![
             setting(
                 wide,
@@ -191,7 +181,7 @@ impl App {
                     SettingsMsg::GameAchievements,
                     "Starts Comet while a game that uses GOG's Galaxy runs, so what it unlocks \
                      reaches GOG. Comet acts for your account and listens on this computer until \
-                     the game ends. Unlocking by hand still works when off.",
+                     the game ends. Unlocking by hand (Advanced) does not need it.",
                 ),
                 None,
             ),
@@ -213,6 +203,36 @@ impl App {
         ]
     }
 
+    /// What most people never need, off until turned on.
+    fn advanced_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
+        vec![setting(
+            wide,
+            "Manual achievements",
+            switch(
+                self.manual_achievements,
+                SettingsMsg::ManualAchievements,
+                "Offers Unlock, Clear and Unlock all beside a game's achievements. A change goes \
+                 straight to your public GOG profile, dated today, and is probably against GOG's \
+                 terms.",
+            ),
+            None,
+        )]
+    }
+}
+
+/// A switch, with what it does below it.
+fn switch<'a>(on: bool, msg: fn(bool) -> SettingsMsg, what: &'static str) -> Element<'a, Message> {
+    column![
+        toggler(on)
+            .on_toggle(move |v| Message::Settings(msg(v)))
+            .size(22),
+        note(what),
+    ]
+    .spacing(8)
+    .into()
+}
+
+impl App {
     fn account_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         let name = self.account.as_ref().map(|a| a.username.as_str());
         vec![setting(
@@ -404,6 +424,7 @@ fn section_icon(s: Section) -> Icon {
         Section::Installs => Icon::Download,
         Section::Appearance => Icon::Palette,
         Section::Privacy => Icon::Shield,
+        Section::Advanced => Icon::Wrench,
         Section::About => Icon::Info,
     }
 }

@@ -16,6 +16,7 @@ const DOWNLOAD_QUEUE: &str = "download_queue";
 const UMU_LOOKUP: &str = "umu_lookup";
 const REPORT_PLAYTIME: &str = "report_playtime";
 const GAME_ACHIEVEMENTS: &str = "game_achievements";
+const MANUAL_ACHIEVEMENTS: &str = "manual_achievements";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -81,6 +82,15 @@ pub fn game_achievements(db: &Db) -> Result<bool> {
 
 pub fn set_game_achievements(db: &Db, on: bool) -> Result<()> {
     db.set_setting(GAME_ACHIEVEMENTS, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether the interface offers to unlock and clear achievements by hand. Off until turned on.
+pub fn manual_achievements(db: &Db) -> Result<bool> {
+    Ok(db.setting(MANUAL_ACHIEVEMENTS)?.as_deref() == Some("on"))
+}
+
+pub fn set_manual_achievements(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(MANUAL_ACHIEVEMENTS, Some(if on { "on" } else { "off" }))
 }
 
 /// The way a game is started, among its launch options, once chosen.

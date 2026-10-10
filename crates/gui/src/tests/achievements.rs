@@ -22,6 +22,7 @@ fn game_page_summarises_achievements() {
 #[test]
 fn unlocking_only_asks_for_confirmation() {
     let mut app = app_with_achievements();
+    app.manual_achievements = true;
     let mut ui = render(&app);
     assert!(ui.find("Clear").is_ok());
     ui.click("Unlock").unwrap();
@@ -47,6 +48,7 @@ fn unlocking_only_asks_for_confirmation() {
 #[test]
 fn cancelling_drops_the_pending_change() {
     let mut app = app_with_achievements();
+    app.manual_achievements = true;
     let _ = app.update(Message::AskAchievementChange(
         "5".into(),
         vec![crate::AchievementChange {
@@ -119,6 +121,7 @@ fn achievements_tab_lists_games_by_completion() {
 #[test]
 fn achievements_tab_opens_a_dedicated_page_per_game() {
     let mut app = app_with_achievements();
+    app.manual_achievements = true;
     app.selected = None;
     app.panel = None;
     let _ = app.update(Message::OpenAchievements("5".into()));
@@ -217,4 +220,46 @@ fn the_achievements_tab_builds_only_the_tiles_in_view_at_10000_games() {
     let mut ui = render(&app);
     assert!(ui.find("[FAKE] Game 1").is_ok());
     assert!(ui.find("[FAKE] Game 5000").is_err(), "far below: not built");
+}
+
+#[test]
+fn manual_changes_are_offered_only_once_turned_on_in_advanced_settings() {
+    use crate::settings::{Section, SettingsMsg};
+    let mut app = app_with_achievements();
+    assert!(!app.manual_achievements, "off until turned on");
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("[FAKE] Alpha").is_ok());
+        for label in ["Unlock", "Clear", "Unlock all"] {
+            assert!(ui.find(label).is_err(), "{label} shown while off");
+        }
+    }
+    // Asked anyway (a message left from before it was turned off): nothing to confirm.
+    let _ = app.update(Message::AskAchievementChange(
+        "5".into(),
+        vec![crate::achievements::AchievementChange {
+            achievement_id: "id-Alpha".into(),
+            name: "[FAKE] Alpha".into(),
+            unlock: true,
+        }],
+    ));
+    assert!(app.pending_change.is_none());
+
+    app.page = Page::Settings;
+    app.selected = None;
+    let mut ui = render(&app);
+    assert!(ui.find(Section::Advanced.title()).is_ok());
+    assert!(ui.find("Manual achievements").is_ok());
+    drop(ui);
+    let _ = app.update(Message::Settings(SettingsMsg::ManualAchievements(true)));
+    let db = app.core.as_ref().unwrap().db.clone();
+    assert!(
+        slatty_core::settings::manual_achievements(&db).unwrap(),
+        "kept"
+    );
+
+    open(&mut app, "5", Some(Panel::Achievements));
+    let mut ui = render(&app);
+    assert!(ui.find("Unlock").is_ok() && ui.find("Clear").is_ok());
+    assert!(ui.find("Unlock all").is_ok());
 }

@@ -203,7 +203,8 @@ impl App {
                     ]
                     .spacing(10)
                     .width(Length::Fill),
-                    unlock_all_button(&g.id, list),
+                    self.manual_achievements
+                        .then(|| unlock_all_button(&g.id, list)),
                 ]
                 .spacing(22)
                 .align_y(Alignment::Center);
@@ -261,7 +262,8 @@ impl App {
             .map(confirmation)
     }
 
-    /// One achievement with its icon, description, rarity and Unlock or Clear.
+    /// One achievement with its icon, description, rarity, and Unlock or Clear once manual changes
+    /// are on.
     pub fn achievement_row<'a>(
         &'a self,
         game_id: &'a str,
@@ -298,13 +300,15 @@ impl App {
         row![
             self.achievement_icon(url, icon_size),
             details,
-            button(text(if done { "Clear" } else { "Unlock" }).size(14))
-                .padding([8, 18])
-                .on_press(Message::AskAchievementChange(
-                    game_id.to_string(),
-                    vec![change(a, !done)],
-                ))
-                .style(theme::tonal),
+            self.manual_achievements.then(|| {
+                button(text(if done { "Clear" } else { "Unlock" }).size(14))
+                    .padding([8, 18])
+                    .on_press(Message::AskAchievementChange(
+                        game_id.to_string(),
+                        vec![change(a, !done)],
+                    ))
+                    .style(theme::tonal)
+            }),
         ]
         .spacing(18)
         .align_y(Alignment::Center)

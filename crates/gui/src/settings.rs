@@ -80,16 +80,18 @@ pub enum Section {
     Installs,
     Appearance,
     Privacy,
+    Advanced,
     About,
 }
 
 impl Section {
-    pub const ALL: [Section; 6] = [
+    pub const ALL: [Section; 7] = [
         Section::Account,
         Section::Library,
         Section::Installs,
         Section::Appearance,
         Section::Privacy,
+        Section::Advanced,
         Section::About,
     ];
 
@@ -100,6 +102,7 @@ impl Section {
             Section::Installs => "Installs",
             Section::Appearance => "Appearance",
             Section::Privacy => "Privacy",
+            Section::Advanced => "Advanced",
             Section::About => "About",
         }
     }
@@ -112,6 +115,7 @@ impl Section {
             Section::Installs => "settings-installs",
             Section::Appearance => "settings-appearance",
             Section::Privacy => "settings-privacy",
+            Section::Advanced => "settings-advanced",
             Section::About => "settings-about",
         }
     }
@@ -122,7 +126,7 @@ impl Section {
 pub struct SettingsView {
     pub section: Section,
     /// Where each part starts, measured once and again after the window changed size.
-    pub tops: [Option<f32>; 6],
+    pub tops: [Option<f32>; Section::ALL.len()],
     /// The offset an entry of the side list asked for: until the page leaves it, that entry
     /// stays highlighted, even when its part cannot reach the top.
     pub target: Option<f32>,
@@ -223,6 +227,8 @@ pub enum SettingsMsg {
     ReportPlaytime(bool),
     /// Whether Comet runs while a game that uses GOG's Galaxy runs.
     GameAchievements(bool),
+    /// Whether achievements can be unlocked and cleared by hand.
+    ManualAchievements(bool),
     /// How one installed game is started, among its launch options.
     LaunchTask(String, String),
     /// Proton build of one installed game, used from its next launch.
@@ -359,6 +365,15 @@ impl App {
             SettingsMsg::GameAchievements(on) => {
                 self.game_achievements = on;
                 if let Err(e) = settings::set_game_achievements(&core.db, on) {
+                    self.notify_error(e.to_string());
+                }
+            }
+            SettingsMsg::ManualAchievements(on) => {
+                self.manual_achievements = on;
+                if !on {
+                    self.pending_change = None;
+                }
+                if let Err(e) = settings::set_manual_achievements(&core.db, on) {
                     self.notify_error(e.to_string());
                 }
             }

@@ -39,7 +39,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `achievements` | Achievement list, manual unlock and clear |
 | `overview` | Per-game achievement counts and cloud save support, cached per account |
 | `playtime` | Play time read from GOG, finished sessions reported to GOG |
-| `settings` | Default installation path, default Proton, favorites |
+| `settings` | Default installation path, default Proton and platform, favorites, the download queue, privacy switches, manual achievement changes, launch options |
 | `custom` | Titles, sorting titles, covers and backgrounds the user chose, and the games they hid, apart from GOG's data; chosen images are copied into the data folder |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
 
@@ -67,7 +67,7 @@ another account is now signed in.
 | `install` | Install plan, download with progress, pause, discard |
 | `downloads` | The download queue: installs waiting as `queued` jobs, started one after the other, reordered by dragging (`ui/downloads.rs` for the tab) |
 | `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
-| `settings` | The Settings page (its side list follows the scroll), defaults for installs, privacy switches, the Proton build and launch option of each installed game |
+| `settings` | The Settings page (its side list follows the scroll), defaults for installs, privacy switches, manual achievement changes (Advanced, off until turned on), the Proton build and launch option of each installed game |
 | `edit` | The menu a right click on a cover or on the key art of a game page opens, and the edit form, a dialog over the library and a drawer on the game page: draft, file picker, saving. `ui/pointer.rs` reports where a right click happened, without a message per mouse move |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
 | `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages, `install` for the Install drawer and dialog, `game_settings` for the Game settings drawer and dialog (library dialogs share `panels::library_dialog`), `manage` and `cloud` for their drawers (drawers share `panels::drawer`); `format` for text shown to the user |

@@ -221,6 +221,8 @@ pub struct App {
     pub umu_lookup: bool,
     pub report_playtime: bool,
     pub game_achievements: bool,
+    /// Whether achievements can be unlocked and cleared by hand (Settings → Advanced).
+    pub manual_achievements: bool,
     /// The ways each installed game can be started, its main one first, and the one chosen.
     pub launch_options: HashMap<String, Vec<String>>,
     pub launch_choices: HashMap<String, String>,
@@ -305,6 +307,7 @@ impl Default for App {
             umu_lookup: true,
             report_playtime: true,
             game_achievements: true,
+            manual_achievements: false,
             launch_options: HashMap::new(),
             launch_choices: HashMap::new(),
             launch_prompt: None,
@@ -491,6 +494,7 @@ impl App {
                 self.umu_lookup = boot.umu_lookup;
                 self.report_playtime = boot.report_playtime;
                 self.game_achievements = boot.game_achievements;
+                self.manual_achievements = boot.manual_achievements;
                 self.launch_options = boot.launch_options;
                 self.launch_choices = boot.launch_choices;
                 self.installs = boot
@@ -626,9 +630,11 @@ impl App {
             Message::Playing(msg) => return self.on_play(msg),
             Message::StopGame => self.stop_game(),
             Message::LoadAchievements(game_id) => return self.load_achievements(game_id),
-            Message::AskAchievementChange(game_id, changes) => {
+            // Only offered once turned on in Settings → Advanced.
+            Message::AskAchievementChange(game_id, changes) if self.manual_achievements => {
                 self.ask_achievement_change(game_id, changes);
             }
+            Message::AskAchievementChange(..) => {}
             Message::CancelAchievementChange => self.pending_change = None,
             Message::ConfirmAchievementChange => return self.confirm_achievement_change(),
             Message::AchievementsChanged(game_id, result) => {
