@@ -24,6 +24,11 @@ use crate::{App, Filters, Interrupted, Message, Panel, Shelf, Sort};
 const GRID_SPACING: f32 = 12.0;
 /// Width the scrollbar takes beside the grid: its own and the gap before it.
 const SCROLLBAR_ROOM: f32 = 18.0;
+/// Height of a stopped download or update above the grid, and the space between two.
+const STOPPED_ROW: f32 = 40.0;
+const STOPPED_SPACING: f32 = 12.0;
+/// Window height under which fewer of them show at once.
+const SHORT_WINDOW: f32 = 720.0;
 
 impl App {
     pub(super) fn library_page(&self) -> Element<'_, Message> {
@@ -187,11 +192,25 @@ impl App {
             .align_y(Alignment::Center)
             .into()
         });
-        container(Column::with_children(rows).spacing(12))
-            .padding([14, 18])
-            .width(Length::Fill)
-            .style(theme::card)
-            .into()
+        // Many of them scroll in the card, so that the grid keeps its room: in a short window one,
+        // and the top of the next to show there are more; four otherwise.
+        let shown = if self.window.height < SHORT_WINDOW {
+            1.5
+        } else {
+            4.0
+        };
+        container(
+            container(
+                scrollable(Column::with_children(rows).spacing(STOPPED_SPACING))
+                    .spacing(8)
+                    .style(theme::scroller),
+            )
+            .max_height(shown * STOPPED_ROW + (shown - 1.0) * STOPPED_SPACING),
+        )
+        .padding([14, 18])
+        .width(Length::Fill)
+        .style(theme::card)
+        .into()
     }
 
     pub(super) fn filter_bar(&self) -> Element<'_, Message> {

@@ -138,6 +138,48 @@ fn an_empty_shelf_says_what_fills_it() {
     assert!(render(&app).find("No game matches.").is_ok());
 }
 
+/// At the smallest window, with the filters open, a download running, several stopped and a
+/// notice, the grid keeps room for a row of covers, and each stopped one stays in reach.
+#[test]
+fn the_grid_keeps_room_under_what_shows_above_it() {
+    use crate::Interrupted;
+    let mut app = library_app();
+    app.window = Size::new(800.0, 560.0);
+    app.filters_open = true;
+    ready_to_install(&mut app, "5");
+    let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
+    app.interrupted = vec![
+        ("6".into(), Interrupted::Download),
+        ("7".into(), Interrupted::Paused),
+        ("8".into(), Interrupted::Failed),
+        ("9".into(), Interrupted::Update),
+    ];
+    app.notice = Some(crate::Notice {
+        error: true,
+        text: "[FAKE] Library not refreshed: GOG did not answer.".into(),
+    });
+    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    snapshot(&mut ui, "library-crowded");
+    let grid = ui
+        .find(iced_test::selector::id(crate::library::GRID))
+        .unwrap()
+        .bounds();
+    // More than half a row of covers (a full row is 230 pixels high at this width), the rest a
+    // scroll away.
+    assert!(grid.height >= 120.0, "{grid:?}");
+    // The stopped ones scroll in their card: the last can be reached.
+    let card = ui.find("[FAKE] Game 6").unwrap().bounds();
+    ui.point_at(card.center());
+    let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+        delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -10.0 },
+    })]);
+    ui.click("Finish update").unwrap();
+    assert!(ui.into_messages().any(|m| matches!(
+        m,
+        Message::Maintenance(MaintenanceMsg::Apply(id, _)) if id == "9"
+    )));
+}
+
 #[test]
 fn shelves_filters_and_sort_select_games() {
     let mut app = library_app();
