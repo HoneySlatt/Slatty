@@ -230,21 +230,34 @@ fn library_at_10000_games() {
     }
     app.page = Page::Achievements;
     time(&app, "achievements tab");
-    let t = std::time::Instant::now();
-    let _ = Simulator::with_size(settings(), SIZE, app.view());
-    println!("achievements layout: {:?}", t.elapsed());
-    app.page = Page::Library;
-    // Laying the page out, beyond building it: a window first with almost nothing, then the library.
-    let base = {
-        let mut empty = library_app();
-        empty.library.clear();
-        let t = std::time::Instant::now();
-        let _ = Simulator::with_size(settings(), SIZE, empty.view());
-        t.elapsed()
+    // Laying out, beyond building: each page at 10,000 games against the same page at 14, both
+    // timed alike (the median of a few windows, which carry the test renderer's own start-up).
+    let laid_out = |app: &App| {
+        let mut runs: Vec<std::time::Duration> = (0..5)
+            .map(|_| {
+                let t = std::time::Instant::now();
+                let _ = Simulator::with_size(settings(), SIZE, app.view());
+                t.elapsed()
+            })
+            .collect();
+        runs.sort();
+        runs[2]
     };
-    let t = std::time::Instant::now();
-    let _ = Simulator::with_size(settings(), SIZE, app.view());
-    println!("layout: {:?} (window alone {base:?})", t.elapsed());
+    let mut small = library_app();
+    for page in [Page::Library, Page::Achievements] {
+        for a in [&mut app, &mut small] {
+            a.page = page;
+            let ids: Vec<String> = a.library.iter().map(|g| g.id.clone()).collect();
+            for id in ids {
+                a.overview.entry(id).or_default().achievements = Some((3, 10));
+            }
+        }
+        let (big, base) = (laid_out(&app), laid_out(&small));
+        println!(
+            "layout, {page:?}: {big:?} at 10,000 games, {base:?} at 14 ({:?} more)",
+            big.saturating_sub(base)
+        );
+    }
 }
 
 #[test]
