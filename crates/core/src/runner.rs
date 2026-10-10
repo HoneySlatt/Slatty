@@ -68,7 +68,7 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
                 ));
                 // Given a file, umu would share the whole filesystem it is on: the script goes to
                 // its interpreter, which umu looks for inside the container.
-                args.insert(0, interpreter_name(&script));
+                args.insert(0, interpreter_name(&script)?);
                 check_shared(install, &args, &install.path)?;
             }
             Ok(LaunchSpec {
@@ -141,8 +141,10 @@ fn native_command(
 }
 
 /// The name of the interpreter a script's first line asks for (`bash` for GOG's, also through
-/// `/usr/bin/env`), else `sh`.
-fn interpreter_name(script: &Path) -> String {
+/// `/usr/bin/env`), else `sh`. Only a shell is accepted: umu reads its first argument as one of
+/// its own options or verbs (`--config` with the script as its configuration, `winetricks`,
+/// Proton's `run`), and the game can rewrite its script between two sessions.
+fn interpreter_name(script: &Path) -> Result<String> {
     let bytes = std::fs::read(script).unwrap_or_default();
     let first = bytes.split(|c| *c == b'\n').next().unwrap_or_default();
     let line = String::from_utf8_lossy(first);
@@ -151,13 +153,19 @@ fn interpreter_name(script: &Path) -> String {
         .unwrap_or_default()
         .split_whitespace()
         .map(|w| w.rsplit('/').next().unwrap_or(w));
-    match words.next() {
+    let name = match words.next() {
         Some("env") => words.next(),
         other => other,
     }
     .filter(|w| !w.is_empty())
-    .unwrap_or("sh")
-    .to_string()
+    .unwrap_or("sh");
+    if !["sh", "bash", "dash"].contains(&name) {
+        return Err(Error::Refused(format!(
+            "{} asks for `{name}`, which an isolated game cannot be started with",
+            script.display()
+        )));
+    }
+    Ok(name.to_string())
 }
 
 /// Whether the game's Wine prefix has been created (always true for native games). Nothing may be
@@ -639,7 +647,22 @@ mod tests {
             ("echo no line for an interpreter", "sh"),
         ] {
             std::fs::write(&script, format!("{first}\necho hi\n")).unwrap();
-            assert_eq!(interpreter_name(&script), name, "{first}");
+            assert_eq!(interpreter_name(&script).unwrap(), name, "{first}");
+        }
+        // Rewritten by the game: umu would take the script for its configuration (where the
+        // prefix it shares is), run winetricks, or a file it shares the folder of.
+        for first in [
+            "#!/usr/bin/env --config",
+            "#!--config",
+            "#!/usr/bin/winetricks",
+            "#!/bin/run",
+            "#!/usr/bin/python3",
+        ] {
+            std::fs::write(&script, format!("{first}\n[umu]\nprefix = \"/\"\n")).unwrap();
+            assert!(
+                matches!(interpreter_name(&script), Err(Error::Refused(_))),
+                "{first}"
+            );
         }
         std::fs::remove_dir_all(dir).unwrap();
     }

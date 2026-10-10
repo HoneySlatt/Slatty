@@ -254,6 +254,10 @@ folder, named as the working directory in its `goggame-*.info`, would share wher
 setup programs, the Galaxy service), just before it starts; the play flow builds the game's
 command again after the setup steps. pressure-vessel splits its path lists on every `:`, escaped
 or not: a game folder with `:` in its path is refused rather than started without its folder.
+umu also reads its first argument as one of its own options or verbs: `--config` would take the
+script for its configuration, which names the prefix the container shares; `winetricks` and
+Proton's verbs (`run`, …) change what it runs. A Linux script's interpreter, the first line of a
+script the game can rewrite, is therefore only accepted as `sh`, `bash` or `dash`.
 
 The launcher itself works in the prefix and the game folder outside the container, where a link
 the game planted could lead it out. When the game is isolated, cloud sync refuses a save folder
