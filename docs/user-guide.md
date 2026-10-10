@@ -113,8 +113,8 @@ tab leads back to the game.
 
 - the install downloading, with its folder, progress, size downloaded, speed and time left, and
   Pause and Cancel; downloads paused, cut off or failed are listed too, with Resume and Discard;
-- the **queue**: an install started while another one downloads waits there instead of being
-  refused. It starts by itself once the ones before it are done, and also after a failed or
+- the **queue**: an install started while another one downloads (its button then reads **Add to
+  queue**) waits there instead of being refused. It starts by itself once the ones before it are done, and also after a failed or
   cancelled download. Drag a row by its handle to change the order, or remove it with ×. Pausing
   the running download holds the queue. The queue and its order are kept when SlattyLauncher
   closes; it goes on at the next start;

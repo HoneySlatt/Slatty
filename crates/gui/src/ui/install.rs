@@ -386,12 +386,13 @@ impl App {
     ) -> Element<'a, Message> {
         let busy = self.installing().is_some();
         let width = if wide { Length::Fill } else { Length::Shrink };
+        // While another game downloads, Start puts this one in the queue.
         let start = button(
             container(
-                text(if info.resumable {
-                    "Resume install"
-                } else {
-                    "Start install"
+                text(match (busy, info.resumable) {
+                    (true, _) => "Add to queue",
+                    (false, true) => "Resume install",
+                    (false, false) => "Start install",
                 })
                 .size(17)
                 .font(semibold()),
@@ -401,7 +402,7 @@ impl App {
         .padding(if wide { [16, 0] } else { [14, 56] })
         .width(width)
         .on_press_maybe(
-            (!busy && (info.platform == Platform::Linux || info.proton.is_some()))
+            (info.platform == Platform::Linux || info.proton.is_some())
                 .then(|| Message::Install(InstallMsg::Start(g.id.clone()))),
         )
         .style(theme::primary);
@@ -414,13 +415,13 @@ impl App {
                 )
                 .style(theme::danger)
         });
-        // Say why Start is unavailable.
-        let why = if let Some((_, title, _)) = self.installing() {
-            Some(note(format!(
-                "{title} is downloading; this one can start once it is done."
-            )))
-        } else if info.platform == Platform::Windows && info.proton.is_none() {
+        // Say why Start is unavailable, or waits.
+        let why = if info.platform == Platform::Windows && info.proton.is_none() {
             Some(note("Choose a Proton build to start."))
+        } else if let Some((_, title, _)) = self.installing() {
+            Some(note(format!(
+                "{title} is downloading; this one waits in the queue until it is done."
+            )))
         } else {
             None
         };

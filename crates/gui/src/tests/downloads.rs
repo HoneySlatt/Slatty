@@ -251,3 +251,25 @@ fn a_failed_download_is_not_started_again_by_itself() {
         );
     }
 }
+
+/// While a game downloads, the install dialog of another one puts it in the queue, rather than
+/// waiting with its button greyed out until the download is done.
+#[test]
+fn an_install_chosen_during_a_download_goes_to_the_queue_from_its_dialog() {
+    let mut app = library_app();
+    ready_to_install(&mut app, "5");
+    let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
+    ready_to_install(&mut app, "6");
+    let _ = app.update(Message::OpenDialog("6".into(), Panel::Install));
+    let mut ui = render(&app);
+    assert!(
+        ui.find("[FAKE] Game 5 is downloading; this one waits in the queue until it is done.")
+            .is_ok()
+    );
+    ui.click("Add to queue").unwrap();
+    for m in ui.into_messages() {
+        let _ = app.update(m);
+    }
+    assert_eq!(app.queue, ["6"]);
+    assert!(app.dialog.is_none(), "the dialog closes once queued");
+}

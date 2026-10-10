@@ -410,7 +410,7 @@ fn another_version_can_be_chosen_before_install_and_after() {
 }
 
 #[test]
-fn a_second_install_says_why_it_waits() {
+fn a_second_install_says_it_waits_in_the_queue() {
     let mut app = library_app();
     app.install_views.insert(
         "5".into(),
@@ -428,11 +428,18 @@ fn a_second_install_says_why_it_waits() {
         .insert("6".into(), InstallView::Ready(fake_plan()));
     let mut ui = render(&app);
     assert!(
-        ui.find("[FAKE] Game 5 is downloading; this one can start once it is done.")
+        ui.find("[FAKE] Game 5 is downloading; this one waits in the queue until it is done.")
             .is_ok()
     );
-    let _ = ui.click("Start install");
-    assert!(ui.into_messages().next().is_none());
+    ui.click("Add to queue").unwrap();
+    for m in ui.into_messages() {
+        let _ = app.update(m);
+    }
+    assert_eq!(app.queue, ["6"]);
+    assert!(matches!(
+        app.install_views.get("6"),
+        Some(InstallView::Queued(_))
+    ));
 }
 
 #[test]
