@@ -23,6 +23,10 @@ use crate::{App, CloudStatus, Loadable, Message, Page, Panel};
 
 /// Height of the summary cards under the key art.
 const CARD_HEIGHT: f32 = 96.0;
+/// Width of the row of cards under which play time and the last session lose their icons.
+const NARROW_CARDS: f32 = 1100.0;
+/// Window height under which a game's title is set smaller, for the key art is short.
+const SHORT_WINDOW: f32 = 800.0;
 
 impl App {
     /// Key art with the title and Play across the window, the summary cards below it.
@@ -59,21 +63,29 @@ impl App {
                 .height(1)
                 .style(theme::divider),
         ];
-        let cards = row![
-            container(self.stats(g))
-                .padding([0, 18])
-                .align_y(Alignment::Center)
-                .width(Length::FillPortion(10))
-                .height(CARD_HEIGHT)
-                .style(theme::block),
-            container(self.cloud_card(g))
-                .width(Length::FillPortion(7))
-                .height(CARD_HEIGHT),
-            container(self.achievements_card(g))
-                .width(Length::FillPortion(9))
-                .height(CARD_HEIGHT),
-        ]
-        .spacing(14);
+        // On a narrow page (a small window, a drawer beside it) play time and the last session get
+        // the room their values need, without their icons.
+        let cards = container(responsive(move |size| {
+            let narrow = size.width < NARROW_CARDS;
+            let (stats, achievements) = if narrow { (11, 8) } else { (10, 9) };
+            row![
+                container(self.stats(g, narrow))
+                    .padding([0, 18])
+                    .align_y(Alignment::Center)
+                    .width(Length::FillPortion(stats))
+                    .height(CARD_HEIGHT)
+                    .style(theme::block),
+                container(self.cloud_card(g))
+                    .width(Length::FillPortion(7))
+                    .height(CARD_HEIGHT),
+                container(self.achievements_card(g))
+                    .width(Length::FillPortion(achievements))
+                    .height(CARD_HEIGHT),
+            ]
+            .spacing(14)
+            .into()
+        }))
+        .height(CARD_HEIGHT);
         let below = column![cards, self.footer(g)]
             .spacing(12)
             .padding(Padding::new(40.0).top(18.0).bottom(22.0));
@@ -115,17 +127,31 @@ impl App {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(theme::hero_fade);
+        // A long title in a short window gives way to Play and the lines below it: smaller, and cut
+        // from the top as a last resort, never pushing them out.
+        let title = text(&g.title)
+            .size(if self.window.height < SHORT_WINDOW {
+                40
+            } else {
+                52
+            })
+            .font(bold())
+            .line_height(1.05);
         // What is drawn over the art keeps its right clicks from the art's menu.
         let front = container(
             column![
-                opaque(text(&g.title).size(52).font(bold()).line_height(1.05)),
+                container(opaque(title))
+                    .height(Length::Fill)
+                    .align_y(Alignment::End)
+                    .clip(true),
                 opaque(self.play_row(g)),
                 opaque(self.not_installable_line(g)),
                 opaque(self.session_line(g)),
                 opaque(self.download_line(g)),
             ]
             .spacing(16)
-            .max_width(720),
+            .max_width(720)
+            .height(Length::Fill),
         )
         .padding(Padding::new(40.0).bottom(22.0))
         .width(Length::Fill)
@@ -312,28 +338,31 @@ impl App {
         .into()
     }
 
-    pub(super) fn stats<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+    pub(super) fn stats<'a>(&'a self, g: &'a LibraryGame, narrow: bool) -> Element<'a, Message> {
         let played = self.playtime.get(&g.id);
         let stat = |ic: Icon, value: String, label: &'a str| {
-            row![
-                container(icon(ic, 20.0, tokens().text))
-                    .center(40)
-                    .style(theme::circle),
-                column![
-                    text(value)
-                        .size(18)
-                        .font(semibold())
-                        .wrapping(Wrapping::None),
-                    text(label)
-                        .size(13)
-                        .color(tokens().muted)
-                        .wrapping(Wrapping::None)
-                ]
-                .spacing(2),
-            ]
-            .spacing(12)
-            .align_y(Alignment::Center)
-            .width(Length::Fill)
+            row![]
+                .push((!narrow).then(|| {
+                    container(icon(ic, 20.0, tokens().text))
+                        .center(40)
+                        .style(theme::circle)
+                }))
+                .push(
+                    column![
+                        text(value)
+                            .size(18)
+                            .font(semibold())
+                            .wrapping(Wrapping::None),
+                        text(label)
+                            .size(13)
+                            .color(tokens().muted)
+                            .wrapping(Wrapping::None)
+                    ]
+                    .spacing(2),
+                )
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .width(Length::Fill)
         };
         row![
             stat(

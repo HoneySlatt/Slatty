@@ -45,6 +45,56 @@ fn installed_game_page_can_be_played_and_shows_no_store_text() {
     );
 }
 
+/// At the smallest window, with long values and a long title, the game page keeps its texts apart
+/// and inside the window.
+#[test]
+fn the_game_page_fits_the_smallest_window() {
+    let mut app = library_app();
+    app.window = iced::Size::new(800.0, 560.0);
+    app.library[2].title =
+        "[FAKE] The Very Long Title of a Game: Definitive Edition With Every Expansion".into();
+    open(&mut app, "3", None);
+    app.overview.insert(
+        "3".into(),
+        GameOverview {
+            playtime_minutes: Some(1234 * 60 + 56),
+            ..Default::default()
+        },
+    );
+    app.playtime.insert(
+        "3".into(),
+        Playtime {
+            seconds: 99 * 3600,
+            last_played: 1_700_000_000,
+        },
+    );
+    let stats = ["1234 h 56 m", "Time played", "14 Nov 2023", "Last played"];
+    // Their own widths, where nothing squeezes them.
+    let roomy: Vec<f32> = {
+        let mut ui = render(&app);
+        stats
+            .iter()
+            .map(|t| ui.find(*t).unwrap().bounds().width)
+            .collect()
+    };
+    let mut ui = iced_test::simulator::Simulator::with_size(settings(), app.window, app.view());
+    snapshot(&mut ui, "game-narrow");
+    for (t, width) in stats.iter().zip(roomy) {
+        let bounds = ui.find(*t).unwrap().bounds();
+        assert!(bounds.width >= width, "{t} squeezed: {bounds:?}, {width}");
+    }
+    let play = ui.find("Play").unwrap().bounds();
+    assert!(play.height > 0.0, "Play pushed out by the title: {play:?}");
+    // Each stat ends before the next begins.
+    let at = |ui: &mut iced_test::simulator::Simulator<'_, Message>, t: &str| {
+        ui.find(t).unwrap().bounds()
+    };
+    let (time, last) = (at(&mut ui, "1234 h 56 m"), at(&mut ui, "14 Nov 2023"));
+    assert!(time.x + time.width < last.x, "{time:?} {last:?}");
+    let cloud = at(&mut ui, "Cloud saves");
+    assert!(last.x + last.width < cloud.x, "{last:?} {cloud:?}");
+}
+
 #[test]
 fn uninstalled_game_offers_install_but_not_play_or_cloud_tools() {
     let mut app = library_app();
