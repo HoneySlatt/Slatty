@@ -26,6 +26,26 @@ fn runners_page() -> App {
 }
 
 #[test]
+fn turning_github_off_stops_a_download_and_a_stopped_update_lists_the_builds_again() {
+    let mut app = runners_page();
+    let _ = app.update(Message::Runners(RunnersMsg::Downloads(true)));
+    let _ = app.update(Message::Runners(RunnersMsg::Install(release(&app))));
+    let (_, _, cancel) = app.runners.installing.clone().unwrap();
+    let _ = app.update(Message::Runners(RunnersMsg::Downloads(false)));
+    assert!(
+        cancel.is_cancelled(),
+        "its Stop button is gone with the rest"
+    );
+
+    // An update stopped or failed may have installed and pruned some builds first.
+    for result in [Err(None), Err(Some("GitHub did not answer".into()))] {
+        app.runners.updating = true;
+        let task = app.update_runners(RunnersMsg::Updated(result));
+        assert_eq!(task.units(), 1, "the Proton menus are listed again");
+    }
+}
+
+#[test]
 fn github_is_offered_only_once_proton_downloads_are_turned_on() {
     let mut app = runners_page();
     let db = app.core.as_ref().unwrap().db.clone();

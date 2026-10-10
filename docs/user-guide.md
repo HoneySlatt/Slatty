@@ -452,7 +452,7 @@ belong to them.
 SlattyLauncher can download the newest build of three Proton projects from their GitHub releases:
 GE-Proton, Proton-CachyOS (its x86-64-v3 build on processors that have those instructions) and
 UMU-Proton. GitHub is contacted only once **Proton downloads** is turned on, in Settings → Runners
-or with `slatty proton downloads on`.
+or with `slatty proton downloads on`; turning it off in Settings stops a download running.
 
 ```sh
 slatty proton downloads on

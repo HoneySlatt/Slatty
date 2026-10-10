@@ -271,6 +271,7 @@ fn proton_candidates_in(downloaded: &Path, home: &Path) -> Vec<PathBuf> {
             .into_iter()
             .flatten()
             .flatten()
+            .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
             .map(|e| e.path())
             .filter(|p| p.join("proton").is_file())
             .collect();
@@ -373,6 +374,12 @@ mod tests {
         // The link to the newest is listed, and so is the build it leads to.
         std::os::unix::fs::symlink("GE-Proton11-7-x86_64", downloaded.join("GE-Proton-latest"))
             .unwrap();
+        // A link being swapped in when a crash cut it off is not offered.
+        std::os::unix::fs::symlink(
+            "GE-Proton11-7-x86_64",
+            downloaded.join(".GE-Proton-latest.slatty-tmp-1-0"),
+        )
+        .unwrap();
 
         let names: Vec<String> = proton_candidates_in(&downloaded, &home)
             .iter()

@@ -38,8 +38,8 @@ pub enum RunnersMsg {
     Updates(bool),
     /// Downloads the newest build of each project games follow as `-latest`.
     Update,
-    /// The builds an update installed; `Err(None)` when it was stopped.
-    /// The builds installed and, for each project that could not be updated, why.
+    /// The builds an update installed and, for each project it could not update, why;
+    /// `Err(None)` when it was stopped.
     Updated(Result<(Vec<Release>, Vec<String>), Option<String>>),
     Cancel,
     Remove(PathBuf),
@@ -59,6 +59,11 @@ impl App {
                 view.downloads = on;
                 if !on {
                     view.releases.clear();
+                    // GitHub off means off: a download or an update running stops, as its Stop
+                    // button goes away with the rest.
+                    if let Some((_, _, cancel)) = &view.installing {
+                        cancel.cancel();
+                    }
                 }
                 if let Err(e) = slatty_core::settings::set_proton_downloads(&core.db, on) {
                     self.notify_error(e.to_string());
@@ -172,11 +177,8 @@ impl App {
                 view.updating = false;
                 view.installing = None;
                 match result {
-                    Ok((updated, failed)) if !failed.is_empty() => {
+                    Ok((_, failed)) if !failed.is_empty() => {
                         self.notify_error(format!("Proton update: {}", failed.join("; ")));
-                        if !updated.is_empty() {
-                            return list(&core);
-                        }
                     }
                     Ok((updated, _)) if updated.is_empty() => {}
                     Ok((updated, _)) => {
@@ -185,11 +187,12 @@ impl App {
                             error: false,
                             text: format!("Proton updated: {}.", names.join(", ")),
                         });
-                        return list(&core);
                     }
                     Err(Some(e)) => self.notify_error(format!("Proton update: {e}")),
                     Err(None) => {}
                 }
+                // Even one stopped or failed may have installed and pruned builds before.
+                return list(&core);
             }
             RunnersMsg::Installed(result) => {
                 view.installing = None;
