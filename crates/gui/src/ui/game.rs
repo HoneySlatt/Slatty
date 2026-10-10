@@ -9,7 +9,7 @@ use iced::widget::{
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::install::Platform;
 use slatty_core::installer::Progress;
-use slatty_core::library::LibraryGame;
+use slatty_core::library::{LibraryGame, NotInstallable};
 
 use super::format::*;
 use super::panels::runner_label;
@@ -120,6 +120,7 @@ impl App {
             column![
                 opaque(text(&g.title).size(52).font(bold()).line_height(1.05)),
                 opaque(self.play_row(g)),
+                opaque(self.not_installable_line(g)),
                 opaque(self.session_line(g)),
                 opaque(self.download_line(g)),
             ]
@@ -204,6 +205,9 @@ impl App {
                     Some(Message::ShowPage(Page::Downloads)),
                     false,
                 ),
+                _ if self.not_installable(&g.id).is_some() => {
+                    big(Icon::Download, "Not installable".into(), None, false)
+                }
                 _ => big(
                     Icon::Download,
                     "Install".into(),
@@ -236,6 +240,34 @@ impl App {
             .spacing(12)
             .align_y(Alignment::Center)
             .into()
+    }
+
+    /// Why Install is unavailable, when GOG offers nothing to install.
+    fn not_installable_line<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        match self.not_installable(&g.id) {
+            Some(why) => text(match why {
+                NotInstallable::Pack => {
+                    "GOG offers nothing to install for this product: it is a pack, whose games \
+                     are in your library on their own."
+                }
+                NotInstallable::Other => {
+                    "GOG offers nothing to install for this product. Its downloads, if any, are \
+                     on gog.com, in your account."
+                }
+            })
+            .size(14)
+            .color(tokens().warning)
+            .into(),
+            None => Space::new().into(),
+        }
+    }
+
+    /// Why GOG offers nothing to install for a game not installed, once known.
+    fn not_installable(&self, game_id: &str) -> Option<NotInstallable> {
+        if self.installs.contains_key(game_id) {
+            return None;
+        }
+        self.installability.get(game_id).copied().flatten()
     }
 
     /// The running download of this game, under Pause.

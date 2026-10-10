@@ -22,7 +22,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `credentials` | System keyring (Secret Service through the `keyring` crate) |
 | `http` | Shared HTTP client; reads that fail on the way (dropped connection, timeout, rate limit, server error) are sent again twice; errors are stripped of URLs so query-string secrets never reach logs |
 | `db` | SQLite state database with versioned migrations |
-| `library` | Galaxy library and gamesdb metadata, per-account cache, covers, key art and images |
+| `library` | Galaxy library and gamesdb metadata, per-account cache, covers, key art and images, whether GOG offers anything to install |
 | `gameinfo` | `goggame-<id>.info` parsing, case-insensitive Windows path resolution |
 | `install` | Installed-game records, Proton build of each game |
 | `galaxy` | Content system: builds, build metadata, depot manifests, secure links, chunks from the fastest CDN endpoint |

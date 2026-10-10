@@ -177,6 +177,32 @@ async fn from_product(http: &Client, id: &str) -> LibraryGame {
     }
 }
 
+/// Why GOG offers nothing to install for a product it lists as owned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotInstallable {
+    /// A bundle: its games are owned, and listed, on their own.
+    Pack,
+    Other,
+}
+
+/// `None` when GOG offers something to install for the product, from its public product data.
+pub async fn not_installable(http: &Client, id: &str) -> Result<Option<NotInstallable>> {
+    let req = http.get(format!("https://api.gog.com/products/{id}"));
+    Ok(installability(
+        &http::json::<Value>(req, "fetching product data").await?,
+    ))
+}
+
+fn installability(product: &Value) -> Option<NotInstallable> {
+    if product["is_installable"].as_bool() != Some(false) {
+        return None;
+    }
+    Some(match product["game_type"].as_str() {
+        Some("pack") => NotInstallable::Pack,
+        _ => NotInstallable::Other,
+    })
+}
+
 /// Cover image bytes, served from the per-account disk cache when present.
 pub async fn cover(
     http: &Client,
@@ -247,6 +273,21 @@ pub fn load_cache(dirs: &Dirs, user_id: &str) -> Result<Option<LibraryCache>> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn tells_products_with_nothing_to_install() {
+        let product = |installable, kind| json!({"is_installable": installable, "game_type": kind});
+        assert_eq!(installability(&product(true, "game")), None);
+        assert_eq!(
+            installability(&product(false, "pack")),
+            Some(NotInstallable::Pack)
+        );
+        assert_eq!(
+            installability(&product(false, "game")),
+            Some(NotInstallable::Other)
+        );
+        assert_eq!(installability(&json!({})), None, "installable unless said");
+    }
 
     #[test]
     fn maps_gamesdb_release() {

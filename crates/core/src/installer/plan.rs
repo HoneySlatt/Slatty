@@ -201,11 +201,14 @@ pub async fn plan_for(
                 "build {id} is no longer offered; restart the install"
             ))
         })?,
-        None => builds
+        None => match builds
             .iter()
             .find(|b| b.branch.is_none())
             .or(builds.first())
-            .ok_or_else(|| Error::Unsupported("no Windows Galaxy build for this game".into()))?,
+        {
+            Some(build) => build,
+            None => return Err(no_build(http, game_id).await),
+        },
     }
     .clone();
     let meta = galaxy::meta(http, &build).await?;
@@ -232,6 +235,22 @@ pub async fn plan_for(
         }
     }
     Ok(plan)
+}
+
+/// Why a game has no Windows build: GOG may offer nothing at all to install for the product.
+async fn no_build(http: &reqwest::Client, game_id: &str) -> Error {
+    use crate::library::{NotInstallable, not_installable};
+    Error::Unsupported(
+        match not_installable(http, game_id).await {
+            Ok(Some(NotInstallable::Pack)) => {
+                "GOG offers nothing to install for this product: it is a pack, whose games are \
+                 in the library on their own"
+            }
+            Ok(Some(NotInstallable::Other)) => "GOG offers nothing to install for this product",
+            _ => "no Windows Galaxy build for this game",
+        }
+        .into(),
+    )
 }
 
 /// Marks the owned DLC to install; a DLC asked for by id must be owned and part of the game.

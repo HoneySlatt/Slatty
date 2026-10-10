@@ -31,6 +31,7 @@ known to work, which is why the final address is pasted back by the user.
 | Owned products | `GET https://galaxy-library.gog.com/users/{user_id}/releases` (paged with `page_token`) | Heroic | Verified |
 | Metadata and artwork | `GET https://gamesdb.gog.com/platforms/gog/external_releases/{id}` | Heroic | Verified |
 | Fallback title | `GET https://api.gog.com/products/{id}` | gogapidocs | Implemented |
+| Whether anything can be installed | `GET https://api.gog.com/products/{id}`: `is_installable`, and `game_type` (`pack` for a bundle) | Capture | Verified (The Elder Scrolls IV: Oblivion GOTY Deluxe: the pack 1242989820 `false`, the game 1458058109 `true`) |
 | Owned products, used for DLC | `GET https://embed.gog.com/user/data/games` (`owned`: product ids) | heroic-gogdl | Verified |
 
 ## Installation (Galaxy content system, generation 2)

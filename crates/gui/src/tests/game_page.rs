@@ -262,3 +262,39 @@ fn a_game_with_several_launch_options_asks_once_which_to_start() {
     assert_eq!(app.launch_choices["3"], "Configuration Tool");
     snapshot(&mut ui, "launch-in-game-settings");
 }
+
+#[test]
+fn a_product_with_nothing_to_install_says_so_instead_of_install() {
+    use slatty_core::library::NotInstallable;
+    let mut app = library_app();
+    let _ = app.update(Message::Select("5".into()));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Install").is_ok(), "until GOG has answered");
+        assert!(ui.find("Not installable").is_err());
+    }
+    let _ = app.update(Message::Installability(
+        "5".into(),
+        Ok(Some(NotInstallable::Pack)),
+    ));
+    settle(&mut app);
+    let mut ui = render(&app);
+    assert!(ui.find("Not installable").is_ok());
+    assert!(ui.find("Install").is_err());
+    assert!(
+        ui.find(
+            "GOG offers nothing to install for this product: it is a pack, whose games are in \
+             your library on their own."
+        )
+        .is_ok()
+    );
+    snapshot(&mut ui, "not-installable");
+    ui.click("Not installable").unwrap();
+    assert_eq!(ui.into_messages().count(), 0, "the button does nothing");
+
+    // An installable game keeps Install; a failed check is asked again later.
+    let _ = app.update(Message::Installability("6".into(), Ok(None)));
+    let _ = app.update(Message::Installability("7".into(), Err("offline".into())));
+    assert_eq!(app.installability.get("6"), Some(&None));
+    assert!(!app.installability.contains_key("7"));
+}

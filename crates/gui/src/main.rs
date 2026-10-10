@@ -40,7 +40,7 @@ use slatty_core::db::Db;
 use slatty_core::http::HttpClient;
 use slatty_core::install::{Install, Platform};
 use slatty_core::installer::{InstallJob, InstallRecord};
-use slatty_core::library::{LibraryCache, LibraryGame};
+use slatty_core::library::{LibraryCache, LibraryGame, NotInstallable};
 use slatty_core::overview::GameOverview;
 use slatty_core::paths::Dirs;
 use slatty_core::session::Playtime;
@@ -225,6 +225,8 @@ pub struct App {
     pub launch_choices: HashMap<String, String>,
     /// A game whose Play asks how to start it, the first time.
     pub launch_prompt: Option<String>,
+    /// Games not installed whose page was opened: `Some` when GOG offers nothing to install.
+    pub installability: HashMap<String, Option<NotInstallable>>,
     pub proton: Option<PathBuf>,
     pub proton_choices: Vec<PathBuf>,
     /// Work that closing the window would interrupt, waiting for the user's choice.
@@ -304,6 +306,7 @@ impl Default for App {
             launch_options: HashMap::new(),
             launch_choices: HashMap::new(),
             launch_prompt: None,
+            installability: HashMap::new(),
             settings_view: settings::SettingsView::default(),
             proton: None,
             proton_choices: Vec::new(),
@@ -367,6 +370,7 @@ pub enum Message {
     /// How a game is started, chosen when its first Play asks; it then starts.
     LaunchAs(String, String),
     CancelLaunch,
+    Installability(String, Result<Option<NotInstallable>, String>),
     Playing(PlayMsg),
     StopGame,
     LoadAchievements(String),
@@ -604,6 +608,11 @@ impl App {
                 return self.start_game(game_id);
             }
             Message::CancelLaunch => self.launch_prompt = None,
+            Message::Installability(id, Ok(answer)) => {
+                self.installability.insert(id, answer);
+            }
+            // Asked again the next time the page opens.
+            Message::Installability(_, Err(_)) => {}
             Message::Playing(msg) => return self.on_play(msg),
             Message::StopGame => self.stop_game(),
             Message::LoadAchievements(game_id) => return self.load_achievements(game_id),
@@ -754,6 +763,23 @@ impl App {
             let art: Vec<String> = game.background.iter().cloned().collect();
             tasks.push(self.request_images(art));
             tasks.push(self.refresh_playtime(vec![id.clone()]));
+        }
+        if !self.installs.contains_key(&id)
+            && !self.installability.contains_key(&id)
+            && let Some(core) = &self.core
+        {
+            let (http, game_id) = (core.http.clone(), id.clone());
+            tasks.push(Task::perform(
+                async move {
+                    slatty_core::library::not_installable(&http, &game_id)
+                        .await
+                        .map_err(err)
+                },
+                {
+                    let id = id.clone();
+                    move |answer| Message::Installability(id, answer)
+                },
+            ));
         }
         if !self.achievements.contains_key(&id) {
             tasks.push(Task::done(Message::LoadAchievements(id.clone())));
