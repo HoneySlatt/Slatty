@@ -65,6 +65,19 @@ fn local(ts: i64) -> Option<chrono::DateTime<chrono::FixedOffset>> {
     }
 }
 
+/// A path as shown. In tests their throwaway folder, named differently each run, shows as
+/// `/tmp/slatty-test`, so that the snapshots showing it do not change from one run to the next.
+pub fn shown_path(path: &std::path::Path) -> String {
+    #[cfg(test)]
+    if let Ok(rest) = path.strip_prefix(crate::tests::root()) {
+        return std::path::Path::new("/tmp/slatty-test")
+            .join(rest)
+            .display()
+            .to_string();
+    }
+    path.display().to_string()
+}
+
 /// "Today", "Yesterday", "3 days ago", or the date.
 pub fn relative_day(ts: i64) -> String {
     let Some(then) = local(ts) else {

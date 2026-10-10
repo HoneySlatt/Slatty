@@ -33,7 +33,9 @@ SLATTY_SNAPSHOT_DIR=/tmp/slatty-ui cargo test -p slatty-gui
 
 This writes PNG snapshots of the tested screens. Tests take 10 October 2026 for today and UTC+2 for
 the time zone, so that dates and times ("Yesterday", "Last refreshed 09/10/2026 00:53") and the
-snapshots showing them are the same whatever the day and wherever they run.
+snapshots showing them are the same whatever the day and wherever they run. Their throwaway folder,
+named anew each run, shows as `/tmp/slatty-test`: two runs give identical snapshots, so any
+difference between a snapshot before and after a change comes from the change.
 
 ### Library at 10,000 games
 

@@ -19,6 +19,8 @@ fn settings_page_holds_account_library_and_install_options() {
         ui.find("14 owned · Last refreshed 09/10/2026 00:53")
             .is_ok()
     );
+    // And show their throwaway folder under one name, whatever its real one this run.
+    assert!(ui.find("/tmp/slatty-test/config/theme.toml").is_ok());
     snapshot(&mut ui, "settings");
 }
 

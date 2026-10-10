@@ -18,10 +18,14 @@ use crate::{App, Core, Filters, Message, Page, Panel, Shelf, Sort};
 
 const SIZE: Size = Size::new(1440.0, 900.0);
 
+/// The throwaway folder the tests work in, its own for each run.
+pub(crate) fn root() -> PathBuf {
+    std::env::temp_dir().join(format!("slatty-gui-test-{}", std::process::id()))
+}
+
 fn core() -> Core {
-    let root = std::env::temp_dir().join(format!("slatty-gui-test-{}", std::process::id()));
     Core {
-        dirs: Dirs::under(&root),
+        dirs: Dirs::under(&root()),
         db: Arc::new(Db::in_memory().unwrap()),
         http: slatty_core::http::client().unwrap(),
         downloads: Arc::new(tokio::sync::Semaphore::new(1)),

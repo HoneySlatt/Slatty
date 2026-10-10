@@ -673,7 +673,7 @@ impl App {
             setting(
                 wide,
                 "Theme file",
-                container(text(path.display().to_string()).size(14))
+                container(text(shown_path(&path)).size(14))
                     .padding([9, 12])
                     .width(Length::Fill)
                     .style(theme::outlined)
