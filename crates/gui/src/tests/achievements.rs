@@ -119,6 +119,35 @@ fn achievements_tab_lists_games_by_completion() {
     );
 }
 
+/// A long title does not push a game's progress out of its tile, at the smallest window.
+#[test]
+fn a_long_title_leaves_the_progress_in_its_tile() {
+    let mut app = library_app();
+    app.page = Page::Achievements;
+    app.window = Size::new(800.0, 560.0);
+    app.library[1].title =
+        "[FAKE] A Game Whose Title Goes On and On: The Complete Collection of Everything".into();
+    app.overview.insert(
+        "2".into(),
+        GameOverview {
+            achievements: Some((3, 40)),
+            ..Default::default()
+        },
+    );
+    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    snapshot(&mut ui, "achievements-long-title");
+    let title = ui
+        .find("[FAKE] A Game Whose Title Goes On and On: The Complete Collection of Everything")
+        .unwrap()
+        .bounds();
+    let progress = ui.find("3 / 40").unwrap().bounds();
+    assert!(progress.height > 0.0, "{progress:?}");
+    assert!(
+        title.y + title.height <= progress.y,
+        "{title:?} {progress:?}"
+    );
+}
+
 #[test]
 fn achievements_tab_opens_a_dedicated_page_per_game() {
     let mut app = app_with_achievements();

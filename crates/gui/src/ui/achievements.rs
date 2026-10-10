@@ -109,7 +109,10 @@ impl App {
         };
         let share = done as f32 / total as f32;
         let details = column![
-            text(&g.title).size(17).font(semibold()),
+            // Three lines at most: a longer title would push the progress out of the tile.
+            container(text(&g.title).size(17).font(semibold()))
+                .max_height(3.0 * 17.0 * 1.3)
+                .clip(true),
             space().height(Length::Fill),
             row![
                 text(format!("{done} / {total}")).size(16),
