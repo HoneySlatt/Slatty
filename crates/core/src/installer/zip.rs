@@ -140,6 +140,22 @@ pub fn entries(dir: &Directory, raw: &[u8]) -> Result<Vec<ZipEntry>> {
             }
             e += 4 + n;
         }
+        // Its data lies before the directory, and deflate shrinks data 1032 times at most: what
+        // says otherwise is damaged, and is refused before it is added up anywhere.
+        let header = header
+            .checked_add(dir.shift)
+            .filter(|h| {
+                h.checked_add(compressed)
+                    .is_some_and(|end| end <= dir.start)
+            })
+            .ok_or_else(|| bad("directory entry outside the installer's files"))?;
+        let possible = match method {
+            STORED => size == compressed,
+            _ => size <= compressed.saturating_mul(1032),
+        };
+        if !possible {
+            return Err(bad("directory entry with an impossible size"));
+        }
         out.push(ZipEntry {
             name,
             method,
@@ -147,7 +163,7 @@ pub fn entries(dir: &Directory, raw: &[u8]) -> Result<Vec<ZipEntry>> {
             compressed,
             size,
             mode: made_on_unix.then_some(attributes >> 16),
-            header: header + dir.shift,
+            header,
         });
         at = next;
     }
@@ -355,6 +371,88 @@ mod tests {
             assert!(directory(&raw, len as u64).is_err());
         }
         assert!(directory(&[0; 22], 1).is_err());
+    }
+
+    fn three_files() -> [File<'static>; 3] {
+        [
+            File {
+                name: "data/noarch/start.sh",
+                data: b"#!/bin/sh\necho hi\n",
+                mode: 0o100755,
+                deflate: false,
+            },
+            File {
+                name: "data/noarch/game/data.bin",
+                data: &[7u8; 5000],
+                mode: 0o100644,
+                deflate: true,
+            },
+            File {
+                name: "data/noarch/lib/libfoo.so",
+                data: b"libfoo.so.1",
+                mode: 0o120777,
+                deflate: false,
+            },
+        ]
+    }
+
+    /// Installers damaged anywhere near their end (bytes changed at random, with a fixed seed) give
+    /// errors, never a panic, and what is read from them stays inside the installer.
+    #[test]
+    fn damaged_installers_are_errors_never_panics() {
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for zip64 in [false, true] {
+            let base = installer(b"#!/bin/sh\nexit 0\n", &three_files(), zip64);
+            for _ in 0..5000 {
+                let mut bytes = base.clone();
+                for _ in 0..next() % 8 + 1 {
+                    let back = (next() as usize % 400).min(bytes.len() - 1);
+                    let i = bytes.len() - 1 - back;
+                    bytes[i] = next() as u8;
+                }
+                let n = bytes.len();
+                let Ok(dir) = directory(&bytes[n.saturating_sub(TAIL as usize)..], n as u64) else {
+                    continue;
+                };
+                let end = dir.start.saturating_add(dir.len) as usize;
+                let Some(raw) = bytes.get(dir.start as usize..end) else {
+                    continue;
+                };
+                for e in entries(&dir, raw).unwrap_or_default() {
+                    assert!(e.header.checked_add(e.compressed).unwrap() <= dir.start);
+                    let _ = e.header + e.span();
+                }
+            }
+        }
+    }
+
+    /// ZIP64 fields claiming sizes and offsets of 2^64 bytes: refused, not added up.
+    #[test]
+    fn impossible_zip64_values_are_refused() {
+        let files = three_files();
+        let bytes = installer(b"#!/bin/sh\n", &files[..1], false);
+        let n = bytes.len();
+        let dir = directory(&bytes[n.saturating_sub(TAIL as usize)..], n as u64).unwrap();
+        let mut raw = bytes[dir.start as usize..(dir.start + dir.len) as usize].to_vec();
+        for field in [20, 24, 42] {
+            raw[field..field + 4].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
+        }
+        raw[30..32].copy_from_slice(&28u16.to_le_bytes());
+        let name_end = 46 + files[0].name.len();
+        let mut extra = vec![1u8, 0, 24, 0];
+        extra.extend([0xff; 24]);
+        raw.splice(name_end..name_end, extra);
+        let dir = Directory {
+            len: raw.len() as u64,
+            ..dir
+        };
+        assert!(entries(&dir, &raw).is_err());
     }
 
     #[test]
