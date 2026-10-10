@@ -18,7 +18,7 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 directories = "6"
 sha2 = "0.11.0"
 md-5 = "0.11.0"
-flate2 = "1.1.10"
+flate2 = { version = "1.1.10", features = ["zlib-rs"] }
 url = "2.5.8"
 chrono = { version = "0.4.45", features = ["serde"] }
 nix = { version = "0.31", features = ["process", "signal", "feature", "fs"] }

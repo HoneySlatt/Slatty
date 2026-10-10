@@ -61,7 +61,7 @@ toolchain from the Nix store) packed three ways, on NVMe:
 
 | Archive | Unpacking | Peak memory |
 |---|---|---|
-| `.tar.gz`, 354 MB (`tar czf`) | 3.4–3.6 s; SHA-512 0.6 s | |
+| `.tar.gz`, 354 MB (`tar czf`) | 3.1–3.2 s (3.4–3.6 s with miniz_oxide); SHA-512 0.6 s | |
 | `.tar.xz` in 44 blocks, 224 MB (`xz -T0 -6`) | 2.7 s (11.2–11.6 s on one thread) | 322 MB (15 MB on one thread) |
 | `.tar.xz` in one block, 221 MB (`xz -T1 -6`) | 10.4–10.6 s | 15 MB |
 
