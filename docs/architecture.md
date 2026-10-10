@@ -214,7 +214,11 @@ environment (`runner::isolation_env`) to share less:
 - `PRESSURE_VESSEL_FILESYSTEMS_RW`: the game folder; `PRESSURE_VESSEL_FILESYSTEMS_RO`: umu's data,
   the redistributables and the game's support files. The prefix is shared by umu itself;
 - `TMPDIR`, `TMP`, `TEMP`, `TEMPDIR` set to `/tmp`, which is private in the container: it shares
-  the folders they name.
+  the folders they name;
+- `DBUS_SESSION_BUS_ADDRESS=disabled:`, D-Bus's address for no bus: the container then shares no
+  session bus (an address to a missing socket stops it from starting). Wine, Proton and umu do not
+  use that bus (Wine's own D-Bus use, in `mountmgr` and `winebth`, is on the system bus, which
+  stays shared).
 
 umu shares, writable, the whole filesystem a game is on (its "game drive": the first mount point
 above `STEAM_COMPAT_INSTALL_PATH`, which it otherwise takes from the program's folder). With `/home`
@@ -289,7 +293,7 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
 | Iced rather than GPUI (reviewed 2026-10-09) | Maintenance comes first. Iced has versioned releases and documentation. GPUI has had no maintained release since 0.2.2 (October 2025); its ecosystem pins weekly third-party snapshots (`gpui-pre`) with frequent breaking changes. Rich pages remain possible with Iced's `markdown`, `table` and `sensor` widgets. |
 | No web view | Native application; sign-in happens in the user's own browser |
 | Address pasted back after sign-in | GOG accepts only the Galaxy redirect URI; no local redirect is known to work |
-| Isolation through umu's own container rather than another sandbox | pressure-vessel already runs every Proton game; its documented options hide the home folder with no second container to keep working with GPUs, sound and gamepads. It shares the D-Bus session bus, so it keeps games out of files, not out of the system |
+| Isolation through umu's own container rather than another sandbox | pressure-vessel already runs every Proton game; its documented options hide the home folder with no second container to keep working with GPUs, sound and gamepads. It still shares the D-Bus system bus, the display, sound, devices and the network: it keeps games out of files, not out of the system |
 | Comet as a supervised companion process | Its library API is not meant for embedding (global state, fixed port, panics on errors) |
 | Subreaper supervisor process for sessions | Launchers that exit early and Wine processes must not end the session too soon |
 | Content hashes, not dates, for cloud sync | Dates are unreliable across machines and Wine; hashes plus per-file history detect real changes |

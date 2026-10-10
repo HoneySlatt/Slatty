@@ -61,14 +61,18 @@ pressure-vessel from the Steam Linux Runtime, told to share less:
 - the game sees its own folder (writable), its Wine prefix, a home folder of its own, and read-only
   umu's runtime and the setup files SlattyLauncher downloads for it;
 - your home folder, your `/tmp` and other disks stay out of view (checked with `/home` and a
-  network share each mounted on their own), so Wine's `z:` drive shows nothing of your files.
+  network share each mounted on their own), so Wine's `z:` drive shows nothing of your files;
+- your D-Bus session bus stays out too: through it a program could have your desktop's services
+  act for it, systemd starting a command outside the container among them.
 
 What isolation leaves open:
 
-- **D-Bus.** The container shares your session bus. Through it, a program could ask other
-  services to act for it, such as starting a command outside the container.
+- **The D-Bus system bus.** Wine uses it to find drives, network adapters and Bluetooth devices.
+  Your system's rules may let the active session do some things through it without a password
+  (such as suspending or mounting a drive).
 - **Display, sound and devices.** Wayland or X11, PipeWire or PulseAudio, the GPU, `/dev` (gamepads)
-  and the network are shared, as games need them. Comet's port (127.0.0.1:9977) is reachable.
+  and the network are shared, as games need them. Comet's port (127.0.0.1:9977) is reachable, as
+  are Unix sockets other programs open in the abstract namespace, which goes with the network.
 - **Processes.** Other processes of yours are visible in `/proc`, though not their files or
   environment.
 
