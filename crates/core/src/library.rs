@@ -308,7 +308,32 @@ fn cache_file(dirs: &Dirs, user_id: &str) -> std::path::PathBuf {
     dirs.account_cache(user_id).join("library.json")
 }
 
-pub fn save_cache(dirs: &Dirs, user_id: &str, games: Vec<LibraryGame>) -> Result<LibraryCache> {
+/// Saves the library just fetched. A game GOG's database failed to describe this time (an outage,
+/// a session expiring during the sync) keeps the description an earlier sync got: its bare entry
+/// has no cover and no systems, which would hide its Linux build.
+pub fn save_cache(dirs: &Dirs, user_id: &str, mut games: Vec<LibraryGame>) -> Result<LibraryCache> {
+    let rank = |m: MetadataSource| match m {
+        MetadataSource::Gamesdb => 2,
+        MetadataSource::Product => 1,
+        MetadataSource::Missing => 0,
+    };
+    if games.iter().any(|g| g.metadata != MetadataSource::Gamesdb)
+        && let Ok(Some(before)) = load_cache(dirs, user_id)
+    {
+        let mut before: HashMap<String, LibraryGame> = before
+            .games
+            .into_iter()
+            .map(|g| (g.id.clone(), g))
+            .collect();
+        for game in &mut games {
+            if let Some(known) = before.remove(&game.id)
+                && rank(known.metadata) > rank(game.metadata)
+            {
+                *game = known;
+            }
+        }
+        games.sort_by_cached_key(|g| g.title.to_lowercase());
+    }
     let cache = LibraryCache {
         user_id: user_id.to_string(),
         fetched_at: Utc::now().timestamp(),
@@ -471,6 +496,51 @@ mod tests {
         let path = image(&http, &dirs, "111", art).await.unwrap();
         assert_eq!(path, images.join(format!("{hash}.jpg")));
         assert!(!images.join(&hash).exists());
+        std::fs::remove_dir_all(dirs.cache.parent().unwrap()).unwrap();
+    }
+
+    /// GOG's game database failing for a while (an outage, a session expiring during a long sync)
+    /// leaves bare entries: they do not replace what an earlier sync described.
+    #[test]
+    fn a_game_described_before_keeps_its_description_when_gog_fails_to_give_it() {
+        let dirs = Dirs::under(
+            &std::env::temp_dir().join(format!("slatty-lib-described-{}", std::process::id())),
+        );
+        let game = |id: &str, title: &str, metadata| LibraryGame {
+            id: id.into(),
+            title: title.into(),
+            cover: (metadata == MetadataSource::Gamesdb).then(|| "https://images/[FAKE]".into()),
+            icon: None,
+            background: None,
+            logo: None,
+            os: if metadata == MetadataSource::Gamesdb {
+                vec!["linux".into()]
+            } else {
+                Vec::new()
+            },
+            metadata,
+        };
+        save_cache(
+            &dirs,
+            "111",
+            vec![game("1", "[FAKE] Described", MetadataSource::Gamesdb)],
+        )
+        .unwrap();
+        let cache = save_cache(
+            &dirs,
+            "111",
+            vec![
+                game("1", "GOG product 1", MetadataSource::Missing),
+                game("2", "GOG product 2", MetadataSource::Missing),
+            ],
+        )
+        .unwrap();
+        assert_eq!(cache.games[0].title, "[FAKE] Described");
+        assert_eq!(cache.games[0].os, ["linux"]);
+        assert!(cache.games[0].cover.is_some());
+        assert_eq!(cache.games[1].title, "GOG product 2", "new: kept as it is");
+        let saved = load_cache(&dirs, "111").unwrap().unwrap();
+        assert_eq!(saved.games[0].metadata, MetadataSource::Gamesdb);
         std::fs::remove_dir_all(dirs.cache.parent().unwrap()).unwrap();
     }
 
