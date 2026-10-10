@@ -19,6 +19,33 @@ fn a_queue_change_cancels_the_drag_before_the_next_render() {
     assert!(app.queue.is_empty());
 }
 
+/// Each message rebuilds the page: moving the pointer over the queue sends none, unless a row is
+/// being moved.
+#[test]
+fn the_pointer_over_the_queue_sends_nothing_until_a_row_is_moved() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    app.queue = vec!["5".into(), "6".into()];
+    app.page = Page::Downloads;
+    let moves = |app: &App| {
+        let mut ui = render(app);
+        let row = ui.find("[FAKE] Game 6").unwrap().bounds().center();
+        for x in [row.x, row.x + 5.0] {
+            let position = iced::Point::new(x, row.y);
+            ui.point_at(position);
+            let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+                position,
+            })]);
+        }
+        ui.into_messages()
+            .filter(|m| matches!(m, Message::Downloads(DownloadsMsg::Drag(_))))
+            .count()
+    };
+    assert_eq!(moves(&app), 0);
+    let _ = app.update(Message::Downloads(DownloadsMsg::Grab(1)));
+    assert!(moves(&app) > 0, "the row follows the pointer");
+}
+
 /// Whether a queued game follows updates is decided as it is queued: by its turn GOG may have
 /// published a newer build, which would make the build chosen look older than it was.
 #[test]

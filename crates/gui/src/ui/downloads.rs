@@ -322,11 +322,16 @@ impl App {
             })
             .into()
         });
-        mouse_area(Column::with_children(rows).spacing(ROW_SPACING))
-            .on_move(|p| Message::Downloads(DownloadsMsg::Drag(p.y)))
-            .on_release(Message::Downloads(DownloadsMsg::Drop))
-            .on_exit(Message::Downloads(DownloadsMsg::Drop))
-            .into()
+        let area = mouse_area(Column::with_children(rows).spacing(ROW_SPACING));
+        // Only while a row is moved: each message rebuilds the page, and the pointer moves often.
+        if self.drag.is_some() {
+            area.on_move(|p| Message::Downloads(DownloadsMsg::Drag(p.y)))
+                .on_release(Message::Downloads(DownloadsMsg::Drop))
+                .on_exit(Message::Downloads(DownloadsMsg::Drop))
+                .into()
+        } else {
+            area.into()
+        }
     }
 
     fn completed_row<'a>(&'a self, id: &'a str, size: u64) -> Element<'a, Message> {
