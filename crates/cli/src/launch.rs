@@ -16,7 +16,7 @@ pub struct LaunchArgs {
 }
 
 pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
-    for s in play::recover_unfinished(&ctx.db)? {
+    for s in play::recover_unfinished(&ctx.db, &ctx.dirs)? {
         println!(
             "Note: the session of {} started {} never recorded its end (launcher interrupted).",
             s.game_id,

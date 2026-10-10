@@ -458,9 +458,16 @@ async fn achievements_now(
         .ok()
 }
 
-/// Sessions without a recorded end (launcher crash or kill) are marked as interrupted.
-pub fn recover_unfinished(db: &Db) -> Result<Vec<session::SessionRecord>> {
-    let unfinished = session::unfinished(db)?;
+/// Sessions without a recorded end (launcher crash or kill) are marked as interrupted. One whose
+/// game still runs under its supervisor (started by another launcher open meanwhile, or by one
+/// that closed) is left as it is.
+pub fn recover_unfinished(db: &Db, dirs: &Dirs) -> Result<Vec<session::SessionRecord>> {
+    let mut unfinished = session::unfinished(db)?;
+    unfinished.retain(|s| {
+        crate::paths::check_game_id(&s.game_id).is_err()
+            || crate::lock::try_acquire(&crate::lock::session(dirs, &s.game_id))
+                .is_ok_and(|free| free.is_some())
+    });
     for s in &unfinished {
         session::mark_interrupted(db, s.id)?;
     }

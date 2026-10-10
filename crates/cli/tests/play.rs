@@ -82,7 +82,7 @@ async fn play_reports_the_real_end_of_a_detached_game() {
         }
     ));
     assert!(root.join("game/done").exists());
-    assert!(play::recover_unfinished(&db).unwrap().is_empty());
+    assert!(play::recover_unfinished(&db, &dirs).unwrap().is_empty());
     std::fs::remove_dir_all(root).unwrap();
 }
 
@@ -169,6 +169,8 @@ async fn a_game_left_running_keeps_the_game_busy() {
         slatty_core::lock::game(&dirs, "7").is_err(),
         "another operation could take a running game"
     );
+    // Another launcher starting meanwhile does not take the session for an interrupted one.
+    assert!(play::recover_unfinished(&db, &dirs).unwrap().is_empty());
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while slatty_core::lock::game(&dirs, "7").is_err() {
         assert!(std::time::Instant::now() < deadline, "the game stays busy");
@@ -178,5 +180,7 @@ async fn a_game_left_running_keeps_the_game_busy() {
         root.join("game/done").exists(),
         "free only once the game ended"
     );
+    // Its end was not recorded, the launcher being gone: it is now.
+    assert_eq!(play::recover_unfinished(&db, &dirs).unwrap().len(), 1);
     std::fs::remove_dir_all(root).unwrap();
 }

@@ -66,7 +66,7 @@ pub async fn boot() -> Result<Boot, String> {
     dirs.keep_private().map_err(err)?;
     let db = Db::open(&dirs.db_file()).map_err(err)?;
     let http = slatty_core::http::client().map_err(err)?;
-    let interrupted = slatty_core::play::recover_unfinished(&db)
+    let interrupted = slatty_core::play::recover_unfinished(&db, &dirs)
         .map_err(err)?
         .into_iter()
         .map(|s| s.game_id)
