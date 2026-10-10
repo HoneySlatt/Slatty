@@ -169,11 +169,18 @@ impl App {
         self.save_overview();
     }
 
+    /// Saved only when a play time changed: at 10,000 games, writing the cache takes a few
+    /// milliseconds on the interface thread, and opening a game page reads its play time again.
     pub fn playtimes_fetched(&mut self, times: Vec<(String, u64)>) {
+        let mut changed = false;
         for (id, minutes) in times {
-            self.overview.entry(id).or_default().playtime_minutes = Some(minutes);
+            let known = &mut self.overview.entry(id).or_default().playtime_minutes;
+            changed |= *known != Some(minutes);
+            *known = Some(minutes);
         }
-        self.save_overview();
+        if changed {
+            self.save_overview();
+        }
     }
 
     /// Reads play time recorded by GOG for these games.

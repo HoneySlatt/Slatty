@@ -193,6 +193,23 @@ fn shelves_filters_and_sort_select_games() {
 }
 
 #[test]
+fn play_time_read_again_unchanged_is_not_written_again() {
+    let mut app = library_app();
+    let core = app.core.as_mut().unwrap();
+    core.dirs = Dirs::under(&core.dirs.cache.join("playtime-test"));
+    let file = core.dirs.account_cache("0").join("overview.json");
+    let _ = app.update(Message::PlaytimesFetched(vec![("1".into(), 200)]));
+    assert!(file.is_file());
+    std::fs::remove_file(&file).unwrap();
+    // A game page opened again: the same minutes.
+    let _ = app.update(Message::PlaytimesFetched(vec![("1".into(), 200)]));
+    assert!(!file.exists());
+    let _ = app.update(Message::PlaytimesFetched(vec![("1".into(), 230)]));
+    assert!(file.is_file());
+    assert_eq!(app.played_seconds("1"), 230 * 60);
+}
+
+#[test]
 fn games_known_only_by_play_time_are_read_again() {
     let mut app = library_app();
     app.library.truncate(2);
