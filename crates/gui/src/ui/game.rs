@@ -19,7 +19,7 @@ use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
 use crate::install::{Cancelling, InstallMsg, InstallView};
 use crate::theme::{self, bold, semibold, tokens};
-use crate::{App, CloudStatus, Loadable, Message, Panel};
+use crate::{App, CloudStatus, Loadable, Message, Page, Panel};
 
 /// Height of the summary cards under the key art.
 const CARD_HEIGHT: f32 = 96.0;
@@ -189,11 +189,19 @@ impl App {
                 Some(InstallView::Ready(info)) if info.resumable => big(
                     Icon::Download,
                     "Resume".into(),
-                    Some(if info.proton.is_some() {
-                        Message::Install(InstallMsg::Start(g.id.clone()))
-                    } else {
-                        Message::OpenPanel(Panel::Install)
-                    }),
+                    Some(
+                        if info.platform == Platform::Linux || info.proton.is_some() {
+                            Message::Install(InstallMsg::Start(g.id.clone()))
+                        } else {
+                            Message::OpenPanel(Panel::Install)
+                        },
+                    ),
+                    false,
+                ),
+                Some(InstallView::Queued(_)) => big(
+                    Icon::Clock,
+                    "Queued".into(),
+                    Some(Message::ShowPage(Page::Downloads)),
                     false,
                 ),
                 _ => big(
@@ -579,14 +587,45 @@ pub(super) fn download_controls<'a>(
             )
             .spacing(10)
     });
-    let below: Option<Element<'a, Message>> = match cancelling {
+    let below = cancel_prompt(&g.id, &g.title, progress, cancelling);
+    column![
+        row![
+            progress_bar(0.0..=1.0, fraction(progress))
+                .girth(8)
+                .style(theme::progress),
+            text(format!("{:.0} %", fraction(progress) * 100.0))
+                .size(14)
+                .font(semibold())
+                // A fixed width, so the bar keeps its length as the digits change.
+                .width(48)
+                .align_x(Alignment::End),
+        ]
+        .spacing(14)
+        .align_y(Alignment::Center),
+        row![container(status).width(Length::Fill)]
+            .push(buttons)
+            .align_y(Alignment::Center),
+    ]
+    .push(below)
+    .spacing(10)
+    .into()
+}
+
+/// Asks before a running download is cancelled, since its files are deleted.
+pub(super) fn cancel_prompt<'a>(
+    game_id: &str,
+    title: &str,
+    progress: Progress,
+    cancelling: Cancelling,
+) -> Option<Element<'a, Message>> {
+    let msg = |m: fn(String) -> InstallMsg| Message::Install(m(game_id.to_string()));
+    match cancelling {
         Cancelling::No => None,
         Cancelling::Asked => Some(
             container(
                 column![
                     text(format!(
-                        "Cancel the download of {} and delete the {} downloaded so far?",
-                        g.title,
+                        "Cancel the download of {title} and delete the {} downloaded so far?",
                         human_size(progress.bytes_done)
                     ))
                     .size(14),
@@ -610,26 +649,5 @@ pub(super) fn download_controls<'a>(
             .into(),
         ),
         Cancelling::Confirmed => Some(note("Cancelling… the downloaded files are deleted.")),
-    };
-    column![
-        row![
-            progress_bar(0.0..=1.0, fraction(progress))
-                .girth(8)
-                .style(theme::progress),
-            text(format!("{:.0} %", fraction(progress) * 100.0))
-                .size(14)
-                .font(semibold())
-                // A fixed width, so the bar keeps its length as the digits change.
-                .width(48)
-                .align_x(Alignment::End),
-        ]
-        .spacing(14)
-        .align_y(Alignment::Center),
-        row![container(status).width(Length::Fill)]
-            .push(buttons)
-            .align_y(Alignment::Center),
-    ]
-    .push(below)
-    .spacing(10)
-    .into()
+    }
 }

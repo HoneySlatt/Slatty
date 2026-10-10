@@ -132,9 +132,10 @@ pub async fn install(
         download_size: plan.download_size,
         disk_size: plan.disk_size,
         target: target.clone(),
-        resumed: job.is_some(),
+        resumed: job.as_ref().is_some_and(|j| !j.is_queued()),
     });
-    let job_resumed = job.is_some();
+    // A queued install has not started: a folder already where it goes is not its own.
+    let job_resumed = job.as_ref().is_some_and(|j| !j.is_queued());
     let mut job = InstallJob {
         game_id: req.game_id.clone(),
         build_id: plan.build.build_id.clone(),

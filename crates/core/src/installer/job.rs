@@ -95,6 +95,10 @@ impl InstallJob {
             .collect()
     }
 
+    pub fn is_queued(&self) -> bool {
+        self.state == QUEUED
+    }
+
     /// Paused on request (Pause, Ctrl+C), rather than interrupted by a crash or a closed window.
     pub fn is_paused(&self) -> bool {
         self.state == PAUSED || self.state == crate::maintenance::UPDATE_PAUSED
@@ -123,6 +127,8 @@ impl InstallJob {
 
 /// State of a job stopped on request.
 pub const PAUSED: &str = "paused";
+/// State of an install waiting in the download queue: chosen, not started.
+pub const QUEUED: &str = "queued";
 
 /// Abandons an unfinished install: deletes its hidden partial folder and its job. An unfinished
 /// update is refused here, since its files are the installed game itself.

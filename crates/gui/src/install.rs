@@ -75,8 +75,12 @@ impl PlanInfo {
 pub enum InstallView {
     Planning,
     Ready(PlanInfo),
+    /// Chosen while another install downloads: waits in the download queue.
+    Queued(PlanInfo),
     Running {
         title: String,
+        /// Where the game goes.
+        folder: PathBuf,
         progress: Progress,
         cancel: CancellationToken,
         cancelling: Cancelling,
@@ -160,6 +164,8 @@ impl App {
             InstallMsg::Planned(game_id, result) => {
                 let auto = self.auto_resume.take_if(|id| *id == game_id).is_some();
                 let view = match result {
+                    // Planned again after a restart: it keeps its place in the queue.
+                    Ok(info) if !auto && self.queue.contains(&game_id) => InstallView::Queued(info),
                     Ok(info) => InstallView::Ready(info),
                     Err(e) => {
                         if auto {
@@ -178,10 +184,6 @@ impl App {
                 }
             }
             InstallMsg::Start(game_id) => {
-                if self.installing().is_some() {
-                    self.notify_error("Another install is already running.".into());
-                    return Task::none();
-                }
                 let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
                     return Task::none();
                 };
@@ -197,6 +199,9 @@ impl App {
                 if !root.is_absolute() {
                     self.notify_error("The install folder must be an absolute path.".into());
                     return Task::none();
+                }
+                if self.installing().is_some() {
+                    return self.enqueue(game_id);
                 }
                 let req = InstallRequest {
                     game_id: game_id.clone(),
@@ -216,11 +221,13 @@ impl App {
                 };
                 let cancel = CancellationToken::new();
                 let title = info.title.clone();
+                let folder = info.folder();
                 self.forget_interrupted(&game_id);
                 self.install_views.insert(
                     game_id.clone(),
                     InstallView::Running {
                         title,
+                        folder,
                         progress: Progress::default(),
                         cancel: cancel.clone(),
                         cancelling: Cancelling::No,
@@ -359,16 +366,24 @@ impl App {
                 ) =>
             {
                 self.install_views.remove(&game_id);
-                return self.update_install(InstallMsg::Discard(game_id));
+                let discard = self.update_install(InstallMsg::Discard(game_id));
+                return Task::batch([discard, self.start_next()]);
             }
             InstallMsg::Done(game_id, Ok(install)) => {
-                self.install_views.remove(&game_id);
+                if let Some(InstallView::Running { progress, .. }) =
+                    self.install_views.remove(&game_id)
+                {
+                    self.completed
+                        .insert(0, (game_id.clone(), progress.bytes_total));
+                }
                 self.installs.insert(game_id.clone(), install);
                 self.refresh_record(&game_id);
                 if self.selected.as_deref() == Some(game_id.as_str()) {
                     self.panel = None;
                 }
+                return self.start_next();
             }
+            // Paused: the queue waits too.
             InstallMsg::Done(game_id, Err(None)) => {
                 self.sync_interrupted(&game_id);
                 return self.update_install(InstallMsg::Prepare(game_id, None));
@@ -376,6 +391,7 @@ impl App {
             InstallMsg::Done(game_id, Err(Some(e))) => {
                 self.sync_interrupted(&game_id);
                 self.install_views.insert(game_id, InstallView::Failed(e));
+                return self.start_next();
             }
         }
         Task::none()
@@ -644,7 +660,7 @@ async fn free_space(root: String) -> Option<u64> {
 
 impl App {
     /// Resumes what a closed window, a crash or a power loss cut off: every unfinished update and
-    /// the first download. Work paused on request waits for Resume or Finish update.
+    /// the first download, else the queue. Work paused on request waits for Resume or Finish update.
     pub fn resume_interrupted(&mut self) -> Task<Message> {
         if self.account.is_none() {
             return Task::none();
@@ -659,19 +675,24 @@ impl App {
             .into_iter()
             .map(|id| self.update_maintenance(MaintenanceMsg::Apply(id, Change::Update)))
             .collect();
-        if self.installing().is_some() {
-            return Task::batch(tasks);
+        if self.installing().is_none() {
+            let cut_off = self
+                .interrupted
+                .iter()
+                .find(|(_, kind)| *kind == crate::Interrupted::Download)
+                .map(|(id, _)| id.clone());
+            tasks.push(match cut_off {
+                Some(game_id) => {
+                    self.auto_resume = Some(game_id.clone());
+                    self.update_install(InstallMsg::Prepare(game_id, None))
+                }
+                None => self.start_next(),
+            });
         }
-        let Some(game_id) = self
-            .interrupted
-            .iter()
-            .find(|(_, kind)| *kind == crate::Interrupted::Download)
-            .map(|(id, _)| id.clone())
-        else {
-            return Task::batch(tasks);
-        };
-        self.auto_resume = Some(game_id.clone());
-        tasks.push(self.update_install(InstallMsg::Prepare(game_id, None)));
+        // The installs still waiting are planned, for their size.
+        for game_id in self.queue.clone() {
+            tasks.push(self.update_install(InstallMsg::Prepare(game_id, None)));
+        }
         Task::batch(tasks)
     }
 }

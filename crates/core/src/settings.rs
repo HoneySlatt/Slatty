@@ -12,6 +12,7 @@ const INTERFACE_THEME: &str = "interface_theme";
 const COVER_WIDTH: &str = "cover_width";
 const LIBRARY_SORT: &str = "library_sort";
 const DEFAULT_PLATFORM: &str = "default_platform";
+const DOWNLOAD_QUEUE: &str = "download_queue";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -47,6 +48,23 @@ pub fn set_default_platform(db: &Db, platform: Platform) -> Result<()> {
         Platform::Windows => "windows",
     };
     db.set_setting(DEFAULT_PLATFORM, Some(value))
+}
+
+/// Game ids waiting in the download queue, in order.
+pub fn download_queue(db: &Db) -> Result<Vec<String>> {
+    Ok(db
+        .setting(DOWNLOAD_QUEUE)?
+        .map(|v| {
+            v.split(',')
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+pub fn set_download_queue(db: &Db, ids: &[String]) -> Result<()> {
+    db.set_setting(DOWNLOAD_QUEUE, Some(&ids.join(",")))
 }
 
 /// Font family the interface uses; `None` for the system's default.

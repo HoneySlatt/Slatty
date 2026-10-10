@@ -14,11 +14,12 @@ use super::format::*;
 use super::game::download_controls;
 use super::note;
 use super::panels::dlc_row;
+use crate::downloads::DownloadsMsg;
 use crate::icons::{Icon, icon};
 use crate::install::{InstallMsg, InstallView, PlanInfo};
 use crate::settings::{PlatformChoice, ProtonChoice};
 use crate::theme::{self, semibold, tokens};
-use crate::{App, Message};
+use crate::{App, Message, Page};
 
 /// The parts of the install choices, laid out differently by the drawer and the dialog.
 struct Choices<'a> {
@@ -129,6 +130,31 @@ impl App {
                 rate,
                 ..
             }) => download_controls(g, *progress, *cancelling, rate.per_second(), true),
+            Some(InstallView::Queued(_)) => {
+                let place = self
+                    .queue
+                    .iter()
+                    .position(|id| *id == g.id)
+                    .map_or(0, |i| i + 1);
+                column![
+                    note(format!(
+                        "Queued, {place} in line: it starts once the downloads before it are done."
+                    )),
+                    row![
+                        button(text("Show downloads").size(14))
+                            .padding([10, 16])
+                            .on_press(Message::ShowPage(Page::Downloads))
+                            .style(theme::tonal),
+                        button(text("Remove from queue").size(14))
+                            .padding([10, 16])
+                            .on_press(Message::Downloads(DownloadsMsg::Remove(g.id.clone())))
+                            .style(theme::danger),
+                    ]
+                    .spacing(10),
+                ]
+                .spacing(12)
+                .into()
+            }
             _ => note("Reading build information from GOG…"),
         }
     }

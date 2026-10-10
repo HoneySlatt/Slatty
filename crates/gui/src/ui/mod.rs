@@ -2,6 +2,7 @@
 
 mod achievements;
 mod cloud;
+mod downloads;
 mod edit;
 pub mod format;
 mod game;
@@ -59,6 +60,7 @@ impl App {
                             Some(game) => self.achievements_game_page(game),
                             None => self.achievements_page(),
                         },
+                        Page::Downloads => self.downloads_page(),
                         Page::Settings => self.settings_page(),
                     })
                 )
@@ -143,6 +145,12 @@ impl App {
             tab(Icon::LayoutGrid, "Library", Page::Library),
             tab(Icon::Trophy, "Achievements", Page::Achievements),
             vertical_rule(24.0),
+            icon_tab(
+                Icon::Download,
+                "downloads-tab",
+                self.page == Page::Downloads,
+                Message::ShowPage(Page::Downloads)
+            ),
             icon_tab(
                 Icon::Settings,
                 "settings-tab",

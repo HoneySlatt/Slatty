@@ -1,5 +1,6 @@
 mod achievements;
 mod cloud;
+mod downloads;
 mod edit;
 mod icons;
 mod install;
@@ -117,6 +118,7 @@ pub enum Page {
     #[default]
     Library,
     Achievements,
+    Downloads,
     Settings,
 }
 
@@ -212,6 +214,11 @@ pub struct App {
     /// Work that closing the window would interrupt, waiting for the user's choice.
     pub quit_confirm: Option<Vec<String>>,
     pub interrupted: Vec<(String, Interrupted)>,
+    /// Installs waiting for the current download, in order.
+    pub queue: Vec<String>,
+    pub drag: Option<downloads::Drag>,
+    /// Installs finished since the start, the latest first, with their size.
+    pub completed: Vec<(String, u64)>,
     /// How the user renamed or illustrated games, and GOG's own titles to go back to.
     pub customs: HashMap<String, slatty_core::custom::Custom>,
     pub gog_titles: HashMap<String, String>,
@@ -277,6 +284,9 @@ impl Default for App {
             proton_choices: Vec::new(),
             quit_confirm: None,
             interrupted: Vec::new(),
+            queue: Vec::new(),
+            drag: None,
+            completed: Vec::new(),
             customs: HashMap::new(),
             gog_titles: HashMap::new(),
             edit: None,
@@ -338,6 +348,7 @@ pub enum Message {
     Cloud(String, CloudRequest),
     CloudDone(String, CloudRequest, Result<CloudResult, String>),
     Install(InstallMsg),
+    Downloads(downloads::DownloadsMsg),
     Maintenance(MaintenanceMsg),
     Settings(SettingsMsg),
     DismissNotice,
@@ -369,6 +380,7 @@ pub struct Boot {
     playtime: HashMap<String, Playtime>,
     overview: HashMap<String, GameOverview>,
     jobs: Vec<(String, Interrupted)>,
+    queue: Vec<String>,
     customs: HashMap<String, slatty_core::custom::Custom>,
     cover_width: Option<f32>,
     sort: Option<Sort>,
@@ -461,6 +473,7 @@ impl App {
                 self.playtime = boot.playtime;
                 self.overview = boot.overview;
                 self.interrupted = boot.jobs;
+                self.queue = boot.queue;
                 self.customs = boot.customs;
                 if let Some(sort) = boot.sort {
                     self.sort = sort;
@@ -584,6 +597,7 @@ impl App {
                 return self.cloud_done(game_id, request, result);
             }
             Message::Install(msg) => return self.update_install(msg),
+            Message::Downloads(msg) => return self.update_downloads(msg),
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Edit(msg) => return self.update_edit(msg),
@@ -834,11 +848,25 @@ async fn boot() -> Result<Boot, String> {
         .and_then(|s| Sort::from_key(&s));
     let playtime = session::playtime(&db).map_err(err)?;
     InstallJob::forget_finished(&db).map_err(err)?;
-    let jobs = InstallJob::list(&db)
+    let (queued, jobs): (Vec<InstallJob>, Vec<InstallJob>) = InstallJob::list(&db)
         .map_err(err)?
         .into_iter()
-        .map(|j| (j.game_id.clone(), Interrupted::of(&j)))
+        .partition(InstallJob::is_queued);
+    let jobs = jobs
+        .iter()
+        .map(|j| (j.game_id.clone(), Interrupted::of(j)))
         .collect();
+    // The queue in its saved order; a queued job missing from it goes last.
+    let mut queue: Vec<String> = slatty_core::settings::download_queue(&db)
+        .map_err(err)?
+        .into_iter()
+        .filter(|id| queued.iter().any(|j| &j.game_id == id))
+        .collect();
+    for j in queued {
+        if !queue.contains(&j.game_id) {
+            queue.push(j.game_id);
+        }
+    }
     let core = Core {
         dirs,
         db: Arc::new(db),
@@ -860,6 +888,7 @@ async fn boot() -> Result<Boot, String> {
         playtime,
         overview,
         jobs,
+        queue,
         customs,
         cover_width,
         sort,

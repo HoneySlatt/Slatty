@@ -490,6 +490,21 @@ pub fn tonal(_: &Theme, status: button::Status) -> button::Style {
     }
 }
 
+/// An action that stands out without filling: outlined and labelled with the accent.
+pub fn accent_outline(_: &Theme, status: button::Status) -> button::Style {
+    let t = tokens();
+    let fill = match status {
+        button::Status::Hovered | button::Status::Pressed => Some(Color {
+            a: 0.12,
+            ..t.accent
+        }),
+        _ => None,
+    };
+    let mut style = base(fill, t.accent, t.radius);
+    style.border = style.border.color(t.accent).width(1.0);
+    style
+}
+
 /// A clickable card of a grid (a game on the Achievements tab).
 pub fn tile(_: &Theme, status: button::Status) -> button::Style {
     let t = tokens();

@@ -58,6 +58,7 @@ live under `ui/`.
 | `cloud` | Cloud save check, sync and conflict choices |
 | `achievements` | Loading achievements, confirmed manual changes |
 | `install` | Install plan, download with progress, pause, discard |
+| `downloads` | The download queue: installs waiting as `queued` jobs, started one after the other, reordered by dragging (`ui/downloads.rs` for the tab) |
 | `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
 | `settings` | Default installation path, default Proton, and the Proton build of each installed game |
 | `edit` | The menu a right click on a cover or on the key art of a game page opens, and the edit form, a dialog over the library and a drawer on the game page: draft, file picker, saving. `ui/pointer.rs` reports where a right click happened, without a message per mouse move |
@@ -144,7 +145,9 @@ builds (`Unsupported OS`):
    the files with the current installers the same way.
 
 An interrupted install keeps its job in the database, and resumes with the same build, language and
-folder. Its state tells a pause on request (`paused`, resumed when asked) from a cut-off
+folder. An install queued in the interface waits as a job in the `queued` state, with the
+choices made in its panel; the order of the queue is a setting. A queued job is never taken for a
+download already published, even when its folder exists. Its state tells a pause on request (`paused`, resumed when asked) from a cut-off
 (`downloading`, resumed by the interface at start-up). Updates do the same with `updating-paused`
 and `updating`; both keep the game from starting. A cut-off after the partial folder was renamed
 but before the game was registered is resumed by checking the game folder in place; a job left

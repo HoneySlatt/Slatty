@@ -827,3 +827,25 @@ fn jobs_left_behind_by_a_registered_install_are_forgotten() {
         "a paused update still holds the game back"
     );
 }
+
+#[test]
+fn a_queued_install_waits_and_keeps_its_place() {
+    let db = Db::in_memory().unwrap();
+    let job = InstallJob {
+        game_id: "1".into(),
+        build_id: "b".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game".into(),
+        state: QUEUED.into(),
+        dlcs: vec![],
+    };
+    job.save(&db).unwrap();
+    let job = InstallJob::load(&db, "1").unwrap().unwrap();
+    assert!(job.is_queued() && !job.is_paused() && !job.is_update());
+    let order = vec!["2".to_string(), "1".to_string()];
+    crate::settings::set_download_queue(&db, &order).unwrap();
+    assert_eq!(crate::settings::download_queue(&db).unwrap(), order);
+    crate::settings::set_download_queue(&db, &[]).unwrap();
+    assert!(crate::settings::download_queue(&db).unwrap().is_empty());
+}

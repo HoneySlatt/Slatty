@@ -27,6 +27,7 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   - settings.
 - **Installation.**
   - Galaxy generation 2 Windows builds: base game, one language.
+  - A download queue, kept across restarts and reordered by dragging.
   - Native Linux builds from GOG's offline installers, read file by file; a default platform in
     Settings and a choice per install.
   - Staged and verified downloads, pause and resume.
