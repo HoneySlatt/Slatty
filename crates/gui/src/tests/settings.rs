@@ -136,6 +136,18 @@ fn the_default_platform_is_kept() {
     );
 }
 
+/// On a very wide window, settings keep lines short enough to read.
+#[test]
+fn settings_keep_a_readable_width_on_a_wide_window() {
+    let mut app = library_app();
+    app.page = Page::Settings;
+    app.window = Size::new(3840.0, 1080.0);
+    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    snapshot(&mut ui, "settings-wide");
+    let log_out = ui.find("Log out").unwrap().bounds();
+    assert!(log_out.x + log_out.width < 1700.0, "{log_out:?}");
+}
+
 #[test]
 fn the_side_list_of_settings_brings_a_part_to_the_top() {
     use crate::settings::{Section, SettingsMsg};

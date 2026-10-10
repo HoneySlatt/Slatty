@@ -109,12 +109,14 @@ impl App {
         .spacing(8)
         .style(theme::scroller)
         .height(Length::Fill);
+        // On a very wide window the settings keep lines and controls a readable length.
         column![
             text("Settings").size(32).font(bold()),
             row![side, content].spacing(20)
         ]
         .spacing(18)
         .padding(Padding::ZERO.top(10))
+        .max_width(MAX_WIDTH)
         .into()
     }
 
@@ -689,8 +691,9 @@ impl App {
     }
 }
 
-/// Width of the side list of the Settings page.
+/// Width of the side list of the Settings page, and the widest the page grows.
 const SIDE_WIDTH: f32 = 236.0;
+const MAX_WIDTH: f32 = 1600.0;
 /// Width of the labels, and of the space for what follows a setting, so the settings line up.
 const LABEL_WIDTH: f32 = 240.0;
 const AFTER_WIDTH: f32 = 250.0;
