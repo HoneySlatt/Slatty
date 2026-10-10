@@ -124,7 +124,8 @@ is held.
      stays slow. Only one such copy runs at a time, so a slow connection is not loaded further;
    - two chunks per file are fetched at once and written at their offset as they arrive, so a late
      chunk does not hold back the following ones;
-   - each file is verified first and downloaded only if missing or wrong;
+   - each file is verified first and downloaded only if missing or wrong (four files at once, and
+     a file of 64 MiB or more in parts on up to four threads: MD5 is slower than an SSD reads);
    - when a file is replaced (update, repair, resumed install), the file already there is hashed at
      the new chunk offsets, and chunks whose MD5 matches are copied from it and checked again
      instead of downloaded;

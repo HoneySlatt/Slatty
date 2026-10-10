@@ -68,6 +68,17 @@ toolchain from the Nix store) packed three ways, on NVMe:
 For comparison, `xz -dc -T0` decodes the 44-block archive in 0.8 s and `xz -dc -T1` in 6.2 s,
 without writing anything.
 
+### Verifying a large file
+
+```sh
+SLATTY_BENCH_FILE=<file> cargo test --release -p slatty-core verifying_a_large_file -- --ignored --nocapture
+```
+
+This times checking a file listed in chunks of 1 MiB, as GOG lists them, from memory: the MD5
+hashing that verify, repair and updates do for every installed file. Reference, 2026-10-10, a
+1.03 GB file: 0.37–0.44 s on four threads (1.42–1.65 s on one, before files of 64 MiB or more were
+checked in parts).
+
 ### The application at 10,000 games
 
 Startup, memory and scrolling are measured in the release build itself, never with a real

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{FileExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -948,4 +948,71 @@ fn an_older_build_holds_a_game_back_as_chosen_not_as_resumed() {
         dlcs: vec![],
     };
     assert_eq!(held_on_start(Some(&job), &plan(build())), None);
+}
+
+/// A large file is checked in parts on several threads: a damaged chunk in any part is found.
+#[test]
+fn a_large_file_is_verified_in_parts() {
+    let dir = std::env::temp_dir().join(format!("slatty-verify-parts-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("big.pak");
+    let size = VERIFY_PART + (3 << 20);
+    std::fs::File::create(&path).unwrap().set_len(size).unwrap();
+    let zeros = fsutil::hex(&Md5::digest(vec![0u8; 1 << 20]));
+    let file = DepotFile {
+        path: "big.pak".into(),
+        chunks: (0..size >> 20)
+            .map(|_| Chunk {
+                md5: zeros.clone(),
+                compressed_md5: String::new(),
+                size: 1 << 20,
+                compressed_size: 0,
+            })
+            .collect(),
+        flags: Vec::new(),
+        md5: None,
+        sfc_ref: None,
+        product_id: "1".into(),
+    };
+    assert!(verify_file(&path, &file).unwrap());
+    for at in [0, size / 2, size - 1] {
+        let f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+        f.write_all_at(b"x", at).unwrap();
+        assert!(!verify_file(&path, &file).unwrap(), "damaged at {at}");
+        f.write_all_at(&[0], at).unwrap();
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// Times verifying a large file as GOG lists it, in chunks of 1 MiB:
+/// `SLATTY_BENCH_FILE=<file> cargo test --release -p slatty-core verifying_a_large_file --
+/// --ignored --nocapture`. The file is read first to list its chunks, so it is checked from
+/// memory: this times the hashing.
+#[test]
+#[ignore]
+fn verifying_a_large_file() {
+    let path = PathBuf::from(std::env::var_os("SLATTY_BENCH_FILE").expect("a file"));
+    let data = std::fs::read(&path).unwrap();
+    let file = DepotFile {
+        path: "big".into(),
+        chunks: data
+            .chunks(1 << 20)
+            .map(|c| Chunk {
+                md5: fsutil::hex(&Md5::digest(c)),
+                compressed_md5: String::new(),
+                size: c.len() as u64,
+                compressed_size: 0,
+            })
+            .collect(),
+        flags: Vec::new(),
+        md5: None,
+        sfc_ref: None,
+        product_id: "1".into(),
+    };
+    drop(data);
+    for _ in 0..2 {
+        let t = std::time::Instant::now();
+        assert!(verify_file(&path, &file).unwrap());
+        println!("verify: {:?}", t.elapsed());
+    }
 }

@@ -466,19 +466,58 @@ pub fn verify_file(path: &Path, file: &DepotFile) -> Result<bool> {
     if !meta.is_file() || meta.len() != file.size() {
         return Ok(false);
     }
-    let mut f =
+    let f =
         std::fs::File::open(path).map_err(|e| Error::io(format!("open {}", path.display()), e))?;
-    let mut buf = Vec::new();
-    for c in &file.chunks {
-        buf.resize(c.size as usize, 0);
-        f.read_exact(&mut buf)
-            .map_err(|e| Error::io(format!("read {}", path.display()), e))?;
-        if fsutil::hex(&Md5::digest(&buf)) != c.md5 {
-            return Ok(false);
-        }
-    }
-    Ok(true)
+    let starts: Vec<u64> = file
+        .chunks
+        .iter()
+        .scan(0, |at, c| {
+            let start = *at;
+            *at += c.size;
+            Some(start)
+        })
+        .collect();
+    // A large file is checked in parts at once: MD5 runs at about 0.7 GB/s on one core, slower
+    // than a local SSD reads.
+    let parts = if file.size() >= VERIFY_PART {
+        std::thread::available_parallelism().map_or(1, |n| n.get().min(4))
+    } else {
+        1
+    };
+    let per_part = file.chunks.len().div_ceil(parts).max(1);
+    let bad = std::sync::atomic::AtomicBool::new(false);
+    std::thread::scope(|s| {
+        let checks: Vec<_> = (0..file.chunks.len())
+            .step_by(per_part)
+            .map(|first| {
+                let (f, starts, bad) = (&f, &starts, &bad);
+                s.spawn(move || {
+                    let mut buf = Vec::new();
+                    let part = first..(first + per_part).min(file.chunks.len());
+                    for (c, &start) in file.chunks[part.clone()].iter().zip(&starts[part]) {
+                        if bad.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        buf.resize(c.size as usize, 0);
+                        f.read_exact_at(&mut buf, start)
+                            .map_err(|e| Error::io(format!("read {}", path.display()), e))?;
+                        if fsutil::hex(&Md5::digest(&buf)) != c.md5 {
+                            bad.store(true, Ordering::Relaxed);
+                        }
+                    }
+                    Ok::<(), Error>(())
+                })
+            })
+            .collect();
+        checks
+            .into_iter()
+            .try_for_each(|c| c.join().expect("verify thread panicked"))
+    })?;
+    Ok(!bad.into_inner())
 }
+
+/// Files this large or larger are verified in parts on several threads.
+pub(crate) const VERIFY_PART: u64 = 64 << 20;
 pub fn free_space(path: &Path) -> Result<u64> {
     let mut probe = path.to_path_buf();
     while !probe.exists() {
