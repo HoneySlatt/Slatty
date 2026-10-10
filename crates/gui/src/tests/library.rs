@@ -278,6 +278,11 @@ fn the_games_listed_are_kept_while_scrolling_and_made_again_after_anything_else(
     // Changed behind the list's back: frames and scroll steps keep the order made before.
     app.library[0].title = "[FAKE] Zebra".into();
     let _ = app.update(Message::Frame(app.now));
+    // Covers come as work of the account signed in.
+    let _ = app.update(Message::AccountResult(
+        app.account_epoch,
+        Box::new(Message::Cover("2".into(), None)),
+    ));
     assert_eq!(titles(&app)[..2], ["Zebra", "Game 2"]);
     // Any other message makes it again.
     let _ = app.update(Message::DismissNotice);

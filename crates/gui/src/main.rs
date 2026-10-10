@@ -443,6 +443,9 @@ impl Message {
     /// Whether the message leaves the games the Library and Achievements tabs list as they were:
     /// those that come many times a second.
     fn keeps_lists(&self) -> bool {
+        if let Message::AccountResult(_, message) = self {
+            return message.keeps_lists();
+        }
         matches!(
             self,
             Message::GridScrolled(_)
