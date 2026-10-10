@@ -19,6 +19,7 @@ Proton-CachyOS.
 | 2026-10-09 | Install plan (`slatty install --info`) | OK | Tomb Raider, DOOM (2016), Horizon Zero Dawn, Cyberpunk 2077: builds and metadata read |
 | 2026-10-10 | Linux install plan (`slatty install --platform linux --info`) | OK | Hollow Knight 1.5.12620: GOG's content system answers `Unsupported OS` for Linux, the offline installer is served in byte ranges (not suffix ranges); its zip starts 795 171 bytes in, after the script; 1 785 game files, 1.13 GiB to download, 4.88 GiB on disk |
 | 2026-10-10 | Native Linux install and launch | OK | Hollow Knight: Silksong 1.0.30000, installed from the interface into /mnt/share/games. GOG's `start.sh` asks for `/bin/bash`: on NixOS it runs through `steam-run` (played by the user) or, without it, through umu 1.4.4 without Proton in the sniper runtime (game running with Mesa OpenGL and PulseAudio, stopped cleanly from the launcher) |
+| 2026-10-10 | Comet only for games with the Galaxy SDK | OK | Firewatch (ships `Galaxy64.dll`): Comet started with the game and stopped after it. Undertale (no Galaxy SDK): Comet not started, no achievement check |
 | 2026-10-09 | Manual achievement unlock | OK | Hollow Knight, `--unlock NEGLECT`; read back from GOG with its date |
 | 2026-10-09 | Update check (`slatty update`) | OK | Undertale reported up to date |
 | 2026-10-09 | Owned DLC detection (`slatty install --info`) | OK | Cyberpunk 2077: Phantom Liberty owned and selected; free REDmod listed as not owned (not added to the account). The Witcher 3 GOTY: no separate DLC |
