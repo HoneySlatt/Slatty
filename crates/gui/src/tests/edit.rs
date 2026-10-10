@@ -167,3 +167,47 @@ fn right_clicking_the_key_art_of_a_game_page_opens_the_edit_drawer() {
     assert!(app.edit.is_none());
     assert_eq!(app.panel, Some(Panel::GameSettings));
 }
+
+#[test]
+fn a_hidden_game_shows_only_under_hidden_games() {
+    use crate::edit::EditMsg;
+    let mut app = library_app();
+    let edit = |app: &mut App, m: EditMsg| drop(app.update(Message::Edit(m)));
+    assert_eq!(
+        app.shelves(),
+        Shelf::ALL,
+        "no Hidden games while none is hidden"
+    );
+
+    // Game 3 is installed: it leaves the Installed shelf too.
+    edit(&mut app, EditMsg::Open("3".into()));
+    assert!(
+        render(&app)
+            .find("Shown only under Hidden games in the library.")
+            .is_ok()
+    );
+    edit(&mut app, EditMsg::Hidden(true));
+    edit(&mut app, EditMsg::Save);
+    assert!(slatty_core::custom::all(&app.core.as_ref().unwrap().db).unwrap()["3"].hidden);
+    assert!(!titles(&app).contains(&"Game 3".to_string()));
+    assert_eq!(titles(&app).len(), 13);
+    app.shelf = Shelf::Installed;
+    assert!(titles(&app).is_empty());
+    app.shelf = Shelf::All;
+    let _ = app.update(Message::Search("Game 3".into()));
+    assert!(titles(&app).is_empty(), "search leaves it out too");
+    let _ = app.update(Message::Search(String::new()));
+
+    assert_eq!(app.shelves().last(), Some(&Shelf::Hidden));
+    let _ = app.update(Message::ShowShelf(Shelf::Hidden));
+    assert_eq!(titles(&app), ["Game 3"]);
+    snapshot(&mut render(&app), "hidden-games");
+
+    // Shown again: the shelf, now empty, leaves the menu.
+    edit(&mut app, EditMsg::Open("3".into()));
+    edit(&mut app, EditMsg::Hidden(false));
+    edit(&mut app, EditMsg::Save);
+    assert_eq!(app.shelf, Shelf::All);
+    assert_eq!(app.shelves(), Shelf::ALL);
+    assert_eq!(titles(&app).len(), 14);
+}

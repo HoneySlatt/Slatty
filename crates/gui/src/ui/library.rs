@@ -18,7 +18,7 @@ use crate::install::InstallMsg;
 use crate::library::GridWindow;
 use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, semibold, tokens};
-use crate::{App, Filters, Interrupted, Message, Panel, Shelf, Sort};
+use crate::{App, Filters, Interrupted, Message, Panel, Sort};
 
 /// Space between covers, across and down.
 const GRID_SPACING: f32 = 12.0;
@@ -41,7 +41,7 @@ impl App {
         .on_press(Message::ToggleFilters)
         .style(theme::ghost);
         let toolbar = row![
-            pick_list(Shelf::ALL, Some(self.shelf), Message::ShowShelf)
+            pick_list(self.shelves(), Some(self.shelf), Message::ShowShelf)
                 .style(theme::dropdown)
                 .font(theme::font())
                 .padding([9, 16])

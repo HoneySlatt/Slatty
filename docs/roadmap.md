@@ -17,7 +17,8 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   shelves, sort, size and filters; game page with key art, play time, cloud and achievement
   summaries, tools in drawers; favorites; Settings with a side list that follows the scroll.
 - **Customisation.** Built-in themes, a theme file for colours, corners and motion, the interface
-  font, the cover size. Each game's title, sorting title, cover and background can be changed.
+  font, the cover size. Each game's title, sorting title, cover and background can be changed,
+  and a game can be hidden.
 - **Large libraries.** The library and Achievements grids build only the rows in view, so a
   library of 10,000 games stays fluid.
 - **Interface.** Iced front end covering:

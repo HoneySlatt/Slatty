@@ -1,10 +1,10 @@
 //! The dialog (library) and the drawer (game page) that change a game's title, sorting title,
-//! cover and background.
+//! cover and background, or hide it.
 
 use crate::theme::text;
 use iced::widget::{
     Space, button, center, column, container, image, mouse_area, opaque, pin, row, scrollable,
-    space, stack, text_input,
+    space, stack, text_input, toggler,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::custom::ImageChange;
@@ -135,6 +135,14 @@ impl App {
                 .font(theme::font())
                 .padding([10, 14]),
             note("Used when the library is sorted by name."),
+            space().height(4),
+            toggler(d.hidden)
+                .label("Hide game")
+                .on_toggle(|v| Message::Edit(EditMsg::Hidden(v)))
+                .size(22)
+                .text_size(14)
+                .font(theme::font()),
+            note("Shown only under Hidden games in the library."),
         ]
         .spacing(8);
         let picture = |art: Art, title, (width, height): (f32, f32)| -> Element<'a, Message> {

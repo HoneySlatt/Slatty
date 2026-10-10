@@ -1,5 +1,5 @@
-//! Changing how a game looks in the library: its title, the title it is sorted by, its cover and
-//! its background. Changes stay in a draft until saved.
+//! Changing how a game looks in the library: its title, the title it is sorted by, its cover, its
+//! background, and whether it is hidden. Changes stay in a draft until saved.
 
 use std::path::PathBuf;
 
@@ -21,6 +21,7 @@ pub struct EditDraft {
     pub game_id: String,
     pub title: String,
     pub sort_title: String,
+    pub hidden: bool,
     pub cover: ImageChange,
     pub background: ImageChange,
 }
@@ -45,9 +46,10 @@ pub enum EditMsg {
     Open(String),
     Title(String),
     SortTitle(String),
+    Hidden(bool),
     Pick(Art),
     Picked(Art, Option<PathBuf>),
-    /// Back to GOG's title and images (saved with Save).
+    /// Back to GOG's title and images, and shown again (saved with Save).
     Reset,
     Cancel,
     Save,
@@ -76,6 +78,7 @@ impl App {
                 self.edit = Some(EditDraft {
                     title: self.title_of(&game_id),
                     sort_title: custom.sort_title.unwrap_or_default(),
+                    hidden: custom.hidden,
                     cover: ImageChange::Keep,
                     background: ImageChange::Keep,
                     game_id: game_id.clone(),
@@ -95,6 +98,11 @@ impl App {
             EditMsg::SortTitle(v) => {
                 if let Some(d) = &mut self.edit {
                     d.sort_title = v;
+                }
+            }
+            EditMsg::Hidden(hidden) => {
+                if let Some(d) = &mut self.edit {
+                    d.hidden = hidden;
                 }
             }
             EditMsg::Pick(art) => {
@@ -125,6 +133,7 @@ impl App {
                 if let Some(d) = &mut self.edit {
                     d.title = self.gog_titles.get(&d.game_id).cloned().unwrap_or_default();
                     d.sort_title.clear();
+                    d.hidden = false;
                     d.cover = ImageChange::Reset;
                     d.background = ImageChange::Reset;
                 }
@@ -151,15 +160,14 @@ impl App {
         } else {
             d.sort_title.as_str()
         };
-        match custom::save(
-            &core.db,
-            &core.dirs,
-            &d.game_id,
-            title,
-            sort_title,
-            d.cover.clone(),
-            d.background.clone(),
-        ) {
+        let changes = custom::Changes {
+            title: title.to_string(),
+            sort_title: sort_title.to_string(),
+            hidden: d.hidden,
+            cover: d.cover.clone(),
+            background: d.background.clone(),
+        };
+        match custom::save(&core.db, &core.dirs, &d.game_id, changes) {
             Ok(saved) => {
                 let game_id = d.game_id.clone();
                 if saved == custom::Custom::default() {
@@ -169,6 +177,10 @@ impl App {
                 }
                 self.edit = None;
                 self.apply_customs();
+                // The last hidden game shown again: its shelf leaves the menu.
+                if !self.shelves().contains(&self.shelf) {
+                    self.shelf = crate::Shelf::All;
+                }
             }
             Err(e) => self.notify_error(e.to_string()),
         }

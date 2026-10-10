@@ -80,6 +80,9 @@ CREATE TABLE game_custom (
     background TEXT
 );
 "#,
+    r#"
+ALTER TABLE game_custom ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+"#,
 ];
 
 pub struct Db {

@@ -17,6 +17,8 @@ pub enum Shelf {
     All,
     Installed,
     Favorites,
+    /// Games the user hid, left out of the other shelves.
+    Hidden,
 }
 
 impl Shelf {
@@ -29,6 +31,7 @@ impl fmt::Display for Shelf {
             Shelf::All => "All",
             Shelf::Installed => "Installed",
             Shelf::Favorites => "Favorites",
+            Shelf::Hidden => "Hidden games",
         })
     }
 }
@@ -322,6 +325,19 @@ impl App {
         ])
     }
 
+    pub fn is_hidden(&self, game_id: &str) -> bool {
+        self.customs.get(game_id).is_some_and(|c| c.hidden)
+    }
+
+    /// The shelves offered: Hidden games only while some game is hidden.
+    pub fn shelves(&self) -> Vec<Shelf> {
+        let mut shelves = Shelf::ALL.to_vec();
+        if self.customs.values().any(|c| c.hidden) {
+            shelves.push(Shelf::Hidden);
+        }
+        shelves
+    }
+
     /// Games of the current shelf matching search and filters, in the chosen order.
     pub fn visible_games(&self) -> Vec<&LibraryGame> {
         let needle = self.search.to_lowercase();
@@ -331,6 +347,8 @@ impl App {
             .iter()
             .filter(|g| needle.is_empty() || g.title.to_lowercase().contains(&needle))
             .filter(|g| match self.shelf {
+                Shelf::Hidden => self.is_hidden(&g.id),
+                _ if self.is_hidden(&g.id) => false,
                 Shelf::All => true,
                 Shelf::Installed => self.installs.contains_key(&g.id),
                 Shelf::Favorites => self.favorites.contains(&g.id),

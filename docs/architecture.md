@@ -40,7 +40,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `overview` | Per-game achievement counts and cloud save support, cached per account |
 | `playtime` | Play time read from GOG, finished sessions reported to GOG |
 | `settings` | Default installation path, default Proton, favorites |
-| `custom` | Titles, sorting titles, covers and backgrounds the user chose, apart from GOG's data; chosen images are copied into the data folder |
+| `custom` | Titles, sorting titles, covers and backgrounds the user chose, and the games they hid, apart from GOG's data; chosen images are copied into the data folder |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
 
 ## Interface modules

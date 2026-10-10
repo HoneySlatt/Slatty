@@ -57,7 +57,8 @@ dot says you are signed in.
 
 **Library** shows your games as covers. Above the grid:
 
-- the shelf menu shows **All** games, the **Installed** ones or your **Favorites**;
+- the shelf menu shows **All** games, the **Installed** ones or your **Favorites**, and
+  **Hidden games** once you have hidden one;
 - the sort menu orders by name, most recently played or most played, and is kept for the next
   start;
 - the filter button shows games for Windows or Linux, with achievements, or with cloud saves.
@@ -73,7 +74,9 @@ Right-click a cover and choose **Edit game** to change its **Title**, its **Sort
 when the library is sorted by name, for example "Witcher 3" for "The Witcher 3"), its **Cover**
 and its **Background** (the key art of the game page). Click a picture to choose an image file (PNG, JPEG,
 WebP, GIF or BMP); it is copied into SlattyLauncher's data, so the original can be moved or
-deleted. Nothing changes until **Save**; **Reset to default** goes back to GOG's title and images.
+deleted. **Hide game** takes the game out of All, Installed, Favorites and search; it is then
+listed only under Hidden games, where the same switch brings it back. Nothing changes until
+**Save**; **Reset to default** goes back to GOG's title and images, and shows the game again.
 On a game page, right-click the key art (not the title or the buttons over it) for the same menu;
 the form then opens in a drawer beside the page.
 These changes are kept apart from GOG's data, so refreshing the library keeps them.
@@ -413,7 +416,7 @@ corners and the page transition. See [theming](theming.md).
 | Path | Content |
 |---|---|
 | System keyring, entry `slatty-launcher` / `gog:<user id>` | Session tokens |
-| `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings, the titles you gave games |
+| `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings, the titles you gave games and the games you hid |
 | `~/.local/share/slatty/prefixes/<id>/` | Wine prefixes of installed games (most saves live here) |
 | `~/.local/share/slatty/manifests/<id>.json` | Files installed for each game |
 | `~/.local/share/slatty/custom/<id>/` | Covers and backgrounds you chose for a game |

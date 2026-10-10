@@ -1,5 +1,5 @@
 //! What the user changed about how a game looks in the library: its title, the title it is sorted
-//! by, its cover and its background. Kept apart from GOG's data so that refreshing the library never
+//! by, its cover, its background, and whether it is hidden. Kept apart from GOG's data so that refreshing the library never
 //! undoes it; chosen images are copied into slatty's data folder, so moving or deleting the original
 //! file breaks nothing.
 
@@ -20,6 +20,18 @@ pub struct Custom {
     pub sort_title: Option<String>,
     pub cover: Option<PathBuf>,
     pub background: Option<PathBuf>,
+    /// Left out of the library's shelves, shown only with the hidden games.
+    pub hidden: bool,
+}
+
+/// What the edit form saves. Empty titles mean GOG's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Changes {
+    pub title: String,
+    pub sort_title: String,
+    pub hidden: bool,
+    pub cover: ImageChange,
+    pub background: ImageChange,
 }
 
 /// What saving does to one of the game's images.
@@ -35,19 +47,9 @@ pub enum ImageChange {
 /// Every game the user customised.
 pub fn all(db: &Db) -> Result<HashMap<String, Custom>> {
     let conn = db.conn();
-    let mut stmt =
-        conn.prepare("SELECT game_id, title, sort_title, cover, background FROM game_custom")?;
-    let rows = stmt.query_map([], |r| {
-        Ok((
-            r.get::<_, String>(0)?,
-            Custom {
-                title: r.get(1)?,
-                sort_title: r.get(2)?,
-                cover: r.get::<_, Option<String>>(3)?.map(PathBuf::from),
-                background: r.get::<_, Option<String>>(4)?.map(PathBuf::from),
-            },
-        ))
-    })?;
+    let mut stmt = conn
+        .prepare("SELECT game_id, title, sort_title, cover, background, hidden FROM game_custom")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, read(r, 1)?)))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -55,32 +57,29 @@ fn get(db: &Db, game_id: &str) -> Result<Custom> {
     Ok(db
         .conn()
         .query_row(
-            "SELECT title, sort_title, cover, background FROM game_custom WHERE game_id = ?1",
+            "SELECT title, sort_title, cover, background, hidden FROM game_custom
+             WHERE game_id = ?1",
             [game_id],
-            |r| {
-                Ok(Custom {
-                    title: r.get(0)?,
-                    sort_title: r.get(1)?,
-                    cover: r.get::<_, Option<String>>(2)?.map(PathBuf::from),
-                    background: r.get::<_, Option<String>>(3)?.map(PathBuf::from),
-                })
-            },
+            |r| read(r, 0),
         )
         .optional()?
         .unwrap_or_default())
 }
 
-/// Saves a game's customisation. Empty titles mean GOG's; a game with nothing left customised is
-/// forgotten, along with its copied images.
-pub fn save(
-    db: &Db,
-    dirs: &Dirs,
-    game_id: &str,
-    title: &str,
-    sort_title: &str,
-    cover: ImageChange,
-    background: ImageChange,
-) -> Result<Custom> {
+/// A `Custom` from the columns starting at `first`.
+fn read(r: &rusqlite::Row<'_>, first: usize) -> rusqlite::Result<Custom> {
+    Ok(Custom {
+        title: r.get(first)?,
+        sort_title: r.get(first + 1)?,
+        cover: r.get::<_, Option<String>>(first + 2)?.map(PathBuf::from),
+        background: r.get::<_, Option<String>>(first + 3)?.map(PathBuf::from),
+        hidden: r.get(first + 4)?,
+    })
+}
+
+/// Saves a game's customisation. A game with nothing left customised is forgotten, along with its
+/// copied images.
+pub fn save(db: &Db, dirs: &Dirs, game_id: &str, changes: Changes) -> Result<Custom> {
     if game_id.is_empty() || !game_id.chars().all(|c| c.is_ascii_alphanumeric()) {
         return Err(Error::Refused(format!("unexpected game id `{game_id}`")));
     }
@@ -88,10 +87,16 @@ pub fn save(
     let folder = dirs.data.join("custom").join(game_id);
     let text = |s: &str| Some(s.trim().to_string()).filter(|s| !s.is_empty());
     let custom = Custom {
-        title: text(title),
-        sort_title: text(sort_title),
-        cover: apply(&folder, "cover", old.cover.as_deref(), cover)?,
-        background: apply(&folder, "background", old.background.as_deref(), background)?,
+        title: text(&changes.title),
+        sort_title: text(&changes.sort_title),
+        cover: apply(&folder, "cover", old.cover.as_deref(), changes.cover)?,
+        background: apply(
+            &folder,
+            "background",
+            old.background.as_deref(),
+            changes.background,
+        )?,
+        hidden: changes.hidden,
     };
     if custom == Custom::default() {
         db.conn()
@@ -100,17 +105,18 @@ pub fn save(
     } else {
         let path = |p: &Option<PathBuf>| p.as_ref().map(|p| p.to_string_lossy().into_owned());
         db.conn().execute(
-            "INSERT INTO game_custom (game_id, title, sort_title, cover, background)
-             VALUES (?1, ?2, ?3, ?4, ?5)
+            "INSERT INTO game_custom (game_id, title, sort_title, cover, background, hidden)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(game_id) DO UPDATE SET title = excluded.title,
                 sort_title = excluded.sort_title, cover = excluded.cover,
-                background = excluded.background",
+                background = excluded.background, hidden = excluded.hidden",
             params![
                 game_id,
                 custom.title,
                 custom.sort_title,
                 path(&custom.cover),
-                path(&custom.background)
+                path(&custom.background),
+                custom.hidden
             ],
         )?;
     }
@@ -223,20 +229,27 @@ mod tests {
         }
     }
 
+    /// Changes that only touch the cover.
+    fn cover(change: ImageChange) -> Changes {
+        Changes {
+            title: String::new(),
+            sort_title: String::new(),
+            hidden: false,
+            cover: change,
+            background: ImageChange::Keep,
+        }
+    }
+
     #[test]
     fn titles_and_images_are_kept_and_survive_the_original_file() {
         let env = Env::new("save");
         let source = env.picture("mine.png", PNG);
-        let custom = save(
-            &env.db,
-            &env.dirs,
-            "42",
-            "  My Game ",
-            "Game, My",
-            ImageChange::Set(source.clone()),
-            ImageChange::Keep,
-        )
-        .unwrap();
+        let changes = Changes {
+            title: "  My Game ".into(),
+            sort_title: "Game, My".into(),
+            ..cover(ImageChange::Set(source.clone()))
+        };
+        let custom = save(&env.db, &env.dirs, "42", changes).unwrap();
         assert_eq!(custom.title.as_deref(), Some("My Game"));
         assert_eq!(custom.sort_title.as_deref(), Some("Game, My"));
         let cover = custom.cover.clone().unwrap();
@@ -249,45 +262,21 @@ mod tests {
     #[test]
     fn replacing_or_resetting_an_image_deletes_the_previous_copy() {
         let env = Env::new("replace");
-        let first = save(
-            &env.db,
-            &env.dirs,
-            "42",
-            "",
-            "",
-            ImageChange::Set(env.picture("a.png", PNG)),
-            ImageChange::Keep,
-        )
-        .unwrap()
-        .cover
-        .unwrap();
-        let second = save(
-            &env.db,
-            &env.dirs,
-            "42",
-            "",
-            "",
-            ImageChange::Set(env.picture("b.png", PNG)),
-            ImageChange::Keep,
-        )
-        .unwrap()
-        .cover
-        .unwrap();
+        let set = |name| cover(ImageChange::Set(env.picture(name, PNG)));
+        let first = save(&env.db, &env.dirs, "42", set("a.png"))
+            .unwrap()
+            .cover
+            .unwrap();
+        let second = save(&env.db, &env.dirs, "42", set("b.png"))
+            .unwrap()
+            .cover
+            .unwrap();
         assert_ne!(
             first, second,
             "a new name, so no cache shows the old picture"
         );
         assert!(!first.exists());
-        let custom = save(
-            &env.db,
-            &env.dirs,
-            "42",
-            "",
-            "",
-            ImageChange::Reset,
-            ImageChange::Keep,
-        )
-        .unwrap();
+        let custom = save(&env.db, &env.dirs, "42", cover(ImageChange::Reset)).unwrap();
         assert_eq!(custom, Custom::default());
         assert!(!second.exists());
         assert!(
@@ -297,31 +286,32 @@ mod tests {
     }
 
     #[test]
+    fn a_hidden_game_stays_hidden_until_shown_again() {
+        let env = Env::new("hidden");
+        let hide = |hidden| Changes {
+            hidden,
+            ..cover(ImageChange::Keep)
+        };
+        save(&env.db, &env.dirs, "42", hide(true)).unwrap();
+        assert!(all(&env.db).unwrap()["42"].hidden, "kept with nothing else");
+        save(&env.db, &env.dirs, "42", hide(false)).unwrap();
+        assert!(all(&env.db).unwrap().is_empty());
+    }
+
+    #[test]
     fn only_images_are_accepted() {
         let env = Env::new("reject");
         let text = env.picture("notes.txt", b"[FAKE] just text");
         assert!(matches!(
-            save(
-                &env.db,
-                &env.dirs,
-                "42",
-                "",
-                "",
-                ImageChange::Set(text),
-                ImageChange::Keep
-            ),
+            save(&env.db, &env.dirs, "42", cover(ImageChange::Set(text))),
             Err(Error::Refused(_))
         ));
+        let renamed = Changes {
+            title: "T".into(),
+            ..cover(ImageChange::Keep)
+        };
         assert!(matches!(
-            save(
-                &env.db,
-                &env.dirs,
-                "../x",
-                "T",
-                "",
-                ImageChange::Keep,
-                ImageChange::Keep
-            ),
+            save(&env.db, &env.dirs, "../x", renamed),
             Err(Error::Refused(_))
         ));
         assert!(is_image(&env.picture("ok.png", PNG)));
