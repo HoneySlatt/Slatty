@@ -66,6 +66,8 @@ Proton-CachyOS.
 | 2026-10-10 | Firewatch (1459256379) | — | Installed on the NAS (its own mount), isolated | Play isolated | OK | Played 1 min (played and checked by the user); cloud checked before (8 uploaded) and after (4 uploaded); Comet started; no achievement earned. Its own home holds only caches, as above |
 | 2026-10-10 | Hollow Knight (1308320804) | 1.5.12620 | Same, isolated without the D-Bus session bus | Play isolated | OK | Played 1 min (played and checked by the user); cloud checked, 5 saves uploaded after; Comet started. Nothing changed from the session with the bus |
 | 2026-10-10 | Hollow Knight (1308320804) | 1.5.12620 | Same, isolated without either D-Bus bus | Play isolated | OK | Played 4 min (played and checked by the user); cloud checked, 2 saves uploaded after; Comet started; play time sent. Nothing changed |
+| 2026-10-10 | Hollow Knight (1308320804) | 1.5.12620 | Same, isolated with `HOME` set to its own home and the user's environment kept out | Play isolated | OK | Played 1 min (played and checked by the user); cloud checked, 5 saves uploaded after; Comet started; play time sent. Nothing changed |
+| 2026-10-10 | Cyberpunk 2077 (1423049311) | — | Installed by slatty under `/home`, isolated, Proton-CachyOS 11.0 | Play isolated, with umu's fixes | OK | Played 3 min, no problem seen (played and checked by the user); cloud checked, 1 save uploaded after; Comet started; play time sent. Proton's fixes ran in the container with the GOG database and umu-1091500 (log in its own home): global defaults applied (`OPENSSL_ia32cap`), no fix of its own listed for it |
 
 ## Not tested against GOG yet
 
@@ -80,5 +82,5 @@ Proton-CachyOS.
 - An achievement earned in game and reported through Comet.
 - A game that needs the Galaxy dummy service. The registration itself was checked under
   UMU-Proton 10.0-4 in a throwaway prefix.
-- Isolated: an achievement reaching Comet from the container, a game with umu fixes (Cyberpunk
-  2077 is being installed for it), a Linux game.
+- Isolated: an achievement reaching Comet from the container, a game with a Proton fix of its
+  own (Cyberpunk 2077 got only the global defaults), a Linux game.

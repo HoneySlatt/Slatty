@@ -59,9 +59,9 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 - **More runners.** System Wine, managed Proton downloads.
 - **Game isolation.** Games run in umu's container with a home folder of their own, Windows games
   by default; the switches are in Game settings and Settings → Privacy. Checked with the container
-  and with Hollow Knight and Firewatch (graphics, sound, gamepad, cloud saves; see
-  [compatibility](compatibility.md)). The D-Bus session and system buses are kept out. Left: an achievement
-  through Comet and umu's fixes in an isolated game.
+  and with Hollow Knight, Firewatch and Cyberpunk 2077 (graphics, sound, gamepad, cloud saves,
+  Proton's fixes; see [compatibility](compatibility.md)). The D-Bus session and system buses are
+  kept out. Left: an achievement through Comet, a game with a Proton fix of its own, a Linux game.
 - **Packaging.** A Nix package (bringing `steam-run-free` for native games), then other
   distributions.
 - **Windows host support.** The core avoids Linux-only assumptions outside the session supervisor
