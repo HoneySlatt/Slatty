@@ -463,9 +463,83 @@ impl NaturalKey {
     }
 }
 
+/// The part of the cover grid to build: a library of thousands of games shows a few dozen covers
+/// at once, and building or laying out the others would cost every frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GridWindow {
+    pub columns: usize,
+    /// Indices of the games to build, from the first row in view to the last, a row more on each
+    /// side so a short scroll never shows a gap.
+    pub first: usize,
+    pub end: usize,
+    /// Space standing for the rows above and below, so the scrollbar stays true.
+    pub above: f32,
+    pub below: f32,
+}
+
+impl GridWindow {
+    /// For `count` cards at most `max_width` wide, `spacing` apart, in 3:4 cells, across `width`,
+    /// scrolled to `offset` and showing `height`. The columns follow Iced's grid.
+    pub fn new(
+        count: usize,
+        width: f32,
+        max_width: f32,
+        spacing: f32,
+        offset: f32,
+        height: f32,
+    ) -> Self {
+        let columns = (((width + spacing) / (max_width + spacing)).ceil() as usize).max(1);
+        let cell = (width - spacing * (columns - 1) as f32) / columns as f32;
+        let pitch = cell * 4.0 / 3.0 + spacing;
+        let rows = count.div_ceil(columns);
+        let total = (rows as f32 * pitch - spacing).max(0.0);
+        let offset = offset.clamp(0.0, (total - height).max(0.0));
+        let first_row = ((offset / pitch).floor() as usize)
+            .saturating_sub(1)
+            .min(rows);
+        let end_row = (((offset + height) / pitch).ceil() as usize + 1).min(rows);
+        let shown = end_row.saturating_sub(first_row);
+        let above = first_row as f32 * pitch;
+        let built = (shown as f32 * pitch - spacing).max(0.0);
+        GridWindow {
+            columns,
+            first: first_row * columns,
+            end: (end_row * columns).min(count),
+            above,
+            below: (total - above - built).max(0.0),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_rows_in_view_are_built_and_the_rest_keeps_its_height() {
+        // 10,000 covers, 4 columns of 100 wide: 2,500 rows of 133.3 plus 12 between.
+        let w = GridWindow::new(10_000, 436.0, 100.0, 12.0, 0.0, 600.0);
+        assert_eq!(w.columns, 4);
+        assert_eq!((w.first, w.above), (0, 0.0));
+        let pitch = 100.0 * 4.0 / 3.0 + 12.0;
+        assert_eq!(w.end, 4 * ((600.0_f32 / pitch).ceil() as usize + 1));
+        let total = 2_500.0 * pitch - 12.0;
+        let built = (w.end / 4) as f32 * pitch - 12.0;
+        assert!(
+            (w.above + built + w.below - total).abs() < 0.5,
+            "the height of all rows"
+        );
+
+        // Halfway down: a row of margin above, and the same total.
+        let w = GridWindow::new(10_000, 436.0, 100.0, 12.0, 1_000.0 * pitch, 600.0);
+        assert_eq!(w.first, 4 * 999);
+        let built = ((w.end - w.first) / 4) as f32 * pitch - 12.0;
+        assert!((w.above + built + w.below - total).abs() < 0.5);
+        // Past the end (the library just got shorter): the last rows.
+        let w = GridWindow::new(10, 436.0, 100.0, 12.0, 1e9, 600.0);
+        assert_eq!((w.first, w.end), (0, 10));
+        assert_eq!(GridWindow::new(0, 436.0, 100.0, 12.0, 0.0, 600.0).end, 0);
+    }
 
     #[test]
     fn titles_sort_with_their_numbers_read_as_numbers() {

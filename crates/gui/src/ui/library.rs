@@ -15,9 +15,15 @@ use super::widgets::vertical_rule;
 use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
 use crate::install::InstallMsg;
+use crate::library::GridWindow;
 use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, semibold, tokens};
 use crate::{App, Filters, Interrupted, Message, Panel, Shelf, Sort};
+
+/// Space between covers, across and down.
+const GRID_SPACING: f32 = 12.0;
+/// Width the scrollbar takes beside the grid: its own and the gap before it.
+const SCROLLBAR_ROOM: f32 = 18.0;
 
 impl App {
     pub(super) fn library_page(&self) -> Element<'_, Message> {
@@ -57,19 +63,20 @@ impl App {
         .spacing(14)
         .align_y(Alignment::Center);
 
-        let mut page = column![toolbar].spacing(14);
+        // What shows above the grid, in one column: the grid keeps its place in the page, and with
+        // it its scroll position, when a bar or a banner comes or goes.
+        let mut head = column![toolbar].spacing(14);
         if self.filters_open {
-            page = page.push(self.filter_bar());
+            head = head.push(self.filter_bar());
         }
         if let Some((id, title, p)) = self.installing() {
-            page = page.push(download_banner(id, title, p));
+            head = head.push(download_banner(id, title, p));
         }
         if !self.interrupted.is_empty() {
-            page = page.push(self.interrupted_card());
+            head = head.push(self.interrupted_card());
         }
 
-        let cards: Vec<Element<'_, Message>> = games.iter().map(|g| self.card(g)).collect();
-        let gallery: Element<'_, Message> = if cards.is_empty() {
+        let gallery: Element<'_, Message> = if games.is_empty() {
             container(
                 text(if self.library.is_empty() {
                     "Your library is empty: refresh it in Settings."
@@ -81,18 +88,38 @@ impl App {
             .padding(20)
             .into()
         } else {
-            scrollable(
+            // Only the rows in view are built; the area's size comes from its last scroll, or from the
+            // window until then (less the page's margins and the scrollbar's room).
+            let view = self.grid_view;
+            let width =
+                view.map_or(self.window.width - 40.0, |v| v.bounds().width) - SCROLLBAR_ROOM;
+            let height = view.map_or(self.window.height, |v| v.bounds().height);
+            let offset = view.map_or(0.0, |v| v.absolute_offset().y);
+            let w = GridWindow::new(
+                games.len(),
+                width,
+                self.card_width,
+                GRID_SPACING,
+                offset,
+                height,
+            );
+            let cards: Vec<Element<'_, Message>> =
+                games[w.first..w.end].iter().map(|g| self.card(g)).collect();
+            scrollable(column![
+                space().height(w.above),
                 grid(cards)
-                    .fluid(self.card_width)
-                    .spacing(12)
+                    .columns(w.columns)
+                    .spacing(GRID_SPACING)
                     .height(grid::aspect_ratio(3, 4)),
-            )
+                space().height(w.below),
+            ])
             .spacing(8)
+            .on_scroll(Message::GridScrolled)
             .style(theme::scroller)
             .height(Length::Fill)
             .into()
         };
-        page.push(gallery).into()
+        column![head, gallery].spacing(14).into()
     }
 
     /// Downloads and updates left unfinished, with the way to resume or drop each one.

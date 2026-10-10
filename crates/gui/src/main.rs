@@ -186,6 +186,8 @@ pub struct App {
     pub sort: Sort,
     /// Width of the covers in the library grid, set in Settings.
     pub card_width: f32,
+    /// Where the cover grid is scrolled to and how large it shows: only the rows in view are built.
+    pub grid_view: Option<iced::widget::scrollable::Viewport>,
     pub filters: Filters,
     pub filters_open: bool,
     pub selected: Option<String>,
@@ -269,6 +271,7 @@ impl Default for App {
             shelf: Shelf::default(),
             sort: Sort::default(),
             card_width: 150.0,
+            grid_view: None,
             filters: Filters::default(),
             filters_open: false,
             selected: None,
@@ -334,6 +337,7 @@ pub enum Message {
     Logout,
     LoggedOut(Result<(), String>),
     SyncLibrary,
+    GridScrolled(iced::widget::scrollable::Viewport),
     LibrarySynced(Result<LibraryCache, String>),
     Search(String),
     ShowPage(Page),
@@ -429,6 +433,8 @@ impl App {
         if self.location() != shown {
             self.now = Instant::now();
             self.page_shown = Self::fade_in(self.now);
+            // A page shown again starts at its top: so does the part of the grid built.
+            self.grid_view = None;
         }
         task
     }
@@ -517,6 +523,7 @@ impl App {
             Message::LoggedOut(Ok(())) => self.logged_out(),
             Message::LoggedOut(Err(e)) => self.notify_error(e),
             Message::SyncLibrary => return self.sync_library(),
+            Message::GridScrolled(viewport) => self.grid_view = Some(viewport),
             Message::LibrarySynced(result) => return self.library_synced(result),
             Message::Search(s) => {
                 self.search = s;

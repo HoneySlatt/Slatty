@@ -75,33 +75,41 @@ impl App {
             (None, Some(panel), Some(game)) => self.with_panel(page, panel, game),
             _ => page,
         };
+        // Dialogs and menus are layers over the page, each drawn over an empty one: the page stays
+        // the first layer whatever opens, so it keeps its state (the library's scroll) under them.
+        let empty = || Element::from(Space::new().width(Length::Fill).height(Length::Fill));
         let dialog = self
             .dialog
             .as_ref()
             .filter(|_| self.selected.is_none())
             .and_then(|(id, panel)| Some((self.library.iter().find(|g| &g.id == id)?, *panel)));
-        let page = match dialog {
-            Some((g, Panel::GameSettings)) => self.game_settings_dialog(page, g),
-            Some((g, _)) => self.install_dialog(page, g),
-            None => page,
-        };
-        let page = match &self.context_menu {
-            Some(menu) => edit::context_menu(page, menu),
-            None => page,
-        };
-        let page = match self.edit.as_ref().filter(|_| self.selected.is_none()) {
-            Some(d) => self.edit_dialog(page, d),
-            None => page,
-        };
-        let page = match &self.launch_prompt {
-            Some(game_id) => self.launch_dialog(page, game_id),
-            None => page,
-        };
-        let page = match &self.quit_confirm {
-            Some(work) => quit_dialog(page, work),
-            None => page,
-        };
-        pointer::right_clicks(page, |at| Message::Edit(EditMsg::At(at))).into()
+        let layers = stack![page]
+            .push(dialog.map(|(g, panel)| match panel {
+                Panel::GameSettings => self.game_settings_dialog(empty(), g),
+                _ => self.install_dialog(empty(), g),
+            }))
+            .push(
+                self.context_menu
+                    .as_ref()
+                    .map(|menu| edit::context_menu(empty(), menu)),
+            )
+            .push(
+                self.edit
+                    .as_ref()
+                    .filter(|_| self.selected.is_none())
+                    .map(|d| self.edit_dialog(empty(), d)),
+            )
+            .push(
+                self.launch_prompt
+                    .as_ref()
+                    .map(|game_id| self.launch_dialog(empty(), game_id)),
+            )
+            .push(
+                self.quit_confirm
+                    .as_ref()
+                    .map(|work| quit_dialog(empty(), work)),
+            );
+        pointer::right_clicks(layers, |at| Message::Edit(EditMsg::At(at))).into()
     }
 
     pub(crate) fn selected_game(&self) -> Option<&LibraryGame> {
@@ -110,8 +118,9 @@ impl App {
     }
 
     fn with_notice<'a>(&'a self, body: Element<'a, Message>) -> Element<'a, Message> {
+        // The banner's place is kept, empty without a notice, so the page under it keeps its state.
         let Some(n) = &self.notice else {
-            return body;
+            return column![Space::new(), body].into();
         };
         let banner = container(
             row![

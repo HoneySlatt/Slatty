@@ -198,3 +198,87 @@ fn the_library_order_is_kept() {
         assert_eq!(Sort::from_key(s.key()), Some(s));
     }
 }
+
+/// Times the library at 10,000 games: the size it must stay fluid at. Run with
+/// `cargo test --release -p slatty-gui library_at_10000_games -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn library_at_10000_games() {
+    let mut app = library_app();
+    app.library = (1..=10_000)
+        .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
+        .collect();
+    let time = |app: &App, what: &str| {
+        let _ = app.view();
+        let t = std::time::Instant::now();
+        for _ in 0..10 {
+            let _ = app.view();
+        }
+        println!("{what}: {:?} per view", t.elapsed() / 10);
+    };
+    for sort in Sort::ALL {
+        app.sort = sort;
+        time(&app, &format!("view, {sort}"));
+    }
+    app.sort = Sort::NameAsc;
+    app.search = "game 99".into();
+    time(&app, "view, searching");
+    app.search.clear();
+    // Laying the page out, beyond building it: a window first with almost nothing, then the library.
+    let base = {
+        let mut empty = library_app();
+        empty.library.clear();
+        let t = std::time::Instant::now();
+        let _ = Simulator::with_size(settings(), SIZE, empty.view());
+        t.elapsed()
+    };
+    let t = std::time::Instant::now();
+    let _ = Simulator::with_size(settings(), SIZE, app.view());
+    println!("layout: {:?} (window alone {base:?})", t.elapsed());
+}
+
+#[test]
+fn a_library_of_10000_games_builds_only_the_covers_in_view() {
+    use iced::mouse::{Event as Mouse, ScrollDelta};
+    let mut app = library_app();
+    app.library = (1..=10_000)
+        .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
+        .collect();
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("[FAKE] Game 1").is_ok());
+        assert!(ui.find("[FAKE] Game 500").is_err(), "far below: not built");
+    }
+    // Scrolled far down with the wheel: the covers there are built, the first ones are not.
+    let messages: Vec<Message> = {
+        let mut ui = render(&app);
+        ui.point_at(iced::Point::new(600.0, 500.0));
+        let _ = ui.simulate([iced::Event::Mouse(Mouse::WheelScrolled {
+            delta: ScrollDelta::Pixels {
+                x: 0.0,
+                y: -40_000.0,
+            },
+        })]);
+        ui.into_messages().collect()
+    };
+    for m in messages {
+        let _ = app.update(m);
+    }
+    let offset = app.grid_view.expect("scrolled").absolute_offset().y;
+    assert!(offset > 30_000.0, "{offset}");
+    let built: Vec<usize> = {
+        let mut ui = render(&app);
+        (1..=10_000)
+            .filter(|i| ui.find(format!("[FAKE] Game {i}")).is_ok())
+            .collect()
+    };
+    assert!(!built.contains(&1), "far above: not built");
+    assert!(built.len() < 100, "a few rows: {}", built.len());
+    assert!(built.iter().all(|i| *i > 1_000), "{built:?}");
+
+    // Back from a game page, the grid shows its top again.
+    open(&mut app, "3", None);
+    let _ = app.update(Message::CloseDetail);
+    assert!(app.grid_view.is_none());
+    assert!(render(&app).find("[FAKE] Game 1").is_ok());
+}

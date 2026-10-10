@@ -54,7 +54,7 @@ live under `ui/`.
 | Module | Responsibility |
 |---|---|
 | `login` | Browser sign-in, sign-out, avatar |
-| `library` | Library sync, covers and images (key art wider than 2560 pixels is scaled down once, in the cache), favorites, shelf, sort and filters, per-game overview and play time |
+| `library` | Library sync, covers and images (key art wider than 2560 pixels is scaled down once, in the cache), favorites, shelf, sort (numbers by value) and filters, per-game overview and play time. Only the rows of the cover grid in view are built (`GridWindow`, a row of margin each side, spaces of the right height for the rest), so a library of 10,000 games builds in about 2 ms; `library_at_10000_games` (ignored test) measures it |
 | `play` | Launching a game and following its session |
 | `cloud` | Cloud save check, sync and conflict choices |
 | `achievements` | Loading achievements, confirmed manual changes |
@@ -68,7 +68,9 @@ live under `ui/`.
 | `theme`, `presets`, `icons` | Design tokens (`Tokens`: every colour, the corner radii of the redesigned pages, and the page transition: a short fade with a slight rise, played when the page changes and set to zero to turn it off) and the widget styles built from them; Lucide icons. Views never name a colour; the tokens come from a built-in theme (`presets`), with `~/.config/slatty/theme.toml` on top when it exists, read at start, on Reload and when the theme changes (see [theming](theming.md)) |
 
 Interface tests (`tests/`, one module per area, helpers in `tests/mod.rs`) drive the real views with
-Iced's simulator and fictitious data.
+Iced's simulator and fictitious data. Dialogs and menus are layers over the page, each over an empty layer, and the
+notice banner keeps its place: the page stays the same widget whatever opens over it, so Iced keeps
+its state (the library's scroll position).
 
 ## Main flows
 
