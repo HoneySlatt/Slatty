@@ -179,6 +179,10 @@ fn point_latest(dirs: &Dirs, source: Source, name: &str) -> Result<()> {
 /// Gives each project that has downloaded builds but no `-latest` link one, to its newest build:
 /// builds downloaded before the links existed, or a link left leading to a build deleted by hand.
 pub fn link_newest(dirs: &Dirs) -> Result<()> {
+    // Another download or removal running sets the links itself.
+    let Some(_lock) = crate::lock::try_acquire(&lock_file(dirs))? else {
+        return Ok(());
+    };
     for source in Source::ALL {
         if current_newest(dirs, source).is_some() {
             continue;
@@ -280,6 +284,8 @@ async fn update_one(
     cancel: &CancellationToken,
 ) -> Result<Option<Release>> {
     let release = latest(http, api, source).await?;
+    // From here to the pruning, nothing else changes the builds or their links.
+    let _lock = lock(dirs)?;
     let previous = current_newest(dirs, source);
     // Never back: a project can publish an older line after a newer one (CachyOS's
     // `10.0-sunset` came out between two 11.0 builds). Compared with every build of the
@@ -288,12 +294,13 @@ async fn update_one(
         return Ok(None);
     }
     let (report, name) = (progress.clone(), release.name.clone());
-    install(http, dirs, &release, move |s| report(&name, s), cancel).await?;
+    install_locked(http, dirs, &release, move |s| report(&name, s), cancel).await?;
     prune(db, dirs, source, &release.path(dirs), previous.as_deref())?;
     Ok(Some(release))
 }
 
-/// Deletes the builds of `source` other than `newest` and `previous` that no game uses.
+/// Deletes the builds of `source` other than `newest` and `previous` that no game uses. Called
+/// with the lock held.
 fn prune(
     db: &Db,
     dirs: &Dirs,
@@ -301,7 +308,6 @@ fn prune(
     newest: &Path,
     previous: Option<&Path>,
 ) -> Result<()> {
-    let _lock = lock(dirs)?;
     let used = used(db)?;
     for build in installed(dirs) {
         let name = build.file_name().unwrap_or_default().to_string_lossy();
@@ -310,8 +316,7 @@ fn prune(
             && Some(build.as_path()) != previous
             && !used.contains(&build)
         {
-            std::fs::remove_dir_all(&build)
-                .map_err(|e| Error::io(format!("delete {}", build.display()), e))?;
+            delete_build(dirs, &build)?;
         }
     }
     Ok(())
@@ -410,6 +415,18 @@ pub async fn install(
     progress: impl Fn(Stage) + Send + Sync + 'static,
     cancel: &CancellationToken,
 ) -> Result<PathBuf> {
+    let _lock = lock(dirs)?;
+    install_locked(http, dirs, release, progress, cancel).await
+}
+
+/// `install`, with the lock held.
+async fn install_locked(
+    http: &Client,
+    dirs: &Dirs,
+    release: &Release,
+    progress: impl Fn(Stage) + Send + Sync + 'static,
+    cancel: &CancellationToken,
+) -> Result<PathBuf> {
     let dest = release.path(dirs);
     if !dest.join("proton").is_file() {
         unpack_release(http, dirs, release, progress, cancel).await?;
@@ -436,10 +453,10 @@ async fn unpack_release(
     cancel: &CancellationToken,
 ) -> Result<()> {
     let dest = release.path(dirs);
-    let _lock = lock(dirs)?;
-    let staging = dir(dirs).join(".staging");
+    let staging = staging(dirs);
     crate::paths::ensure_dir(&staging)?;
     let archive = staging.join(&release.archive);
+    clear_staging(&staging, release);
 
     let raw =
         crate::http::bytes(http.get(&release.checksum_url), "downloading a Proton sum").await?;
@@ -477,10 +494,53 @@ async fn unpack_release(
             release.archive
         )));
     }
+    // What a deletion cut off left of the same build: it has no `proton`, or this would not run.
+    if std::fs::symlink_metadata(&dest).is_ok() {
+        delete_build(dirs, &dest)?;
+    }
     std::fs::rename(&unpacked, &dest)
         .map_err(|e| Error::io(format!("move {}", dest.display()), e))?;
     let _ = std::fs::remove_file(&archive);
     Ok(())
+}
+
+fn staging(dirs: &Dirs) -> PathBuf {
+    dir(dirs).join(".staging")
+}
+
+/// Removes what earlier runs left in the staging folder: unpacked folders and deletions cut off,
+/// and the downloads of the project's releases a newer one replaced. The download of `release`
+/// itself is kept to go on with, as are other projects' downloads.
+fn clear_staging(staging: &Path, release: &Release) {
+    for entry in std::fs::read_dir(staging).into_iter().flatten().flatten() {
+        let (path, name) = (entry.path(), entry.file_name());
+        let name = name.to_string_lossy();
+        let left = if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            true
+        } else {
+            *name != release.archive
+                && archive_stem(&name).is_some_and(|s| Source::of(s) == Some(release.source))
+        };
+        if left {
+            let _ = if path.is_dir() {
+                std::fs::remove_dir_all(&path)
+            } else {
+                std::fs::remove_file(&path)
+            };
+        }
+    }
+}
+
+/// Deletes a build folder by first moving it into the staging folder, in one step: a deletion cut
+/// off (a crash, a full disk) leaves nothing half deleted among the builds, and the next download
+/// clears it.
+fn delete_build(dirs: &Dirs, build: &Path) -> Result<()> {
+    let staging = staging(dirs);
+    crate::paths::ensure_dir(&staging)?;
+    let trash = crate::fsutil::temp_sibling(&staging.join(build.file_name().unwrap_or_default()));
+    std::fs::rename(build, &trash)
+        .map_err(|e| Error::io(format!("delete {}", build.display()), e))?;
+    std::fs::remove_dir_all(&trash).map_err(|e| Error::io(format!("delete {}", build.display()), e))
 }
 
 /// Deletes a downloaded build, unless a game or the default Proton uses it.
@@ -529,8 +589,7 @@ pub fn remove(db: &Db, dirs: &Dirs, path: &Path) -> Result<()> {
             name.unwrap_or_default()
         )));
     }
-    std::fs::remove_dir_all(path)
-        .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
+    delete_build(dirs, path)?;
     // Nothing follows the link: it goes with the build it led to.
     if let Some(source) = newest_of {
         let link = latest_link(dirs, source);
@@ -540,9 +599,15 @@ pub fn remove(db: &Db, dirs: &Dirs, path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Held while the builds or their links change: a download with its unpacking and link, an
+/// update with its pruning, a removal, the links made at start.
 fn lock(dirs: &Dirs) -> Result<crate::lock::FileLock> {
-    crate::lock::try_acquire(&dirs.locks().join("protons.lock"))?
+    crate::lock::try_acquire(&lock_file(dirs))?
         .ok_or_else(|| Error::Refused("another Proton download or removal is running".into()))
+}
+
+fn lock_file(dirs: &Dirs) -> PathBuf {
+    dirs.locks().join("protons.lock")
 }
 
 async fn download(

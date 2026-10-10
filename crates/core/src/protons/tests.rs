@@ -342,6 +342,73 @@ async fn a_build_is_downloaded_checked_and_unpacked_and_a_cut_download_goes_on()
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// Earlier runs were cut off: a deletion of this very build half done, a build unpacked but never
+/// moved into place, a deletion moved aside, and an older release's download.
+#[tokio::test]
+async fn what_cut_off_runs_left_is_cleared_and_does_not_block_a_download() {
+    let root = root("leftovers");
+    let dirs = Dirs::under(&root);
+    let half_deleted = dir(&dirs).join("GE-Proton11-7-x86_64");
+    std::fs::create_dir_all(half_deleted.join("files/lib")).unwrap();
+    std::fs::write(half_deleted.join("files/lib/left.so"), b"").unwrap();
+    let staging = dir(&dirs).join(".staging");
+    for d in [
+        "GE-Proton11-6-x86_64",
+        ".GE-Proton11-5-x86_64.slatty-tmp-1-0",
+    ] {
+        std::fs::create_dir_all(staging.join(d).join("files")).unwrap();
+    }
+    std::fs::write(staging.join("GE-Proton11-6-x86_64.tar.gz"), b"old").unwrap();
+    let other = staging.join("proton-cachyos-11.0-20261005-slr-x86_64.tar.xz");
+    std::fs::write(&other, b"half").unwrap();
+
+    let archive = gz(&build_tar(|_| {}));
+    let (api, _) = github(archive.clone(), sha512_hex(&archive)).await;
+    let http = crate::http::client().unwrap();
+    let release = latest(&http, &api, Source::GeProton).await.unwrap();
+    let path = install(&http, &dirs, &release, |_| {}, &CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(path.join("proton").is_file());
+    assert!(!path.join("files/lib/left.so").exists());
+    let left: Vec<String> = std::fs::read_dir(&staging)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        left,
+        [other.file_name().unwrap().to_string_lossy()],
+        "another project's download stays"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// Two processes (the interface and the command line) change the builds one at a time: the links
+/// are made, a build installed or removed, only by the one holding the lock.
+#[tokio::test]
+async fn builds_and_links_change_one_process_at_a_time() {
+    let root = root("locked");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    let build = fake_build(&dirs, "GE-Proton11-7-x86_64");
+    let held = lock(&dirs).unwrap();
+    // Links at start: left to the process holding the lock.
+    link_newest(&dirs).unwrap();
+    assert!(std::fs::symlink_metadata(latest_link(&dirs, Source::GeProton)).is_err());
+    // A build already there would still have its link set.
+    let archive = gz(&build_tar(|_| {}));
+    let (api, _) = github(archive.clone(), sha512_hex(&archive)).await;
+    let http = crate::http::client().unwrap();
+    let release = latest(&http, &api, Source::GeProton).await.unwrap();
+    let result = install(&http, &dirs, &release, |_| {}, &CancellationToken::new()).await;
+    assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
+    assert!(matches!(remove(&db, &dirs, &build), Err(Error::Refused(_))));
+    drop(held);
+    link_newest(&dirs).unwrap();
+    assert_eq!(latest_target(&dirs, Source::GeProton), Some(build));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[tokio::test]
 async fn a_build_that_does_not_match_its_sum_is_deleted_unopened() {
     let root = root("sum");
