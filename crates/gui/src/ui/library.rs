@@ -18,7 +18,7 @@ use crate::install::InstallMsg;
 use crate::library::GridWindow;
 use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, semibold, tokens};
-use crate::{App, Filters, Interrupted, Message, Panel, Sort};
+use crate::{App, Filters, Interrupted, Message, Panel, Shelf, Sort};
 
 /// Space between covers, across and down.
 const GRID_SPACING: f32 = 12.0;
@@ -80,8 +80,17 @@ impl App {
             container(
                 text(if self.library.is_empty() {
                     "Your library is empty: refresh it in Settings."
-                } else {
+                } else if !self.search.trim().is_empty() || self.filters.any() {
                     "No game matches."
+                } else {
+                    match self.shelf {
+                        Shelf::All => "No game matches.",
+                        Shelf::Installed => "No game installed yet.",
+                        Shelf::Favorites => {
+                            "No favorite yet: the heart beside Play on a game's page adds it here."
+                        }
+                        Shelf::Hidden => "No hidden game.",
+                    }
                 })
                 .color(tokens().muted),
             )

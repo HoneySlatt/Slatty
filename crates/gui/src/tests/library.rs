@@ -116,6 +116,28 @@ fn filter_status_remains_readable_at_the_minimum_window_size() {
     )));
 }
 
+/// An empty shelf says what would fill it; "No game matches." is kept for a search or filters.
+#[test]
+fn an_empty_shelf_says_what_fills_it() {
+    let mut app = library_app();
+    app.installs.clear();
+    for (shelf, text) in [
+        (Shelf::Installed, "No game installed yet."),
+        (
+            Shelf::Favorites,
+            "No favorite yet: the heart beside Play on a game's page adds it here.",
+        ),
+        (Shelf::Hidden, "No hidden game."),
+    ] {
+        app.shelf = shelf;
+        app.lists.clear();
+        assert!(render(&app).find(text).is_ok(), "{text}");
+    }
+    app.search = "nothing like it".into();
+    app.lists.clear();
+    assert!(render(&app).find("No game matches.").is_ok());
+}
+
 #[test]
 fn shelves_filters_and_sort_select_games() {
     let mut app = library_app();
