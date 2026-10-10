@@ -283,7 +283,7 @@ async fn update_one(
     progress: &std::sync::Arc<impl Fn(&str, Stage) + Send + Sync + 'static>,
     cancel: &CancellationToken,
 ) -> Result<Option<Release>> {
-    let release = latest(http, api, source).await?;
+    let release = or_cancelled(cancel, latest(http, api, source)).await?;
     // From here to the pruning, nothing else changes the builds or their links.
     let _lock = lock(dirs)?;
     let previous = current_newest(dirs, source);
@@ -458,14 +458,17 @@ async fn unpack_release(
     let archive = staging.join(&release.archive);
     clear_staging(&staging, release);
 
-    let raw =
-        crate::http::bytes(http.get(&release.checksum_url), "downloading a Proton sum").await?;
+    let raw = or_cancelled(
+        cancel,
+        crate::http::bytes(http.get(&release.checksum_url), "downloading a Proton sum"),
+    )
+    .await?;
     let expected = parse_sum(&raw, &release.archive)?;
     download(http, release, &archive, &progress, cancel).await?;
 
     progress(Stage::Verifying);
-    let path = archive.clone();
-    let sum = tokio::task::spawn_blocking(move || sha512_file(&path))
+    let (path, stop) = (archive.clone(), cancel.clone());
+    let sum = tokio::task::spawn_blocking(move || sha512_file(&path, &stop))
         .await
         .map_err(|e| Error::io("checking a Proton build", std::io::Error::other(e)))??;
     if sum != expected {
@@ -682,12 +685,15 @@ fn parse_sum(raw: &[u8], archive: &str) -> Result<String> {
         .ok_or_else(|| Error::Refused(format!("no SHA-512 sum published for {archive}")))
 }
 
-fn sha512_file(path: &Path) -> Result<String> {
+fn sha512_file(path: &Path, cancel: &CancellationToken) -> Result<String> {
     let mut file =
         std::fs::File::open(path).map_err(|e| Error::io(format!("open {}", path.display()), e))?;
     let mut hasher = Sha512::new();
     let mut buf = vec![0; 1 << 20];
     loop {
+        if cancel.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
         let n = file
             .read(&mut buf)
             .map_err(|e| Error::io(format!("read {}", path.display()), e))?;
@@ -697,6 +703,18 @@ fn sha512_file(path: &Path) -> Result<String> {
         hasher.update(&buf[..n]);
     }
     Ok(crate::fsutil::hex(&hasher.finalize()))
+}
+
+/// `work`, unless `cancel` stops it first: a request to a stalled server can wait half a minute
+/// per try, and is tried three times.
+async fn or_cancelled<T>(
+    cancel: &CancellationToken,
+    work: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    tokio::select! {
+        _ = cancel.cancelled() => Err(Error::Cancelled),
+        result = work => result,
+    }
 }
 
 /// The archive's name without `.tar.gz` or `.tar.xz`, for an archive this module can unpack.

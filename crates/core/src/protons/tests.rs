@@ -359,6 +359,55 @@ async fn a_build_is_downloaded_checked_and_unpacked_and_a_cut_download_goes_on()
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// GitHub stalls: Stop is heard at once, not after its tries run out (half a minute each).
+#[tokio::test]
+async fn stop_is_heard_while_github_does_not_answer() {
+    let root = root("stalled");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    crate::settings::set_proton_downloads(&db, true).unwrap();
+    game_on(&db, &root, "1", &latest_link(&dirs, Source::GeProton));
+    // Takes connections, never answers.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let stalled = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move {
+        let mut held = Vec::new();
+        while let Ok((socket, _)) = listener.accept().await {
+            held.push(socket);
+        }
+    });
+    let http = crate::http::client().unwrap();
+    let cancel = CancellationToken::new();
+    let stop = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        stop.cancel();
+    });
+    let started = std::time::Instant::now();
+    let result = update(&db, &http, &dirs, &stalled, |_, _| {}, &cancel).await;
+    assert!(matches!(result, Err(Error::Cancelled)), "{result:?}");
+    // The sum of a release, asked of the same stalled server.
+    let release = Release {
+        source: Source::GeProton,
+        version: "GE-Proton11-7".into(),
+        name: "GE-Proton11-7-x86_64".into(),
+        size: 1,
+        url: format!("{stalled}/archive"),
+        archive: ARCHIVE.into(),
+        checksum_url: format!("{stalled}/sum"),
+    };
+    let cancel = CancellationToken::new();
+    let stop = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        stop.cancel();
+    });
+    let result = install(&http, &dirs, &release, |_| {}, &cancel).await;
+    assert!(matches!(result, Err(Error::Cancelled)), "{result:?}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// Earlier runs were cut off: a deletion of this very build half done, a build unpacked but never
 /// moved into place, a deletion moved aside, and an older release's download.
 #[tokio::test]
@@ -930,7 +979,7 @@ fn unpacking_a_large_build() {
     let archive = PathBuf::from(std::env::var_os("SLATTY_BENCH_ARCHIVE").expect("an archive"));
     let root = root("bench");
     let t = std::time::Instant::now();
-    sha512_file(&archive).unwrap();
+    sha512_file(&archive, &CancellationToken::new()).unwrap();
     println!("sha512: {:?}", t.elapsed());
     let t = std::time::Instant::now();
     unpack(
