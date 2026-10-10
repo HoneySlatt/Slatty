@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn a_queue_change_cancels_the_drag_before_the_next_render() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    app.queue = vec!["5".into(), "6".into()];
+    let _ = app.update(Message::Downloads(DownloadsMsg::Grab(1)));
+    let _ = app.update(Message::Downloads(DownloadsMsg::Drag(0.0)));
+    let _ = app.start_next();
+    assert_eq!(app.queue_order(), vec!["6"]);
+    let _ = app.update(Message::Downloads(DownloadsMsg::Drop));
+    assert_eq!(app.queue, vec!["6"]);
+
+    let _ = app.update(Message::Downloads(DownloadsMsg::Grab(0)));
+    let _ = app.update(Message::Downloads(DownloadsMsg::Remove("6".into())));
+    assert!(app.queue_order().is_empty());
+    let _ = app.update(Message::Downloads(DownloadsMsg::Drop));
+    assert!(app.queue.is_empty());
+}
+
+#[test]
 fn installs_started_during_a_download_wait_in_a_queue_that_can_be_reordered() {
     use crate::downloads::{DownloadsMsg, ROW_HEIGHT, ROW_SPACING};
     use slatty_core::installer::InstallJob;

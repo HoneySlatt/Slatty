@@ -36,6 +36,7 @@ impl App {
     pub fn update_downloads(&mut self, msg: DownloadsMsg) -> Task<Message> {
         match msg {
             DownloadsMsg::Remove(game_id) => {
+                self.drag = None;
                 self.queue.retain(|id| *id != game_id);
                 self.save_queue();
                 self.install_views.remove(&game_id);
@@ -104,6 +105,7 @@ impl App {
         self.install_views
             .insert(game_id.clone(), InstallView::Queued(info));
         self.forget_interrupted(&game_id);
+        self.drag = None;
         self.queue.push(game_id.clone());
         self.save_queue();
         self.dialog.take_if(|(id, _)| *id == game_id);
@@ -134,6 +136,7 @@ impl App {
         if waiting(crate::Interrupted::Paused).is_some() || self.queue.is_empty() {
             return Task::none();
         }
+        self.drag = None;
         let game_id = self.queue.remove(0);
         self.save_queue();
         match self.install_views.remove(&game_id) {
