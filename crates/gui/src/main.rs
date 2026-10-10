@@ -174,6 +174,7 @@ pub struct App {
     pub core: Option<Core>,
     pub fatal: Option<String>,
     pub account: Option<AccountInfo>,
+    pub account_epoch: u64,
     pub avatar: Option<String>,
     pub login_input: String,
     pub login_busy: bool,
@@ -264,6 +265,7 @@ impl Default for App {
             core: None,
             fatal: None,
             account: None,
+            account_epoch: 0,
             avatar: None,
             login_input: String::new(),
             login_busy: false,
@@ -333,6 +335,8 @@ impl Default for App {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    /// Result of work started in a particular sign-in session.
+    AccountResult(u64, Box<Message>),
     Booted(Result<Box<Boot>, String>),
     OpenLoginPage,
     LoginInput(String),
@@ -471,6 +475,12 @@ impl App {
 
     fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
+            // Work of an earlier sign-in session finds nothing of its own to fill.
+            Message::AccountResult(epoch, message) => {
+                if epoch == self.account_epoch && self.account.is_some() {
+                    return self.handle(*message);
+                }
+            }
             Message::Booted(Ok(boot)) => {
                 self.core = Some(boot.core);
                 self.account = boot.account;

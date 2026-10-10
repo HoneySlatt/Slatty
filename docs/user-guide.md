@@ -277,6 +277,9 @@ A save that changes during the sync, because the game or anything else writes it
 is and reported; sync again once it has stopped changing. [docs/cloud-saves.md](cloud-saves.md)
 explains the rules in detail.
 
+If you switch GOG accounts while a game runs, its saves and achievements are not checked with the
+new account when the session ends: sign back into the account that started it, then sync.
+
 ## Achievements
 
 ```sh

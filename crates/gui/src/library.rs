@@ -8,7 +8,7 @@ use iced::futures::{SinkExt, Stream, StreamExt};
 use slatty_core::library::{self, LibraryCache, LibraryGame};
 use slatty_core::overview::{self, GameOverview};
 
-use crate::work::tokens;
+use crate::work::tokens_for;
 use crate::{App, Core, Message, err};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -99,18 +99,24 @@ impl App {
         let (Some(core), false) = (self.core.clone(), self.library_busy) else {
             return Task::none();
         };
+        let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
+            return Task::none();
+        };
         self.library_busy = true;
-        Task::perform(
+        self.account_task(Task::perform(
             async move {
-                let tokens = tokens(&core).await?;
+                let tokens = tokens_for(&core, &user_id).await?;
                 let games = library::fetch(&core.http, &tokens).await.map_err(err)?;
                 library::save_cache(&core.dirs, &tokens.user_id, games).map_err(err)
             },
             Message::LibrarySynced,
-        )
+        ))
     }
 
     pub fn library_synced(&mut self, result: Result<LibraryCache, String>) -> Task<Message> {
+        if self.account.is_none() {
+            return Task::none();
+        }
         self.library_busy = false;
         match result {
             Ok(cache) => self.set_library(cache),
@@ -168,12 +174,15 @@ impl App {
         let Some(core) = self.core.clone() else {
             return Task::none();
         };
-        if ids.is_empty() || self.account.is_none() {
+        let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
+            return Task::none();
+        };
+        if ids.is_empty() {
             return Task::none();
         }
-        Task::perform(
+        self.account_task(Task::perform(
             async move {
-                let Ok(tokens) = tokens(&core).await else {
+                let Ok(tokens) = tokens_for(&core, &user_id).await else {
                     return Vec::new();
                 };
                 let (http, tokens) = (&core.http, &tokens);
@@ -188,7 +197,7 @@ impl App {
                     .await
             },
             Message::PlaytimesFetched,
-        )
+        ))
     }
 
     /// Seconds played, as GOG records them.
@@ -238,7 +247,10 @@ impl App {
 
     /// Reads achievements and cloud support of every game (or only of those not known yet).
     pub fn scan_overview(&mut self, all: bool) -> Task<Message> {
-        let Some(core) = self.core.clone() else {
+        let (Some(core), Some(user_id)) = (
+            self.core.clone(),
+            self.account.as_ref().map(|a| a.user_id.clone()),
+        ) else {
             return Task::none();
         };
         if self.overview_busy {
@@ -254,7 +266,7 @@ impl App {
             return Task::none();
         }
         self.overview_busy = true;
-        Task::run(overview_stream(core, ids), |m| m)
+        self.account_task(Task::run(overview_stream(core, user_id, ids), |m| m))
     }
 
     pub fn request_images(&mut self, urls: Vec<String>) -> Task<Message> {
@@ -266,7 +278,7 @@ impl App {
             .into_iter()
             .filter(|u| !u.is_empty() && self.images_requested.insert(u.clone()))
             .collect();
-        Task::batch(wanted.into_iter().map(|url| {
+        self.account_task(Task::batch(wanted.into_iter().map(|url| {
             let (core, user_id, key) = (core.clone(), user_id.clone(), url.clone());
             Task::perform(
                 async move {
@@ -281,10 +293,17 @@ impl App {
                 },
                 move |bytes| Message::Image(key, bytes),
             )
-        }))
+        })))
     }
 
     pub fn set_library(&mut self, cache: LibraryCache) -> Task<Message> {
+        if self
+            .account
+            .as_ref()
+            .is_none_or(|a| a.user_id != cache.user_id)
+        {
+            return Task::none();
+        }
         self.fetched_at = Some(cache.fetched_at);
         self.library = cache.games;
         self.gog_titles = self
@@ -319,7 +338,7 @@ impl App {
         }));
         let all = self.library.iter().map(|g| g.id.clone()).collect();
         Task::batch([
-            covers,
+            self.account_task(covers),
             self.scan_overview(false),
             self.refresh_playtime(all),
         ])
@@ -385,9 +404,9 @@ impl App {
     }
 }
 
-fn overview_stream(core: Core, ids: Vec<String>) -> impl Stream<Item = Message> {
+fn overview_stream(core: Core, user_id: String, ids: Vec<String>) -> impl Stream<Item = Message> {
     iced::stream::channel(16, async move |mut output| {
-        let tokens = tokens(&core).await;
+        let tokens = tokens_for(&core, &user_id).await;
         if let Ok(tokens) = tokens {
             let (http, tokens) = (&core.http, &tokens);
             let mut results = iced::futures::stream::iter(ids)

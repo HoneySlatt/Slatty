@@ -90,6 +90,21 @@ impl Account {
 
     pub async fn load(db: &Db, dirs: &Dirs) -> Result<Account> {
         let info = Self::active(db)?.ok_or(Error::NotLoggedIn)?;
+        Self::load_info(info, dirs).await
+    }
+
+    /// Loads credentials only for the account that started the operation.
+    pub async fn load_for(db: &Db, dirs: &Dirs, user_id: &str) -> Result<Account> {
+        let info = Self::active(db)?.ok_or(Error::NotLoggedIn)?;
+        if info.user_id != user_id {
+            return Err(Error::Refused(
+                "the signed-in account changed; try again".into(),
+            ));
+        }
+        Self::load_info(info, dirs).await
+    }
+
+    async fn load_info(info: AccountInfo, dirs: &Dirs) -> Result<Account> {
         let tokens = load_tokens(info.user_id.clone())
             .await?
             .ok_or(Error::NotLoggedIn)?;
@@ -204,4 +219,33 @@ async fn fetch_username(http: &Client, tokens: &Tokens) -> Result<String> {
     Ok(http::json::<User>(req, "fetching the user profile")
         .await?
         .username)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn account_work_refuses_a_switch_before_accessing_credentials() {
+        let db = Db::in_memory().unwrap();
+        db.conn()
+            .execute(
+                "INSERT INTO accounts VALUES ('new', '[FAKE] New account', 0)",
+                [],
+            )
+            .unwrap();
+        db.set_setting(ACTIVE_USER, Some("new")).unwrap();
+        let dirs = Dirs::under(
+            &std::env::temp_dir().join(format!("slatty-account-switch-{}", std::process::id())),
+        );
+        assert!(matches!(
+            Account::load_for(&db, &dirs, "old").await,
+            Err(Error::Refused(_))
+        ));
+        db.set_setting(ACTIVE_USER, None).unwrap();
+        assert!(matches!(
+            Account::load_for(&db, &dirs, "old").await,
+            Err(Error::NotLoggedIn)
+        ));
+    }
 }

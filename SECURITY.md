@@ -23,6 +23,9 @@ Include the steps to reproduce and the version or commit you tested.
   game that ships GOG's Galaxy SDK, stopped when the game ends, and never started once
   **Achievements in game** is off (Settings → Privacy).
 - **Logs.** Comet's log may contain game client identifiers. Review it before sharing.
+- **Account changes.** Work started for one account never uses another's tokens: after a switch,
+  its library, achievement, cloud and play time requests are refused, and its late results are
+  dropped.
 - **Private files.** SlattyLauncher's folders (settings, data, cache, state) are made readable by
   you only (0700) at every start, and its database 0600: they hold your library, play times, save
   backups and Wine prefixes.

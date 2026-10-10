@@ -124,6 +124,7 @@ pub async fn play(
     mut stop: UnboundedReceiver<()>,
 ) -> Result<()> {
     let _busy = crate::lock::game(dirs, &req.game_id)?;
+    let user_id = Account::active(db)?.map(|a| a.user_id);
     let mut install = Install::get(db, &req.game_id)?
         .ok_or_else(|| Error::NotFound(format!("{} is not imported", req.game_id)))?;
     crate::umu::resolve(db, http, &mut install).await;
@@ -143,7 +144,6 @@ pub async fn play(
         && !native
         && crate::settings::game_achievements(db)?
         && crate::comet::uses_galaxy(dirs, &install);
-    let user_id = Account::active(db)?.map(|a| a.user_id);
 
     if let Some(init) = runner::prefix_init_spec(&install)? {
         emit(PlayEvent::PreparingPrefix);
@@ -167,7 +167,7 @@ pub async fn play(
 
     if crate::setup::pending(dirs, &install.game_id)? {
         let result = async {
-            let tokens = tokens(db, dirs, http).await?;
+            let tokens = tokens(db, dirs, http, user_id.as_deref()).await?;
             let forward = |e: SetupEvent| {
                 emit(match e {
                     SetupEvent::Downloading => {
@@ -222,7 +222,7 @@ pub async fn play(
     }
 
     if cloud {
-        match cloud_sync(db, dirs, http, &install).await {
+        match cloud_sync(db, dirs, http, &install, user_id.as_deref()).await {
             Ok(Some(summary)) if summary.is_clean() => emit(PlayEvent::CloudChecked(summary)),
             Ok(Some(summary)) => {
                 emit(PlayEvent::Blocked(summary));
@@ -236,7 +236,7 @@ pub async fn play(
     }
 
     let comet = if use_comet {
-        match start_comet(db, dirs, http, &install).await {
+        match start_comet(db, dirs, http, &install, user_id.as_deref()).await {
             Ok(started) => {
                 emit(PlayEvent::CometReady);
                 Some(started)
@@ -282,7 +282,7 @@ pub async fn play(
                 "the end of the session is uncertain".into(),
             ));
         } else {
-            match cloud_sync(db, dirs, http, &install).await {
+            match cloud_sync(db, dirs, http, &install, user_id.as_deref()).await {
                 Ok(Some(summary)) => emit(PlayEvent::CloudUploaded(summary)),
                 Ok(None) => {}
                 Err(e) => emit(PlayEvent::CloudUploadSkipped(e.to_string())),
@@ -300,7 +300,10 @@ pub async fn play(
 
     if let Some(before) = before {
         emit(
-            match (before, achievements_now(db, dirs, http, &install).await) {
+            match (
+                before,
+                achievements_now(db, dirs, http, &install, user_id.as_deref()).await,
+            ) {
                 (Some(before), Some(after)) => {
                     let new: Vec<String> = achievements::newly_unlocked(&before, &after)
                         .iter()
@@ -366,8 +369,9 @@ async fn cloud_sync(
     dirs: &Dirs,
     http: &Client,
     install: &Install,
+    user_id: Option<&str>,
 ) -> Result<Option<CloudSummary>> {
-    let tokens = tokens(db, dirs, http).await?;
+    let tokens = tokens(db, dirs, http, user_id).await?;
     let outcomes =
         cloud::sync_held(db, dirs, http, &tokens, install, SyncOptions::default()).await?;
     Ok(outcomes.map(|o| CloudSummary::from_outcomes(&o)))
@@ -389,12 +393,12 @@ async fn report_playtime(
     if crate::playtime::unreported(db, user_id)?.is_empty() {
         return Ok(0);
     }
-    let tokens = tokens(db, dirs, http).await?;
+    let tokens = tokens(db, dirs, http, Some(user_id)).await?;
     crate::playtime::report_pending(db, http, &tokens).await
 }
 
-async fn tokens(db: &Db, dirs: &Dirs, http: &Client) -> Result<Tokens> {
-    let mut account = Account::load(db, dirs).await?;
+async fn tokens(db: &Db, dirs: &Dirs, http: &Client, user_id: Option<&str>) -> Result<Tokens> {
+    let mut account = Account::load_for(db, dirs, user_id.ok_or(Error::NotLoggedIn)?).await?;
     Ok(account.tokens(http).await?.clone())
 }
 
@@ -403,13 +407,14 @@ async fn start_comet(
     dirs: &Dirs,
     http: &Client,
     install: &Install,
+    user_id: Option<&str>,
 ) -> Result<(Comet, Option<Vec<Achievement>>)> {
     let bin =
         find_in_path("comet").ok_or_else(|| Error::NotFound("`comet` is not in PATH".into()))?;
-    let mut account = Account::load(db, dirs).await?;
+    let mut account = Account::load_for(db, dirs, user_id.ok_or(Error::NotLoggedIn)?).await?;
     let tokens = account.tokens(http).await?.clone();
     let comet = Comet::start(&bin, &tokens, &account.info.username, dirs).await?;
-    let before = achievements_now(db, dirs, http, install).await;
+    let before = achievements_now(db, dirs, http, install, user_id).await;
     Ok((comet, before))
 }
 
@@ -418,8 +423,9 @@ async fn achievements_now(
     dirs: &Dirs,
     http: &Client,
     install: &Install,
+    user_id: Option<&str>,
 ) -> Option<Vec<Achievement>> {
-    let tokens = tokens(db, dirs, http).await.ok()?;
+    let tokens = tokens(db, dirs, http, user_id).await.ok()?;
     let (client_id, token) = achievements::game_token(http, &tokens, install)
         .await
         .ok()?;

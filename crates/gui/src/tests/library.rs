@@ -1,6 +1,56 @@
 use super::*;
 
 #[test]
+fn a_library_response_after_logout_cannot_restore_the_old_account() {
+    let mut app = library_app();
+    app.library_busy = true;
+    app.overview_busy = true;
+    let cache = slatty_core::library::LibraryCache {
+        user_id: "0".into(),
+        fetched_at: 1,
+        games: app.library.clone(),
+    };
+    app.logged_out();
+    let _ = app.update(Message::LibrarySynced(Ok(cache)));
+    assert!(app.library.is_empty());
+    assert!(!app.library_busy && !app.overview_busy);
+}
+
+#[test]
+fn late_account_results_are_ignored_after_signing_back_in() {
+    let mut app = library_app();
+    let epoch = app.account_epoch;
+    let account = app.account.clone();
+    app.logged_out();
+    app.account = account;
+    app.overview_busy = true;
+    let results = [
+        Message::Avatar(Some("https://invalid.example/old-avatar".into())),
+        Message::Cover("1".into(), Some(vec![1])),
+        Message::Image("old-image".into(), Some(vec![1])),
+        Message::OverviewFetched("1".into(), Ok(GameOverview::default())),
+        Message::OverviewDone,
+        Message::PlaytimesFetched(vec![("1".into(), 200)]),
+        Message::Achievements("1".into(), Ok(vec![fake_achievement("old", true)])),
+        Message::LibrarySynced(Err("old failure".into())),
+    ];
+    for result in results {
+        let _ = app.update(Message::AccountResult(epoch, Box::new(result)));
+    }
+    assert!(app.avatar.is_none() && app.covers.is_empty() && app.images.is_empty());
+    assert!(app.overview.is_empty() && app.achievements.is_empty());
+    assert!(app.overview_busy && app.notice.is_none());
+    let _ = app.update(Message::AccountResult(
+        app.account_epoch,
+        Box::new(Message::OverviewFetched(
+            "1".into(),
+            Ok(GameOverview::default()),
+        )),
+    ));
+    assert!(app.overview.contains_key("1"));
+}
+
+#[test]
 fn login_screen_offers_browser_login_without_password_field() {
     let app = App {
         core: Some(core()),

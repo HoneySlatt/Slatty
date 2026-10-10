@@ -56,6 +56,14 @@ pub async fn tokens(core: &Core) -> Result<slatty_core::auth::Tokens, String> {
     account.tokens(&core.http).await.map_err(err).cloned()
 }
 
+/// Refuses queued account work if sign-in changed before the task loaded its credentials.
+pub async fn tokens_for(core: &Core, user_id: &str) -> Result<slatty_core::auth::Tokens, String> {
+    let mut account = Account::load_for(&core.db, &core.dirs, user_id)
+        .await
+        .map_err(err)?;
+    account.tokens(&core.http).await.map_err(err).cloned()
+}
+
 /// `None` when the user paused the work, else the error to show.
 pub fn paused_or(e: slatty_core::Error) -> Option<String> {
     match e {

@@ -8,7 +8,7 @@ use slatty_core::cloud::{
 };
 use slatty_core::install::Install;
 
-use crate::work::tokens;
+use crate::work::tokens_for;
 use crate::{App, Core, Message, err, ui};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +72,9 @@ pub enum CloudRequest {
 
 impl App {
     pub fn request_cloud(&mut self, game_id: String, request: CloudRequest) -> Task<Message> {
+        let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
+            return Task::none();
+        };
         let (Some(core), Some(install)) = (self.core.clone(), self.installs.get(&game_id).cloned())
         else {
             return Task::none();
@@ -85,9 +88,10 @@ impl App {
             return Task::none();
         }
         self.cloud.entry(game_id.clone()).or_default().busy = true;
-        Task::perform(cloud_task(core, install, request), move |r| {
-            Message::CloudDone(game_id.clone(), request, r)
-        })
+        self.account_task(Task::perform(
+            cloud_task(core, user_id, install, request),
+            move |r| Message::CloudDone(game_id.clone(), request, r),
+        ))
     }
 
     /// A sync is followed by a check, so the drawer shows where things stand afterwards.
@@ -126,6 +130,7 @@ impl App {
 
 async fn cloud_task(
     core: Core,
+    user_id: String,
     install: Install,
     request: CloudRequest,
 ) -> Result<CloudResult, String> {
@@ -140,7 +145,7 @@ async fn cloud_task(
             ..Default::default()
         },
     };
-    let tokens = tokens(&core).await?;
+    let tokens = tokens_for(&core, &user_id).await?;
     let Some(outcomes) =
         cloud::sync_game(&core.db, &core.dirs, &core.http, &tokens, &install, opts)
             .await
