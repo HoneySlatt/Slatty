@@ -61,6 +61,8 @@ async fn an_isolated_linux_game_sees_nothing_of_the_home_folder() {
              if [ -e '{}' ]; then echo VISIBLE; else echo hidden; fi > result\n\
              if [ -S /run/pressure-vessel/bus ] || [ -S \"$XDG_RUNTIME_DIR/bus\" ]; \
              then echo REACHABLE; else echo hidden; fi > bus\n\
+             if [ -S /run/dbus/system_bus_socket ]; \
+             then echo REACHABLE; else echo hidden; fi > system-bus\n\
              echo \"$HOME\" > home\ntouch \"$HOME/written-by-the-game\"\n",
             marker.display()
         ),
@@ -82,6 +84,11 @@ async fn an_isolated_linux_game_sees_nothing_of_the_home_folder() {
     run(&spec, &root.join("game.log")).await;
     assert_eq!(result(&root, "result"), "hidden");
     assert_eq!(result(&root, "bus"), "hidden", "the D-Bus session bus");
+    assert_eq!(
+        result(&root, "system-bus"),
+        "hidden",
+        "the D-Bus system bus"
+    );
     // Its home is its own: what it writes there lands in SlattyLauncher's folder for it.
     let home = runner::isolated_home(&dirs, "1").unwrap();
     assert!(home.join("written-by-the-game").is_file());
@@ -92,6 +99,7 @@ async fn an_isolated_linux_game_sees_nothing_of_the_home_folder() {
     run(&spec, &root.join("game.log")).await;
     assert_eq!(result(&root, "result"), "VISIBLE");
     assert_eq!(result(&root, "bus"), "REACHABLE");
+    assert_eq!(result(&root, "system-bus"), "REACHABLE");
     std::fs::remove_dir_all(root).unwrap();
 }
 

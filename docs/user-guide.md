@@ -278,9 +278,10 @@ slatty isolation <game-id> --on
 
 - An isolated Linux game runs in umu's Steam Linux Runtime (`umu-run` is needed), on NixOS too,
   instead of `steam-run`. It does not find the saves it made in your home folder: it starts from
-  its own. To carry on with a save, copy it to the same place under its home folder. Nor can it
-  reach your desktop's services over D-Bus: one that keeps the screen awake that way, or asks
-  GameMode for performance, no longer can.
+  its own. To carry on with a save, copy it to the same place under its home folder.
+- An isolated game reaches no service over D-Bus. A Linux game that keeps the screen awake that
+  way, or asks GameMode for performance, no longer can; a Windows game no longer sees Bluetooth
+  devices through Wine (gamepads are not affected).
 - A game run through Wine alone (imported with `--runner wine`) cannot be isolated.
 - Isolation keeps a game out of your files, not a hostile program out of your system: see
   [SECURITY.md](../SECURITY.md#scope).

@@ -343,10 +343,13 @@ fn isolation_env(dirs: &Dirs, install: &Install) -> Result<Vec<(String, String)>
         ("TEMPDIR".into(), "/tmp".into()),
         ("STEAM_COMPAT_LIBRARY_PATHS".into(), String::new()),
         ("STEAM_COMPAT_CLIENT_INSTALL_PATH".into(), String::new()),
-        // Through the session bus a program could have other services act for it, outside the
-        // container (systemd starts commands). Wine, Proton and umu do not use it; D-Bus's own
-        // "no bus" address keeps it out (a missing socket would stop the container).
+        // Through the D-Bus buses a program could have other services act for it, outside the
+        // container (systemd starts commands; the system's rules may let the session suspend or
+        // mount drives). Wine, Proton and umu do not need them (checked: Wine saw the same network
+        // adapters and drives without the system bus); D-Bus's own "no bus" address keeps them
+        // out (a missing socket would stop the container).
         ("DBUS_SESSION_BUS_ADDRESS".into(), "disabled:".into()),
+        ("DBUS_SYSTEM_BUS_ADDRESS".into(), "disabled:".into()),
     ])
 }
 
@@ -447,6 +450,7 @@ mod tests {
             assert_eq!(value(&env, temp), Some("/tmp"), "{temp}");
         }
         assert_eq!(value(&env, "DBUS_SESSION_BUS_ADDRESS"), Some("disabled:"));
+        assert_eq!(value(&env, "DBUS_SYSTEM_BUS_ADDRESS"), Some("disabled:"));
 
         install.isolated = false;
         let env = umu_env(&dirs, &install, Path::new("/proton"), Path::new("/prefix")).unwrap();
