@@ -193,7 +193,6 @@ impl App {
             .style(theme::plain);
         let bar = row![
             logo(44.0),
-            Space::new().width(12),
             tabs,
             space().width(Length::Fill),
             search,
