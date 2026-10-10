@@ -51,10 +51,23 @@ fn today() -> chrono::NaiveDate {
     }
 }
 
+/// A moment in the local time zone: in tests always UTC+2 (Paris in summer), so that the times and
+/// days they show do not depend on the computer's zone.
+fn local(ts: i64) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    use chrono::TimeZone;
+    if cfg!(test) {
+        chrono::FixedOffset::east_opt(2 * 3600).and_then(|zone| zone.timestamp_opt(ts, 0).single())
+    } else {
+        chrono::Local
+            .timestamp_opt(ts, 0)
+            .single()
+            .map(|t| t.fixed_offset())
+    }
+}
+
 /// "Today", "Yesterday", "3 days ago", or the date.
 pub fn relative_day(ts: i64) -> String {
-    use chrono::{Local, TimeZone};
-    let Some(then) = Local.timestamp_opt(ts, 0).single() else {
+    let Some(then) = local(ts) else {
         return String::new();
     };
     match (today() - then.date_naive()).num_days() {
@@ -66,10 +79,7 @@ pub fn relative_day(ts: i64) -> String {
 }
 
 pub fn local_time(ts: i64) -> String {
-    use chrono::TimeZone;
-    chrono::Local
-        .timestamp_opt(ts, 0)
-        .single()
+    local(ts)
         .map(|t| t.format("%d/%m/%Y %H:%M").to_string())
         .unwrap_or_default()
 }

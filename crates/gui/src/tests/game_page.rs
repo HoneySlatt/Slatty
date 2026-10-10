@@ -70,7 +70,7 @@ fn the_game_page_fits_the_smallest_window() {
             last_played: 1_700_000_000,
         },
     );
-    let stats = ["1234 h 56 m", "Time played", "14 Nov 2023", "Last played"];
+    let stats = ["1234 h 56 m", "Time played", "15 Nov 2023", "Last played"];
     // Their own widths, where nothing squeezes them.
     let roomy: Vec<f32> = {
         let mut ui = render(&app);
@@ -91,7 +91,7 @@ fn the_game_page_fits_the_smallest_window() {
     let at = |ui: &mut iced_test::simulator::Simulator<'_, Message>, t: &str| {
         ui.find(t).unwrap().bounds()
     };
-    let (time, last) = (at(&mut ui, "1234 h 56 m"), at(&mut ui, "14 Nov 2023"));
+    let (time, last) = (at(&mut ui, "1234 h 56 m"), at(&mut ui, "15 Nov 2023"));
     assert!(time.x + time.width < last.x, "{time:?} {last:?}");
     let cloud = at(&mut ui, "Cloud saves");
     assert!(last.x + last.width < cloud.x, "{last:?} {cloud:?}");

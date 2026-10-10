@@ -14,6 +14,11 @@ fn settings_page_holds_account_library_and_install_options() {
     ] {
         assert!(ui.find(label).is_ok(), "{label}");
     }
+    // Tests tell times in the same time zone wherever they run (Paris in summer, UTC+2).
+    assert!(
+        ui.find("14 owned · Last refreshed 09/10/2026 00:53")
+            .is_ok()
+    );
     snapshot(&mut ui, "settings");
 }
 
