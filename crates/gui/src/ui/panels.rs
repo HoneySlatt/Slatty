@@ -32,48 +32,15 @@ impl App {
         panel: Panel,
         g: &'a LibraryGame,
     ) -> Element<'a, Message> {
-        let (title, content) = match panel {
-            Panel::Install => return self.install_drawer(page, g),
-            Panel::GameSettings => return self.game_settings_drawer(page, g),
-            Panel::Manage => return self.manage_drawer(page, g),
-            Panel::Cloud => return self.cloud_drawer(page, g),
-            Panel::Achievements => return self.achievements_drawer(page, g),
-            Panel::Session => ("Session", self.session_panel(g)),
-        };
-        let boxed = container(
-            column![
-                row![
-                    column![
-                        text(title).size(24).font(bold()),
-                        text(&g.title).size(14).color(tokens().muted)
-                    ]
-                    .spacing(2)
-                    .width(Length::Fill),
-                    round_button(Icon::X, Message::ClosePanel),
-                ]
-                .align_y(Alignment::Center),
-                scrollable(content).style(theme::scroller).spacing(8),
-            ]
-            .spacing(18),
-        )
-        .padding(26)
-        .max_width(720)
-        .max_height(760)
-        .style(theme::card);
-        stack![
-            page,
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(theme::backdrop)
-            )
-            .on_press(Message::ClosePanel),
-            center(opaque(boxed)),
-        ]
-        .into()
+        match panel {
+            Panel::Install => self.install_drawer(page, g),
+            Panel::GameSettings => self.game_settings_drawer(page, g),
+            Panel::Manage => self.manage_drawer(page, g),
+            Panel::Cloud => self.cloud_drawer(page, g),
+            Panel::Achievements => self.achievements_drawer(page, g),
+            Panel::Session => self.session_drawer(page, g),
+        }
     }
-
     /// Progress bar and Pause button of a running verify, repair or update.
     pub(super) fn maintenance_progress(&self, game_id: &str) -> Option<Element<'_, Message>> {
         let v = self.maintenance.get(game_id)?;
@@ -227,20 +194,35 @@ impl App {
         .into()
     }
 
-    pub(super) fn session_panel<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let Some(p) = self.play.as_ref().filter(|p| p.game_id == g.id) else {
-            return note("No session yet.");
+    /// What the last session of the game did, step by step, with Stop while it runs.
+    fn session_drawer<'a>(
+        &'a self,
+        page: Element<'a, Message>,
+        g: &'a LibraryGame,
+    ) -> Element<'a, Message> {
+        let session = self.play.as_ref().filter(|p| p.game_id == g.id);
+        let body: Element<'a, Message> = match session {
+            Some(p) => scrollable(
+                Column::with_children(p.log.iter().map(|l| text(l.as_str()).size(15).into()))
+                    .spacing(10)
+                    .padding(Padding::ZERO.right(14)),
+            )
+            .style(theme::scroller)
+            .anchor_bottom()
+            .height(Length::Fill)
+            .into(),
+            None => note("No session yet."),
         };
-        let mut col = Column::with_children(p.log.iter().map(|l| note(l.as_str()))).spacing(6);
-        if p.running {
-            col = col.push(
-                button(text("Stop game").size(14))
-                    .padding([10, 16])
-                    .on_press(Message::StopGame)
-                    .style(theme::danger),
-            );
-        }
-        col.into()
+        let stop = session.filter(|p| p.running).map(|_| {
+            button(container(text("Stop game").size(15).font(semibold())).center_x(Length::Fill))
+                .padding([14, 0])
+                .width(Length::Fill)
+                .on_press(Message::StopGame)
+                .style(theme::danger)
+                .into()
+        });
+        let subtitle = text(&g.title).size(18).color(tokens().muted);
+        self.drawer(page, "Session", subtitle.into(), body, stop)
     }
 }
 

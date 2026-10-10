@@ -2070,3 +2070,32 @@ fn the_default_platform_is_kept() {
         Platform::Linux
     );
 }
+
+#[test]
+fn the_session_shows_in_a_drawer_with_stop() {
+    let mut app = library_app();
+    open(&mut app, "3", Some(Panel::Session));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("No session yet.").is_ok());
+    }
+    let (stop, _stopped) = tokio::sync::mpsc::unbounded_channel();
+    app.play = Some(crate::play::PlayState {
+        game_id: "3".into(),
+        log: vec!["Preparing…".into(), "Game started.".into()],
+        stop,
+        running: true,
+    });
+    let messages: Vec<Message> = {
+        let mut ui = render(&app);
+        assert!(ui.find("Preparing…").is_ok());
+        assert!(ui.find("Game started.").is_ok());
+        snapshot(&mut ui, "session-drawer");
+        ui.click("Stop game").unwrap();
+        ui.into_messages().collect()
+    };
+    assert!(matches!(&messages[..], [Message::StopGame]), "{messages:?}");
+    // The page stays usable beside it: the drawer closes like the others.
+    let _ = app.update(Message::ClosePanel);
+    assert_eq!(app.panel, None);
+}

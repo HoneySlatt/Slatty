@@ -92,6 +92,7 @@ panels:
 | Cloud saves card | A drawer beside the page: status, save folder, what a sync would do (upload, download, compare, unchanged, deleted on one side), Check, Sync now, conflict choices |
 | Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page (over it in a narrow window) |
 | Install button | A drawer beside the page: version, download and disk size, free space, platform (Windows or Linux), folder, language, DLC, Proton and game version (Windows builds; the newest unless another is chosen), start, discard |
+| Details, under Play | Session, in a drawer beside the page: each step of the launch and of the session (cloud check, Comet, start, end, play time), and Stop game while it runs |
 
 Once started, a download shows on the game page itself, with its progress, its percentage and its
 speed over the last seconds. The big button pauses it (then resumes it), and **Cancel** deletes it
