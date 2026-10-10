@@ -406,14 +406,7 @@ pub async fn reconfigure(
             _ => "nothing to change".into(),
         }));
     }
-    // Noted as the change starts, so a change cut off and finished later keeps it: an older build
-    // chosen is not updated without asking; the newest is. A language or DLC change leaves it.
-    if pending.is_none()
-        && let Some(held) = held_after(&change, plan.is_newest())
-    {
-        crate::settings::set_held_back(db, game_id, held)?;
-    }
-    InstallJob {
+    let job = InstallJob {
         game_id: game_id.to_string(),
         build_id: plan.build.build_id.clone(),
         language: plan.language.clone(),
@@ -429,8 +422,19 @@ pub async fn reconfigure(
             .unwrap_or_default(),
         state: UPDATING.into(),
         dlcs: selected.clone(),
-    }
-    .save(db)?;
+    };
+    // Noted just before the first file changes: a change refused before (not enough space, GOG
+    // not answering) leaves the game as it was, playable. Held back is noted then too, so a change
+    // cut off and finished later keeps it: an older build chosen is not updated without asking;
+    // the newest is. A language or DLC change leaves it.
+    let begin = || {
+        if pending.is_none()
+            && let Some(held) = held_after(&change, plan.is_newest())
+        {
+            crate::settings::set_held_back(db, game_id, held)?;
+        }
+        job.save(db)
+    };
     let (applied, files) = if plan.platform == Platform::Linux {
         let source = linux_source(http, tokens, dirs, &plan);
         let set = linux::LinuxSet::new(&plan.linux)?;
@@ -441,6 +445,8 @@ pub async fn reconfigure(
             free_space: &installer::free_space,
         };
         let applied = async {
+            dl.check_space(&set, &install.path)?;
+            begin()?;
             let checked = dl.check_installed(&set, &install.path, true).await?;
             let kept: HashSet<&Path> = set
                 .files
@@ -460,6 +466,7 @@ pub async fn reconfigure(
     } else {
         windows_reconfigure(
             dirs, http, tokens, game_id, &plan, &record, &install, &selected, progress, cancel,
+            &begin,
         )
         .await?
     };
@@ -506,6 +513,7 @@ async fn windows_reconfigure(
     selected: &[String],
     progress: &(dyn Fn(Progress) + Send + Sync),
     cancel: CancellationToken,
+    begin: &(dyn Fn() -> Result<()> + Sync),
 ) -> Result<(Result<UpdateReport>, Vec<installer::RecordedFile>)> {
     let source = GogContent::new(http.clone(), tokens.clone(), dirs);
     let set = installer::collect_files(&source, &plan.depots).await?;
@@ -537,7 +545,7 @@ async fn windows_reconfigure(
         .unwrap_or_default()
     };
     let applied = async {
-        let report = apply_update(&dl, &set, record, &install.path, &patches).await?;
+        let report = apply_update(&dl, &set, record, &install.path, &patches, begin).await?;
         dl.check_installed(
             &set.support_set(),
             &installer::support_dir(dirs, game_id),
@@ -556,7 +564,11 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
     old: &InstallRecord,
     dir: &Path,
     patches: &[crate::patches::FilePatch],
+    begin: &(dyn Fn() -> Result<()> + Sync),
 ) -> Result<UpdateReport> {
+    // Refused before anything changes when the disk cannot hold the new files.
+    dl.check_space(set, dir)?;
+    begin()?;
     let patched = crate::patches::apply_all(dl.source, patches, set, old, dir, &dl.cancel).await?;
     let checked = dl.check_installed(set, dir, true).await?;
     // Windows sees differently cased paths as one file.

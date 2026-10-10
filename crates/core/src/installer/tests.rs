@@ -554,9 +554,10 @@ async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
         free_space: &free_space,
     };
     let before = env.source.fetched.load(Ordering::SeqCst);
-    let report = crate::maintenance::apply_update(&dl, &new_set, &old_record, &game, &[])
-        .await
-        .unwrap();
+    let report =
+        crate::maintenance::apply_update(&dl, &new_set, &old_record, &game, &[], &|| Ok(()))
+            .await
+            .unwrap();
 
     assert_eq!(
         report.downloaded,
@@ -579,6 +580,69 @@ async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
         b"keep me"
     );
     assert!(!game.join("goggame-1.info").exists());
+}
+
+/// An update refused for space leaves the game as it was and is not noted as started, so the game
+/// stays playable; one that goes ahead is noted before its first file changes.
+#[tokio::test]
+async fn an_update_without_room_changes_nothing_and_is_not_noted() {
+    let mut env = Env::new("update-space");
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    let game = env.target();
+    let old_set = collect_files(&env.source, &env.depots).await.unwrap();
+    let old_record = InstallRecord {
+        build_id: "b1".into(),
+        version: "1.0".into(),
+        language: "en-US".into(),
+        path: Some(game.clone()),
+        dlcs: vec![],
+        setup_build: None,
+        files: recorded_files(&old_set),
+    };
+    let items = vec![env.source.file(
+        "Game.exe",
+        b"[FAKE] executable bytes, version two",
+        &["executable"],
+    )];
+    env.source.manifests.insert("m2".into(), items);
+    let depots = vec![Depot {
+        manifest: "m2".into(),
+        ..env.depots[0].clone()
+    }];
+    let new_set = collect_files(&env.source, &depots).await.unwrap();
+    let old_exe = std::fs::read(game.join("Game.exe")).unwrap();
+    let begun = AtomicUsize::new(0);
+    let begin = || {
+        assert_eq!(std::fs::read(game.join("Game.exe")).unwrap(), old_exe);
+        begun.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    };
+    let update = |free: u64| {
+        let free_space = move |_: &Path| Ok(free);
+        let (source, set, record, game, begin) =
+            (&env.source, &new_set, &old_record, &game, &begin);
+        async move {
+            let dl = Download {
+                source,
+                cancel: CancellationToken::new(),
+                progress: &|_| {},
+                free_space: &free_space,
+            };
+            crate::maintenance::apply_update(&dl, set, record, game, &[], begin).await
+        }
+    };
+
+    let refused = update(0).await;
+    assert!(matches!(refused, Err(Error::Refused(_))), "{refused:?}");
+    assert_eq!(begun.load(Ordering::SeqCst), 0);
+    assert_eq!(std::fs::read(game.join("Game.exe")).unwrap(), old_exe);
+
+    update(PLENTY).await.unwrap();
+    assert_eq!(begun.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        std::fs::read(game.join("Game.exe")).unwrap(),
+        b"[FAKE] executable bytes, version two"
+    );
 }
 
 #[tokio::test]
@@ -654,7 +718,7 @@ async fn dlc_files_come_from_their_product_and_removing_the_dlc_deletes_only_the
         progress: &|_| {},
         free_space: &free_space,
     };
-    let report = crate::maintenance::apply_update(&dl, &base_only, &record, &game, &[])
+    let report = crate::maintenance::apply_update(&dl, &base_only, &record, &game, &[], &|| Ok(()))
         .await
         .unwrap();
     assert!(report.downloaded.is_empty());

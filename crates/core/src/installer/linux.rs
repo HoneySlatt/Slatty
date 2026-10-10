@@ -431,7 +431,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         Ok(self.fill(set, dir, repair).await?.0)
     }
 
-    fn check_space(&self, set: &LinuxSet, dir: &Path) -> Result<()> {
+    pub(crate) fn check_space(&self, set: &LinuxSet, dir: &Path) -> Result<()> {
         let present: u64 = set
             .files
             .iter()

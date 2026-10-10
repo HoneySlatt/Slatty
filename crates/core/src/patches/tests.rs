@@ -207,6 +207,7 @@ async fn an_update_downloads_only_the_delta_of_a_patched_file() {
         &env.record,
         &env.root,
         std::slice::from_ref(&env.patch),
+        &|| Ok(()),
     )
     .await
     .unwrap();

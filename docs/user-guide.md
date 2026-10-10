@@ -378,7 +378,9 @@ An update compares each file of the new build with the one on disk:
   Anything else in the game folder is left alone.
 
 If an update is interrupted, the game cannot be launched until `slatty update <game-id>` completes
-it. The command resumes with the same build and only downloads what is still missing.
+it. The command resumes with the same build and only downloads what is still missing. An update
+refused before any file changes (not enough disk space, GOG not answering) leaves the game playable
+as it was.
 
 When GOG publishes a binary patch from the installed build to the new one, changed files are rebuilt
 from the installed version and a small delta, often a few hundred bytes for a file of several

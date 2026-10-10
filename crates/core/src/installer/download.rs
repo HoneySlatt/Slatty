@@ -172,7 +172,7 @@ impl<S: ContentSource> Download<'_, S> {
         Ok(checked)
     }
 
-    fn check_space(&self, set: &FileSet, dir: &Path) -> Result<()> {
+    pub(crate) fn check_space(&self, set: &FileSet, dir: &Path) -> Result<()> {
         let present: u64 = set
             .files
             .iter()
