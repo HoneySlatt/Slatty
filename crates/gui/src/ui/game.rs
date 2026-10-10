@@ -1,4 +1,4 @@
-//! Game page: key art, play b        let base: Element<'_, Message> = match self.hero_art(g) {tton, stats, cloud and achievements summaries.
+//! Game page: key art, play button, stats, cloud and achievements summaries.
 
 use crate::theme::text;
 use iced::widget::text::Wrapping;
