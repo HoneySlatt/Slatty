@@ -136,8 +136,9 @@ builds (`Unsupported OS`):
    tried again, without counting the progress twice. Links pointing out of the game folder are
    never made.
 4. The staged folder, its publication, the record and the job are those of a Windows build. The
-   game is registered with `Runner::Native` and starts through `start.sh`: inside `steam-run` on
-   NixOS when present, else through the interpreter its first line names, looked up in `PATH` when
+   game is registered with `Runner::Native` and starts through `start.sh`: on NixOS inside `steam-run`
+   when present, else inside umu with `UMU_NO_PROTON=1` and `RUNTIMEPATH=steamrt3` (sniper); on
+   other systems through the interpreter its first line names, looked up in `PATH` when
    that path is missing. Post-install setup,
    cloud sync and Comet are skipped. Verify, repair, updates and DLC or language changes compare
    the files with the current installers the same way.

@@ -130,10 +130,12 @@ starts on the default platform from Settings, Windows until you change it. On th
 - comes from GOG's offline Linux installer. Only the game's own files are read out of it, one by
   one, so nothing else is downloaded and no copy of the installer is kept. Each file is checked
   against the installer's CRC-32 before it is kept;
-- runs natively through its `start.sh`, without Proton or a Wine prefix. On NixOS it runs through
-  `steam-run` when installed (`programs.steam.enable` provides it): GOG's scripts ask for
-  `/bin/bash`, and the games load libraries (OpenGL, sound) that NixOS does not keep in the usual
-  places. Elsewhere, an interpreter missing at the path the script names is looked up in `PATH`;
+- runs natively through its `start.sh`, without Proton or a Wine prefix. On NixOS, GOG's scripts
+  ask for `/bin/bash` and the games load libraries (OpenGL, sound) that NixOS does not keep in the
+  usual places, so the game runs in a usual Linux layout: through `steam-run` when installed
+  (Steam provides it, and the `steam-run-free` package without Steam), else through umu without
+  Proton, in the Steam Linux Runtime 3.0 that umu downloads for Windows games anyway. No Steam is
+  needed. Elsewhere, an interpreter missing at the path the script names is looked up in `PATH`;
 - has no cloud saves: GOG lists save folders for Windows and macOS builds only;
 - reports no achievements: GOG's Linux builds do not include the Galaxy SDK that Comet talks to;
 - comes in the single version GOG offers, so there is no **Game version** choice. Its DLC are

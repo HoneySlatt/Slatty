@@ -39,16 +39,21 @@ pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
             if !script.is_file() {
                 return Err(Error::NotFound(format!("{} is missing", script.display())));
             }
-            let steam_run = Path::new("/etc/NIXOS")
-                .exists()
-                .then(|| find_in_path("steam-run"))
-                .flatten();
-            let (program, args) = native_command(&script, steam_run);
+            // NixOS keeps neither `/bin/bash` (which GOG's scripts ask for) nor the libraries games
+            // load (OpenGL, sound) where they look: they run in a usual Linux layout there.
+            let wrapper = if Path::new("/etc/NIXOS").exists() {
+                find_in_path("steam-run")
+                    .map(Wrapper::SteamRun)
+                    .or_else(|| find_in_path("umu-run").map(Wrapper::Umu))
+            } else {
+                None
+            };
+            let (program, args, env) = native_command(&script, wrapper);
             Ok(LaunchSpec {
                 program,
                 args,
                 cwd: install.path.clone(),
-                env: Vec::new(),
+                env,
             })
         }
         (Platform::Windows, Runner::Umu { .. } | Runner::Wine { .. }) => {
@@ -61,14 +66,36 @@ pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
     }
 }
 
-/// How to start a native game's script. On NixOS, through `steam-run` when given: it lends the
-/// game the usual Linux layout and libraries (`/bin/bash`, OpenGL, sound) that NixOS lacks.
-/// Elsewhere, through the interpreter its first line names, found in PATH by name when that path
-/// does not exist (GOG's scripts ask for `/bin/bash`).
-fn native_command(script: &Path, steam_run: Option<PathBuf>) -> (PathBuf, Vec<String>) {
+/// What a native game runs inside, where the system alone cannot run it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Wrapper {
+    /// NixOS's FHS environment of Steam's libraries (`steam-run`, or `steam-run-free` without
+    /// Steam).
+    SteamRun(PathBuf),
+    /// umu without Proton: the Steam Linux Runtime 3.0 (sniper) container, which umu already
+    /// downloads for Windows games.
+    Umu(PathBuf),
+}
+
+/// How to start a native game's script: inside `wrapper` when there is one, else through the
+/// interpreter its first line names, found in PATH by name when that path does not exist.
+fn native_command(
+    script: &Path,
+    wrapper: Option<Wrapper>,
+) -> (PathBuf, Vec<String>, Vec<(String, String)>) {
     let script_arg = vec![script.display().to_string()];
-    if let Some(run) = steam_run {
-        return (run, script_arg);
+    match wrapper {
+        Some(Wrapper::SteamRun(run)) => return (run, script_arg, Vec::new()),
+        Some(Wrapper::Umu(umu)) => {
+            let env = [
+                ("UMU_NO_PROTON", "1"),
+                ("RUNTIMEPATH", "steamrt3"),
+                ("GAMEID", "umu-0"),
+            ];
+            let env = env.map(|(k, v)| (k.to_string(), v.to_string())).to_vec();
+            return (umu, script_arg, env);
+        }
+        None => {}
     }
     let first = std::fs::read(script)
         .ok()
@@ -84,10 +111,10 @@ fn native_command(script: &Path, steam_run: Option<PathBuf>) -> (PathBuf, Vec<St
             .file_name()
             .and_then(|n| find_in_path(&n.to_string_lossy()))
         {
-            Some(found) => (found, script_arg),
-            None => (script.to_path_buf(), Vec::new()),
+            Some(found) => (found, script_arg, Vec::new()),
+            None => (script.to_path_buf(), Vec::new(), Vec::new()),
         },
-        _ => (script.to_path_buf(), Vec::new()),
+        _ => (script.to_path_buf(), Vec::new(), Vec::new()),
     }
 }
 
@@ -221,17 +248,30 @@ mod tests {
         let arg = vec![script.display().to_string()];
         // GOG's scripts name /bin/bash, which NixOS does not have.
         std::fs::write(&script, "#!/nonexistent/bin/sh \necho hi\n").unwrap();
-        let (program, args) = native_command(&script, None);
+        let (program, args, env) = native_command(&script, None);
         assert_eq!(program, find_in_path("sh").unwrap());
         assert_eq!(args, arg);
+        assert!(env.is_empty());
         // An interpreter that exists: the script runs as it is.
         std::fs::write(&script, "#!/bin/sh\necho hi\n").unwrap();
         if Path::new("/bin/sh").exists() {
-            assert_eq!(native_command(&script, None), (script.clone(), Vec::new()));
+            assert_eq!(
+                native_command(&script, None),
+                (script.clone(), Vec::new(), Vec::new())
+            );
         }
-        // steam-run, when given, runs it in its usual Linux layout.
-        let run = PathBuf::from("/run/current-system/sw/bin/steam-run");
-        assert_eq!(native_command(&script, Some(run.clone())), (run, arg));
+        // steam-run runs it in a usual Linux layout.
+        let run = PathBuf::from("/bin/steam-run");
+        assert_eq!(
+            native_command(&script, Some(Wrapper::SteamRun(run.clone()))),
+            (run, arg.clone(), Vec::new())
+        );
+        // umu without Proton, in the Steam Linux Runtime 3.0.
+        let umu = PathBuf::from("/bin/umu-run");
+        let (program, args, env) = native_command(&script, Some(Wrapper::Umu(umu.clone())));
+        assert_eq!((program, args), (umu, arg));
+        assert!(env.contains(&("UMU_NO_PROTON".into(), "1".into())));
+        assert!(env.contains(&("RUNTIMEPATH".into(), "steamrt3".into())));
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

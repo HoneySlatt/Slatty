@@ -24,7 +24,7 @@ against real GOG services; details are in [docs/compatibility.md](docs/compatibi
 | Sign-in in the system browser, tokens in the system keyring | yes |
 | Library with covers, cached for offline use | yes |
 | Install Windows builds (Galaxy depots), pause and resume, integrity checks | install yes, pause/resume not yet |
-| Install native Linux builds from GOG's offline installers, file by file | plan yes (Hollow Knight: file list and sizes read from the installer), full install not yet |
+| Install native Linux builds from GOG's offline installers, file by file | yes (Hollow Knight: Silksong installed and played) |
 | Launch through umu + Proton, follow the session until the last process exits | yes |
 | Cloud saves: three-way sync, conflict handling, backups | download and upload yes |
 | Achievements: list, report unlocks made in game through Comet | listing yes, in-game unlock not yet |

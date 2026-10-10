@@ -8,19 +8,19 @@ use slatty_core::paths::Dirs;
 use slatty_core::play::{self, PlayEvent, PlayRequest};
 use slatty_core::runner::Runner;
 
-/// The fake games run as they are: on NixOS a native game would go through `steam-run` when the
-/// machine has it, whose sandbox may not see the temporary folder they live in.
-fn without_steam_run() {
+/// The fake games run as they are: on NixOS a native game would go through `steam-run` or umu
+/// when the machine has them, whose sandboxes may not see the temporary folder they live in.
+fn without_wrappers() {
     let path = std::env::var_os("PATH").unwrap_or_default();
     let kept: Vec<PathBuf> = std::env::split_paths(&path)
-        .filter(|dir| !dir.join("steam-run").exists())
+        .filter(|dir| !dir.join("steam-run").exists() && !dir.join("umu-run").exists())
         .collect();
     // Every test of this file sets the same value, so concurrent writes agree.
     unsafe { std::env::set_var("PATH", std::env::join_paths(kept).unwrap()) };
 }
 
 fn fake_native_game(name: &str, script: &str) -> (PathBuf, Dirs, Db) {
-    without_steam_run();
+    without_wrappers();
     let root = std::env::temp_dir().join(format!("slatty-play-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let game = root.join("game");
