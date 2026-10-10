@@ -345,7 +345,7 @@ pub(super) fn confirmation(p: &PendingChange) -> Element<'_, Message> {
                 "The change is written directly to your public GOG profile, \
                  dated today. It is probably against GOG's terms."
             ),
-            // Hollow Knight sends its own unlocks at each launch: a cleared one came back.
+            // A game may send the achievements it earned again at its next launch.
             p.changes.iter().any(|c| !c.unlock).then(|| note(
                 "A game that keeps its own record of its achievements can unlock a cleared one \
                  again the next time it runs."
