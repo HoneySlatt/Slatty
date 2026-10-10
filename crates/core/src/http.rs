@@ -9,11 +9,12 @@ pub type HttpClient = Client;
 
 pub const USER_AGENT: &str = concat!("SlattyLauncher/", env!("CARGO_PKG_VERSION"));
 
+/// A connection silent for 30 seconds is given up; a slow one never is, whatever it carries: a
+/// file of a Linux installer comes in a single request, and may take many minutes.
 pub fn client() -> Result<Client> {
     Client::builder()
         .user_agent(USER_AGENT)
         .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(120))
         .read_timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| Error::network("building the HTTP client", e))
@@ -118,6 +119,31 @@ mod tests {
         let url = serve(vec![NOT_FOUND, OK]).await;
         let r = json::<serde_json::Value>(client().unwrap().get(url), "testing").await;
         assert!(matches!(r, Err(Error::Http { status: 404, .. })));
+    }
+
+    /// A large file (a Linux installer's data, a big save) keeps arriving for minutes on a slow
+    /// connection: only a silent connection is given up, never a long one. Takes over two minutes.
+    #[tokio::test]
+    #[ignore]
+    async fn a_long_download_is_not_cut_off() {
+        const SECONDS: usize = 125;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 4096];
+            let _ = socket.read(&mut buf).await;
+            let head = format!("HTTP/1.1 200 OK\r\ncontent-length: {SECONDS}\r\n\r\n");
+            socket.write_all(head.as_bytes()).await.unwrap();
+            for _ in 0..SECONDS {
+                socket.write_all(b"x").await.unwrap();
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+        let resp = send(client().unwrap().get(format!("http://{addr}/")), "testing")
+            .await
+            .unwrap();
+        assert_eq!(resp.bytes().await.unwrap().len(), SECONDS);
     }
 
     #[tokio::test]
