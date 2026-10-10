@@ -112,7 +112,7 @@ tab leads back to the game.
 **Downloads tab.** The download button of the top bar (next to Settings) lists:
 
 - the install downloading, with its folder, progress, size downloaded, speed and time left, and
-  Pause and Cancel; downloads paused or cut off are listed too, with Resume and Discard;
+  Pause and Cancel; downloads paused, cut off or failed are listed too, with Resume and Discard;
 - the **queue**: an install started while another one downloads waits there instead of being
   refused. It starts by itself once the ones before it are done, and also after a failed or
   cancelled download. Drag a row by its handle to change the order, or remove it with ×. Pausing
@@ -123,8 +123,9 @@ tab leads back to the game.
 Escape closes the panel, then the game page.
 
 A download or an update cut off by a closed window, a crash or a power cut resumes by itself when
-SlattyLauncher starts again (one download at a time). Those paused on request are listed at the top
-of the Library tab instead: **Resume** or **Discard** a download, **Finish update** for an update,
+SlattyLauncher starts again (one download at a time). Those paused on request, and downloads stopped
+by an error (tried again only when you ask, since they would most likely fail the same way), are
+listed at the top of the Library tab instead: **Resume** or **Discard** a download, **Finish update** for an update,
 which the game needs before it can start again, paused or not.
 
 Nothing an interruption leaves behind is trusted: every file already on disk is checked again

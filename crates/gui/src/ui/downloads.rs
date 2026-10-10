@@ -23,7 +23,12 @@ impl App {
         let stopped: Vec<(&str, Interrupted)> = self
             .interrupted
             .iter()
-            .filter(|(_, k)| matches!(k, Interrupted::Download | Interrupted::Paused))
+            .filter(|(_, k)| {
+                matches!(
+                    k,
+                    Interrupted::Download | Interrupted::Paused | Interrupted::Failed
+                )
+            })
             .map(|(id, k)| (id.as_str(), *k))
             .collect();
         let active = usize::from(self.installing().is_some()) + stopped.len();
@@ -173,10 +178,10 @@ impl App {
                 self.cover_art(id, 48.0),
                 column![
                     text(self.title_of(id)).size(16).font(semibold()),
-                    note(if kind == Interrupted::Paused {
-                        "Paused. It resumes where it stopped."
-                    } else {
-                        "Interrupted. It resumes where it stopped."
+                    note(match kind {
+                        Interrupted::Paused => "Paused. It resumes where it stopped.",
+                        Interrupted::Failed => "Failed. It resumes where it stopped.",
+                        _ => "Interrupted. It resumes where it stopped.",
                     }),
                 ]
                 .spacing(4)

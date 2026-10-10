@@ -202,7 +202,7 @@ pub async fn install(
             job.state = if matches!(e, Error::Cancelled) {
                 PAUSED.into()
             } else {
-                "failed".into()
+                FAILED.into()
             };
             job.save(db)?;
             return Err(e);

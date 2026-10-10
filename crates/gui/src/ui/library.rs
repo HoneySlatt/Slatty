@@ -123,11 +123,11 @@ impl App {
             let title = self.title_of(id);
             let working = self.maintenance.get(id).is_some_and(|m| m.busy);
             let (status, actions): (&str, Element<'_, Message>) = match kind {
-                Interrupted::Download | Interrupted::Paused => (
-                    if *kind == Interrupted::Paused {
-                        "Download paused. It resumes where it stopped."
-                    } else {
-                        "Download interrupted. It resumes where it stopped."
+                Interrupted::Download | Interrupted::Paused | Interrupted::Failed => (
+                    match kind {
+                        Interrupted::Paused => "Download paused. It resumes where it stopped.",
+                        Interrupted::Failed => "Download failed. It resumes where it stopped.",
+                        _ => "Download interrupted. It resumes where it stopped.",
                     },
                     row![
                         button(text("Resume").size(14))

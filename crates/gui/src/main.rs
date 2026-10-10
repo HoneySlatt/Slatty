@@ -142,6 +142,9 @@ pub enum Interrupted {
     Download,
     /// Paused on request: resumed only when asked.
     Paused,
+    /// Stopped by an error: resumed only when asked, since trying again at once would most likely
+    /// fail the same way. It does not hold the queue.
+    Failed,
     /// An update, language or DLC change cut off: the game cannot start until it is finished, which
     /// happens by itself at the next start.
     Update,
@@ -157,6 +160,8 @@ impl Interrupted {
             Interrupted::Update
         } else if job.is_paused() {
             Interrupted::Paused
+        } else if job.state == slatty_core::installer::FAILED {
+            Interrupted::Failed
         } else {
             Interrupted::Download
         }

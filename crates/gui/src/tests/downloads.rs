@@ -194,3 +194,60 @@ fn an_install_being_planned_to_start_holds_the_queue() {
     ));
     assert_eq!(app.queue, ["6"]);
 }
+
+/// A download that fails (a full disk, a folder it cannot write to) waits for Resume or Discard:
+/// started again at once, it would fail again, and again, asking GOG for its plan each time. The
+/// queue goes on meanwhile.
+#[test]
+fn a_failed_download_is_not_started_again_by_itself() {
+    use slatty_core::installer::{FAILED, InstallJob};
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    for id in ["5", "6"] {
+        ready_to_install(&mut app, id);
+        let _ = app.update(Message::Install(InstallMsg::Start(id.into())));
+    }
+    // What the core leaves behind when the download fails.
+    InstallJob {
+        game_id: "5".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 5".into(),
+        state: FAILED.into(),
+        dlcs: Vec::new(),
+    }
+    .save(&db)
+    .unwrap();
+    let _ = app.update(Message::Install(InstallMsg::Done(
+        "5".into(),
+        Err(Some("not enough disk space".into())),
+    )));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Failed(_))
+    ));
+    assert_eq!(
+        app.interrupted,
+        [("5".to_string(), crate::Interrupted::Failed)]
+    );
+    assert!(
+        matches!(
+            app.install_views.get("6"),
+            Some(InstallView::Running { .. })
+        ),
+        "the queue goes on, not the failed download"
+    );
+    // Nor at the next start: only a download cut off resumes by itself.
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    app.interrupted.retain(|(id, _)| id == "5");
+    let _ = app.start_next();
+    assert!(app.auto_resume.is_none());
+    {
+        let mut ui = render(&app);
+        assert!(
+            ui.find("Download failed. It resumes where it stopped.")
+                .is_ok()
+        );
+    }
+}

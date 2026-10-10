@@ -129,6 +129,8 @@ impl InstallJob {
 pub const PAUSED: &str = "paused";
 /// State of an install waiting in the download queue: chosen, not started.
 pub const QUEUED: &str = "queued";
+/// State of an install stopped by an error: resumed only when asked.
+pub const FAILED: &str = "failed";
 
 /// Abandons an unfinished install: deletes its hidden partial folder and its job. An unfinished
 /// update is refused here, since its files are the installed game itself.
