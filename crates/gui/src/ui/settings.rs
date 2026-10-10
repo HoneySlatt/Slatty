@@ -56,12 +56,15 @@ impl App {
             .width(SIDE_WIDTH)
             .height(Length::Fill)
             .style(theme::card);
+        // Room for a name, a control and what follows it side by side, once the side list, the
+        // margins and the indent are taken from the window.
+        let wide = self.window.width - SIDE_WIDTH - 172.0 >= LABEL_WIDTH + AFTER_WIDTH + 330.0;
         let cards = Section::ALL.map(|s| {
             let rows = match s {
-                Section::Account => self.account_rows(),
-                Section::Library => self.library_rows(),
-                Section::Installs => self.installs_rows(),
-                Section::Appearance => self.appearance_rows(),
+                Section::Account => self.account_rows(wide),
+                Section::Library => self.library_rows(wide),
+                Section::Installs => self.installs_rows(wide),
+                Section::Appearance => self.appearance_rows(wide),
                 Section::About => vec![note(format!(
                     "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL)",
                     env!("CARGO_PKG_VERSION")
@@ -148,16 +151,17 @@ impl App {
     }
 }
 impl App {
-    fn account_rows(&self) -> Vec<Element<'_, Message>> {
+    fn account_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         let name = self.account.as_ref().map(|a| a.username.as_str());
         vec![setting(
+            wide,
             "Signed in as",
             text(name.unwrap_or_default()).size(15).into(),
             Some(action("Log out", Message::Logout)),
         )]
     }
 
-    fn library_rows(&self) -> Vec<Element<'_, Message>> {
+    fn library_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         let refreshed = match self.fetched_at {
             Some(ts) => format!("Last refreshed {}", local_time(ts)),
             None => "Never refreshed".into(),
@@ -175,6 +179,7 @@ impl App {
         .style(theme::tonal);
         vec![
             setting(
+                wide,
                 "Games",
                 text(format!("{} owned · {refreshed}", self.library.len()))
                     .size(15)
@@ -182,6 +187,7 @@ impl App {
                 Some(refresh.into()),
             ),
             setting(
+                wide,
                 "Cover size",
                 select(pick_list(
                     COVER_SIZES.map(CoverSize),
@@ -193,7 +199,7 @@ impl App {
         ]
     }
 
-    fn installs_rows(&self) -> Vec<Element<'_, Message>> {
+    fn installs_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         let protons: Vec<ProtonChoice> = self
             .proton_choices
             .iter()
@@ -213,6 +219,7 @@ impl App {
         .style(theme::tonal);
         vec![
             setting(
+                wide,
                 "Default installation path",
                 text_input("/home/…/Games/GOG", &self.library_root)
                     .on_input(|v| Message::Settings(SettingsMsg::RootInput(v)))
@@ -224,6 +231,7 @@ impl App {
                 Some(browse.into()),
             ),
             setting(
+                wide,
                 "Default platform",
                 select(pick_list(
                     PlatformChoice::ALL,
@@ -233,6 +241,7 @@ impl App {
                 Some(note("For games GOG offers on both.")),
             ),
             setting(
+                wide,
                 "Default Proton",
                 select(
                     pick_list(protons, self.proton.clone().map(ProtonChoice), |c| {
@@ -246,7 +255,7 @@ impl App {
     }
 
     /// The built-in themes, the font and the theme file, with the way to create, edit and apply it.
-    fn appearance_rows(&self) -> Vec<Element<'_, Message>> {
+    fn appearance_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         let Some(core) = &self.core else {
             return Vec::new();
         };
@@ -282,6 +291,7 @@ impl App {
             .collect();
         vec![
             setting(
+                wide,
                 "Theme",
                 select(pick_list(
                     crate::presets::Preset::ALL,
@@ -291,6 +301,7 @@ impl App {
                 None,
             ),
             setting(
+                wide,
                 "Font",
                 select(pick_list(fonts, Some(current), |f| {
                     Message::Settings(SettingsMsg::Font(f))
@@ -298,6 +309,7 @@ impl App {
                 None,
             ),
             setting(
+                wide,
                 "Theme file",
                 container(text(path.display().to_string()).size(14))
                     .padding([9, 12])
@@ -333,17 +345,28 @@ fn section_icon(s: Section) -> Icon {
     }
 }
 
-/// A setting: its name, its value or control, then a button or a note.
+/// A setting: its name, its value or control, then a button or a note. On a narrow page the name
+/// goes above the rest.
 fn setting<'a>(
+    wide: bool,
     label: &'a str,
     control: Element<'a, Message>,
     after: Option<Element<'a, Message>>,
 ) -> Element<'a, Message> {
+    let label = text(label).size(15).color(tokens().muted);
+    if !wide {
+        return column![
+            label,
+            row![container(control).width(Length::Fill)]
+                .push(after)
+                .spacing(12)
+                .align_y(Alignment::Center),
+        ]
+        .spacing(8)
+        .into();
+    }
     row![
-        text(label)
-            .size(15)
-            .width(LABEL_WIDTH)
-            .color(tokens().muted),
+        label.width(LABEL_WIDTH),
         container(control).width(Length::Fill),
         container(after.unwrap_or_else(|| Space::new().into())).width(AFTER_WIDTH),
     ]

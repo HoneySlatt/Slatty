@@ -2247,4 +2247,10 @@ fn the_side_list_of_settings_brings_a_part_to_the_top() {
         let _ = app.update(m);
     }
     assert_eq!(app.settings_section, Section::Installs);
+
+    // In a narrow window each name goes above its setting.
+    app.window = Size::new(940.0, 1000.0);
+    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    assert!(ui.find("Default installation path").is_ok());
+    snapshot(&mut ui, "settings-narrow");
 }
