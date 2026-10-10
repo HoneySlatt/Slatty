@@ -400,6 +400,8 @@ pub enum Message {
     OpenPanel(Panel),
     ClosePanel,
     Cover(String, Option<PathBuf>),
+    /// The covers found in the account's cache at start, by game id.
+    CachedCovers(HashMap<String, PathBuf>),
     Image(String, Option<PathBuf>),
     ScanOverview,
     OverviewFetched(String, Result<GameOverview, String>),
@@ -453,6 +455,7 @@ impl Message {
                 | Message::Frame(_)
                 | Message::WindowResized(_)
                 | Message::Cover(..)
+                | Message::CachedCovers(_)
                 | Message::Image(..)
                 | Message::Key(_)
                 | Message::Install(InstallMsg::Progress(..))
@@ -700,6 +703,7 @@ impl App {
                 self.covers.insert(id, image::Handle::from_path(path));
             }
             Message::Cover(_, None) => {}
+            Message::CachedCovers(found) => return self.covers_cached(found),
             Message::Image(url, Some(path)) => {
                 // The key art of the open game fades in once downloaded.
                 if self.selected_game().and_then(|g| g.background.as_ref()) == Some(&url) {

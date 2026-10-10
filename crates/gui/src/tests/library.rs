@@ -271,6 +271,25 @@ fn the_library_order_is_kept() {
     }
 }
 
+/// At start the covers already cached come in one message; only those missing are downloaded,
+/// each on its own.
+#[test]
+fn cached_covers_show_at_once_and_only_missing_ones_are_downloaded() {
+    let mut app = library_app();
+    app.library[0].cover = Some("https://example.invalid/1.jpg".into());
+    app.library[1].cover = Some("https://example.invalid/2.jpg".into());
+    let found = std::collections::HashMap::from([
+        ("1".to_string(), PathBuf::from("/cache/covers/1.jpg")),
+        ("99".to_string(), PathBuf::from("/cache/covers/99.jpg")),
+    ]);
+    let downloads = app.covers_cached(found);
+    assert!(app.covers.contains_key("1"));
+    assert!(!app.covers.contains_key("99"), "not in the library");
+    assert_eq!(app.covers.len(), 1);
+    // Game 2 has a cover to download; the others have none.
+    assert_eq!(downloads.units(), 1);
+}
+
 #[test]
 fn the_games_listed_are_kept_while_scrolling_and_made_again_after_anything_else() {
     let mut app = library_app();

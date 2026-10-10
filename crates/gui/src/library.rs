@@ -326,13 +326,46 @@ impl App {
         let Some(core) = self.core.clone() else {
             return Task::none();
         };
-        let user_id = cache.user_id;
-        let missing: Vec<LibraryGame> = self
-            .library
-            .iter()
-            .filter(|g| !self.covers.contains_key(&g.id))
-            .cloned()
-            .collect();
+        // The covers already cached, all in one message; then each missing one on its own.
+        let dirs = core.dirs.clone();
+        let covers = Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || library::cached_covers(&dirs, &cache.user_id))
+                    .await
+                    .unwrap_or_default()
+            },
+            Message::CachedCovers,
+        );
+        let all = self.library.iter().map(|g| g.id.clone()).collect();
+        Task::batch([
+            self.account_task(covers),
+            self.scan_overview(false),
+            self.refresh_playtime(all),
+        ])
+    }
+
+    /// Shows the covers found in the cache, and downloads those still missing.
+    pub fn covers_cached(&mut self, found: HashMap<String, PathBuf>) -> Task<Message> {
+        let (Some(core), Some(account)) = (self.core.clone(), self.account.as_ref()) else {
+            return Task::none();
+        };
+        let user_id = account.user_id.clone();
+        let mut missing = Vec::new();
+        for game in &self.library {
+            if self.covers.contains_key(&game.id) {
+                continue;
+            }
+            match found.get(&game.id) {
+                Some(path) => {
+                    self.covers.insert(
+                        game.id.clone(),
+                        iced::widget::image::Handle::from_path(path),
+                    );
+                }
+                None if game.cover.is_some() => missing.push(game.clone()),
+                None => {}
+            }
+        }
         let covers = Task::batch(missing.into_iter().map(|game| {
             let (core, user_id) = (core.clone(), user_id.clone());
             let id = game.id.clone();
@@ -347,12 +380,7 @@ impl App {
                 move |path| Message::Cover(id, path),
             )
         }));
-        let all = self.library.iter().map(|g| g.id.clone()).collect();
-        Task::batch([
-            self.account_task(covers),
-            self.scan_overview(false),
-            self.refresh_playtime(all),
-        ])
+        self.account_task(covers)
     }
 
     pub fn is_hidden(&self, game_id: &str) -> bool {

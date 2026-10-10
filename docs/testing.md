@@ -67,9 +67,9 @@ Reference, 2026-10-10 (Ryzen 7 5800X, Radeon RX 6800, niri at 3840×2160, 240 Hz
 
 | | Result |
 |---|---|
-| Library shown | about 105 ms after start |
-| Every cover ready | 446–498 ms, cold or warm (698–773 ms when covers were read into memory) |
-| Resident memory, covers in | 152 MB (997 MB when covers were kept in memory) |
+| Library shown | 120–130 ms after start |
+| Every cover ready | 205–217 ms, read from the cache in one pass (446–535 ms with a task and a message per cover, 698–773 ms when covers were read into memory) |
+| Resident memory, covers in | 135 MB (166 MB with a task per cover, 997 MB when covers were kept in memory) |
 | 200 game pages with 2560×1440 key art opened in a row | 191 MB, flat after the first 50 (254 MB and growing before) |
 | Scrolling, 1,200 frames | p50 4.2 ms (every frame at 240 Hz), p99 8.4 ms, max 8.6–13 ms; none above 16.7 ms (p50 5.6 ms, p99 12.1 ms, max 20 ms before the lists were kept) |
 | `view` while scrolling | p50 0.17 ms, p99 0.25 ms (2.0 ms before the lists were kept, 5.5 ms before the sort keys were kept) |

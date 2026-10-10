@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -255,6 +256,28 @@ async fn cached(
 
 const IMAGE_EXTENSIONS: [&str; 5] = ["jpg", "png", "webp", "gif", "bmp"];
 
+/// The covers already in the account's cache, by game id, in one pass over the folder rather than
+/// a few checks per game. Covers an earlier version kept without their format in their name are
+/// left to `cover`, which renames them.
+pub fn cached_covers(dirs: &Dirs, user_id: &str) -> HashMap<String, PathBuf> {
+    let folder = dirs.account_cache(user_id).join("covers");
+    std::fs::read_dir(folder)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| !t.is_dir()))
+        .filter_map(|e| {
+            let path = e.path();
+            if !IMAGE_EXTENSIONS.contains(&path.extension()?.to_str()?) {
+                return None;
+            }
+            let id = path.file_stem()?.to_str()?.to_string();
+            crate::paths::check_game_id(&id).ok()?;
+            Some((id, path))
+        })
+        .collect()
+}
+
 /// An image already in the cache. One an earlier version kept without its format in its name
 /// (`<id>.img` for a cover, the bare hash for an image) is renamed after it, or dropped when it is
 /// not an image.
@@ -425,6 +448,19 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(path, folder.join("3.png"));
+
+        // Read all at once at start: covers named after their format, nothing else.
+        std::fs::write(folder.join("4.img"), [0xFF, 0xD8, 0xFF, 0xE0]).unwrap();
+        std::fs::write(folder.join(".5.jpg.slatty-tmp-1-0"), b"").unwrap();
+        std::fs::create_dir_all(folder.join("6.jpg")).unwrap();
+        let found = cached_covers(&dirs, "111");
+        assert_eq!(
+            found,
+            HashMap::from([
+                ("1".to_string(), folder.join("1.jpg")),
+                ("3".to_string(), folder.join("3.png"))
+            ])
+        );
 
         // Other images are kept by the hash of their address, which an earlier version used alone.
         let images = dirs.account_cache("111").join("images");
