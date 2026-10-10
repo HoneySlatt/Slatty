@@ -17,8 +17,11 @@ pub struct AchievementsArgs {
     #[arg(long, num_args = 1.., value_name = "ACHIEVEMENT")]
     unlock: Vec<String>,
     /// Unlock every locked achievement
-    #[arg(long, conflicts_with = "unlock")]
+    #[arg(long, conflicts_with_all = ["unlock", "clear"])]
     unlock_all: bool,
+    /// Clear these achievements (key, id or exact name)
+    #[arg(long, num_args = 1.., value_name = "ACHIEVEMENT")]
+    clear: Vec<String>,
     /// Do not ask for confirmation
     #[arg(long)]
     yes: bool,
@@ -48,46 +51,53 @@ pub async fn run(ctx: &Ctx, args: AchievementsArgs) -> Result<()> {
         .unwrap_or_else(|| args.game_id.clone());
     let list = achievements::fetch(&ctx.http, &tokens.user_id, &client_id, &token).await?;
 
-    let mut locked: Vec<&Achievement> = Vec::new();
+    let mut changes: Vec<(&Achievement, bool)> = Vec::new();
     if args.unlock_all {
-        locked.extend(list.iter().filter(|a| a.date_unlocked.is_none()));
+        changes.extend(
+            list.iter()
+                .filter(|a| a.date_unlocked.is_none())
+                .map(|a| (a, true)),
+        );
     }
-    for q in &args.unlock {
-        let Some(a) = achievements::select(&list, q) else {
-            bail!("no achievement matches `{q}` in {title}; run without options to list them");
-        };
-        if a.date_unlocked.is_none() {
-            locked.push(a);
+    for (queries, unlock) in [(&args.unlock, true), (&args.clear, false)] {
+        for q in queries {
+            let Some(a) = achievements::select(&list, q) else {
+                bail!("no achievement matches `{q}` in {title}; run without options to list them");
+            };
+            if a.date_unlocked.is_some() != unlock {
+                changes.push((a, unlock));
+            }
         }
     }
 
-    if locked.is_empty() {
-        if !args.unlock.is_empty() || args.unlock_all {
-            println!("Nothing to unlock.");
+    if changes.is_empty() {
+        if !args.unlock.is_empty() || !args.clear.is_empty() || args.unlock_all {
+            println!("Nothing to change.");
         }
         print_list(&title, &list);
         return Ok(());
     }
 
     println!(
-        "{title}: {} unlock(s) on your GOG profile, made outside the game, for good:",
-        locked.len()
+        "{title}: {} change(s) on your GOG profile, made outside the game:",
+        changes.len()
     );
-    for a in &locked {
-        println!("  {}", a.name);
+    for (a, unlock) in &changes {
+        println!("  {} {}", if *unlock { "unlock" } else { "clear " }, a.name);
     }
     if !args.yes && !confirm()? {
         println!("Cancelled.");
         return Ok(());
     }
     let mut failed = 0;
-    for a in &locked {
-        match achievements::unlock(
+    for (a, unlock) in &changes {
+        match achievements::set_unlocked(
             &ctx.http,
             &tokens.user_id,
             &client_id,
             &token,
             &a.achievement_id,
+            *unlock,
         )
         .await
         {
@@ -101,7 +111,7 @@ pub async fn run(ctx: &Ctx, args: AchievementsArgs) -> Result<()> {
     let after = achievements::fetch(&ctx.http, &tokens.user_id, &client_id, &token).await?;
     print_list(&title, &after);
     if failed > 0 {
-        bail!("{failed} unlock(s) failed");
+        bail!("{failed} change(s) failed");
     }
     Ok(())
 }

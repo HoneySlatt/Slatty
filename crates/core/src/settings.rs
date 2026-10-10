@@ -84,7 +84,7 @@ pub fn set_game_achievements(db: &Db, on: bool) -> Result<()> {
     db.set_setting(GAME_ACHIEVEMENTS, Some(if on { "on" } else { "off" }))
 }
 
-/// Whether the interface offers to unlock achievements by hand. Off until turned on.
+/// Whether the interface offers to unlock and clear achievements by hand. Off until turned on.
 pub fn manual_achievements(db: &Db) -> Result<bool> {
     Ok(db.setting(MANUAL_ACHIEVEMENTS)?.as_deref() == Some("on"))
 }

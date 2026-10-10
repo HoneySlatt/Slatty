@@ -54,7 +54,7 @@ enum Command {
     /// Cloud saves
     #[command(subcommand)]
     Cloud(cloud::CloudCommand),
-    /// Achievements as recorded on GOG; can also unlock them manually
+    /// Achievements as recorded on GOG; can also unlock or clear them manually
     Achievements(achievements::AchievementsArgs),
 }
 

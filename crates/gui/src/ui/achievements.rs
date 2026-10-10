@@ -262,8 +262,8 @@ impl App {
             .map(confirmation)
     }
 
-    /// One achievement with its icon, description, rarity, and Unlock while locked, once manual
-    /// achievements are on.
+    /// One achievement with its icon, description, rarity, and Unlock or Clear once manual changes
+    /// are on.
     pub fn achievement_row<'a>(
         &'a self,
         game_id: &'a str,
@@ -300,12 +300,12 @@ impl App {
         row![
             self.achievement_icon(url, icon_size),
             details,
-            (self.manual_achievements && !done).then(|| {
-                button(text("Unlock").size(14))
+            self.manual_achievements.then(|| {
+                button(text(if done { "Clear" } else { "Unlock" }).size(14))
                     .padding([8, 18])
                     .on_press(Message::AskAchievementChange(
                         game_id.to_string(),
-                        vec![change(a)],
+                        vec![change(a, !done)],
                     ))
                     .style(theme::tonal)
             }),
@@ -316,26 +316,34 @@ impl App {
     }
 }
 
-pub(super) fn change(a: &Achievement) -> AchievementChange {
+pub(super) fn change(a: &Achievement, unlock: bool) -> AchievementChange {
     AchievementChange {
         achievement_id: a.achievement_id.clone(),
         name: a.name.clone(),
+        unlock,
     }
 }
 
 pub(super) fn confirmation(p: &PendingChange) -> Element<'_, Message> {
     let names: Vec<&str> = p.changes.iter().map(|c| c.name.as_str()).collect();
+    let verb = if p.changes.iter().all(|c| c.unlock) {
+        "Unlock"
+    } else if p.changes.iter().all(|c| !c.unlock) {
+        "Clear"
+    } else {
+        "Change"
+    };
     container(
         column![
             text(format!(
-                "Unlock {} achievement(s) without playing: {}",
+                "{verb} {} achievement(s) without playing: {}",
                 p.changes.len(),
                 names.join(", ")
             ))
             .size(14),
             note(
-                "It is written directly to your public GOG profile, dated today, and stays there \
-                 for good. It is probably against GOG's terms."
+                "The change is written directly to your public GOG profile, \
+                 dated today. It is probably against GOG's terms."
             ),
             row![
                 button(text("Confirm").size(14))
@@ -361,7 +369,7 @@ pub fn unlock_all_button<'a>(game_id: &str, list: &[Achievement]) -> Element<'a,
     let locked: Vec<AchievementChange> = list
         .iter()
         .filter(|a| a.date_unlocked.is_none())
-        .map(change)
+        .map(|a| change(a, true))
         .collect();
     let game_id = game_id.to_string();
     button(text("Unlock all").size(14))

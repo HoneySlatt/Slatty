@@ -93,7 +93,7 @@ panels:
 | Sliders button (top right) | Game settings, in a drawer beside the page: folder, launch option (for a game that has several), Proton build (used from the next launch; the platform for a Linux build), game version (switch to an older or newer build), language and DLC |
 | ⋮ button (top right) | Manage, in a drawer beside the page: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
 | Cloud saves card | A drawer beside the page: status, save folder, what a sync would do (upload, download, compare, unchanged, deleted on one side), Check, Sync now, conflict choices |
-| Achievements card | Full list from the most common to the rarest (with Unlock, once turned on in Settings → Advanced), in a drawer beside the page (over it in a narrow window) |
+| Achievements card | Full list from the most common to the rarest (with unlock or clear, once turned on in Settings → Advanced), in a drawer beside the page (over it in a narrow window) |
 | Install button | A drawer beside the page: version, download and disk size, free space, platform (Windows or Linux), folder, language, DLC, Proton and game version (Windows builds; the newest unless another is chosen), start, discard |
 | Details, under Play | Session, in a drawer beside the page: each step of the launch and of the session (cloud check, Comet, start, end, play time), and Stop game while it runs |
 
@@ -133,7 +133,7 @@ asks first and says what would be interrupted.
 
 **Achievements** shows every game with achievements as a card (cover, unlocked count, share and
 progress bar), the most completed first. Clicking a game opens its own
-achievements page in the same tab, where you can also unlock them once **Manual achievements** is on in Settings → Advanced. SlattyLauncher reads which games
+achievements page in the same tab, where you can also unlock or clear them once **Manual achievements** is on in Settings → Advanced. SlattyLauncher reads which games
 have achievements and cloud saves from GOG in the background and keeps the answer in
 `~/.cache/slatty/<user id>/overview.json`; **Refresh** reads it again.
 
@@ -292,18 +292,19 @@ When a game is launched by SlattyLauncher, unlocks made in the game are sent to 
 Support depends on the game and its Galaxy SDK version; see
 [docs/compatibility.md](compatibility.md).
 
-Achievements can also be unlocked manually, for any game you own, installed or not. In the
-interface, turn on **Manual achievements** in Settings → Advanced (off until then): Unlock and
-Unlock all then appear beside a game's locked achievements. On the command line:
+Achievements can also be changed manually, for any game you own, installed or not. In the
+interface, turn on **Manual achievements** in Settings → Advanced (off until then): Unlock, Clear and
+Unlock all then appear beside a game's achievements. On the command line:
 
 ```sh
 slatty achievements <game-id> --unlock NEGLECT "Steel Soul"
 slatty achievements <game-id> --unlock-all
+slatty achievements <game-id> --clear NEGLECT
 ```
 
 Achievements are matched by key, id or exact name. You are asked to confirm before anything is
-written. A manual unlock appears on your public GOG profile, dated today, stays there for good,
-and is probably against GOG's terms of use.
+written. Manual changes appear on your public GOG profile, dated today, and are probably against
+GOG's terms of use.
 
 ## Updates
 
@@ -417,8 +418,8 @@ them), **Achievements in game** (Comet runs while a game that uses GOG's Galaxy 
 unlocks made in games are not reported; unlocking by hand does not need it) and **Play time on GOG** (each session goes to GOG so it counts on your profile, as Galaxy
 does; sessions played while it is off are never sent). SlattyLauncher has no telemetry.
 
-**Advanced** holds **Manual achievements**, off until turned on: it adds Unlock and Unlock all
-beside a game's locked achievements (see [Achievements](#achievements)).
+**Advanced** holds **Manual achievements**, off until turned on: it adds Unlock, Clear and Unlock
+all beside a game's achievements (see [Achievements](#achievements)).
 
 **Appearance** picks a built-in theme (Carbonfox, Everforest, Pastel Glow, Gruvbox Dark
 or Light) and the interface font, applied at once and kept, and shows the theme file, `~/.config/slatty/theme.toml`: create it, edit it, and reload it to change colours,

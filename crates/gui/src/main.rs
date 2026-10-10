@@ -221,7 +221,7 @@ pub struct App {
     pub umu_lookup: bool,
     pub report_playtime: bool,
     pub game_achievements: bool,
-    /// Whether achievements can be unlocked by hand (Settings → Advanced).
+    /// Whether achievements can be unlocked and cleared by hand (Settings → Advanced).
     pub manual_achievements: bool,
     /// The ways each installed game can be started, its main one first, and the one chosen.
     pub launch_options: HashMap<String, Vec<String>>,

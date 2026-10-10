@@ -211,9 +211,9 @@ impl App {
             switch(
                 self.manual_achievements,
                 SettingsMsg::ManualAchievements,
-                "Offers Unlock and Unlock all beside a game's locked achievements. An unlock goes \
-                 straight to your public GOG profile, dated today, stays there for good, and is \
-                 probably against GOG's terms.",
+                "Offers Unlock, Clear and Unlock all beside a game's achievements. A change goes \
+                 straight to your public GOG profile, dated today, and is probably against GOG's \
+                 terms.",
             ),
             None,
         )]

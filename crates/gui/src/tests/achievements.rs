@@ -24,16 +24,12 @@ fn unlocking_only_asks_for_confirmation() {
     let mut app = app_with_achievements();
     app.manual_achievements = true;
     let mut ui = render(&app);
-    let unlocks = texts(&mut ui).iter().filter(|t| *t == "Unlock").count();
-    assert_eq!(
-        unlocks, 1,
-        "only the locked achievement: an unlock is for good"
-    );
+    assert!(ui.find("Clear").is_ok());
     ui.click("Unlock").unwrap();
     let messages: Vec<Message> = ui.into_messages().collect();
     assert!(matches!(
         messages.as_slice(),
-        [Message::AskAchievementChange(game, changes)] if game == "5" && changes.len() == 1
+        [Message::AskAchievementChange(game, changes)] if game == "5" && changes.len() == 1 && changes[0].unlock
     ));
     for m in messages {
         let _ = app.update(m);
@@ -58,6 +54,7 @@ fn cancelling_drops_the_pending_change() {
         vec![crate::AchievementChange {
             achievement_id: "id-Alpha".into(),
             name: "[FAKE] Alpha".into(),
+            unlock: true,
         }],
     ));
     let mut ui = render(&app);
@@ -233,7 +230,7 @@ fn manual_changes_are_offered_only_once_turned_on_in_advanced_settings() {
     {
         let mut ui = render(&app);
         assert!(ui.find("[FAKE] Alpha").is_ok());
-        for label in ["Unlock", "Unlock all"] {
+        for label in ["Unlock", "Clear", "Unlock all"] {
             assert!(ui.find(label).is_err(), "{label} shown while off");
         }
     }
@@ -243,6 +240,7 @@ fn manual_changes_are_offered_only_once_turned_on_in_advanced_settings() {
         vec![crate::achievements::AchievementChange {
             achievement_id: "id-Alpha".into(),
             name: "[FAKE] Alpha".into(),
+            unlock: true,
         }],
     ));
     assert!(app.pending_change.is_none());
@@ -262,6 +260,6 @@ fn manual_changes_are_offered_only_once_turned_on_in_advanced_settings() {
 
     open(&mut app, "5", Some(Panel::Achievements));
     let mut ui = render(&app);
-    assert!(ui.find("Unlock").is_ok());
+    assert!(ui.find("Unlock").is_ok() && ui.find("Clear").is_ok());
     assert!(ui.find("Unlock all").is_ok());
 }
