@@ -19,6 +19,7 @@ const GAME_ACHIEVEMENTS: &str = "game_achievements";
 const MANUAL_ACHIEVEMENTS: &str = "manual_achievements";
 const STEAMGRIDDB: &str = "steamgriddb";
 const ISOLATE_NEW_GAMES: &str = "isolate_new_games";
+const PROTON_DOWNLOADS: &str = "proton_downloads";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -114,6 +115,15 @@ pub fn set_steamgriddb(db: &Db, on: bool) -> Result<()> {
     db.set_setting(STEAMGRIDDB, Some(if on { "on" } else { "off" }))
 }
 
+/// Whether Proton builds may be listed and downloaded from GitHub. Off until turned on.
+pub fn proton_downloads(db: &Db) -> Result<bool> {
+    Ok(db.setting(PROTON_DOWNLOADS)?.as_deref() == Some("on"))
+}
+
+pub fn set_proton_downloads(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(PROTON_DOWNLOADS, Some(if on { "on" } else { "off" }))
+}
+
 /// The way a game is started, among its launch options, once chosen.
 pub fn launch_choice(db: &Db, game_id: &str) -> Result<Option<String>> {
     db.setting(&format!("launch_task:{game_id}"))
@@ -193,16 +203,16 @@ pub fn set_favorites(db: &Db, ids: &[String]) -> Result<()> {
     db.set_setting(FAVORITES, Some(&ids.join(",")))
 }
 
-/// Proton builds already on disk (Steam compatibility tools folder).
-/// Proton builds that can run games: custom ones in Steam's `compatibilitytools.d`, Valve's own
-/// (Proton Experimental, stable, Hotfix) in every Steam library, and those umu downloaded. A build
-/// found twice (`~/.steam/steam` is the same folder, or the same name in two places) is listed once.
-pub fn proton_candidates() -> Vec<PathBuf> {
-    proton_candidates_in(&home())
+/// Proton builds that can run games: those SlattyLauncher downloaded, custom ones in Steam's
+/// `compatibilitytools.d`, Valve's own (Proton Experimental, stable, Hotfix) in every Steam
+/// library, and those umu downloaded. A build found twice (`~/.steam/steam` is the same folder, or
+/// the same name in two places) is listed once.
+pub fn proton_candidates(dirs: &crate::paths::Dirs) -> Vec<PathBuf> {
+    proton_candidates_in(&crate::protons::dir(dirs), &home())
 }
 
-fn proton_candidates_in(home: &Path) -> Vec<PathBuf> {
-    let mut places = Vec::new();
+fn proton_candidates_in(downloaded: &Path, home: &Path) -> Vec<PathBuf> {
+    let mut places = vec![downloaded.to_path_buf()];
     for steam in steam_roots(home) {
         places.push(steam.join("compatibilitytools.d"));
     }
@@ -305,14 +315,19 @@ mod tests {
         .unwrap();
         std::fs::create_dir_all(home.join(".steam")).unwrap();
         std::os::unix::fs::symlink(&steam, home.join(".steam/steam")).unwrap();
+        // Downloaded by SlattyLauncher: listed first; a download half done is not a build.
+        let downloaded = home.join("slatty/protons");
+        build(&downloaded.join("GE-Proton11-7-x86_64"));
+        std::fs::create_dir_all(downloaded.join(".staging/GE-Proton11-8-x86_64")).unwrap();
 
-        let names: Vec<String> = proton_candidates_in(&home)
+        let names: Vec<String> = proton_candidates_in(&downloaded, &home)
             .iter()
             .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         assert_eq!(
             names,
             [
+                "GE-Proton11-7-x86_64",
                 "GE-Proton",
                 "Proton - Experimental",
                 "Proton 10.0",

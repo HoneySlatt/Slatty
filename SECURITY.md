@@ -49,6 +49,13 @@ Include the steps to reproduce and the version or commit you tested.
 - SteamGridDB (`steamgriddb.com`), only once turned on in Settings → Advanced and only when you
   search it in Edit game: the name you search and your own SteamGridDB API key, kept in the system
   keyring and sent in a header. Pictures you look at come from its servers.
+- GitHub (`api.github.com`, `github.com`, which sends the files from
+  `release-assets.githubusercontent.com`), only once Proton downloads are turned on in
+  Settings → Runners and only when you list or download Proton builds: which project's releases
+  you ask for, without any account. A downloaded archive is checked against the SHA-512 sum its
+  release publishes before it is opened; this catches a damaged download, not a release replaced
+  by whoever controls the project's GitHub account. It is unpacked like a Linux installer: nothing
+  is written out of its folder.
 
 ## Scope
 

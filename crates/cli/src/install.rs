@@ -148,7 +148,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
                 Some(p) => p,
                 None => bail!(
                     "choose a Proton build once with --proton <dir containing `proton`>, e.g. one of:\n{}",
-                    settings::proton_candidates()
+                    settings::proton_candidates(&ctx.dirs)
                         .iter()
                         .map(|p| format!("  {}", p.display()))
                         .collect::<Vec<_>>()

@@ -24,3 +24,8 @@ chrono = { version = "0.4.45", features = ["serde"] }
 nix = { version = "0.31", features = ["process", "signal", "feature", "fs"] }
 futures = "0.3"
 oxidelta = { version = "0.1.4", default-features = false, features = ["adler32"] }
+tar = { version = "0.4.46", default-features = false }
+lzma-rust2 = { version = "0.21.0", default-features = false, features = ["std", "optimization", "xz"] }
+
+[dev-dependencies]
+lzma-rust2 = { version = "0.21.0", default-features = false, features = ["std", "xz", "encoder"] }

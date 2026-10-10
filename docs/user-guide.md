@@ -18,6 +18,7 @@ Anything done in one is visible in the other.
 - [Achievements](#achievements)
 - [Maintenance](#maintenance)
 - [Games installed elsewhere](#games-installed-elsewhere)
+- [Proton builds](#proton-builds)
 - [Settings](#settings)
 - [Where data is stored](#where-data-is-stored)
 - [Troubleshooting](#troubleshooting)
@@ -430,6 +431,28 @@ slatty forget <game-id>
 Imported games cannot be verified or uninstalled, because SlattyLauncher does not know which files
 belong to them.
 
+## Proton builds
+
+SlattyLauncher can download the newest build of three Proton projects from their GitHub releases:
+GE-Proton, Proton-CachyOS (its x86-64-v3 build on processors that have those instructions) and
+UMU-Proton. GitHub is contacted only once **Proton downloads** is turned on, in Settings → Runners
+or with `slatty proton downloads on`.
+
+```sh
+slatty proton downloads on
+slatty proton available
+slatty proton install ge-proton        # or proton-cachyos, umu-proton
+slatty proton list
+slatty proton remove GE-Proton11-7-x86_64
+```
+
+- Each archive is checked against the SHA-512 sum its release publishes before it is opened, then
+  unpacked in `~/.local/share/slatty/protons/<name>`. A download stopped half way (Ctrl+C, a lost
+  connection) goes on from where it was the next time.
+- Downloaded builds appear first in every Proton menu, beside those of Steam and umu.
+- A build is kept until you delete it, even once a newer one is out: games keep the build they were
+  set to. Deleting one is refused while a game or the default Proton uses it.
+
 ## Settings
 
 The interface's **Settings** tab lists its parts on the left (Account, Library, Installs,
@@ -483,6 +506,7 @@ corners and the page transition. See [theming](theming.md).
 | System keyring, entry `slatty-launcher` / `key:steamgriddb` | Your SteamGridDB API key, once saved |
 | `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings, the titles you gave games and the games you hid |
 | `~/.local/share/slatty/prefixes/<id>/` | Wine prefixes of installed games (most saves live here) |
+| `~/.local/share/slatty/protons/<name>/` | Proton builds downloaded from GitHub |
 | `~/.local/share/slatty/homes/<id>/` | The home folder of an isolated game: what it writes there, a Linux game's saves among them. Kept when the game is uninstalled |
 | `~/.local/share/slatty/manifests/<id>.json` | Files installed for each game |
 | `~/.local/share/slatty/custom/<id>/` | Covers and backgrounds you chose for a game |

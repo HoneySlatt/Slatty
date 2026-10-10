@@ -6,6 +6,7 @@ mod install;
 mod launch;
 mod library;
 mod maintenance;
+mod proton;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -58,6 +59,9 @@ enum Command {
     Cloud(cloud::CloudCommand),
     /// Achievements as recorded on GOG; can also unlock or clear them manually
     Achievements(achievements::AchievementsArgs),
+    /// Proton builds: list them, or download them from GitHub
+    #[command(subcommand)]
+    Proton(proton::ProtonCommand),
 }
 
 pub struct Ctx {
@@ -121,6 +125,7 @@ async fn run() -> Result<()> {
         Command::Launch(args) => launch::run(&ctx, args).await,
         Command::Cloud(cmd) => cloud::run(&ctx, cmd).await,
         Command::Achievements(args) => achievements::run(&ctx, args).await,
+        Command::Proton(cmd) => proton::run(&ctx, cmd).await,
     }
 }
 

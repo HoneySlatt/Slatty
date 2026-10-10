@@ -31,6 +31,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `patches` | GOG's binary patches between builds: lookup, delta download, xdelta3 application |
 | `runner` | Launch commands for umu/Proton, Wine and native games; prefix creation; isolation (see [Game isolation](#game-isolation)) |
 | `umu` | Game id in umu's database, looked up once per game, so umu applies its fixes for it |
+| `protons` | Proton builds downloaded from GitHub releases (GE-Proton, Proton-CachyOS, UMU-Proton), once turned on: the archive for this computer, resumed downloads, its published SHA-512 sum checked before it is opened, then unpacked without anything leaving its folder (paths that climb out, links out, even through another link, and special files are left out). A build a game or the default uses is not deleted |
 | `session` | Session supervisor (subreaper), session records, play time |
 | `play` | Full play flow: prefix, cloud, Comet, session, upload, achievement diff |
 | `cloud` | Save locations, local scan, three-way plan, transport, sync executor, diagnostics |
@@ -314,6 +315,7 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
 | Install records | `~/.local/share/slatty/manifests/` | from GOG, for the same build |
 | Prefixes and backups | `~/.local/share/slatty/{prefixes,backups}/` | no |
 | Home folders of isolated games | `~/.local/share/slatty/homes/` | no (Linux games' saves) |
+| Downloaded Proton builds | `~/.local/share/slatty/protons/` | from GitHub, while the release is listed |
 | Cache | `~/.cache/slatty/<user id>/` | yes |
 | Logs | `~/.local/state/slatty/logs/` | yes |
 
@@ -326,6 +328,7 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
 | No web view | Native application; sign-in happens in the user's own browser |
 | Address pasted back after sign-in | GOG accepts only the Galaxy redirect URI; no local redirect is known to work |
 | Isolation through umu's own container rather than another sandbox | pressure-vessel already runs every Proton game; its documented options hide the home folder with no second container to keep working with GPUs, sound and gamepads. It still shares the display, sound, devices and the network: it keeps games out of files and D-Bus, not out of the system |
+| Proton builds downloaded by SlattyLauncher, not by umu | umu can fetch GE-Proton or UMU-Proton itself, but only at a game's launch, which would then wait for half a gigabyte, and its "latest" builds are replaced in place under one name, changing a game's Proton behind its back. SlattyLauncher keeps each build in a folder of its own and deletes one only when asked and unused |
 | Comet as a supervised companion process | Its library API is not meant for embedding (global state, fixed port, panics on errors) |
 | Subreaper supervisor process for sessions | Launchers that exit early and Wine processes must not end the session too soon |
 | Content hashes, not dates, for cloud sync | Dates are unreliable across machines and Wine; hashes plus per-file history detect real changes |

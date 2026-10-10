@@ -23,6 +23,7 @@ pub mod patches;
 pub mod paths;
 pub mod play;
 pub mod playtime;
+pub mod protons;
 pub mod runner;
 pub mod secret;
 pub mod session;

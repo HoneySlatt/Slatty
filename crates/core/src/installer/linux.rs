@@ -773,7 +773,7 @@ enum LinkState {
 }
 
 /// Whether a link at `path` (relative to the game folder) pointing to `target` stays inside it.
-fn stays_inside(path: &Path, target: &Path) -> bool {
+pub(crate) fn stays_inside(path: &Path, target: &Path) -> bool {
     let mut depth = path.components().count() as i64 - 1;
     for c in target.components() {
         match c {

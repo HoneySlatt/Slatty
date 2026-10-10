@@ -111,7 +111,7 @@ pub async fn boot() -> Result<Boot, String> {
         None
     };
     // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
-    let proton_choices = slatty_core::settings::proton_candidates();
+    let proton_choices = slatty_core::settings::proton_candidates(&dirs);
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let customs = slatty_core::custom::all(&db).map_err(err)?;
     let cover_width = slatty_core::settings::cover_width(&db).map_err(err)?;
