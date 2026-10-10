@@ -265,6 +265,7 @@ pub struct App {
     pub customs: HashMap<String, slatty_core::custom::Custom>,
     pub gog_titles: HashMap<String, String>,
     pub sort_keys: library::SortKeys,
+    pub lists: library::Lists,
     pub edit: Option<edit::EditDraft>,
     pub menu_for: Option<String>,
     pub context_menu: Option<edit::ContextMenu>,
@@ -352,6 +353,7 @@ impl Default for App {
             customs: HashMap::new(),
             gog_titles: HashMap::new(),
             sort_keys: Default::default(),
+            lists: Default::default(),
             edit: None,
             menu_for: None,
             context_menu: None,
@@ -437,6 +439,26 @@ pub enum Message {
     Key(keyboard::Event),
 }
 
+impl Message {
+    /// Whether the message leaves the games the Library and Achievements tabs list as they were:
+    /// those that come many times a second.
+    fn keeps_lists(&self) -> bool {
+        matches!(
+            self,
+            Message::GridScrolled(_)
+                | Message::AchievementsScrolled(_)
+                | Message::Frame(_)
+                | Message::WindowResized(_)
+                | Message::Cover(..)
+                | Message::Image(..)
+                | Message::Key(_)
+                | Message::Install(InstallMsg::Progress(..))
+                | Message::Maintenance(MaintenanceMsg::Progress(..))
+                | Message::Runners(runners::RunnersMsg::Progress(..))
+        )
+    }
+}
+
 impl std::fmt::Debug for Core {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Core")
@@ -481,6 +503,9 @@ impl App {
 
     /// Plays the page transition when the update moved to another page.
     fn update(&mut self, message: Message) -> Task<Message> {
+        if !message.keeps_lists() {
+            self.lists.clear();
+        }
         let shown = self.location();
         let task = self.handle(message);
         // Whatever ended (a game, an install, an update) may let a waiting update start.

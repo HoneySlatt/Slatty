@@ -235,11 +235,16 @@ impl App {
     /// Progress of reading achievements and cloud saves from GOG, while anything is missing.
     pub fn overview_status(&self) -> Option<String> {
         let total = self.library.len();
-        let read = self
-            .library
-            .iter()
-            .filter(|g| self.overview_checked(&g.id))
-            .count();
+        let read = *self
+            .lists
+            .overview_read
+            .borrow_mut()
+            .get_or_insert_with(|| {
+                self.library
+                    .iter()
+                    .filter(|g| self.overview_checked(&g.id))
+                    .count()
+            });
         if self.overview_busy {
             Some(format!("Reading GOG data… {read}/{total} games"))
         } else if read < total {
@@ -365,22 +370,44 @@ impl App {
 
     /// Games of the current shelf matching search and filters, in the chosen order.
     pub fn visible_games(&self) -> Vec<&LibraryGame> {
+        let key = (
+            self.search.clone(),
+            self.shelf,
+            self.filters,
+            self.sort,
+            self.library.len(),
+        );
+        let mut kept = self.lists.library.borrow_mut();
+        let shown = match &*kept {
+            Some((k, shown)) if *k == key => shown.clone(),
+            _ => {
+                let shown: Rc<[usize]> = self.find_visible_games().into();
+                *kept = Some((key, shown.clone()));
+                shown
+            }
+        };
+        shown.iter().map(|&i| &self.library[i]).collect()
+    }
+
+    /// `visible_games`, as places in `library`.
+    fn find_visible_games(&self) -> Vec<usize> {
         let needle = self.search.to_lowercase();
         let f = self.filters;
-        let mut games: Vec<&LibraryGame> = self
+        let mut games: Vec<(usize, &LibraryGame)> = self
             .library
             .iter()
-            .filter(|g| needle.is_empty() || g.title.to_lowercase().contains(&needle))
-            .filter(|g| match self.shelf {
+            .enumerate()
+            .filter(|(_, g)| needle.is_empty() || g.title.to_lowercase().contains(&needle))
+            .filter(|(_, g)| match self.shelf {
                 Shelf::Hidden => self.is_hidden(&g.id),
                 _ if self.is_hidden(&g.id) => false,
                 Shelf::All => true,
                 Shelf::Installed => self.installs.contains_key(&g.id),
                 Shelf::Favorites => self.favorites.contains(&g.id),
             })
-            .filter(|g| !f.windows || g.os.iter().any(|o| o == "windows"))
-            .filter(|g| !f.linux || g.os.iter().any(|o| o == "linux"))
-            .filter(|g| {
+            .filter(|(_, g)| !f.windows || g.os.iter().any(|o| o == "windows"))
+            .filter(|(_, g)| !f.linux || g.os.iter().any(|o| o == "linux"))
+            .filter(|(_, g)| {
                 let o = self.overview.get(&g.id);
                 (!f.achievements || o.is_some_and(|o| o.achievements.is_some()))
                     && (!f.cloud_saves || o.is_some_and(|o| o.cloud_saves))
@@ -388,17 +415,17 @@ impl App {
             .collect();
         let played = |g: &LibraryGame| self.playtime.get(&g.id).copied().unwrap_or_default();
         match self.sort {
-            Sort::NameAsc => games.sort_by_cached_key(|g| self.sort_name(g)),
+            Sort::NameAsc => games.sort_by_cached_key(|(_, g)| self.sort_name(g)),
             Sort::NameDesc => {
-                games.sort_by_cached_key(|g| std::cmp::Reverse(self.sort_name(g)));
+                games.sort_by_cached_key(|(_, g)| std::cmp::Reverse(self.sort_name(g)));
             }
             Sort::RecentlyPlayed => {
-                games.sort_by_cached_key(|g| {
+                games.sort_by_cached_key(|(_, g)| {
                     (std::cmp::Reverse(played(g).last_played), self.sort_name(g))
                 });
             }
             Sort::MostPlayed => {
-                games.sort_by_cached_key(|g| {
+                games.sort_by_cached_key(|(_, g)| {
                     (
                         std::cmp::Reverse(self.played_seconds(&g.id)),
                         self.sort_name(g),
@@ -406,7 +433,7 @@ impl App {
                 });
             }
         }
-        games
+        games.into_iter().map(|(i, _)| i).collect()
     }
 }
 
@@ -477,6 +504,31 @@ fn fit_image(path: PathBuf) -> PathBuf {
 /// Kept by title, which alone decides the key, so a renamed game never finds a stale one.
 #[derive(Default)]
 pub struct SortKeys(RefCell<HashMap<String, Rc<NaturalKey>>>);
+
+/// The games the Library and Achievements tabs list, as places in `library`, kept from one view
+/// to the next: at 10,000 games, filtering and sorting take about 2 ms, nearly all of a view, and
+/// `view` runs after every message. Scrolling, animation frames, covers and progress change none
+/// of it; every other message forgets them (`Message::keeps_lists`). The library's list is also
+/// kept by what it was made for (search, shelf, filters, order).
+#[derive(Default)]
+pub struct Lists {
+    library: RefCell<Option<(ListKey, Rc<[usize]>)>>,
+    /// For the library's length: each game's place, and its unlocked and total achievements.
+    pub achievements: RefCell<Option<(usize, AchievementsList)>>,
+    /// How many games GOG's data was read for, shown while some are missing.
+    overview_read: RefCell<Option<usize>>,
+}
+
+type ListKey = (String, Shelf, Filters, Sort, usize);
+pub type AchievementsList = Rc<[(usize, usize, usize)]>;
+
+impl Lists {
+    pub fn clear(&self) {
+        self.library.take();
+        self.achievements.take();
+        self.overview_read.take();
+    }
+}
 
 impl SortKeys {
     pub fn of(&self, title: &str) -> Rc<NaturalKey> {

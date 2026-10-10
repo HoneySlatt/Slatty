@@ -40,9 +40,10 @@ cargo test --release -p slatty-gui library_at_10000_games -- --ignored --nocaptu
 ```
 
 This times the Library and Achievements pages with 10,000 games whose titles are long,
-accented and partly not Latin, in no particular order: how long each view takes to build, and how
-much longer laying it out takes than with 14 such games. A view must build well within a 16 ms
-frame. Layout times include the test renderer's own start-up, so only the difference means
+accented and partly not Latin, in no particular order: how long each view takes to build with the
+list of games kept (as while scrolling), how long making that list again takes (after any other
+message), and how much longer laying it out takes than with 14 such games. A view must build well
+within a 16 ms frame. Layout times include the test renderer's own start-up, so only the difference means
 something. They are those of a first display: the test lays out every widget anew, while the
 application keeps what it laid out for a row as long as the row stays in view. Scrolling is
 checked in the application itself.
@@ -70,8 +71,9 @@ Reference, 2026-10-10 (Ryzen 7 5800X, Radeon RX 6800, niri at 3840×2160, 240 Hz
 | Every cover ready | 446–498 ms, cold or warm (698–773 ms when covers were read into memory) |
 | Resident memory, covers in | 152 MB (997 MB when covers were kept in memory) |
 | 200 game pages with 2560×1440 key art opened in a row | 191 MB, flat after the first 50 (254 MB and growing before) |
-| Scrolling, 1,200 frames | p50 4.7 ms, p99 7.1 ms, max 9.6 ms; none above 16.7 ms |
-| `view` while scrolling | p50 1.7 ms, p99 2.3 ms (5.5 ms before the sort keys were kept) |
+| Scrolling, 1,200 frames | p50 4.2 ms (every frame at 240 Hz), p99 8.4 ms, max 8.6–13 ms; none above 16.7 ms (p50 5.6 ms, p99 12.1 ms, max 20 ms before the lists were kept) |
+| `view` while scrolling | p50 0.17 ms, p99 0.25 ms (2.0 ms before the lists were kept, 5.5 ms before the sort keys were kept) |
+| `library_at_10000_games` | view 0.13 ms, Achievements 0.16 ms, list made again 1.8–2.0 ms (1.9 and 2.7 ms per view before the lists were kept) |
 | Idle CPU, nothing happening | 0 ticks in 15 s |
 
 ### Tests that need real tools

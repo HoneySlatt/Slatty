@@ -214,19 +214,37 @@ impl App {
     /// Games with achievements and their unlocked and total counts, highest completion first; ties
     /// by title.
     pub fn games_by_achievements(&self) -> Vec<(&LibraryGame, usize, usize)> {
+        let mut kept = self.lists.achievements.borrow_mut();
+        let games = match &*kept {
+            Some((len, games)) if *len == self.library.len() => games.clone(),
+            _ => {
+                let games: std::rc::Rc<[_]> = self.find_games_by_achievements().into();
+                *kept = Some((self.library.len(), games.clone()));
+                games
+            }
+        };
+        games
+            .iter()
+            .map(|&(i, done, total)| (&self.library[i], done, total))
+            .collect()
+    }
+
+    /// `games_by_achievements`, with the games as places in `library`.
+    fn find_games_by_achievements(&self) -> Vec<(usize, usize, usize)> {
         let mut games: Vec<_> = self
             .library
             .iter()
-            .filter_map(|g| {
+            .enumerate()
+            .filter_map(|(i, g)| {
                 let (done, total) = self.overview.get(&g.id)?.achievements?;
-                Some((g, done, total, self.sort_name(g)))
+                Some((i, done, total, self.sort_name(g)))
             })
             .collect();
         // done / total compared as cross products, exact where floats could tie wrongly.
         games.sort_by(|a, b| (b.1 * a.2).cmp(&(a.1 * b.2)).then_with(|| a.3.cmp(&b.3)));
         games
             .into_iter()
-            .map(|(g, done, total, _)| (g, done, total))
+            .map(|(i, done, total, _)| (i, done, total))
             .collect()
     }
 }

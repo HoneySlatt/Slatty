@@ -271,6 +271,23 @@ fn the_library_order_is_kept() {
     }
 }
 
+#[test]
+fn the_games_listed_are_kept_while_scrolling_and_made_again_after_anything_else() {
+    let mut app = library_app();
+    assert_eq!(titles(&app)[..2], ["Game 1", "Game 2"]);
+    // Changed behind the list's back: frames and scroll steps keep the order made before.
+    app.library[0].title = "[FAKE] Zebra".into();
+    let _ = app.update(Message::Frame(app.now));
+    assert_eq!(titles(&app)[..2], ["Zebra", "Game 2"]);
+    // Any other message makes it again.
+    let _ = app.update(Message::DismissNotice);
+    assert_eq!(titles(&app)[..1], ["Game 2"]);
+    assert_eq!(titles(&app).last().unwrap(), "Zebra");
+    // What it was made for changed (here without a message): made again.
+    app.search = "zeb".into();
+    assert_eq!(titles(&app), ["Zebra"]);
+}
+
 /// Times the library at 10,000 games: the size it must stay fluid at. Run with
 /// `cargo test --release -p slatty-gui library_at_10000_games -- --ignored --nocapture`.
 #[test]
@@ -302,6 +319,14 @@ fn library_at_10000_games() {
         app.sort = sort;
         time(&app, &format!("view, {sort}"));
     }
+    // The views above keep the list from one view to the next, as scrolling does; any other
+    // message makes it again.
+    let t = std::time::Instant::now();
+    for _ in 0..10 {
+        app.lists.clear();
+        let _ = app.visible_games();
+    }
+    println!("list made again: {:?}", t.elapsed() / 10);
     app.sort = Sort::NameAsc;
     app.search = "世界 99".into();
     time(&app, "view, searching");
