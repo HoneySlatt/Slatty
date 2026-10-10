@@ -18,6 +18,9 @@ use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Interrupted, Message, Panel};
 
+/// The widest the Downloads tab grows.
+const MAX_WIDTH: f32 = 1600.0;
+
 impl App {
     pub(super) fn downloads_page(&self) -> Element<'_, Message> {
         // Downloads stopped by a pause, a closed window or a crash wait at the top too.
@@ -83,10 +86,14 @@ impl App {
                     .spacing(ROW_SPACING),
                 );
         }
-        scrollable(container(content).padding(Padding::ZERO.top(10).right(14)))
-            .style(theme::scroller)
-            .height(Length::Fill)
-            .into()
+        // On a very wide window a download's figures and buttons stay near its title.
+        container(
+            scrollable(container(content).padding(Padding::ZERO.top(10).right(14)))
+                .style(theme::scroller)
+                .height(Length::Fill),
+        )
+        .max_width(MAX_WIDTH)
+        .into()
     }
 
     /// The game updating without asking, with its progress and Pause, then those waiting.

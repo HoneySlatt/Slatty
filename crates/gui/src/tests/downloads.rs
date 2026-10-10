@@ -64,6 +64,23 @@ fn a_queued_install_follows_updates_as_chosen() {
     assert!(slatty_core::settings::held_back(&db, "7").unwrap());
 }
 
+/// On a very wide window a download's controls stay near its title.
+#[test]
+fn downloads_keep_a_readable_width_on_a_wide_window() {
+    let mut app = library_app();
+    for id in ["5", "6"] {
+        ready_to_install(&mut app, id);
+        let _ = app.update(Message::Install(InstallMsg::Start(id.into())));
+    }
+    app.page = Page::Downloads;
+    app.window = Size::new(3840.0, 1080.0);
+    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    snapshot(&mut ui, "downloads-wide");
+    // The share done, at the end of the progress bar.
+    let done = ui.find("0 %").unwrap().bounds();
+    assert!(done.x + done.width < 1700.0, "{done:?}");
+}
+
 #[test]
 fn installs_started_during_a_download_wait_in_a_queue_that_can_be_reordered() {
     use crate::downloads::{DownloadsMsg, ROW_HEIGHT, ROW_SPACING};
