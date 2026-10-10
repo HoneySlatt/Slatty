@@ -214,6 +214,7 @@ pub async fn cover(
     let Some(url) = &game.cover else {
         return Ok(None);
     };
+    crate::store::of(&game.id)?;
     let folder = dirs.account_cache(user_id).join("covers");
     cached(http, folder, game.id.clone(), url, "downloading a cover")
         .await
@@ -400,6 +401,13 @@ mod tests {
                 .is_err()
         );
         assert!(!folder.join("2.img").exists());
+
+        // A game id that would lead out of the cache folder is refused before anything is read.
+        let escaping = game_with_cover("../covers/1", "http://127.0.0.1:9/c.jpg".into());
+        assert!(matches!(
+            cover(&http, &dirs, "111", &escaping).await,
+            Err(crate::Error::Refused(_))
+        ));
 
         // Downloaded: named after what it is, whatever its address says.
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

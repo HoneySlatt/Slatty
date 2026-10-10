@@ -54,6 +54,10 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 
 ## Planned
 
+- **Steam games beside GOG's.** Driven by the installed Steam client, which installs, runs and
+  syncs them; owned games and achievements through the user's own Web API key. The groundwork is
+  done: game ids name their store. See [steam-plan.md](steam-plan.md) and
+  [steam-feasibility.md](steam-feasibility.md).
 - **Gamepad navigation.** A couch mode.
 - **Translations of the interface.** It is in English for now.
 - **More runners.** System Wine, managed Proton downloads.

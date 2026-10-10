@@ -10,17 +10,18 @@ Plan of 2026-10-10, built on [steam-feasibility.md](steam-feasibility.md), which
   `-applaunch`;
 - may read the owned list and achievements through the user's own Web API key, once turned on.
 
-Several choices below are the owner's to make; they are listed at the end. No step runs anything
-against a Steam account without the owner: real checks are run by them and recorded in
+Decided by the owner on 2026-10-10: strategy B (D1), owned games through the user's own Web API key
+(D2), the `steam-` prefix for game ids (D4). The other choices are listed at the end. No step runs
+anything against a Steam account without the owner: real checks are run by them and recorded in
 [compatibility.md](compatibility.md).
 
 ## 1. Multi-store design
 
 ### 1.1 Store and game id
 
-- **A `Store` enum** (`Gog`, `Steam`) in a new `core/src/store.rs`.
-- **A `GameId` type** holding the store and the store's own id. Its text form is the key used
-  everywhere today (database, file names, settings, interface maps):
+- **A `Store` enum** (`Gog`, `Steam`) in `core/src/store.rs`.
+- **The game id stays text**, the key used everywhere today (database, file names, settings,
+  interface maps), and names its store:
 
   | Store | Text form | Example |
   |---|---|---|
@@ -34,13 +35,13 @@ against a Steam account without the owner: real checks are run by them and recor
     `installer::linux::BUILD_PREFIX` [code]).
   - **`-`, not `:`.** It is valid in file names on every system, including the Windows host on the
     roadmap.
-- **One place parses ids.** `GameId::parse` accepts only digits, or `steam-` and digits. Every path
-  built from an id goes through it, which also closes the unchecked joins found in `lock.rs`,
-  `installer/record.rs` and `installer.rs` [code].
+- **One place reads ids.** `store::of` accepts letters and digits (GOG, as before) or `steam-` and
+  digits, and refuses anything else. It is called before an id names a file. A wrapping type was
+  not needed: the text form is what every caller stores and compares.
 - **The alternative is a `store` column.** SQLite cannot change a primary key, so `installs`,
   `install_jobs` and `game_custom` would be rebuilt by an appended migration (create, copy, drop,
-  rename), and file names would change too. It is cleaner in the long run but riskier. This is
-  decision D4.
+  rename), and file names would change too. It is cleaner in the long run but riskier. Not chosen
+  (D4).
 
 ### 1.2 Capabilities rather than one big trait
 
@@ -51,7 +52,8 @@ against a Steam account without the owner: real checks are run by them and recor
 - **Hence:**
   - **Dispatch by `match` on `Store`** at the few entry points: library, launch, install,
     uninstall, verify, achievements, cloud status.
-  - **A `Capabilities` value per store**, read by both front ends to show or hide what applies:
+  - **A `Capabilities` value per store** (added with S2 and S3, its first users), read by both
+    front ends to show or hide what applies:
     install panel, pause, versions, languages and DLC, cloud sync by SlattyLauncher, manual
     achievements, play time reporting, Proton choice.
   - **The GOG modules stay as they are.** Steam gets its own module, `core/src/steam/`:
@@ -94,29 +96,36 @@ against a Steam account without the owner: real checks are run by them and recor
   same formats. Covers keep their names (`steam-440.jpg`), so `library::cached_file` and the
   interface's image handling work as they are [code].
 
-## 2. Milestone zero: the multi-store refactor, GOG unchanged
+## 2. Milestone zero: game ids name their store (done, 2026-10-10)
 
-**Scope:**
+**What was done:**
 
-1. **`Store`, `GameId` and `Capabilities`** in the core. `GameId::parse` is used wherever an id
-   enters (CLI arguments, library, database reads) and wherever a path is built from an id.
-2. **The store-blind spots found by the audit [code]:**
-   - `playtime::unreported` and `report_pending` consider GOG ids only;
-   - `runner::umu_env` and `umu::lookup` take the store instead of a hard-coded `gog`;
-   - `custom::save` accepts the `steam-<digits>` form.
-3. **`LibraryGame` gets its store from its id.** Nothing else in the interface changes yet.
-4. **No database migration.** A test opens a copy of a version-7 database (the current
-   `MIGRATIONS`) and checks that everything reads back.
+1. **`core/src/store.rs`:**
+   - `Store` (`Gog`, `Steam`);
+   - `store::of(game_id)`: the store, or a refusal for an id unsafe in a file name;
+   - `store::require_gog(game_id)`.
+2. **Ids are checked before they name a file:**
+   - `lock::game`, which every operation that changes a game holds first;
+   - `custom::save`, which now accepts `steam-<digits>`;
+   - `library::cover`, whose id comes from GOG's servers.
+3. **Steam games cannot enter what SlattyLauncher deletes or rewrites** (§1.3): `Install::save`,
+   `InstallJob::save` and `InstallRecord::save` refuse them.
+4. **Play time** is reported to GOG for GOG games only (`playtime::unreported`).
+5. **No database migration and no file renamed.** `db::MIGRATIONS` is untouched, so a test reading
+   an older database would check nothing new.
+
+**Left for later, because nothing would use it yet:**
+
+- `Capabilities` (S2, S3).
+- The store in `runner::umu_env` and `umu::lookup`: a Steam game is never run by SlattyLauncher
+  under strategy B, and now cannot be registered as an install.
+- `LibraryGame`'s store (S2).
 
 | | |
 |---|---|
-| **Modules** | core: `store` (new), `lock`, `installer/record`, `installer`, `custom`, `playtime`, `runner`, `umu`, `library`; cli: argument parsing; gui: none beyond types |
-| **Dependencies** | None |
-| **Tests** | All existing tests pass unchanged. New: `GameId` round trip and refusals (`/`, `..`, empty, letters); a session of a `steam-` id is never pending for GOG; a GOG id still sent with `STORE=gog`, a Steam id with `steam`; `custom::save` accepts `steam-440`; version-7 database read back |
-| **Real check** | None needed (GOG behaviour unchanged). The owner may run `slatty library list` and open the interface as usual |
-| **Done when** | `cargo test`, clippy and fmt pass; the GOG flows are unchanged; architecture.md describes `store` |
+| **Tests** | All existing tests pass unchanged. New: store of an id and refusals (`..`, `/`, `.`, spaces, `steam:`, empty, non-ASCII); Steam ids refused by installs, jobs and records, with nothing written; `lock::game` refuses an escaping id and accepts a Steam id; a Steam session is never pending for GOG; Steam games can be customised, unsafe ids cannot; a cover whose id leads out of the cache is refused |
+| **Real check** | The ids of the owner's installed games were read (`slatty installs`, local only): all numeric, so none is refused by the new checks |
 | **Effort** | S |
-| **Risks** | Missing a place where an id becomes a path. Mitigation: grep every `format!` and `join` that uses an id; the audit already lists them (feasibility §2.1) |
 
 ## 3. Prototype: remove the biggest unknowns first
 
@@ -245,12 +254,12 @@ These are listed in feasibility §5–6 with their reasons:
 
 ## 6. Decisions for the owner
 
-| # | Decision | Options | Recommendation |
+| # | Decision | Options | Recommendation or choice |
 |---|---|---|---|
-| D1 | Strategy | B (client-driven), A (native), C (external downloader) | B |
-| D2 | Owned games that are not installed | None; the user's Web API key (documented, needs a key and a domain); QR sign-in and licences over the client protocol (no key, undocumented, SSA §2.G) | Web API key, or none at first |
-| D3 | Steam client required for Steam games | Accept (B), or refuse Steam support | Accept, and say it in the README |
-| D4 | Game id scheme | `steam-<appid>` prefix, no migration; or a `store` column with table rebuilds | Prefix |
+| D1 | Strategy | B (client-driven), A (native), C (external downloader) | **Chosen: B** |
+| D2 | Owned games that are not installed | None; the user's Web API key (documented, needs a key and a domain); QR sign-in and licences over the client protocol (no key, undocumented, SSA §2.G) | **Chosen: Web API key** |
+| D3 | Steam client required for Steam games | Accept (B), or refuse Steam support | Follows from D1; to be said in the README |
+| D4 | Game id scheme | `steam-<appid>` prefix, no migration; or a `store` column with table rebuilds | **Chosen: prefix** |
 | D5 | Covers for Steam games | Steam's local image cache (if P3 finds it); the store CDN (a new host, a switch, a SECURITY.md entry) | Local cache first |
 | D6 | Stopping a Steam game from SlattyLauncher | Only if P1 shows a safe way; otherwise no Stop button | Decide after P1 |
 | D7 | README presentation | One table with GOG and Steam columns, "by Steam" where Steam does the work | One table |
