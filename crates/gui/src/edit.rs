@@ -410,13 +410,12 @@ impl App {
     }
 
     /// What the library is sorted by when sorting by name.
-    pub fn sort_name(&self, g: &LibraryGame) -> crate::library::NaturalKey {
-        crate::library::NaturalKey::of(
-            self.customs
-                .get(&g.id)
-                .and_then(|c| c.sort_title.as_deref())
-                .unwrap_or(&g.title),
-        )
+    pub fn sort_name(&self, g: &LibraryGame) -> std::rc::Rc<crate::library::NaturalKey> {
+        self.sort_keys.of(self
+            .customs
+            .get(&g.id)
+            .and_then(|c| c.sort_title.as_deref())
+            .unwrap_or(&g.title))
     }
 }
 

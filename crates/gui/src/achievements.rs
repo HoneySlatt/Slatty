@@ -219,7 +219,7 @@ impl App {
             .iter()
             .filter_map(|g| {
                 let (done, total) = self.overview.get(&g.id)?.achievements?;
-                Some((g, done, total, g.title.to_lowercase()))
+                Some((g, done, total, self.sort_name(g)))
             })
             .collect();
         // done / total compared as cross products, exact where floats could tie wrongly.

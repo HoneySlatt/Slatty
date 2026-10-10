@@ -96,6 +96,7 @@ impl App {
         self.achievements_game = None;
         self.library.clear();
         self.gog_titles.clear();
+        self.sort_keys.clear();
         self.dialog = None;
         self.edit = None;
         self.context_menu = None;

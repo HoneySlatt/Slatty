@@ -135,7 +135,7 @@ Closing the window while something runs (a download, an update or repair, a clou
 asks first and says what would be interrupted.
 
 **Achievements** shows every game with achievements as a card (cover, unlocked count, share and
-progress bar), the most completed first. Clicking a game opens its own
+progress bar), the most completed first, then by title as in the library. Clicking a game opens its own
 achievements page in the same tab, where you can also unlock or clear them once **Manual achievements** is on in Settings → Advanced. SlattyLauncher reads which games
 have achievements and cloud saves from GOG in the background and keeps the answer in
 `~/.cache/slatty/<user id>/overview.json`; **Refresh** reads it again.

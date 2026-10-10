@@ -1,7 +1,10 @@
 //! The game library: GOG sync, covers and images, favorites, what GOG reads for each game
 //! (achievements, cloud saves, play time), and the shelf, filters and order shown.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
+use std::rc::Rc;
 
 use iced::Task;
 use iced::futures::{SinkExt, Stream, StreamExt};
@@ -460,6 +463,27 @@ fn fit_image(bytes: Vec<u8>, cached: &std::path::Path) -> Vec<u8> {
     // The original is downloaded again only if this copy goes away.
     let _ = slatty_core::fsutil::write_atomic(cached, &out);
     out
+}
+
+/// The `NaturalKey` of each title, made once: making them took 4 ms of every view at 10,000 games.
+/// Kept by title, which alone decides the key, so a renamed game never finds a stale one.
+#[derive(Default)]
+pub struct SortKeys(RefCell<HashMap<String, Rc<NaturalKey>>>);
+
+impl SortKeys {
+    pub fn of(&self, title: &str) -> Rc<NaturalKey> {
+        let mut keys = self.0.borrow_mut();
+        if let Some(key) = keys.get(title) {
+            return key.clone();
+        }
+        let key = Rc::new(NaturalKey::of(title));
+        keys.insert(title.to_string(), key.clone());
+        key
+    }
+
+    pub fn clear(&self) {
+        self.0.borrow_mut().clear();
+    }
 }
 
 /// A title sorted the way people read it: case aside, and numbers by their value, so "Game 2"

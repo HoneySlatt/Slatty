@@ -249,6 +249,7 @@ pub struct App {
     /// How the user renamed or illustrated games, and GOG's own titles to go back to.
     pub customs: HashMap<String, slatty_core::custom::Custom>,
     pub gog_titles: HashMap<String, String>,
+    pub sort_keys: library::SortKeys,
     pub edit: Option<edit::EditDraft>,
     pub menu_for: Option<String>,
     pub context_menu: Option<edit::ContextMenu>,
@@ -331,6 +332,7 @@ impl Default for App {
             completed: Vec::new(),
             customs: HashMap::new(),
             gog_titles: HashMap::new(),
+            sort_keys: Default::default(),
             edit: None,
             menu_for: None,
             context_menu: None,

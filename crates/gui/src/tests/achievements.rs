@@ -95,13 +95,14 @@ fn achievements_tab_lists_games_by_completion() {
         order,
         [
             "[FAKE] Game 6",
-            "[FAKE] Game 11",
             "[FAKE] Game 2",
+            "[FAKE] Game 11",
             "[FAKE] Game 9",
             "[FAKE] Game 10",
             "[FAKE] Game 8"
         ],
-        "highest share first, even with fewer unlocked; equal shares by title"
+        "highest share first, even with fewer unlocked; equal shares by title, as the library \
+         sorts them (numbers by value)"
     );
     let mut ui = render(&app);
     assert!(ui.find("4 / 4").is_ok());
