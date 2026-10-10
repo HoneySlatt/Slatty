@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::auth::Tokens;
 use crate::db::Db;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::http;
 
 fn url(user_id: &str, game_id: &str) -> String {
@@ -97,14 +97,41 @@ pub fn keep_private(db: &Db, user_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Sends every pending session; stops at the first failure so the rest is retried later.
-/// Returns the minutes reported.
+/// Sends every pending session; stops at the first failure so the rest is retried later, except a
+/// session GOG refuses for good, which is skipped. Returns the minutes reported.
 pub async fn report_pending(db: &Db, http: &Client, tokens: &Tokens) -> Result<i64> {
+    send_pending(db, &tokens.user_id, |s| async move {
+        report(http, tokens, &s.game_id, s.started_at, s.minutes).await
+    })
+    .await
+}
+
+async fn send_pending<F: Future<Output = Result<()>>>(
+    db: &Db,
+    user_id: &str,
+    send: impl Fn(Unreported) -> F,
+) -> Result<i64> {
     let mut minutes = 0;
-    for s in unreported(db, &tokens.user_id)? {
-        report(http, tokens, &s.game_id, s.started_at, s.minutes).await?;
-        mark_reported(db, s.id)?;
-        minutes += s.minutes;
+    for s in unreported(db, user_id)? {
+        let (id, played) = (s.id, s.minutes);
+        match send(s).await {
+            Ok(()) => {
+                mark_reported(db, id)?;
+                minutes += played;
+            }
+            // Refused for good (not a session or token GOG may accept later): sending it again
+            // would hold back every session after it.
+            Err(Error::Http { status, .. })
+                if (400..500).contains(&status) && ![401, 408, 429].contains(&status) =>
+            {
+                tracing::warn!("play time of session {id} refused by GOG (HTTP {status})");
+                db.conn().execute(
+                    "UPDATE sessions SET reported = 3 WHERE id = ?1",
+                    params![id],
+                )?;
+            }
+            Err(e) => return Err(e),
+        }
     }
     Ok(minutes)
 }
@@ -153,6 +180,40 @@ mod tests {
             .unwrap();
         let pending = unreported(&db, "me").unwrap();
         assert_eq!(pending.iter().map(|s| s.id).collect::<Vec<_>>(), [3]);
+    }
+
+    /// A session GOG refuses for good does not hold back the ones after it, and is not sent again;
+    /// a network error or a server failing for now stops, so that the rest is sent later.
+    #[tokio::test]
+    async fn a_session_gog_refuses_does_not_hold_back_the_others() {
+        let db = Db::in_memory().unwrap();
+        db.conn()
+            .execute_batch(
+                "INSERT INTO sessions (id, game_id, user_id, started_at, ended_at, state, reported) VALUES
+                   (1, '1', 'me', 1000, 1600, 'ended', 0),
+                   (2, '2', 'me', 2000, 2600, 'ended', 0),
+                   (3, '3', 'me', 3000, 3600, 'ended', 0);",
+            )
+            .unwrap();
+        let answer = |status: u16| {
+            move |s: Unreported| {
+                let refused = s.game_id == "1";
+                async move {
+                    if refused {
+                        Err(crate::error::Error::Http {
+                            context: "test",
+                            status,
+                        })
+                    } else {
+                        Ok(())
+                    }
+                }
+            }
+        };
+        assert!(send_pending(&db, "me", answer(503)).await.is_err());
+        assert_eq!(unreported(&db, "me").unwrap().len(), 3, "tried again later");
+        assert_eq!(send_pending(&db, "me", answer(400)).await.unwrap(), 20);
+        assert!(unreported(&db, "me").unwrap().is_empty());
     }
 
     #[test]

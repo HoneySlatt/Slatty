@@ -251,7 +251,8 @@ A launch goes through these steps:
    launcher.
 5. Cloud saves are uploaded, Comet stops, and newly recorded achievements are listed.
 6. The session is added to your play time on GOG, as GOG Galaxy does. Sessions shorter than a
-   minute are not sent (GOG ignores them). Offline, it is sent after the next session.
+   minute are not sent (GOG ignores them). Offline, it is sent after the next session. A session
+   GOG refuses outright is not sent again, and the ones after it still are.
 
 Ctrl+C asks the game to quit; a second Ctrl+C forces it. Pressed before the game starts (Ctrl+C,
 or Stop game in the interface), it keeps the game from starting. Options:
