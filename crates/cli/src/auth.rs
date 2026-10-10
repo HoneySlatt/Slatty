@@ -51,7 +51,7 @@ pub async fn run(ctx: &Ctx, cmd: AuthCommand) -> Result<()> {
         AuthCommand::Logout => {
             let account = Account::load(&ctx.db, &ctx.dirs).await?;
             let name = account.info.username.clone();
-            account.logout(&ctx.db).await?;
+            account.logout(&ctx.db, &ctx.dirs).await?;
             println!("Logged out {name}. Local cache and saves are kept.");
             Ok(())
         }

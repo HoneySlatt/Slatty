@@ -13,6 +13,8 @@ Include the steps to reproduce and the version or commit you tested.
 - **No password.** You sign in on GOG's own page, in your browser.
 - **Tokens stay in the keyring.** Session tokens are stored only in the system keyring (Secret
   Service). Without a keyring, SlattyLauncher refuses to store them rather than writing a plain file.
+- **Signing out is final.** Logging out deletes the tokens from the keyring. Installs and updates
+  still running keep their own copy in memory until they end, and never write it back.
 - **Tokens stay out of logs and process lists.**
   - They never appear in logs, error messages or process arguments.
   - Some GOG endpoints take tokens in the URL, so network errors are reported without their URL.

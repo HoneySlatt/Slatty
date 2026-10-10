@@ -82,7 +82,7 @@ impl App {
         Task::perform(
             async move {
                 let account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-                account.logout(&core.db).await.map_err(err)
+                account.logout(&core.db, &core.dirs).await.map_err(err)
             },
             Message::LoggedOut,
         )

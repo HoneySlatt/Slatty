@@ -166,8 +166,11 @@ impl Account {
         })
     }
 
-    pub async fn logout(self, db: &Db) -> Result<()> {
+    pub async fn logout(self, db: &Db, dirs: &Dirs) -> Result<()> {
         let user_id = self.info.user_id.clone();
+        // A refresh running now would store its tokens after they are deleted.
+        let lock_path = dirs.locks().join(format!("auth-{user_id}.lock"));
+        let _lock = lock::acquire(&lock_path, Duration::from_secs(30)).await?;
         tokio::task::spawn_blocking(move || credentials::delete(&user_id))
             .await
             .expect("keyring task panicked")?;
@@ -180,9 +183,7 @@ impl Account {
 pub async fn fresh(http: &Client, dirs: &Dirs, current: &Tokens, force: bool) -> Result<Tokens> {
     let lock_path = dirs.locks().join(format!("auth-{}.lock", current.user_id));
     let _lock = lock::acquire(&lock_path, Duration::from_secs(30)).await?;
-    let tokens = load_tokens(current.user_id.clone())
-        .await?
-        .unwrap_or_else(|| current.clone());
+    let (tokens, signed_in) = refresh_base(load_tokens(current.user_id.clone()).await?, current);
     if !force && !tokens.is_expired() {
         return Ok(tokens);
     }
@@ -193,8 +194,20 @@ pub async fn fresh(http: &Client, dirs: &Dirs, current: &Tokens, force: bool) ->
             "token belongs to another account",
         ));
     }
-    store_tokens(fresh.clone()).await?;
+    if signed_in {
+        store_tokens(fresh.clone()).await?;
+    }
     Ok(fresh)
+}
+
+/// The tokens a refresh starts from, and whether the account is still signed in. With nothing in
+/// the keyring, the account was signed out while work kept running: the work may refresh its own
+/// copy, but storing it would sign the account back in.
+fn refresh_base(stored: Option<Tokens>, current: &Tokens) -> (Tokens, bool) {
+    match stored {
+        Some(t) => (t, true),
+        None => (current.clone(), false),
+    }
 }
 
 async fn store_tokens(tokens: Tokens) -> Result<()> {
@@ -247,5 +260,19 @@ mod tests {
             Account::load_for(&db, &dirs, "old").await,
             Err(Error::NotLoggedIn)
         ));
+    }
+
+    #[test]
+    fn a_refresh_after_signing_out_does_not_sign_the_account_back_in() {
+        let tokens = |access: &str| Tokens {
+            user_id: "1".into(),
+            access_token: Secret::new(access),
+            refresh_token: Secret::new("[FAKE] refresh"),
+            expires_at: 0,
+        };
+        let (from, store) = refresh_base(Some(tokens("[FAKE] stored")), &tokens("[FAKE] mine"));
+        assert!(store && from.access_token.expose() == "[FAKE] stored");
+        let (from, store) = refresh_base(None, &tokens("[FAKE] mine"));
+        assert!(!store && from.access_token.expose() == "[FAKE] mine");
     }
 }
