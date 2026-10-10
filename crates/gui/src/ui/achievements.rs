@@ -11,11 +11,15 @@ use slatty_core::library::LibraryGame;
 use super::{inner, note, round_button};
 use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
+use crate::library::GridWindow;
 use crate::theme::{self, bold, semibold, tokens};
 use crate::{AchievementChange, App, Loadable, Message, Page, PendingChange};
 
 /// Height of a game card on the Achievements tab.
 const TILE_HEIGHT: f32 = 186.0;
+/// Widest a tile of the Achievements tab grows, and the space between tiles.
+const TILE_MAX_WIDTH: f32 = 540.0;
+const TILE_SPACING: f32 = 14.0;
 /// Height of an achievement on a game's achievements page.
 const ACHIEVEMENT_HEIGHT: f32 = 112.0;
 
@@ -52,16 +56,35 @@ impl App {
             .style(theme::tonal),
         ]
         .align_y(Alignment::Center);
-        let cards: Vec<Element<'_, Message>> = games
-            .into_iter()
-            .map(|(g, done, total)| self.achievement_tile(g, done, total))
+        // Only the rows in view are built, as in the library.
+        let view = self.achievements_view;
+        let w = GridWindow::new(
+            games.len(),
+            view.map_or(self.window.width - 40.0, |v| v.bounds().width) - 18.0,
+            TILE_MAX_WIDTH,
+            TILE_SPACING,
+            Some(TILE_HEIGHT),
+            view.map_or(0.0, |v| v.absolute_offset().y),
+            view.map_or(self.window.height, |v| v.bounds().height),
+        );
+        let cards: Vec<Element<'_, Message>> = games[w.first..w.end]
+            .iter()
+            .map(|&(g, done, total)| self.achievement_tile(g, done, total))
             .collect();
         column![
             header,
-            scrollable(grid(cards).fluid(540).spacing(14).height(Length::Shrink))
-                .spacing(8)
-                .style(theme::scroller)
-                .height(Length::Fill)
+            scrollable(column![
+                space().height(w.above),
+                grid(cards)
+                    .columns(w.columns)
+                    .spacing(TILE_SPACING)
+                    .height(Length::Shrink),
+                space().height(w.below),
+            ])
+            .spacing(8)
+            .on_scroll(Message::AchievementsScrolled)
+            .style(theme::scroller)
+            .height(Length::Fill)
         ]
         .spacing(20)
         .padding(Padding::ZERO.top(4))

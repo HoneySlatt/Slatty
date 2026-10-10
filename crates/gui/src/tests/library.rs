@@ -224,6 +224,16 @@ fn library_at_10000_games() {
     app.search = "game 99".into();
     time(&app, "view, searching");
     app.search.clear();
+    // The Achievements tab, every game with achievements.
+    for g in &app.library {
+        app.overview.entry(g.id.clone()).or_default().achievements = Some((3, 10));
+    }
+    app.page = Page::Achievements;
+    time(&app, "achievements tab");
+    let t = std::time::Instant::now();
+    let _ = Simulator::with_size(settings(), SIZE, app.view());
+    println!("achievements layout: {:?}", t.elapsed());
+    app.page = Page::Library;
     // Laying the page out, beyond building it: a window first with almost nothing, then the library.
     let base = {
         let mut empty = library_app();

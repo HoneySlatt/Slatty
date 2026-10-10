@@ -188,6 +188,8 @@ pub struct App {
     pub card_width: f32,
     /// Where the cover grid is scrolled to and how large it shows: only the rows in view are built.
     pub grid_view: Option<iced::widget::scrollable::Viewport>,
+    /// The same for the grid of the Achievements tab.
+    pub achievements_view: Option<iced::widget::scrollable::Viewport>,
     pub filters: Filters,
     pub filters_open: bool,
     pub selected: Option<String>,
@@ -272,6 +274,7 @@ impl Default for App {
             sort: Sort::default(),
             card_width: 150.0,
             grid_view: None,
+            achievements_view: None,
             filters: Filters::default(),
             filters_open: false,
             selected: None,
@@ -338,6 +341,7 @@ pub enum Message {
     LoggedOut(Result<(), String>),
     SyncLibrary,
     GridScrolled(iced::widget::scrollable::Viewport),
+    AchievementsScrolled(iced::widget::scrollable::Viewport),
     LibrarySynced(Result<LibraryCache, String>),
     Search(String),
     ShowPage(Page),
@@ -435,6 +439,7 @@ impl App {
             self.page_shown = Self::fade_in(self.now);
             // A page shown again starts at its top: so does the part of the grid built.
             self.grid_view = None;
+            self.achievements_view = None;
         }
         task
     }
@@ -524,6 +529,7 @@ impl App {
             Message::LoggedOut(Err(e)) => self.notify_error(e),
             Message::SyncLibrary => return self.sync_library(),
             Message::GridScrolled(viewport) => self.grid_view = Some(viewport),
+            Message::AchievementsScrolled(viewport) => self.achievements_view = Some(viewport),
             Message::LibrarySynced(result) => return self.library_synced(result),
             Message::Search(s) => {
                 self.search = s;

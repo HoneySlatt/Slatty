@@ -100,6 +100,7 @@ impl App {
                 width,
                 self.card_width,
                 GRID_SPACING,
+                None,
                 offset,
                 height,
             );

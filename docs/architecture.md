@@ -54,7 +54,7 @@ live under `ui/`.
 | Module | Responsibility |
 |---|---|
 | `login` | Browser sign-in, sign-out, avatar |
-| `library` | Library sync, covers and images (key art wider than 2560 pixels is scaled down once, in the cache), favorites, shelf, sort (numbers by value) and filters, per-game overview and play time. Only the rows of the cover grid in view are built (`GridWindow`, a row of margin each side, spaces of the right height for the rest), so a library of 10,000 games builds in about 2 ms; `library_at_10000_games` (ignored test) measures it |
+| `library` | Library sync, covers and images (key art wider than 2560 pixels is scaled down once, in the cache), favorites, shelf, sort (numbers by value) and filters, per-game overview and play time. Only the rows of the cover grid in view are built (`GridWindow`, a row of margin each side, spaces of the right height for the rest), so a library of 10,000 games builds in about 2 ms, and the Achievements tab does the same; `library_at_10000_games` (ignored test) measures both |
 | `play` | Launching a game and following its session |
 | `cloud` | Cloud save check, sync and conflict choices |
 | `achievements` | Loading achievements, confirmed manual changes |

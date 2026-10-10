@@ -203,3 +203,18 @@ fn a_narrow_window_lays_the_achievements_drawer_over_the_page() {
         "over the page in a narrow window, closed by a click beside it"
     );
 }
+
+#[test]
+fn the_achievements_tab_builds_only_the_tiles_in_view_at_10000_games() {
+    let mut app = library_app();
+    app.library = (1..=10_000)
+        .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
+        .collect();
+    for g in &app.library {
+        app.overview.entry(g.id.clone()).or_default().achievements = Some((3, 10));
+    }
+    app.page = Page::Achievements;
+    let mut ui = render(&app);
+    assert!(ui.find("[FAKE] Game 1").is_ok());
+    assert!(ui.find("[FAKE] Game 5000").is_err(), "far below: not built");
+}

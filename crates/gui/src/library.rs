@@ -478,19 +478,21 @@ pub struct GridWindow {
 }
 
 impl GridWindow {
-    /// For `count` cards at most `max_width` wide, `spacing` apart, in 3:4 cells, across `width`,
-    /// scrolled to `offset` and showing `height`. The columns follow Iced's grid.
+    /// For `count` cards at most `max_width` wide, `spacing` apart, across `width`, scrolled to
+    /// `offset` and showing `height`. Cells are `cell_height` high, or 3:4 when `None`. The columns
+    /// follow Iced's grid.
     pub fn new(
         count: usize,
         width: f32,
         max_width: f32,
         spacing: f32,
+        cell_height: Option<f32>,
         offset: f32,
         height: f32,
     ) -> Self {
         let columns = (((width + spacing) / (max_width + spacing)).ceil() as usize).max(1);
         let cell = (width - spacing * (columns - 1) as f32) / columns as f32;
-        let pitch = cell * 4.0 / 3.0 + spacing;
+        let pitch = cell_height.unwrap_or(cell * 4.0 / 3.0) + spacing;
         let rows = count.div_ceil(columns);
         let total = (rows as f32 * pitch - spacing).max(0.0);
         let offset = offset.clamp(0.0, (total - height).max(0.0));
@@ -518,7 +520,7 @@ mod tests {
     #[test]
     fn only_the_rows_in_view_are_built_and_the_rest_keeps_its_height() {
         // 10,000 covers, 4 columns of 100 wide: 2,500 rows of 133.3 plus 12 between.
-        let w = GridWindow::new(10_000, 436.0, 100.0, 12.0, 0.0, 600.0);
+        let w = GridWindow::new(10_000, 436.0, 100.0, 12.0, None, 0.0, 600.0);
         assert_eq!(w.columns, 4);
         assert_eq!((w.first, w.above), (0, 0.0));
         let pitch = 100.0 * 4.0 / 3.0 + 12.0;
@@ -531,14 +533,17 @@ mod tests {
         );
 
         // Halfway down: a row of margin above, and the same total.
-        let w = GridWindow::new(10_000, 436.0, 100.0, 12.0, 1_000.0 * pitch, 600.0);
+        let w = GridWindow::new(10_000, 436.0, 100.0, 12.0, None, 1_000.0 * pitch, 600.0);
         assert_eq!(w.first, 4 * 999);
         let built = ((w.end - w.first) / 4) as f32 * pitch - 12.0;
         assert!((w.above + built + w.below - total).abs() < 0.5);
         // Past the end (the library just got shorter): the last rows.
-        let w = GridWindow::new(10, 436.0, 100.0, 12.0, 1e9, 600.0);
+        let w = GridWindow::new(10, 436.0, 100.0, 12.0, None, 1e9, 600.0);
         assert_eq!((w.first, w.end), (0, 10));
-        assert_eq!(GridWindow::new(0, 436.0, 100.0, 12.0, 0.0, 600.0).end, 0);
+        assert_eq!(
+            GridWindow::new(0, 436.0, 100.0, 12.0, None, 0.0, 600.0).end,
+            0
+        );
     }
 
     #[test]
