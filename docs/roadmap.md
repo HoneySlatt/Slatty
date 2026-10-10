@@ -39,6 +39,9 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   - Wine prefix created at first launch.
 - **Launching.** A Proton build per game; native Linux games through `steam-run` or umu on NixOS;
   games with several launch options ask which one at the first Play.
+- **Managed Proton builds.** GE-Proton, Proton-CachyOS and UMU-Proton downloaded from GitHub once
+  turned on, checked against their published sums; `<project>-latest` to follow the newest build,
+  kept up to date once a day at start if asked, never moving back to an older version.
 - **Privacy and security.** Switches for umu's game database, play time reporting and Comet;
   Comet started only for games that ship the Galaxy SDK; private data folders; no write through
   a link leading out of a game folder; dependency audit.
@@ -56,7 +59,7 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 
 - **Gamepad navigation.** A couch mode.
 - **Translations of the interface.** It is in English for now.
-- **More runners.** System Wine, managed Proton downloads.
+- **More runners.** System Wine.
 - **Game isolation.** Games run in umu's container with a home folder of their own, Windows games
   by default; the switches are in Game settings and Settings → Privacy. Checked with the container
   and with Hollow Knight, Firewatch and Cyberpunk 2077 (graphics, sound, gamepad, cloud saves,

@@ -27,6 +27,7 @@ against real GOG services; details are in [docs/compatibility.md](docs/compatibi
 | Install native Linux builds from GOG's offline installers, file by file | yes (Hollow Knight: Silksong installed and played) |
 | Launch through umu + Proton, follow the session until the last process exits | yes |
 | Launch options: pick the game or one of its tools at the first Play, change it later | yes (Trails in the Sky) |
+| Proton builds from GitHub (GE-Proton, Proton-CachyOS, UMU-Proton), checked against their sums, kept up to date if asked (off until turned on in Settings → Runners) | download tried by the user; update not yet |
 | Cloud saves: three-way sync, conflict handling, backups | download and upload yes |
 | Achievements: list, report unlocks made in game through Comet | listing yes, in-game unlock not yet |
 | Achievements: unlock or clear manually (off until turned on in Settings → Advanced) | yes |
@@ -45,8 +46,8 @@ See [docs/roadmap.md](docs/roadmap.md).
 - A Secret Service keyring (GNOME Keyring, KeePassXC, KWallet with its Secret Service bridge).
 - [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and a Proton build: a custom one
   (GE-Proton, Proton-CachyOS, …) in `~/.local/share/Steam/compatibilitytools.d`, one of Valve's
-  (Proton Experimental, stable, Hotfix) downloaded by Steam in any of its libraries, or one umu
-  downloaded.
+  (Proton Experimental, stable, Hotfix) downloaded by Steam in any of its libraries, one umu
+  downloaded, or one SlattyLauncher downloads from GitHub (Settings → Runners).
 - [Comet](https://github.com/imLinguin/comet) for achievements.
 - Comet's `GalaxyCommunication.exe` dummy service, which some games need to report achievements.
 - An XDG desktop portal with a file chooser (xdg-desktop-portal-gtk, -gnome, -kde…) and libdbus
