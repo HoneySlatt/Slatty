@@ -173,6 +173,13 @@ impl App {
                                 "The download of {} could not resume: {e}",
                                 self.title_of(&game_id)
                             ));
+                            // It waits for Resume or Discard, rather than being tried again and
+                            // again.
+                            for (id, kind) in &mut self.interrupted {
+                                if *id == game_id && *kind == crate::Interrupted::Download {
+                                    *kind = crate::Interrupted::Paused;
+                                }
+                            }
                         }
                         InstallView::Failed(e)
                     }
@@ -181,6 +188,10 @@ impl App {
                 self.install_views.insert(game_id.clone(), view);
                 if auto && ready {
                     return self.update_install(InstallMsg::Start(game_id));
+                }
+                // One that cannot start does not stop the queue.
+                if auto {
+                    return self.start_next();
                 }
             }
             InstallMsg::Start(game_id) => {
@@ -286,6 +297,8 @@ impl App {
                     Ok(()) => self.forget_interrupted(&game_id),
                     Err(e) => self.notify_error(e),
                 }
+                // A discarded download no longer holds the queue.
+                return self.start_next();
             }
             InstallMsg::Proton(game_id, choice) => {
                 if let Some(InstallView::Ready(info)) = self.install_views.get_mut(&game_id) {
@@ -675,20 +688,7 @@ impl App {
             .into_iter()
             .map(|id| self.update_maintenance(MaintenanceMsg::Apply(id, Change::Update)))
             .collect();
-        if self.installing().is_none() {
-            let cut_off = self
-                .interrupted
-                .iter()
-                .find(|(_, kind)| *kind == crate::Interrupted::Download)
-                .map(|(id, _)| id.clone());
-            tasks.push(match cut_off {
-                Some(game_id) => {
-                    self.auto_resume = Some(game_id.clone());
-                    self.update_install(InstallMsg::Prepare(game_id, None))
-                }
-                None => self.start_next(),
-            });
-        }
+        tasks.push(self.start_next());
         // The installs still waiting are planned, for their size.
         for game_id in self.queue.clone() {
             tasks.push(self.update_install(InstallMsg::Prepare(game_id, None)));

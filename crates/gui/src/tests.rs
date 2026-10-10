@@ -2362,3 +2362,53 @@ fn a_game_with_several_launch_options_asks_once_which_to_start() {
     assert_eq!(app.launch_choices["3"], "Configuration Tool");
     snapshot(&mut ui, "launch-in-game-settings");
 }
+
+#[test]
+fn the_queue_goes_on_once_nothing_downloads_or_waits() {
+    use crate::Interrupted;
+    let mut app = library_app();
+    ready_to_install(&mut app, "5");
+    let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
+    ready_to_install(&mut app, "6");
+    let _ = app.update(Message::Install(InstallMsg::Start("6".into())));
+    assert_eq!(app.queue, ["6"]);
+
+    // Paused: the queue waits.
+    let _ = app.update(Message::Install(InstallMsg::Done("5".into(), Err(None))));
+    app.interrupted = vec![("5".into(), Interrupted::Paused)];
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(crate::install::PlanInfo {
+            resumable: true,
+            ..fake_plan()
+        }),
+    )));
+    assert!(app.installing().is_none());
+    assert_eq!(app.queue, ["6"]);
+
+    // Discarded: the queue goes on.
+    let _ = app.update(Message::Install(InstallMsg::Discarded("5".into(), Ok(()))));
+    assert!(matches!(
+        app.install_views.get("6"),
+        Some(InstallView::Running { .. })
+    ));
+    assert!(app.queue.is_empty());
+}
+
+#[test]
+fn a_cut_off_download_that_cannot_resume_waits_instead_of_being_retried() {
+    use crate::Interrupted;
+    let mut app = library_app();
+    app.interrupted = vec![("5".into(), Interrupted::Download)];
+    app.queue = vec!["6".into()];
+    // Resumed first, before the queue.
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("5"));
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Err("offline".into()),
+    )));
+    assert_eq!(app.interrupted, [("5".to_string(), Interrupted::Paused)]);
+    assert_eq!(app.queue, ["6"], "held by the download waiting");
+    assert!(app.auto_resume.is_none());
+}

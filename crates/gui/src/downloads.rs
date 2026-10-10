@@ -114,9 +114,24 @@ impl App {
         Task::none()
     }
 
-    /// Starts the first install of the queue, unless one is downloading.
+    /// Starts what downloads next, unless something downloads: a download cut off (closed window,
+    /// crash) first, then the first install of the queue. A download paused on request holds the
+    /// queue until it is resumed or discarded.
     pub fn start_next(&mut self) -> Task<Message> {
-        if self.installing().is_some() || self.queue.is_empty() {
+        if self.installing().is_some() {
+            return Task::none();
+        }
+        let waiting = |kind| {
+            self.interrupted
+                .iter()
+                .find(|(_, k)| *k == kind)
+                .map(|(id, _)| id.clone())
+        };
+        if let Some(game_id) = waiting(crate::Interrupted::Download) {
+            self.auto_resume = Some(game_id.clone());
+            return self.update_install(InstallMsg::Prepare(game_id, None));
+        }
+        if waiting(crate::Interrupted::Paused).is_some() || self.queue.is_empty() {
             return Task::none();
         }
         let game_id = self.queue.remove(0);
