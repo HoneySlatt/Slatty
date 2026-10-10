@@ -30,7 +30,7 @@ against real GOG services; details are in [docs/compatibility.md](docs/compatibi
 | Cloud saves: three-way sync, conflict handling, backups | download and upload yes |
 | Achievements: list, report unlocks made in game through Comet | listing yes, in-game unlock not yet |
 | Achievements: unlock or clear manually (off until turned on in Settings → Advanced) | yes |
-| Edit a game: title, sorting title, cover and background (from a file, or from SteamGridDB once turned on), hide it | yes (SteamGridDB not yet) |
+| Edit a game: title, sorting title, cover and background (from a file, or from SteamGridDB once turned on), hide it | yes |
 | Verify, repair and uninstall installed games | verify and repair yes, uninstall not yet |
 | Updates: detect a newer build, update in place | detection yes, applying not yet |
 | DLC and language: choose at install, add, remove or switch later | ownership detection yes, changes not yet |
