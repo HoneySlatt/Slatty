@@ -59,6 +59,8 @@ Proton-CachyOS.
 | 2026-10-09 | Alan Wake (1207659037) | — | Download from the interface | Cancel while downloading | OK | Stopped at about 1 GB; the hidden partial folder and the install job were deleted, nothing else touched |
 | 2026-10-09 | Stardew Valley (1453375253) | 1.6.15 | CLI download, killed with SIGKILL at 154 MiB | Crash, then a damaged file | OK | The job stayed `downloading`, 4 half-written temporary files, no game folder. A finished file was then overwritten in the middle (4 KiB of zeros, as after a power cut). The resumed install found and fetched it again, cleared the temporary files, and `slatty verify` found every file intact. Uninstalled afterwards |
 | 2026-10-09 | Hollow Knight (1308320804) | 1.5.12620 | Uninstalled with its prefix, installed again | Cloud saves | Fixed | The save history outlived the prefix: the new, empty save folder read as "deleted by the user", nothing was downloaded at first launch and the game started from scratch. Nothing was lost (prefix backup, cloud untouched); the save was put back from the backup. A missing or emptied save folder now downloads the cloud copies |
+| 2026-10-10 | Hollow Knight (1308320804) | 1.5.12620 | Installed by slatty under `/home` (its own mount), isolated | Play isolated | OK | Played 2 min with a DualSense (played and checked by the user): graphics, sound and gamepad fine; cloud checked before, 5 saves uploaded after, so the game wrote them in its prefix. Comet started; no achievement earned, so reaching it from the container is not shown yet. Its own home holds only caches (Mesa shaders, protonfixes' log, PulseAudio): shaders are compiled again at the first isolated launch |
+| 2026-10-10 | Firewatch (1459256379) | — | Installed on the NAS (its own mount), isolated | Play isolated | OK | Played 1 min (played and checked by the user); cloud checked before (8 uploaded) and after (4 uploaded); Comet started; no achievement earned. Its own home holds only caches, as above |
 
 ## Not tested against GOG yet
 
@@ -73,3 +75,5 @@ Proton-CachyOS.
 - An achievement earned in game and reported through Comet.
 - A game that needs the Galaxy dummy service. The registration itself was checked under
   UMU-Proton 10.0-4 in a throwaway prefix.
+- Isolated: an achievement reaching Comet from the container, a game with umu fixes (Cyberpunk
+  2077 is being installed for it), a Linux game.
