@@ -23,7 +23,6 @@ pub struct Boot {
     pub library: Option<LibraryCache>,
     pub installs: Vec<Install>,
     pub records: HashMap<String, InstallSummary>,
-    pub launch_options: HashMap<String, Vec<String>>,
     pub launch_choices: HashMap<String, String>,
     pub interrupted: Vec<String>,
     pub library_root: PathBuf,
@@ -37,7 +36,6 @@ pub struct Boot {
     /// Whether a SteamGridDB API key is in the keyring; only asked once the integration is on.
     pub steamgriddb_key: Option<bool>,
     pub proton: Option<PathBuf>,
-    pub proton_choices: Vec<PathBuf>,
     /// Whether Proton builds may be downloaded from GitHub, and those already downloaded.
     pub proton_downloads: bool,
     pub downloaded_protons: Vec<PathBuf>,
@@ -82,10 +80,6 @@ pub async fn boot() -> Result<Boot, String> {
         None => (None, HashMap::new()),
     };
     let installs = Install::list(&db).map_err(err)?;
-    let launch_options = installs
-        .iter()
-        .map(|i| (i.game_id.clone(), slatty_core::runner::launch_options(i)))
-        .collect();
     let launch_choices = installs
         .iter()
         .filter_map(|i| {
@@ -118,10 +112,10 @@ pub async fn boot() -> Result<Boot, String> {
     } else {
         None
     };
-    // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
-    // A link it could not make only leaves that `-latest` entry out of the menus.
+    // A link it could not make only leaves that `-latest` entry out of the menus. Game folders and
+    // Steam libraries, which can sit on a network drive still waking up, are read once the library
+    // shows (`App::read_launch_options`, `runners::list`).
     let _ = slatty_core::protons::link_newest(&dirs);
-    let proton_choices = slatty_core::settings::proton_candidates(&dirs);
     let proton_downloads = slatty_core::settings::proton_downloads(&db).map_err(err)?;
     let downloaded_protons = slatty_core::protons::installed(&dirs);
     let proton_updates = slatty_core::settings::proton_updates(&db).map_err(err)?;
@@ -166,13 +160,11 @@ pub async fn boot() -> Result<Boot, String> {
         account,
         library,
         installs,
-        launch_options,
         launch_choices,
         records,
         interrupted,
         library_root,
         proton,
-        proton_choices,
         proton_downloads,
         downloaded_protons,
         proton_updates,

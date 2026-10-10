@@ -392,11 +392,11 @@ impl App {
                         .insert(0, (game_id.clone(), progress.bytes_total));
                 }
                 self.installs.insert(game_id.clone(), install);
-                self.refresh_record(&game_id);
+                let read = self.refresh_record(&game_id);
                 if self.selected.as_deref() == Some(game_id.as_str()) {
                     self.panel = None;
                 }
-                return self.start_next();
+                return Task::batch([read, self.start_next()]);
             }
             // Paused: the queue waits too.
             InstallMsg::Done(game_id, Err(None)) => {

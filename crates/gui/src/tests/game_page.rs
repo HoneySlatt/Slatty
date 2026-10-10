@@ -220,6 +220,33 @@ fn the_session_shows_in_a_drawer_with_stop() {
     assert_eq!(app.panel, None);
 }
 
+/// How a game starts is read from its folder after start, off the interface thread: the folder
+/// can be on a network drive still waking up. A Play pressed before waits for it.
+#[test]
+fn play_waits_for_the_game_folder_read_after_start() {
+    let mut app = library_app();
+    open(&mut app, "3", None);
+    let read = app.update(Message::Play("3".into()));
+    assert!(app.play.is_none() && app.launch_prompt.is_none());
+    assert!(read.units() > 0, "its folder is read");
+    let _ = app.update(Message::LaunchOptions(
+        vec![(
+            "3".into(),
+            vec!["[FAKE] Game 3".into(), "Configuration Tool".into()],
+        )],
+        Some("3".into()),
+    ));
+    assert_eq!(
+        app.launch_prompt.as_deref(),
+        Some("3"),
+        "then asks, as before"
+    );
+    // A folder that could not be read: Play goes on, without asking again and again.
+    let mut app = library_app();
+    let _ = app.update(Message::LaunchOptions(Vec::new(), Some("3".into())));
+    assert!(app.play.is_some());
+}
+
 #[test]
 fn a_game_with_several_launch_options_asks_once_which_to_start() {
     let mut app = library_app();

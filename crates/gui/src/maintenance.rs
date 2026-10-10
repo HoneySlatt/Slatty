@@ -416,13 +416,14 @@ impl App {
                     Ok(_) => self.forget_interrupted(&game_id),
                     Err(_) => self.sync_interrupted(&game_id),
                 }
-                self.refresh_record(&game_id);
+                let read = self.refresh_record(&game_id);
                 let view = self.maintenance.entry(game_id).or_default();
                 view.finish(vec![match result {
                     Ok(summary) => summary,
                     Err(None) => "Paused. Apply it again to resume.".into(),
                     Err(Some(e)) => format!("Update failed: {e}. Run it again to resume."),
                 }]);
+                return read;
             }
         }
         Task::none()

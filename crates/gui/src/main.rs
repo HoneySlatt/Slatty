@@ -402,6 +402,9 @@ pub enum Message {
     Cover(String, Option<PathBuf>),
     /// The covers found in the account's cache at start, by game id.
     CachedCovers(HashMap<String, PathBuf>),
+    /// How these installed games can be started, read from their folders; then the game whose
+    /// Play waited for it.
+    LaunchOptions(Vec<(String, Vec<String>)>, Option<String>),
     Image(String, Option<PathBuf>),
     ScanOverview,
     OverviewFetched(String, Result<GameOverview, String>),
@@ -592,7 +595,6 @@ impl App {
                 self.account = boot.account;
                 self.library_root = boot.library_root.display().to_string();
                 self.proton = boot.proton;
-                self.proton_choices = boot.proton_choices;
                 self.runners.downloads = boot.proton_downloads;
                 self.runners.downloaded = boot.downloaded_protons;
                 self.runners.updates = boot.proton_updates;
@@ -610,7 +612,6 @@ impl App {
                 self.manual_achievements = boot.manual_achievements;
                 self.steamgriddb = boot.steamgriddb;
                 self.steamgriddb_key = boot.steamgriddb_key;
-                self.launch_options = boot.launch_options;
                 self.launch_choices = boot.launch_choices;
                 self.installs = boot
                     .installs
@@ -645,7 +646,12 @@ impl App {
                 let avatar = self.fetch_avatar();
                 let resume = self.resume_interrupted();
                 let check = self.update_updates(updates::UpdatesMsg::Check);
-                let tasks = [avatar, resume, proton_update, check];
+                // Read once the library shows: game folders and Steam libraries can sit on a
+                // network drive that takes seconds to wake up.
+                let ids = self.installs.keys().cloned().collect();
+                let folders = self.read_launch_options(ids, None);
+                let protons = runners::list(self.core.as_ref().expect("just set"));
+                let tasks = [avatar, resume, proton_update, check, folders, protons];
                 if let Some(cache) = boot.library {
                     return Task::batch(tasks.into_iter().chain([self.set_library(cache)]));
                 }
@@ -718,6 +724,14 @@ impl App {
             }
             Message::Cover(_, None) => {}
             Message::CachedCovers(found) => return self.covers_cached(found),
+            Message::LaunchOptions(read, play) => {
+                self.launch_options.extend(read);
+                if let Some(game_id) = play {
+                    // Read or not, Play goes on: it does not wait twice.
+                    self.launch_options.entry(game_id.clone()).or_default();
+                    return self.start_game(game_id);
+                }
+            }
             Message::Image(url, Some(path)) => {
                 // The key art of the open game fades in once downloaded.
                 if self.selected_game().and_then(|g| g.background.as_ref()) == Some(&url) {
@@ -975,16 +989,11 @@ impl App {
         }
     }
 
-    pub fn refresh_record(&mut self, game_id: &str) {
+    /// Reads again what an install or a change left: its record, and how the game is started.
+    pub fn refresh_record(&mut self, game_id: &str) -> Task<Message> {
         let Some(core) = &self.core else {
-            return;
+            return Task::none();
         };
-        if let Some(install) = self.installs.get(game_id) {
-            self.launch_options.insert(
-                game_id.to_string(),
-                slatty_core::runner::launch_options(install),
-            );
-        }
         match InstallRecord::load(&core.dirs, game_id) {
             Ok(Some(r)) => {
                 self.records.insert(game_id.to_string(), boot::summary(&r));
@@ -993,6 +1002,29 @@ impl App {
                 self.records.remove(game_id);
             }
         }
+        self.read_launch_options(vec![game_id.to_string()], None)
+    }
+
+    /// Reads from their folders, off the interface thread, how these installed games can be
+    /// started; then starts `play`.
+    pub fn read_launch_options(&self, ids: Vec<String>, play: Option<String>) -> Task<Message> {
+        let installs: Vec<Install> = ids
+            .iter()
+            .filter_map(|id| self.installs.get(id).cloned())
+            .collect();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    installs
+                        .iter()
+                        .map(|i| (i.game_id.clone(), slatty_core::runner::launch_options(i)))
+                        .collect()
+                })
+                .await
+                .unwrap_or_default()
+            },
+            move |read| Message::LaunchOptions(read, play),
+        )
     }
 
     fn notify_error(&mut self, text: String) {

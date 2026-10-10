@@ -98,7 +98,7 @@ Reference, 2026-10-10 (Ryzen 7 5800X, Radeon RX 6800, niri at 3840×2160, 240 Hz
 
 | | Result |
 |---|---|
-| Library shown | 120–130 ms after start |
+| Library shown | 120–130 ms after start; the same with 30 installed games on a drive answering each access in 0.2 s (a read-only FUSE passthrough that waits, standing in for a network drive waking up), where it took 24.1 s while their folders were read before |
 | Every cover ready | 205–217 ms, read from the cache in one pass (446–535 ms with a task and a message per cover, 698–773 ms when covers were read into memory) |
 | Resident memory, covers in | 135 MB (166 MB with a task per cover, 997 MB when covers were kept in memory) |
 | 200 game pages with 2560×1440 key art opened in a row | 191 MB, flat after the first 50 (254 MB and growing before) |

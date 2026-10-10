@@ -232,7 +232,7 @@ impl App {
 }
 
 /// Lists the Proton builds again, off the interface thread: Steam libraries can be on slow drives.
-fn list(core: &crate::Core) -> Task<Message> {
+pub fn list(core: &crate::Core) -> Task<Message> {
     let dirs = core.dirs.clone();
     Task::perform(
         async move {
