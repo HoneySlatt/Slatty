@@ -113,6 +113,51 @@ impl Section {
     }
 }
 
+/// Which part of the Settings page is highlighted in its side list, and what that follows.
+#[derive(Debug, Clone, Default)]
+pub struct SettingsView {
+    pub section: Section,
+    /// Where each part starts, measured once and again after the window changed size.
+    pub tops: [Option<f32>; 5],
+    /// The offset an entry of the side list asked for: until the page leaves it, that entry
+    /// stays highlighted, even when its part cannot reach the top.
+    pub target: Option<f32>,
+}
+
+impl SettingsView {
+    /// The part at the top of the page: the last one that reached it, or the last of all once the
+    /// page is scrolled to its end.
+    fn at(&self, offset: f32, max: f32) -> Section {
+        if max > 0.0 && offset >= max - 1.0 {
+            return Section::About;
+        }
+        Section::ALL
+            .into_iter()
+            .zip(self.tops)
+            .filter(|(_, top)| top.is_some_and(|t| t <= offset + 24.0))
+            .map(|(s, _)| s)
+            .last()
+            .unwrap_or(Section::Account)
+    }
+}
+
+/// Measures where each part of the Settings page starts.
+pub fn measure_sections() -> Task<Message> {
+    use iced::widget::selector::{find, id};
+    find(id(Section::Account.id())).then(|first| {
+        let first = first.map(|t| t.bounds().y);
+        Task::batch(Section::ALL.map(|s| {
+            find(id(s.id())).and_then(move |card| match first {
+                Some(f) => Task::done(Message::Settings(SettingsMsg::Measured(
+                    s,
+                    card.bounds().y - f,
+                ))),
+                None => Task::none(),
+            })
+        }))
+    })
+}
+
 /// The id of the page's scrolling area.
 pub const SETTINGS_SCROLL: &str = "settings-scroll";
 
@@ -161,6 +206,13 @@ pub enum SettingsMsg {
     Show(Section),
     /// Where that part starts, below the first one, once measured.
     ScrollTo(Option<f32>),
+    /// The page scrolled to `offset`, of at most `max`.
+    Scrolled {
+        offset: f32,
+        max: f32,
+    },
+    /// Where a part starts, below the first one.
+    Measured(Section, f32),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
 }
@@ -244,7 +296,7 @@ impl App {
             }
             SettingsMsg::Show(section) => {
                 use iced::widget::selector::{find, id};
-                self.settings_section = section;
+                self.settings_view.section = section;
                 // Its offset in the page: how far its card is below the first one.
                 return find(id(section.id())).then(|card| {
                     find(id(Section::Account.id())).map(move |first| {
@@ -259,6 +311,7 @@ impl App {
                 });
             }
             SettingsMsg::ScrollTo(Some(y)) => {
+                self.settings_view.target = Some(y);
                 return iced::widget::operation::scroll_to(
                     SETTINGS_SCROLL,
                     iced::widget::operation::AbsoluteOffset {
@@ -268,6 +321,23 @@ impl App {
                 );
             }
             SettingsMsg::ScrollTo(None) => {}
+            SettingsMsg::Scrolled { offset, max } => {
+                let view = &mut self.settings_view;
+                if let Some(t) = view.target {
+                    if (offset - t.min(max)).abs() < 1.0 {
+                        return Task::none();
+                    }
+                    view.target = None;
+                }
+                if view.tops.iter().all(Option::is_none) {
+                    return measure_sections();
+                }
+                view.section = view.at(offset, max);
+            }
+            SettingsMsg::Measured(section, y) => {
+                let i = Section::ALL.iter().position(|s| *s == section).unwrap_or(0);
+                self.settings_view.tops[i] = Some(y);
+            }
             SettingsMsg::CoverSize(size) => {
                 self.card_width = size.width();
                 if let Err(e) = settings::set_cover_width(&core.db, self.card_width) {

@@ -21,7 +21,7 @@ impl App {
     /// A side list of the parts of the page, and their cards; an entry brings its card to the top.
     pub(super) fn settings_page(&self) -> Element<'_, Message> {
         let entries = Section::ALL.map(|s| {
-            let active = self.settings_section == s;
+            let active = self.settings_view.section == s;
             let color = if active {
                 tokens().accent
             } else {
@@ -94,6 +94,12 @@ impl App {
             container(Column::with_children(cards).spacing(14)).padding(Padding::ZERO.right(14)),
         )
         .id(SETTINGS_SCROLL)
+        .on_scroll(|v| {
+            Message::Settings(SettingsMsg::Scrolled {
+                offset: v.absolute_offset().y,
+                max: (v.content_bounds().height - v.bounds().height).max(0.0),
+            })
+        })
         .spacing(8)
         .style(theme::scroller)
         .height(Length::Fill);

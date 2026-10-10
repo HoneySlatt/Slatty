@@ -207,8 +207,7 @@ pub struct App {
     pub install_views: HashMap<String, InstallView>,
     pub maintenance: HashMap<String, MaintenanceView>,
     pub library_root: String,
-    /// The part of the Settings page last chosen in its side list.
-    pub settings_section: settings::Section,
+    pub settings_view: settings::SettingsView,
     /// Build installed when a game has both, unless changed in its install dialog.
     pub default_platform: Platform,
     pub proton: Option<PathBuf>,
@@ -282,7 +281,7 @@ impl Default for App {
             maintenance: HashMap::new(),
             library_root: String::new(),
             default_platform: Platform::Windows,
-            settings_section: settings::Section::Account,
+            settings_view: settings::SettingsView::default(),
             proton: None,
             proton_choices: Vec::new(),
             quit_confirm: None,
@@ -609,7 +608,11 @@ impl App {
                 return self.load_panel(id, panel);
             }
             Message::CloseDialog => self.dialog = None,
-            Message::WindowResized(size) => self.window = size,
+            Message::WindowResized(size) => {
+                self.window = size;
+                // The parts of the Settings page moved.
+                self.settings_view.tops = Default::default();
+            }
             Message::Frame(now) => self.now = now,
             Message::DismissNotice => self.notice = None,
             Message::CloseRequested => {

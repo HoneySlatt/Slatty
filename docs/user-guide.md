@@ -373,7 +373,8 @@ belong to them.
 ## Settings
 
 The interface's **Settings** tab lists its parts on the left (Account, Library, Installs,
-Appearance, About); choosing one brings it to the top. **Account** shows who is signed in, with
+Appearance, About); choosing one brings it to the top, and the list follows the page as it
+scrolls. **Account** shows who is signed in, with
 Log out. **Library** shows how many games you own and when the list was refreshed, with Refresh
 library, and the size of the covers. **Installs** holds:
 

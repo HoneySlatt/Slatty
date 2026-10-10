@@ -2227,7 +2227,7 @@ fn the_side_list_of_settings_brings_a_part_to_the_top() {
     use crate::settings::{Section, SettingsMsg};
     let mut app = library_app();
     app.page = Page::Settings;
-    assert_eq!(app.settings_section, Section::Account);
+    assert_eq!(app.settings_view.section, Section::Account);
     let messages: Vec<Message> = {
         let mut ui = render(&app);
         for s in Section::ALL {
@@ -2246,11 +2246,55 @@ fn the_side_list_of_settings_brings_a_part_to_the_top() {
     for m in messages {
         let _ = app.update(m);
     }
-    assert_eq!(app.settings_section, Section::Installs);
+    assert_eq!(app.settings_view.section, Section::Installs);
 
     // In a narrow window each name goes above its setting.
     app.window = Size::new(940.0, 1000.0);
     let mut ui = Simulator::with_size(settings(), app.window, app.view());
     assert!(ui.find("Default installation path").is_ok());
     snapshot(&mut ui, "settings-narrow");
+}
+
+#[test]
+fn the_side_list_of_settings_follows_the_scroll() {
+    use crate::settings::{Section, SettingsMsg};
+    let mut app = library_app();
+    app.page = Page::Settings;
+    let scrolled = |app: &mut App, offset: f32| {
+        let _ = app.update(Message::Settings(SettingsMsg::Scrolled {
+            offset,
+            max: 900.0,
+        }));
+        app.settings_view.section
+    };
+    // Measured first; the parts start 0, 200, 450, 800 and 1100 below the top.
+    assert_eq!(scrolled(&mut app, 300.0), Section::Account);
+    for (s, y) in Section::ALL
+        .into_iter()
+        .zip([0.0, 200.0, 450.0, 800.0, 1100.0])
+    {
+        let _ = app.update(Message::Settings(SettingsMsg::Measured(s, y)));
+    }
+    assert_eq!(scrolled(&mut app, 0.0), Section::Account);
+    assert_eq!(scrolled(&mut app, 210.0), Section::Library);
+    assert_eq!(
+        scrolled(&mut app, 440.0),
+        Section::Installs,
+        "nearly at the top"
+    );
+    assert_eq!(scrolled(&mut app, 900.0), Section::About, "at the end");
+
+    // An entry chosen stays highlighted while the page goes where it asked, even when its part
+    // cannot reach the top; scrolling away hands over to the page again.
+    let _ = app.update(Message::Settings(SettingsMsg::Show(Section::Appearance)));
+    let _ = app.update(Message::Settings(SettingsMsg::ScrollTo(Some(800.0))));
+    assert_eq!(scrolled(&mut app, 300.0), Section::Library);
+    let _ = app.update(Message::Settings(SettingsMsg::Show(Section::Appearance)));
+    let _ = app.update(Message::Settings(SettingsMsg::ScrollTo(Some(1100.0))));
+    assert_eq!(scrolled(&mut app, 900.0), Section::Appearance);
+    assert_eq!(scrolled(&mut app, 500.0), Section::Installs);
+
+    // A new window size measures again.
+    let _ = app.update(Message::WindowResized(Size::new(1000.0, 800.0)));
+    assert!(app.settings_view.tops.iter().all(Option::is_none));
 }
