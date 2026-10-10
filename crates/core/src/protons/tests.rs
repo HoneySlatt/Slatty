@@ -83,6 +83,16 @@ fn xz(data: &[u8]) -> Vec<u8> {
     e.finish().unwrap()
 }
 
+/// In blocks of 4 KiB, as `xz -T0` makes them (bigger): decoded a block per thread.
+fn xz_blocks(data: &[u8]) -> Vec<u8> {
+    let mut options = lzma_rust2::XzOptions::default();
+    options.lzma_options.dict_size = lzma_rust2::DICT_SIZE_MIN;
+    options.set_block_size(std::num::NonZeroU64::new(4096));
+    let mut e = lzma_rust2::XzWriterMt::new(Vec::new(), options, 1).unwrap();
+    e.write_all(data).unwrap();
+    e.finish().unwrap()
+}
+
 fn sha512_hex(data: &[u8]) -> String {
     crate::fsutil::hex(&Sha512::digest(data))
 }
@@ -195,7 +205,14 @@ fn an_archive_unpacks_into_its_folder_and_nothing_leaves_it() {
             "/etc/passwd",
         );
     });
-    for (name, data) in [("b.tar.gz", gz(&tar)), ("b.tar.xz", xz(&tar))] {
+    let blocks = xz_blocks(&tar);
+    let threaded = lzma_rust2::XzReaderMt::new(std::io::Cursor::new(&blocks), true, 1).unwrap();
+    assert!(threaded.block_count() > 1, "{}", threaded.block_count());
+    for (name, data) in [
+        ("b.tar.gz", gz(&tar)),
+        ("b.tar.xz", xz(&tar)),
+        ("blocks.tar.xz", blocks.clone()),
+    ] {
         let archive = root.join(name);
         std::fs::write(&archive, data).unwrap();
         let to = root.join("to");
@@ -901,5 +918,29 @@ async fn an_older_release_never_takes_the_place_of_a_newer_build() {
         .unwrap();
     assert!(release.path(&dirs).join("proton").is_file());
     assert_eq!(latest_target(&dirs, Source::GeProton), Some(newer_build));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// Times checking and unpacking a large archive laid out as GitHub's (one top folder holding the
+/// build): `SLATTY_BENCH_ARCHIVE=<archive.tar.gz or .tar.xz> TMPDIR=$HOME/.cache cargo test
+/// --release -p slatty-core unpacking_a_large_build -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn unpacking_a_large_build() {
+    let archive = PathBuf::from(std::env::var_os("SLATTY_BENCH_ARCHIVE").expect("an archive"));
+    let root = root("bench");
+    let t = std::time::Instant::now();
+    sha512_file(&archive).unwrap();
+    println!("sha512: {:?}", t.elapsed());
+    let t = std::time::Instant::now();
+    unpack(
+        &archive,
+        &root.join("build"),
+        &CancellationToken::new(),
+        &|_, _| {},
+    )
+    .unwrap();
+    println!("unpack: {:?}", t.elapsed());
+    assert!(root.join("build/proton").is_file());
     std::fs::remove_dir_all(root).unwrap();
 }

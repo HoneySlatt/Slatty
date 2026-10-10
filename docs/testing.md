@@ -48,6 +48,26 @@ something. They are those of a first display: the test lays out every widget ane
 application keeps what it laid out for a row as long as the row stays in view. Scrolling is
 checked in the application itself.
 
+### Unpacking a Proton build
+
+```sh
+SLATTY_BENCH_ARCHIVE=<archive.tar.gz or .tar.xz> TMPDIR=$HOME/.cache \
+  cargo test --release -p slatty-core unpacking_a_large_build -- --ignored --nocapture
+```
+
+This times checking (SHA-512) and unpacking an archive laid out as GitHub's: one folder holding the
+build, with a `proton` file in it. Reference, 2026-10-10, with a 1.1 GB tree of 3,275 files (a Rust
+toolchain from the Nix store) packed three ways, on NVMe:
+
+| Archive | Unpacking | Peak memory |
+|---|---|---|
+| `.tar.gz`, 354 MB (`tar czf`) | 3.4–3.6 s; SHA-512 0.6 s | |
+| `.tar.xz` in 44 blocks, 224 MB (`xz -T0 -6`) | 2.7 s (11.2–11.6 s on one thread) | 322 MB (15 MB on one thread) |
+| `.tar.xz` in one block, 221 MB (`xz -T1 -6`) | 10.4–10.6 s | 15 MB |
+
+For comparison, `xz -dc -T0` decodes the 44-block archive in 0.8 s and `xz -dc -T1` in 6.2 s,
+without writing anything.
+
 ### The application at 10,000 games
 
 Startup, memory and scrolling are measured in the release build itself, never with a real
