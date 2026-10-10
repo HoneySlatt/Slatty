@@ -115,6 +115,31 @@ async fn play_can_stop_the_game() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// Stop pressed while the launch is being prepared (cloud saves, Comet: long when offline) does
+/// not start the game, rather than ending it, unsaved, as soon as it starts.
+#[tokio::test]
+async fn stop_before_the_game_starts_does_not_start_it() {
+    let (root, dirs, db) = fake_native_game("stop-early", "touch \"$PWD/started\"; sleep 30");
+    let events = Mutex::new(Vec::new());
+    let (stop_tx, stop_rx) = tokio::sync::mpsc::unbounded_channel();
+    stop_tx.send(()).unwrap();
+    let http = slatty_core::http::client().unwrap();
+    play::play(
+        &db,
+        &dirs,
+        &http,
+        request(),
+        |e| events.lock().unwrap().push(e),
+        stop_rx,
+    )
+    .await
+    .unwrap();
+    let events = events.into_inner().unwrap();
+    assert_eq!(events, [PlayEvent::StoppedBeforeStart]);
+    assert!(!root.join("game/started").exists());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// Closing the launcher (or a crash) during a game leaves the game running: nothing else may
 /// update, repair, uninstall, sync or start it until it ends.
 #[tokio::test]

@@ -91,6 +91,8 @@ pub enum PlayEvent {
         code: Option<i32>,
     },
     StopRequested,
+    /// Stop was asked for while the launch was being prepared: the game was not started.
+    StoppedBeforeStart,
     Ended {
         seconds: u64,
         code: Option<i32>,
@@ -116,7 +118,8 @@ pub struct PlayRequest {
 }
 
 /// Full play flow: cloud check, Comet, supervised session, cloud upload, achievement diff.
-/// Each message on `stop` asks the game to quit; the second one forces it.
+/// Each message on `stop` asks the game to quit; the second one forces it. One sent before the game
+/// starts keeps it from starting.
 pub async fn play(
     db: &Db,
     dirs: &Dirs,
@@ -258,6 +261,15 @@ pub async fn play(
         None
     };
 
+    // Stop asked for while all this ran (it can take long offline): the game is not started, rather
+    // than started and asked to quit at once, its saves then left out of the upload.
+    if stop.try_recv().is_ok() {
+        if let Some((comet, _)) = comet {
+            let _ = comet.stop().await;
+        }
+        emit(PlayEvent::StoppedBeforeStart);
+        return Ok(());
+    }
     if install.isolated {
         emit(PlayEvent::Isolated);
     }

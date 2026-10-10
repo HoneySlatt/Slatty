@@ -174,6 +174,7 @@ pub fn describe_play_event(e: &PlayEvent) -> String {
             format!("Launcher exited ({code:?}); following remaining game processes…")
         }
         PlayEvent::StopRequested => "Stopping…".into(),
+        PlayEvent::StoppedBeforeStart => "Stopped before the game started.".into(),
         PlayEvent::Ended { seconds, clean, .. } => format!(
             "Session ended after {} min{}.",
             seconds / 60,

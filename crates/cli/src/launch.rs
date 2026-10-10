@@ -82,6 +82,7 @@ fn print_event(game_id: &str, event: PlayEvent) {
             println!("Launch process exited ({code:?}); waiting for remaining game processes…")
         }
         PlayEvent::StopRequested => println!("Stopping the game (Ctrl+C again to force)…"),
+        PlayEvent::StoppedBeforeStart => println!("Stopped before the game started."),
         PlayEvent::Ended {
             seconds,
             code,

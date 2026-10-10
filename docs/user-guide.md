@@ -253,7 +253,8 @@ A launch goes through these steps:
 6. The session is added to your play time on GOG, as GOG Galaxy does. Sessions shorter than a
    minute are not sent (GOG ignores them). Offline, it is sent after the next session.
 
-Ctrl+C asks the game to quit; a second Ctrl+C forces it. Options:
+Ctrl+C asks the game to quit; a second Ctrl+C forces it. Pressed before the game starts (Ctrl+C,
+or Stop game in the interface), it keeps the game from starting. Options:
 
 - `--no-cloud` skips step 2 and step 5's upload;
 - `--no-comet` runs without achievements.
