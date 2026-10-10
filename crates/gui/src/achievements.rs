@@ -214,21 +214,20 @@ impl App {
     /// Games with achievements and their unlocked and total counts, highest completion first; ties
     /// by title.
     pub fn games_by_achievements(&self) -> Vec<(&LibraryGame, usize, usize)> {
-        let mut games: Vec<(&LibraryGame, usize, usize)> = self
+        let mut games: Vec<_> = self
             .library
             .iter()
             .filter_map(|g| {
                 let (done, total) = self.overview.get(&g.id)?.achievements?;
-                Some((g, done, total))
+                Some((g, done, total, g.title.to_lowercase()))
             })
             .collect();
         // done / total compared as cross products, exact where floats could tie wrongly.
-        games.sort_by(|a, b| {
-            (b.1 * a.2)
-                .cmp(&(a.1 * b.2))
-                .then_with(|| a.0.title.to_lowercase().cmp(&b.0.title.to_lowercase()))
-        });
+        games.sort_by(|a, b| (b.1 * a.2).cmp(&(a.1 * b.2)).then_with(|| a.3.cmp(&b.3)));
         games
+            .into_iter()
+            .map(|(g, done, total, _)| (g, done, total))
+            .collect()
     }
 }
 

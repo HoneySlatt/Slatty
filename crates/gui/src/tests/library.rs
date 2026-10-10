@@ -95,6 +95,28 @@ fn search_filters_the_library() {
 }
 
 #[test]
+fn filter_status_remains_readable_at_the_minimum_window_size() {
+    let mut app = library_app();
+    app.window = Size::new(800.0, 560.0);
+    app.filters_open = true;
+    app.filters.achievements = true;
+    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    snapshot(&mut ui, "narrow-filters");
+    let status = ui.find("14 games could not be read from GOG").unwrap();
+    let bounds = status.bounds();
+    assert!(bounds.x + bounds.width <= app.window.width, "{bounds:?}");
+    assert!(bounds.height <= 40.0, "at most two lines: {bounds:?}");
+    ui.click("Has cloud saves").unwrap();
+    assert!(ui.into_messages().any(|m| matches!(
+        m,
+        Message::SetFilters(Filters {
+            cloud_saves: true,
+            ..
+        })
+    )));
+}
+
+#[test]
 fn shelves_filters_and_sort_select_games() {
     let mut app = library_app();
     app.shelf = Shelf::Installed;
@@ -254,10 +276,20 @@ fn the_library_order_is_kept() {
 #[test]
 #[ignore]
 fn library_at_10000_games() {
+    // Titles as GOG's can be: long, accented, not only Latin, in no particular order.
+    let games = |count: usize| -> Vec<LibraryGame> {
+        (1..=count)
+            .map(|i| {
+                let n = (i * 7919) % count;
+                fake_game(
+                    &n.to_string(),
+                    &format!("Épopée 世界 {n}: The Long Journey"),
+                )
+            })
+            .collect()
+    };
     let mut app = library_app();
-    app.library = (1..=10_000)
-        .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
-        .collect();
+    app.library = games(10_000);
     let time = |app: &App, what: &str| {
         let _ = app.view();
         let t = std::time::Instant::now();
@@ -271,7 +303,7 @@ fn library_at_10000_games() {
         time(&app, &format!("view, {sort}"));
     }
     app.sort = Sort::NameAsc;
-    app.search = "game 99".into();
+    app.search = "世界 99".into();
     time(&app, "view, searching");
     app.search.clear();
     // The Achievements tab, every game with achievements.
@@ -294,6 +326,7 @@ fn library_at_10000_games() {
         runs[2]
     };
     let mut small = library_app();
+    small.library = games(14);
     for page in [Page::Library, Page::Achievements] {
         for a in [&mut app, &mut small] {
             a.page = page;

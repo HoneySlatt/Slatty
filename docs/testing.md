@@ -33,6 +33,18 @@ SLATTY_SNAPSHOT_DIR=/tmp/slatty-ui cargo test -p slatty-gui
 
 This writes PNG snapshots of the tested screens.
 
+### Library at 10,000 games
+
+```sh
+cargo test --release -p slatty-gui library_at_10000_games -- --ignored --nocapture
+```
+
+This times the Library and Achievements pages with 10,000 games whose titles are long,
+accented and partly not Latin, in no particular order: how long each view takes to build, and how
+much longer laying it out takes than with 14 such games. A view must build well within a 16 ms
+frame. Layout times include the test renderer's own start-up, so only the difference means
+something.
+
 ### Tests that need real tools
 
 These are ignored by default:
