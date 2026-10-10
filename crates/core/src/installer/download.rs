@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::os::unix::fs::{FileExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use flate2::read::ZlibDecoder;
 use futures::StreamExt;
@@ -216,8 +216,10 @@ impl<S: ContentSource> Download<'_, S> {
         };
         report(0, 0);
 
-        // A failed file does not stop the others, so a retry has less to fetch; cancelling stops all.
+        // A failed file does not stop the others, so a retry has less to fetch; cancelling stops all,
+        // and so does a full disk, on which the others would fail too once downloaded.
         let first_error: std::sync::Mutex<Option<Error>> = std::sync::Mutex::new(None);
+        let full = AtomicBool::new(false);
         // Indices rather than borrowed items keep the future provably Send (rustc HRTB limitation).
         futures::stream::iter(0..set.files.len())
             .for_each_concurrent(FILE_CONCURRENCY, |i| {
@@ -226,9 +228,13 @@ impl<S: ContentSource> Download<'_, S> {
                 let first_error = &first_error;
                 let bad = &bad;
                 let reused = &reused;
+                let full = &full;
                 async move {
                     if self.cancel.is_cancelled() {
                         first_error.lock().unwrap().get_or_insert(Error::Cancelled);
+                        return;
+                    }
+                    if full.load(Ordering::Relaxed) {
                         return;
                     }
                     let result = async {
@@ -253,6 +259,9 @@ impl<S: ContentSource> Download<'_, S> {
                     }
                     .await;
                     if let Err(e) = result {
+                        if e.is_disk_full() {
+                            full.store(true, Ordering::Relaxed);
+                        }
                         first_error.lock().unwrap().get_or_insert(e);
                     }
                 }
@@ -332,17 +341,22 @@ impl<S: ContentSource> Download<'_, S> {
                 }
             })
             .buffer_unordered(CHUNK_CONCURRENCY);
-        let mut reused = 0;
-        while let Some(data) = chunks.next().await {
-            let (i, data, local) = data.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
-            out.write_all_at(&data, offsets[i])
-                .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
-            if local {
-                reused += data.len() as u64;
+        let written = async {
+            let mut reused = 0;
+            while let Some(data) = chunks.next().await {
+                let (i, data, local) = data?;
+                out.write_all_at(&data, offsets[i])
+                    .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
+                if local {
+                    reused += data.len() as u64;
+                }
+                on_bytes(data.len() as u64);
             }
-            on_bytes(data.len() as u64);
+            Ok::<_, Error>(reused)
         }
+        .await;
         drop(out);
+        let reused = written.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
         if file.is_executable() {
             let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
         }

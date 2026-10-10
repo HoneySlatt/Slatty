@@ -56,6 +56,14 @@ impl Error {
         }
     }
 
+    /// No room left on the disk, or in the user's quota.
+    pub fn is_disk_full(&self) -> bool {
+        matches!(self, Self::Io { source, .. } if matches!(
+            source.kind(),
+            std::io::ErrorKind::StorageFull | std::io::ErrorKind::QuotaExceeded
+        ))
+    }
+
     pub fn parse(context: &'static str, detail: impl ToString) -> Self {
         Self::Parse {
             context,

@@ -8,6 +8,9 @@ use crate::installer::zip::build::{File, installer};
 struct Fake {
     installers: Vec<Vec<u8>>,
     drop_once: Mutex<Option<u64>>,
+    /// Stands for a disk found full as an entry is written.
+    full: std::sync::atomic::AtomicBool,
+    opened: AtomicUsize,
 }
 
 impl Fake {
@@ -15,6 +18,8 @@ impl Fake {
         Fake {
             installers,
             drop_once: Mutex::new(None),
+            full: Default::default(),
+            opened: Default::default(),
         }
     }
 }
@@ -30,6 +35,13 @@ impl Source for Fake {
         start: u64,
         end: u64,
     ) -> Result<BoxStream<'static, Result<Vec<u8>>>> {
+        self.opened.fetch_add(1, Ordering::SeqCst);
+        if self.full.load(Ordering::SeqCst) {
+            return Err(Error::io(
+                "test write",
+                std::io::ErrorKind::StorageFull.into(),
+            ));
+        }
         let mut data = self.installers[part][start as usize..end as usize].to_vec();
         if self
             .drop_once
@@ -180,6 +192,46 @@ async fn a_linux_download_does_not_truncate_a_staging_link_target() {
     .await
     .unwrap();
     assert_eq!(std::fs::read(outside).unwrap(), b"keep");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// A disk found full stops every file at once, rather than each being downloaded to fail the same
+/// way.
+#[tokio::test]
+async fn a_full_disk_stops_the_other_linux_files() {
+    let names: Vec<String> = (0..40)
+        .map(|n| format!("data/noarch/game/[FAKE] part {n}.pak"))
+        .collect();
+    let files: Vec<File> = names
+        .iter()
+        .map(|name| File {
+            name,
+            data: b"[FAKE] game data",
+            mode: 0o100644,
+            deflate: false,
+        })
+        .collect();
+    let source = Fake::new(vec![installer(b"#!/bin/sh\n", &files, false)]);
+    let part = Part {
+        installer: installer_of("1"),
+        entries: read_entries(&source, 0).await.unwrap(),
+    };
+    let set = LinuxSet::new(&[part]).unwrap();
+    let root = temp("full");
+    source.full.store(true, Ordering::SeqCst);
+    let opened = source.opened.load(Ordering::SeqCst);
+    let err = LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &plenty,
+    }
+    .run(&set, &root.join(".Game.partial"), &root.join("Game"))
+    .await
+    .unwrap_err();
+    assert!(err.is_disk_full(), "{err}");
+    let tried = source.opened.load(Ordering::SeqCst) - opened;
+    assert!(tried <= FILE_CONCURRENCY, "{tried} of 40 files tried");
     std::fs::remove_dir_all(root).unwrap();
 }
 

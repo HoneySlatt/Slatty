@@ -134,7 +134,9 @@ is held.
      instead of downloaded;
    - each chunk is checked against its compressed and decompressed MD5;
    - files are written to a temporary name, then renamed; the filesystem is synced once when every
-     file is in place, rather than file by file.
+     file is in place, rather than file by file;
+   - a file that fails does not stop the others, so a retry has less to fetch, except on a full
+     disk, where the others would only fail once downloaded.
 4. The partial folder is renamed to the game folder.
 5. An install record (build, language, file list) is saved, and the game is registered with a
    prefix under `~/.local/share/slatty/prefixes/<id>`.

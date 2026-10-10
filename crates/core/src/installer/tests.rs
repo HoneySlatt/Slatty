@@ -23,6 +23,8 @@ struct MemoryContent {
     chunks: HashMap<String, Vec<u8>>,
     fetched: AtomicUsize,
     fail_on: Mutex<Option<String>>,
+    /// Stands for a disk found full as this chunk is written.
+    full_on: Mutex<Option<String>>,
     corrupt: Mutex<Option<String>>,
     /// This chunk arrives late, after the ones that follow it.
     slow: Mutex<Option<String>>,
@@ -77,6 +79,12 @@ impl ContentSource for MemoryContent {
                 context: "test network",
                 status: 503,
             });
+        }
+        if self.full_on.lock().unwrap().as_deref() == Some(compressed_md5) {
+            return Err(Error::io(
+                "test write",
+                std::io::ErrorKind::StorageFull.into(),
+            ));
         }
         let mut data = self
             .chunks
@@ -243,6 +251,53 @@ async fn interrupted_install_resumes_without_refetching_finished_files() {
         std::fs::read(env.target().join("Game.exe")).unwrap(),
         b"[FAKE] executable bytes"
     );
+}
+
+/// A disk found full stops every file at once: the others would fail the same way after their
+/// chunks were downloaded for nothing. No temporary file is left behind.
+#[tokio::test]
+async fn a_full_disk_stops_the_other_files() {
+    let mut env = Env::new("full");
+    let mut items = env.source.manifests["m1"].clone();
+    for n in 0..24 {
+        // Ten chunks of their own each.
+        let contents: String = (0..10).map(|k| format!("{n:02}{k:02}")).collect();
+        items.push(env.source.file(
+            &format!("data\\[FAKE] part {n}.pak"),
+            contents.as_bytes(),
+            &[],
+        ));
+    }
+    env.source.manifests.insert("m1".into(), items);
+    let total = env.source.chunks.len();
+    let DepotItem::DepotFile(exe) = &env.source.manifests["m1"][0] else {
+        unreachable!()
+    };
+    *env.source.full_on.lock().unwrap() = Some(exe.chunks[0].compressed_md5.clone());
+    let err = env
+        .run(&CancellationToken::new(), PLENTY)
+        .await
+        .unwrap_err();
+    assert!(err.is_disk_full(), "{err}");
+    let fetched = env.source.fetched.load(Ordering::SeqCst);
+    assert!(fetched < total / 4, "{fetched} of {total} chunks fetched");
+    let temporary: Vec<_> = walkdir(&env.partial())
+        .into_iter()
+        .filter(|p| p.to_string_lossy().ends_with(".slatty-dl"))
+        .collect();
+    assert!(temporary.is_empty(), "{temporary:?}");
+}
+
+fn walkdir(dir: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            found.extend(walkdir(&path));
+        }
+        found.push(path);
+    }
+    found
 }
 
 #[tokio::test]

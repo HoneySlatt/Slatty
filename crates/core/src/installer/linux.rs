@@ -8,7 +8,7 @@ use std::future::Future;
 use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use futures::StreamExt;
 use futures::stream::BoxStream;
@@ -472,14 +472,19 @@ impl<S: Source> LinuxDownload<'_, S> {
         };
         report(0, 0);
         let first_error: std::sync::Mutex<Option<Error>> = std::sync::Mutex::new(None);
+        // On a full disk the other files would fail too, once downloaded.
+        let full = AtomicBool::new(false);
         futures::stream::iter(0..set.files.len())
             .for_each_concurrent(FILE_CONCURRENCY, |i| {
                 let file = &set.files[i];
                 let dest = dir.join(&file.path);
-                let (bad, first_error) = (&bad, &first_error);
+                let (bad, first_error, full) = (&bad, &first_error, &full);
                 async move {
                     if self.cancel.is_cancelled() {
                         first_error.lock().unwrap().get_or_insert(Error::Cancelled);
+                        return;
+                    }
+                    if full.load(Ordering::Relaxed) {
                         return;
                     }
                     let result = async {
@@ -503,6 +508,9 @@ impl<S: Source> LinuxDownload<'_, S> {
                     }
                     .await;
                     if let Err(e) = result {
+                        if e.is_disk_full() {
+                            full.store(true, Ordering::Relaxed);
+                        }
                         first_error.lock().unwrap().get_or_insert(e);
                     }
                 }
