@@ -41,13 +41,23 @@ pub fn duration(seconds: i64) -> String {
     }
 }
 
+/// The day dates are told from: always 10 October 2026 in tests, so that what they show, and
+/// their snapshots, do not change from one day to the next.
+fn today() -> chrono::NaiveDate {
+    if cfg!(test) {
+        chrono::NaiveDate::from_ymd_opt(2026, 10, 10).expect("a valid date")
+    } else {
+        chrono::Local::now().date_naive()
+    }
+}
+
 /// "Today", "Yesterday", "3 days ago", or the date.
 pub fn relative_day(ts: i64) -> String {
     use chrono::{Local, TimeZone};
     let Some(then) = Local.timestamp_opt(ts, 0).single() else {
         return String::new();
     };
-    match (Local::now().date_naive() - then.date_naive()).num_days() {
+    match (today() - then.date_naive()).num_days() {
         0 => "Today".into(),
         1 => "Yesterday".into(),
         d @ 2..=6 => format!("{d} days ago"),

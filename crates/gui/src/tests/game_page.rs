@@ -20,6 +20,8 @@ fn installed_game_page_can_be_played_and_shows_no_store_text() {
     );
     let mut ui = render(&app);
     assert!(ui.find("3 h 5 m").is_ok(), "GOG's total, not the local one");
+    // Tests see the same day whenever they run, so the snapshots do not change from day to day.
+    assert!(ui.find("Yesterday").is_ok(), "played on 9 October 2026");
     assert!(ui.find("Time played").is_ok());
     assert!(ui.find("Cloud saves").is_ok());
     assert!(ui.find("Manage").is_ok());

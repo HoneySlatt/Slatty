@@ -31,7 +31,9 @@ that is what the checks below are for.
 SLATTY_SNAPSHOT_DIR=/tmp/slatty-ui cargo test -p slatty-gui
 ```
 
-This writes PNG snapshots of the tested screens.
+This writes PNG snapshots of the tested screens. Tests take 10 October 2026 for today, so that
+dates told from it ("Yesterday", "3 days ago") and the snapshots showing them do not change from one
+day to the next.
 
 ### Library at 10,000 games
 
