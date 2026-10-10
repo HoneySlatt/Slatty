@@ -186,6 +186,70 @@ mod tests {
         assert_eq!(db.setting("x").unwrap(), None);
     }
 
+    /// A database left by any earlier version, with data in every table it had, is brought up to
+    /// date and keeps that data.
+    #[test]
+    fn a_database_of_every_earlier_version_is_brought_up_to_date() {
+        let rows: [&[&str]; 8] = [
+            &[
+                "INSERT INTO settings VALUES ('k', 'v')",
+                "INSERT INTO accounts VALUES ('u', '[FAKE] user', 1)",
+                "INSERT INTO installs (game_id, title, platform, path, runner, added_at)
+                 VALUES ('1', '[FAKE] Game', 'windows', '/g', '{\"kind\":\"umu\"}', 1)",
+                "INSERT INTO sessions (game_id, started_at, state) VALUES ('1', 1, 'ended')",
+                "INSERT INTO sync_roots (user_id, game_id, location, root) VALUES ('u', '1', 'l', '/r')",
+                "INSERT INTO sync_baseline VALUES ('u', '1', 'l', 'p', 'h', 1, 'r', 1)",
+            ],
+            &["INSERT INTO install_jobs (game_id, build_id, language, root, directory, state, updated_at)
+               VALUES ('2', 'b', 'en', '/g', 'G', 'queued', 1)"],
+            &[],
+            &[],
+            &[],
+            &["INSERT INTO game_custom (game_id, title) VALUES ('1', '[FAKE] Mine')"],
+            &[],
+            &[],
+        ];
+        for old in 1..MIGRATIONS.len() {
+            let mut conn = Connection::open_in_memory().unwrap();
+            for (sql, rows) in MIGRATIONS[..old].iter().zip(rows) {
+                conn.execute_batch(sql).unwrap();
+                for row in rows {
+                    conn.execute(row, []).unwrap();
+                }
+            }
+            conn.pragma_update(None, "user_version", old as i64)
+                .unwrap();
+            migrate(&mut conn).unwrap_or_else(|e| panic!("from version {old}: {e}"));
+            let version: i64 = conn
+                .pragma_query_value(None, "user_version", |r| r.get(0))
+                .unwrap();
+            assert_eq!(version, MIGRATIONS.len() as i64);
+            let count = |table: &str| -> i64 {
+                conn.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+                    .unwrap()
+            };
+            for table in [
+                "settings",
+                "accounts",
+                "installs",
+                "sessions",
+                "sync_baseline",
+            ] {
+                assert_eq!(count(table), 1, "{table}, from version {old}");
+            }
+            assert_eq!(
+                count("install_jobs"),
+                i64::from(old >= 2),
+                "from version {old}"
+            );
+            assert_eq!(
+                count("game_custom"),
+                i64::from(old >= 6),
+                "from version {old}"
+            );
+        }
+    }
+
     #[test]
     fn games_installed_before_isolation_are_isolated_when_windows_builds() {
         let mut conn = Connection::open_in_memory().unwrap();
