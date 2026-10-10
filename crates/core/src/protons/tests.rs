@@ -623,7 +623,7 @@ fn the_newest_build_stays_while_games_follow_it_and_goes_with_its_link_otherwise
 }
 
 #[test]
-fn builds_downloaded_before_the_links_get_one_to_the_last_unpacked() {
+fn builds_downloaded_before_the_links_get_one_to_the_newest() {
     let root = root("link-newest");
     let dirs = Dirs::under(&root);
     let at = |build: &Path, secs: u64| {
@@ -632,23 +632,69 @@ fn builds_downloaded_before_the_links_get_one_to_the_last_unpacked() {
             .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
             .unwrap();
     };
-    // By when it was unpacked, not by name: 11-10 sorts before 11-9.
-    at(&fake_build(&dirs, "GE-Proton11-10-x86_64"), 2_000);
-    at(&fake_build(&dirs, "GE-Proton11-9-x86_64"), 1_000);
-    let umu = fake_build(&dirs, "UMU-Proton-10.0-4");
-    std::os::unix::fs::symlink("elsewhere", latest_link(&dirs, Source::UmuProton)).unwrap();
+    // By version, not by name (11-10 sorts before 11-9) nor by date (Proton writes into a build
+    // the first time it runs).
+    at(&fake_build(&dirs, "GE-Proton11-10-x86_64"), 1_000);
+    at(&fake_build(&dirs, "GE-Proton11-9-x86_64"), 2_000);
+    fake_build(&dirs, "UMU-Proton-10.0-4");
+    fake_build(&dirs, "UMU-Proton-10.0-5");
+    std::os::unix::fs::symlink("UMU-Proton-10.0-4", latest_link(&dirs, Source::UmuProton)).unwrap();
     link_newest(&dirs).unwrap();
     assert_eq!(
         latest_target(&dirs, Source::GeProton),
         Some(dir(&dirs).join("GE-Proton11-10-x86_64"))
     );
-    // A link already there is left as it is; a project without builds gets none.
+    // A link already leading to a build is left as it is; a project without builds gets none.
     assert_eq!(
         latest_target(&dirs, Source::UmuProton),
-        Some(dir(&dirs).join("elsewhere"))
+        Some(dir(&dirs).join("UMU-Proton-10.0-4"))
     );
-    assert!(umu.is_dir());
     assert!(std::fs::symlink_metadata(latest_link(&dirs, Source::ProtonCachyOs)).is_err());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// The build a `-latest` link led to was deleted by hand: games following it could not start.
+#[tokio::test]
+async fn a_link_to_a_deleted_build_is_repaired_and_never_moves_back() {
+    let root = root("dangling");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    crate::settings::set_proton_downloads(&db, true).unwrap();
+    let kept = fake_build(&dirs, "GE-Proton12-1-x86_64");
+    let link = latest_link(&dirs, Source::GeProton);
+    std::os::unix::fs::symlink("GE-Proton12-2-x86_64", &link).unwrap();
+    game_on(&db, &root, "1", &link);
+    // GitHub's latest is 11-7: older than the build left, though the link leads nowhere.
+    let archive = gz(&build_tar(|_| {}));
+    let (api, seen) = github(archive.clone(), sha512_hex(&archive)).await;
+    let http = crate::http::client().unwrap();
+    let updated = update(
+        &db,
+        &http,
+        &dirs,
+        &api,
+        |_, _| {},
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert!(updated.is_empty());
+    assert!(
+        seen.lock().unwrap().iter().all(|r| r.starts_with(LATEST)),
+        "nothing downloaded"
+    );
+    // At the next start, the link leads to the newest build left.
+    link_newest(&dirs).unwrap();
+    assert_eq!(latest_target(&dirs, Source::GeProton), Some(kept.clone()));
+    // 11-7 installed by hand does not take it either, and repairs it as well.
+    let release = latest(&http, &api, Source::GeProton).await.unwrap();
+    std::fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink("GE-Proton12-2-x86_64", &link).unwrap();
+    install(&http, &dirs, &release, |_| {}, &CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(release.path(&dirs).join("proton").is_file());
+    assert_eq!(latest_target(&dirs, Source::GeProton), Some(kept));
     std::fs::remove_dir_all(root).unwrap();
 }
 

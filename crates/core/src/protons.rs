@@ -144,12 +144,23 @@ fn current_newest(dirs: &Dirs, source: Source) -> Option<PathBuf> {
 /// their names, in order (`GE-Proton11-7` → 11, 7; `proton-cachyos-11.0-20261005-slr` → 11, 0,
 /// 20261005).
 fn newer(name: &str, than: &Path) -> bool {
-    let numbers = |s: &str| -> Vec<u64> {
-        s.split(|c: char| !c.is_ascii_digit())
-            .filter_map(|n| n.parse().ok())
-            .collect()
-    };
-    numbers(name) > numbers(&than.file_name().unwrap_or_default().to_string_lossy())
+    version(name) > version(&than.file_name().unwrap_or_default().to_string_lossy())
+}
+
+fn version(name: &str) -> Vec<u64> {
+    name.split(|c: char| !c.is_ascii_digit())
+        .filter_map(|n| n.parse().ok())
+        .collect()
+}
+
+/// The downloaded build of `source` with the highest version, wherever its link leads.
+fn newest_build(dirs: &Dirs, source: Source) -> Option<PathBuf> {
+    installed(dirs)
+        .into_iter()
+        .filter(|b| {
+            Source::of(&b.file_name().unwrap_or_default().to_string_lossy()) == Some(source)
+        })
+        .max_by_key(|b| version(&b.file_name().unwrap_or_default().to_string_lossy()))
 }
 
 /// Points the `-latest` link of `source` at the build named `name`, replacing the old link in one
@@ -165,20 +176,14 @@ fn point_latest(dirs: &Dirs, source: Source, name: &str) -> Result<()> {
     })
 }
 
-/// Gives each project that has downloaded builds but no `-latest` link one, to the build unpacked
-/// last (builds downloaded before the links existed).
+/// Gives each project that has downloaded builds but no `-latest` link one, to its newest build:
+/// builds downloaded before the links existed, or a link left leading to a build deleted by hand.
 pub fn link_newest(dirs: &Dirs) -> Result<()> {
     for source in Source::ALL {
-        if std::fs::symlink_metadata(latest_link(dirs, source)).is_ok() {
+        if current_newest(dirs, source).is_some() {
             continue;
         }
-        let newest = installed(dirs)
-            .into_iter()
-            .filter(|b| {
-                Source::of(&b.file_name().unwrap_or_default().to_string_lossy()) == Some(source)
-            })
-            .max_by_key(|b| std::fs::metadata(b).and_then(|m| m.modified()).ok());
-        if let Some(build) = newest {
+        if let Some(build) = newest_build(dirs, source) {
             point_latest(
                 dirs,
                 source,
@@ -237,11 +242,9 @@ pub async fn update(
         let release = latest(http, api, source).await?;
         let previous = current_newest(dirs, source);
         // Never back: a project can publish an older line after a newer one (CachyOS's
-        // `10.0-sunset` came out between two 11.0 builds).
-        if previous
-            .as_deref()
-            .is_some_and(|p| !newer(&release.name, p))
-        {
+        // `10.0-sunset` came out between two 11.0 builds). Compared with every build of the
+        // project, not only the link's: a link may lead to a build deleted by hand.
+        if newest_build(dirs, source).is_some_and(|b| !newer(&release.name, &b)) {
             continue;
         }
         let (report, name) = (progress.clone(), release.name.clone());
@@ -374,8 +377,16 @@ pub async fn install(
     if !dest.join("proton").is_file() {
         unpack_release(http, dirs, release, progress, cancel).await?;
     }
-    if current_newest(dirs, release.source).is_none_or(|c| newer(&release.name, &c)) {
-        point_latest(dirs, release.source, &release.name)?;
+    // The link leads to the project's newest build: never back to an older one installed by hand,
+    // and away from a build deleted by hand.
+    if let Some(newest) = newest_build(dirs, release.source)
+        && (newest == dest || current_newest(dirs, release.source).is_none())
+    {
+        point_latest(
+            dirs,
+            release.source,
+            &newest.file_name().unwrap_or_default().to_string_lossy(),
+        )?;
     }
     Ok(dest)
 }
