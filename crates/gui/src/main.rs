@@ -245,6 +245,8 @@ pub struct App {
     pub launch_choices: HashMap<String, String>,
     /// A game whose Play asks how to start it, the first time.
     pub launch_prompt: Option<String>,
+    /// A game whose Play waits for its folder to be read.
+    pub launch_reading: Option<String>,
     /// Games not installed whose page was opened: `Some` when GOG offers nothing to install.
     pub installability: HashMap<String, Option<NotInstallable>>,
     pub proton: Option<PathBuf>,
@@ -339,6 +341,7 @@ impl Default for App {
             launch_options: HashMap::new(),
             launch_choices: HashMap::new(),
             launch_prompt: None,
+            launch_reading: None,
             installability: HashMap::new(),
             settings_view: settings::SettingsView::default(),
             proton: None,
@@ -728,6 +731,7 @@ impl App {
                 self.launch_options.extend(read);
                 if let Some(game_id) = play {
                     // Read or not, Play goes on: it does not wait twice.
+                    self.launch_reading.take_if(|id| *id == game_id);
                     self.launch_options.entry(game_id.clone()).or_default();
                     return self.start_game(game_id);
                 }

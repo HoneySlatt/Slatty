@@ -38,6 +38,7 @@ impl App {
         }
         // Read after start, from a folder that can be on a drive still waking up: Play waits for it.
         if self.installs.contains_key(&game_id) && !self.launch_options.contains_key(&game_id) {
+            self.launch_reading = Some(game_id.clone());
             return self.read_launch_options(vec![game_id.clone()], Some(game_id));
         }
         // A game that can be started several ways asks which, once.

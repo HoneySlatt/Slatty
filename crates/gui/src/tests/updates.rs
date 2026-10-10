@@ -78,6 +78,31 @@ fn updates_wait_while_a_game_runs_and_start_once_it_ends() {
     assert_eq!(app.updates.current.as_deref(), Some("3"));
 }
 
+/// Play pressed while its game's folder is read, or while it asks how to start: an update found
+/// meanwhile waits, rather than starting on that game and leaving the press without effect.
+#[test]
+fn updates_wait_for_a_play_pressed_before_they_start() {
+    let mut app = auto_app();
+    let _ = app.update(Message::Play("3".into()));
+    let _ = app.update(found());
+    assert!(app.updates.current.is_none());
+    let _ = app.update(Message::LaunchOptions(Vec::new(), Some("3".into())));
+    assert!(app.play.as_ref().is_some_and(|p| p.running), "it starts");
+    game_ends(&mut app);
+    assert_eq!(app.updates.current.as_deref(), Some("3"));
+
+    let mut app = auto_app();
+    app.launch_options.insert(
+        "3".into(),
+        vec!["[FAKE] Game 3".into(), "Configuration Tool".into()],
+    );
+    let _ = app.update(Message::Play("3".into()));
+    let _ = app.update(found());
+    assert!(app.updates.current.is_none(), "asking how to start");
+    let _ = app.update(Message::CancelLaunch);
+    assert_eq!(app.updates.current.as_deref(), Some("3"));
+}
+
 fn playing(app: &mut App) {
     let (stop, _rx) = tokio::sync::mpsc::unbounded_channel();
     app.play = Some(PlayState {
