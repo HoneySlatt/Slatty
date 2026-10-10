@@ -53,8 +53,6 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 
 ## Planned
 
-- **Store-like game pages.** Description, screenshots, changelog. GOG's descriptions are HTML,
-  rendered through Iced's Markdown support.
 - **Gamepad navigation.** A couch mode.
 - **Translations of the interface.** It is in English for now.
 - **More runners.** System Wine, managed Proton downloads.
