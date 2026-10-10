@@ -238,6 +238,8 @@ pub async fn install(
         runner,
     };
     install.save(db)?;
+    // An older build chosen at install is kept as it is; the newest is kept up to date.
+    crate::settings::set_held_back(db, &req.game_id, !plan.is_newest())?;
     InstallJob::delete(db, &req.game_id)?;
     emit(InstallEvent::Finished {
         path: target,

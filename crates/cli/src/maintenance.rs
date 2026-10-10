@@ -7,6 +7,7 @@ use clap::Args;
 use slatty_core::account::Account;
 use slatty_core::installer::Progress;
 use slatty_core::maintenance::{self, Change};
+use slatty_core::settings;
 use tokio_util::sync::CancellationToken;
 
 use crate::Ctx;
@@ -142,9 +143,25 @@ pub struct UpdateArgs {
     /// Only report whether an update is available
     #[arg(long)]
     check: bool,
+    /// Turn automatic updates on or off (the interface applies them; on until turned off). A
+    /// game on an older build chosen by hand is never updated without asking.
+    #[arg(long, value_name = "on|off", conflicts_with_all = ["game_id", "check"])]
+    automatic: Option<OnOff>,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum OnOff {
+    On,
+    Off,
 }
 
 pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
+    if let Some(state) = args.automatic {
+        let on = matches!(state, OnOff::On);
+        settings::set_auto_update(&ctx.db, on)?;
+        println!("Automatic updates are {}", if on { "on" } else { "off" });
+        return Ok(());
+    }
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
     let Some(game_id) = args.game_id else {
@@ -159,8 +176,16 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
             .await
             {
                 Ok(Some(u)) => println!(
-                    "{:>12}  {:<40} {} -> {}",
-                    install.game_id, install.title, u.installed_version, u.available_version
+                    "{:>12}  {:<40} {} -> {}{}",
+                    install.game_id,
+                    install.title,
+                    u.installed_version,
+                    u.available_version,
+                    if settings::held_back(&ctx.db, &install.game_id)? {
+                        "  (older build chosen: updated only when asked)"
+                    } else {
+                        ""
+                    }
                 ),
                 Ok(None) => println!("{:>12}  {:<40} up to date", install.game_id, install.title),
                 Err(slatty_core::Error::Refused(_)) => {

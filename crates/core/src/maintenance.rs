@@ -129,6 +129,7 @@ pub fn uninstall(
 
     Install::remove(db, game_id)?;
     InstallJob::delete(db, game_id)?;
+    crate::settings::set_held_back(db, game_id, false)?;
     let _ = std::fs::remove_file(InstallRecord::file(dirs, game_id));
     let _ = std::fs::remove_dir_all(installer::support_dir(dirs, game_id));
     Ok(report)
@@ -248,24 +249,42 @@ pub async fn check_update(
             available_build: build_id,
         }));
     }
-    let dlcs = DlcSelection::Only(record.dlcs.clone());
-    let plan = installer::plan_for(
-        http,
-        tokens,
-        game_id,
-        install.platform,
-        Some(&record.language),
-        None,
-        &dlcs,
-    )
-    .await?;
-    Ok(
-        (plan.build.build_id != record.build_id).then(|| UpdateCheck {
-            installed_version: record.version.clone(),
-            available_version: plan.build.version_name.clone(),
-            available_build: plan.build.build_id.clone(),
-        }),
-    )
+    // The list of builds is enough to tell, in one request: games are checked by the dozen.
+    let builds = crate::galaxy::builds(http, tokens, game_id).await?;
+    let newest = installer::newest_public(&builds)
+        .ok_or_else(|| Error::Unsupported("GOG no longer offers a Windows build".into()))?;
+    Ok((newest.build_id != record.build_id).then(|| UpdateCheck {
+        installed_version: record.version.clone(),
+        available_version: newest.version_name.clone(),
+        available_build: newest.build_id.clone(),
+    }))
+}
+
+/// Whether a game is held back from updates once `change` is made to a build that is (`newest`)
+/// or is not GOG's newest; `None` leaves it as it was.
+fn held_after(change: &Change, newest: bool) -> Option<bool> {
+    match change {
+        Change::Update => Some(false),
+        Change::Build(_) => Some(!newest),
+        Change::Language(_) | Change::Dlcs(_) => None,
+    }
+}
+
+/// The games to update without asking: installed by slatty, on the build they were given as the
+/// newest (not an older one chosen), with automatic updates on.
+pub fn auto_update_candidates(db: &Db, dirs: &Dirs) -> Result<Vec<String>> {
+    if !crate::settings::auto_update(db)? {
+        return Ok(Vec::new());
+    }
+    let mut ids = Vec::new();
+    for install in Install::list(db)? {
+        if InstallRecord::load(dirs, &install.game_id)?.is_some()
+            && !crate::settings::held_back(db, &install.game_id)?
+        {
+            ids.push(install.game_id);
+        }
+    }
+    Ok(ids)
 }
 
 /// Languages and DLC that can be chosen for an installed game, on its installed build.
@@ -385,6 +404,13 @@ pub async fn reconfigure(
             Change::Update => format!("{} is already up to date", install.title),
             _ => "nothing to change".into(),
         }));
+    }
+    // Noted as the change starts, so a change cut off and finished later keeps it: an older build
+    // chosen is not updated without asking; the newest is. A language or DLC change leaves it.
+    if pending.is_none()
+        && let Some(held) = held_after(&change, plan.is_newest())
+    {
+        crate::settings::set_held_back(db, game_id, held)?;
     }
     InstallJob {
         game_id: game_id.to_string(),
@@ -790,6 +816,52 @@ mod tests {
         assert!(env.game().join("Game.exe").exists());
         assert!(prefix.join("drive_c").exists());
         assert!(Install::get(&env.db, "1").unwrap().is_some());
+    }
+
+    #[test]
+    fn games_on_their_newest_build_are_updated_without_asking_not_older_ones_chosen() {
+        let env = Env::new("auto", true);
+        // Not installed by slatty (no record): never.
+        Install {
+            game_id: "2".into(),
+            title: "[FAKE] Imported".into(),
+            ..Install::get(&env.db, "1").unwrap().unwrap()
+        }
+        .save(&env.db)
+        .unwrap();
+        assert_eq!(auto_update_candidates(&env.db, &env.dirs).unwrap(), ["1"]);
+        crate::settings::set_held_back(&env.db, "1", true).unwrap();
+        assert!(
+            auto_update_candidates(&env.db, &env.dirs)
+                .unwrap()
+                .is_empty()
+        );
+        crate::settings::set_held_back(&env.db, "1", false).unwrap();
+        crate::settings::set_auto_update(&env.db, false).unwrap();
+        assert!(
+            auto_update_candidates(&env.db, &env.dirs)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn choosing_an_older_build_holds_a_game_back_and_updating_releases_it() {
+        assert_eq!(held_after(&Change::Build("old".into()), false), Some(true));
+        assert_eq!(held_after(&Change::Build("new".into()), true), Some(false));
+        assert_eq!(held_after(&Change::Update, true), Some(false));
+        // A language or DLC change on the build installed leaves the choice as it was, even
+        // when GOG has a newer build by then.
+        assert_eq!(held_after(&Change::Language("fr".into()), false), None);
+        assert_eq!(held_after(&Change::Dlcs(vec![]), false), None);
+    }
+
+    #[test]
+    fn an_uninstalled_game_is_no_longer_held_back() {
+        let env = Env::new("held", true);
+        crate::settings::set_held_back(&env.db, "1", true).unwrap();
+        uninstall(&env.db, &env.dirs, "1", false).unwrap();
+        assert!(!crate::settings::held_back(&env.db, "1").unwrap());
     }
 
     #[test]

@@ -48,6 +48,12 @@ pub enum DlcSelection {
 }
 
 impl InstallPlan {
+    /// Whether the planned build is the newest GOG offers to everyone (a Linux build is the only
+    /// one offered).
+    pub fn is_newest(&self) -> bool {
+        newest_public(&self.builds).is_none_or(|b| b.build_id == self.build.build_id)
+    }
+
     pub fn selected_dlcs(&self) -> Vec<String> {
         self.dlcs
             .iter()
@@ -181,6 +187,14 @@ impl InstallPlan {
     }
 }
 
+/// The build GOG offers to everyone, newest first: the first outside a beta branch.
+pub fn newest_public(builds: &[Build]) -> Option<&Build> {
+    builds
+        .iter()
+        .find(|b| b.branch.is_none())
+        .or(builds.first())
+}
+
 /// Public build by default; a pinned build id (from an interrupted job) must still exist.
 pub async fn plan_for(
     http: &reqwest::Client,
@@ -201,11 +215,7 @@ pub async fn plan_for(
                 "build {id} is no longer offered; restart the install"
             ))
         })?,
-        None => match builds
-            .iter()
-            .find(|b| b.branch.is_none())
-            .or(builds.first())
-        {
+        None => match newest_public(&builds) {
             Some(build) => build,
             None => return Err(no_build(http, game_id).await),
         },
@@ -434,5 +444,26 @@ mod tests {
             "The Witcher 3 Wild Hunt"
         );
         assert_eq!(super::folder_name("../AC/DC?"), "ACDC");
+    }
+
+    #[test]
+    fn the_newest_build_is_the_first_outside_a_beta_branch() {
+        let build = |id: &str, branch: Option<&str>| super::Build {
+            build_id: id.into(),
+            version_name: id.into(),
+            link: String::new(),
+            branch: branch.map(String::from),
+            generation: 2,
+            date_published: None,
+        };
+        let builds = [
+            build("beta", Some("beta")),
+            build("2", None),
+            build("1", None),
+        ];
+        assert_eq!(super::newest_public(&builds).unwrap().build_id, "2");
+        // Only betas: the newest of them.
+        assert_eq!(super::newest_public(&builds[..1]).unwrap().build_id, "beta");
+        assert!(super::newest_public(&[]).is_none());
     }
 }

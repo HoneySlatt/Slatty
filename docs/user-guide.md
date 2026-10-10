@@ -352,7 +352,14 @@ one again the next time it runs.
 slatty update                  # check every game installed by SlattyLauncher
 slatty update <game-id> --check
 slatty update <game-id>        # apply
+slatty update --automatic off  # or on: automatic updates (on until turned off)
 ```
+
+Games are updated without asking while **automatic updates** are on, which they are until turned
+off, but only those on the newest build. A game on an older build you chose (in the Install panel
+or as its game version) stays on it and is updated only when you ask; updating it, or choosing the
+newest build, makes it follow updates again. A language or DLC change does not change this.
+Checking a Windows game takes one request to GOG (the list of builds).
 
 An update compares each file of the new build with the one on disk:
 

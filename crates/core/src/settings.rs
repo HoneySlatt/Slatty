@@ -22,6 +22,7 @@ const ISOLATE_NEW_GAMES: &str = "isolate_new_games";
 const PROTON_DOWNLOADS: &str = "proton_downloads";
 const PROTON_UPDATES: &str = "proton_updates";
 const PROTON_CHECKED_AT: &str = "proton_checked_at";
+const AUTO_UPDATE: &str = "auto_update";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -143,6 +144,25 @@ pub fn proton_checked_at(db: &Db) -> Result<Option<i64>> {
 
 pub fn set_proton_checked_at(db: &Db, at: i64) -> Result<()> {
     db.set_setting(PROTON_CHECKED_AT, Some(&at.to_string()))
+}
+
+/// Whether installed games on their newest build are updated without asking. On until turned off.
+pub fn auto_update(db: &Db) -> Result<bool> {
+    Ok(db.setting(AUTO_UPDATE)?.as_deref() != Some("off"))
+}
+
+pub fn set_auto_update(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(AUTO_UPDATE, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether the user chose a build of the game older than GOG's newest: it is then not updated
+/// without asking.
+pub fn held_back(db: &Db, game_id: &str) -> Result<bool> {
+    Ok(db.setting(&format!("held_back:{game_id}"))?.is_some())
+}
+
+pub fn set_held_back(db: &Db, game_id: &str, held: bool) -> Result<()> {
+    db.set_setting(&format!("held_back:{game_id}"), held.then_some("on"))
 }
 
 /// The way a game is started, among its launch options, once chosen.
