@@ -81,6 +81,13 @@ pub fn uninstall(
     // The saves in the prefix are copied first too: a backup that fails deletes nothing.
     if let Some(prefix) = prefix {
         let users = prefix.join("drive_c/users");
+        // A game writes its prefix: a link there would have the backup copy where it leads.
+        if users.is_dir() && !installer::leads_inside(prefix, &users) {
+            return Err(Error::Refused(format!(
+                "{} leads out of the prefix through a link; nothing was deleted",
+                users.display()
+            )));
+        }
         if users.is_dir() {
             let backup = dirs
                 .data
@@ -766,6 +773,23 @@ mod tests {
             b"prefix save"
         );
         assert!(!env.dirs.data.join("prefixes/1").exists());
+    }
+
+    /// The prefix's user folder is a link out of the prefix (a game writes its prefix): the
+    /// backup would copy where it leads, and the uninstall stops before deleting anything.
+    #[test]
+    fn a_prefix_whose_user_folder_leads_out_of_it_is_not_backed_up_nor_deleted() {
+        let env = Env::new("prefix-link", true);
+        let prefix = env.dirs.data.join("prefixes/1");
+        let outside = env.root.join("outside");
+        std::fs::rename(prefix.join("drive_c/users"), &outside).unwrap();
+        std::os::unix::fs::symlink(&outside, prefix.join("drive_c/users")).unwrap();
+        let result = uninstall(&env.db, &env.dirs, "1", true);
+        assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
+        assert!(!env.dirs.data.join("backups").exists());
+        assert!(env.game().join("Game.exe").exists());
+        assert!(prefix.join("drive_c").exists());
+        assert!(Install::get(&env.db, "1").unwrap().is_some());
     }
 
     #[test]

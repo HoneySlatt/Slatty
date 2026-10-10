@@ -61,6 +61,12 @@ pub async fn ensure(dirs: &Dirs, install: &Install, exe: &Path, supervisor: &Pat
     if installed(prefix) {
         return Ok(false);
     }
+    let dest = prefix.join(PREFIX_PATH);
+    // An isolated game writes its prefix: a link planted there could lead this copy, made outside
+    // the container, into the user's files.
+    if install.isolated {
+        crate::installer::refuse_outside(prefix, &dest)?;
+    }
     let log = dirs
         .logs()
         .join(format!("galaxy-service-{}.log", install.game_id));
@@ -80,7 +86,6 @@ pub async fn ensure(dirs: &Dirs, install: &Install, exe: &Path, supervisor: &Pat
             )));
         }
     }
-    let dest = prefix.join(PREFIX_PATH);
     let dir = dest.parent().expect("constant path has a parent");
     crate::paths::ensure_dir(dir)?;
     let partial = dir.join("GalaxyCommunication.exe.slatty-partial");
@@ -119,6 +124,36 @@ mod tests {
             format!("drive_c/{}", WINDOWS_PATH[3..].replace('\\', "/")),
             PREFIX_PATH
         );
+    }
+
+    #[tokio::test]
+    async fn an_isolated_games_prefix_is_not_written_through_a_link_out_of_it() {
+        let root = std::env::temp_dir().join(format!("slatty-galaxy-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let prefix = root.join("pfx");
+        std::fs::create_dir_all(prefix.join("drive_c")).unwrap();
+        std::fs::create_dir_all(root.join("outside")).unwrap();
+        // Planted by the game, which writes its prefix: the copy is made outside the container.
+        std::os::unix::fs::symlink(root.join("outside"), prefix.join("drive_c/ProgramData"))
+            .unwrap();
+        let install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: crate::install::Platform::Windows,
+            path: root.join("game"),
+            client_id: None,
+            runner: crate::runner::Runner::Umu {
+                proton: root.join("proton"),
+                prefix: prefix.clone(),
+            },
+            umu_id: None,
+            isolated: true,
+        };
+        let dirs = Dirs::under(&root.join("slatty"));
+        let result = ensure(&dirs, &install, &root.join("exe"), &root.join("supervisor")).await;
+        assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
+        assert!(!root.join("outside").join("redists").exists());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

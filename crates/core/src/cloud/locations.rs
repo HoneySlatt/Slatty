@@ -67,7 +67,24 @@ pub fn resolve(template: &str, install: &Install) -> Result<PathBuf> {
             "unsupported variable in save location: {template}"
         )));
     }
-    resolve_relative(&base, rest)
+    let root = resolve_relative(&base, rest)?;
+    // An isolated game writes its prefix and its folder, where a link could lead the sync, which
+    // runs outside the container, to read or write the user's files for it. A game that is not
+    // isolated sees them anyway (and Wine alone links the user folders to the real ones).
+    if install.isolated {
+        let anchor = match install.runner.prefix() {
+            Some(prefix) if root.starts_with(prefix) => prefix,
+            _ => install.path.as_path(),
+        };
+        if !crate::installer::leads_inside(anchor, &root) {
+            return Err(Error::Refused(format!(
+                "{} leads out of {} through a link; saves are not synced through it",
+                root.display(),
+                anchor.display()
+            )));
+        }
+    }
+    Ok(root)
 }
 
 fn user_folder(install: &Install, var: &str) -> Result<PathBuf> {
@@ -206,6 +223,45 @@ mod tests {
         );
         assert!(resolve("<?APPLICATION_SUPPORT?>/x", &i).is_err());
         assert!(resolve("<?SAVED_GAMES?>/../../escape", &i).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn an_isolated_games_saves_are_not_synced_through_a_link_out_of_its_prefix() {
+        let root = std::env::temp_dir().join(format!("slatty-loc-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let users = root.join("pfx/drive_c/users");
+        std::fs::create_dir_all(users.join("steamuser")).unwrap();
+        std::fs::create_dir_all(root.join("outside")).unwrap();
+        std::fs::create_dir_all(root.join("game")).unwrap();
+        // Planted by the game, which writes its prefix and its folder: the sync runs outside the
+        // container and would follow it into the user's files.
+        std::os::unix::fs::symlink(root.join("outside"), users.join("steamuser/AppData")).unwrap();
+        std::os::unix::fs::symlink(root.join("outside"), root.join("game/saves")).unwrap();
+        let mut i = install(&root);
+        i.isolated = true;
+        for template in [
+            "<?APPLICATION_DATA_ROAMING?>/Game",
+            "<?INSTALL?>/saves/profile",
+        ] {
+            assert!(
+                matches!(resolve(template, &i), Err(Error::Refused(_))),
+                "{template}"
+            );
+        }
+        // umu links the user's name to `steamuser` inside the prefix: that one stays allowed.
+        std::os::unix::fs::symlink("steamuser", users.join("someone")).unwrap();
+        assert_eq!(
+            resolve("<?SAVED_GAMES?>/Game", &i).unwrap(),
+            users.join("steamuser/Saved Games/Game")
+        );
+        // Not isolated, the game sees the user's files anyway, and Wine alone links the user
+        // folders to the real ones.
+        i.isolated = false;
+        assert_eq!(
+            resolve("<?APPLICATION_DATA_ROAMING?>/Game", &i).unwrap(),
+            users.join("steamuser/AppData/Roaming/Game")
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
