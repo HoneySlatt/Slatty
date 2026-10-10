@@ -9,6 +9,7 @@ use slatty_core::db::Db;
 use slatty_core::install::{Install, Platform};
 use slatty_core::installer::{InstallJob, InstallRecord};
 use slatty_core::library::LibraryCache;
+use slatty_core::lock::FileLock;
 use slatty_core::overview::{self, GameOverview};
 use slatty_core::paths::Dirs;
 use slatty_core::session::{self, Playtime};
@@ -61,9 +62,21 @@ pub fn summary(r: &InstallRecord) -> InstallSummary {
     }
 }
 
+/// The interface's own lock, held until it closes.
+static INSTANCE: std::sync::OnceLock<FileLock> = std::sync::OnceLock::new();
+
+/// One interface at a time, taken before anything is read or changed. The command line may still
+/// run beside it: each of its changes to a game takes that game's lock.
+fn hold_interface(dirs: &Dirs) -> Result<FileLock, String> {
+    slatty_core::lock::try_acquire(&dirs.locks().join("interface.lock"))
+        .map_err(err)?
+        .ok_or_else(|| "SlattyLauncher is already open.".to_string())
+}
+
 pub async fn boot() -> Result<Boot, String> {
     let dirs = Dirs::from_system().map_err(err)?;
     dirs.keep_private().map_err(err)?;
+    let _ = INSTANCE.set(hold_interface(&dirs)?);
     let db = Db::open(&dirs.db_file()).map_err(err)?;
     let http = slatty_core::http::client().map_err(err)?;
     let interrupted = slatty_core::play::recover_unfinished(&db, &dirs)
@@ -187,4 +200,29 @@ pub async fn boot() -> Result<Boot, String> {
         cover_width,
         sort,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A second interface is refused while one is open: two would each keep a download queue
+    /// and overwrite the other's, and each take the other's running game for a crashed session.
+    #[test]
+    fn one_interface_at_a_time() {
+        let dirs = Dirs::under(
+            &std::env::temp_dir().join(format!("slatty-gui-instance-{}", std::process::id())),
+        );
+        let first = hold_interface(&dirs).unwrap();
+        assert_eq!(
+            hold_interface(&dirs).unwrap_err(),
+            "SlattyLauncher is already open."
+        );
+        drop(first);
+        assert!(
+            hold_interface(&dirs).is_ok(),
+            "free once the first one closed"
+        );
+        let _ = std::fs::remove_dir_all(dirs.state.parent().unwrap());
+    }
 }

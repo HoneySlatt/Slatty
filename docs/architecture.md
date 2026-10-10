@@ -109,7 +109,9 @@ the same process or another one (CLI and interface), is refused instead of touch
 A game started from SlattyLauncher keeps it busy until its last process ends, even once the launcher
 was closed or crashed: the session supervisor holds `session-<id>.lock` for as long as it runs (as
 do the prefix creation and setup steps it runs), and every operation on the game is refused while it
-is held. A launcher starting meanwhile does not mark that session as interrupted either.
+is held. A launcher starting meanwhile does not mark that session as interrupted either. One
+interface runs at a time (`locks/interface.lock`, taken before anything is read): a second one says
+SlattyLauncher is already open. The command line still runs beside it.
 
 ### Install
 
