@@ -73,30 +73,24 @@ pub async fn fetch(
     Ok(page.items)
 }
 
-/// Unlocks an achievement now, or clears it, outside any game.
-/// GOG shows the result on the profile exactly like an unlock made in game.
-pub async fn set_unlocked(
+/// Unlocks an achievement now, outside any game. GOG shows it on the profile exactly like an
+/// unlock made in game, for good.
+pub async fn unlock(
     http: &Client,
     user_id: &str,
     client_id: &str,
     token: &Secret,
     achievement_id: &str,
-    unlocked: bool,
 ) -> Result<()> {
     let url = format!(
         "https://gameplay.gog.com/clients/{client_id}/users/{user_id}/achievements/{achievement_id}"
     );
-    let date = unlocked.then(|| Utc::now().format("%Y-%m-%dT%H:%M:%S+0000").to_string());
+    let date = Utc::now().format("%Y-%m-%dT%H:%M:%S+0000").to_string();
     let req = http
         .post(url)
         .bearer_auth(token.expose())
         .json(&serde_json::json!({ "date_unlocked": date }));
-    let context = if unlocked {
-        "unlocking an achievement"
-    } else {
-        "clearing an achievement"
-    };
-    http::send(req, context).await.map(drop)
+    http::send(req, "unlocking an achievement").await.map(drop)
 }
 
 /// Finds an achievement by key, numeric id or exact name (case-insensitive).

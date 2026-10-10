@@ -227,7 +227,7 @@ pub enum SettingsMsg {
     ReportPlaytime(bool),
     /// Whether Comet runs while a game that uses GOG's Galaxy runs.
     GameAchievements(bool),
-    /// Whether achievements can be unlocked and cleared by hand.
+    /// Whether achievements can be unlocked by hand.
     ManualAchievements(bool),
     /// How one installed game is started, among its launch options.
     LaunchTask(String, String),

@@ -36,7 +36,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `cloud` | Save locations, local scan, three-way plan, transport, sync executor, diagnostics |
 | `comet` | Supervised Comet process |
 | `galaxy_service` | Comet's dummy `GalaxyCommunication` service, registered in game prefixes |
-| `achievements` | Achievement list, manual unlock and clear |
+| `achievements` | Achievement list, manual unlock |
 | `overview` | Per-game achievement counts and cloud save support, cached per account |
 | `playtime` | Play time read from GOG, finished sessions reported to GOG |
 | `settings` | Default installation path, default Proton and platform, favorites, the download queue, privacy switches, manual achievement changes, launch options |

@@ -1,4 +1,4 @@
-//! Achievements of a game: loading them, and manual changes once the user confirms.
+//! Achievements of a game: loading them, and unlocks by hand once the user confirms.
 
 use iced::Task;
 use slatty_core::achievements::{self, Achievement};
@@ -9,7 +9,7 @@ use slatty_core::overview::{self, GameOverview};
 use crate::work::tokens_for;
 use crate::{App, Core, Loadable, Message, Page, Panel, err};
 
-/// Manual achievement changes waiting for the user's confirmation.
+/// Achievements to unlock by hand, waiting for the user's confirmation.
 #[derive(Debug, Clone)]
 pub struct PendingChange {
     pub game_id: String,
@@ -20,7 +20,6 @@ pub struct PendingChange {
 pub struct AchievementChange {
     pub achievement_id: String,
     pub name: String,
-    pub unlock: bool,
 }
 
 impl App {
@@ -68,13 +67,12 @@ impl App {
                     achievement_access(&core, &user_id, &pending.game_id, install).await?;
                 let mut failures = Vec::new();
                 for change in &pending.changes {
-                    if let Err(e) = achievements::set_unlocked(
+                    if let Err(e) = achievements::unlock(
                         &core.http,
                         &user_id,
                         &client_id,
                         &token,
                         &change.achievement_id,
-                        change.unlock,
                     )
                     .await
                     {

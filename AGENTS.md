@@ -59,7 +59,7 @@ nix shell nixpkgs#cargo-audit -c cargo audit
 These act on a real person's account, disk or system. Ask the human first, every time:
 
 - **Run commands against GOG with their account.** `slatty install` downloads gigabytes,
-  `slatty cloud sync` writes saves on both sides, `slatty achievements --unlock/--clear` changes
+  `slatty cloud sync` writes saves on both sides, `slatty achievements --unlock` changes
   a public profile, and `slatty launch` reports play time. Read-only commands
   (`slatty cloud status`, `slatty install --info`, `slatty update --check`, `slatty library list`)
   are the safe way to check a change.
