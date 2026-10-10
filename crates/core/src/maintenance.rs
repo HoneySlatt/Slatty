@@ -78,6 +78,19 @@ pub fn uninstall(
     for rel in &files {
         installer::refuse_outside(root, &root.join(rel))?;
     }
+    // The saves in the prefix are copied first too: a backup that fails deletes nothing.
+    if let Some(prefix) = prefix {
+        let users = prefix.join("drive_c/users");
+        if users.is_dir() {
+            let backup = dirs
+                .data
+                .join("backups/prefixes")
+                .join(game_id)
+                .join(Utc::now().format("%Y%m%d-%H%M%S").to_string());
+            copy_dir(&users, &backup)?;
+            report.prefix_backup = Some(backup);
+        }
+    }
     for rel in files {
         let path = root.join(rel);
         installer::refuse_outside(root, &path)?;
@@ -102,16 +115,6 @@ pub fn uninstall(
     if let Some(prefix) = prefix
         && prefix.exists()
     {
-        let users = prefix.join("drive_c/users");
-        if users.is_dir() {
-            let backup = dirs
-                .data
-                .join("backups/prefixes")
-                .join(game_id)
-                .join(Utc::now().format("%Y%m%d-%H%M%S").to_string());
-            copy_dir(&users, &backup)?;
-            report.prefix_backup = Some(backup);
-        }
         std::fs::remove_dir_all(prefix)
             .map_err(|e| Error::io(format!("delete {}", prefix.display()), e))?;
         report.prefix_removed = true;
@@ -762,6 +765,20 @@ mod tests {
             b"prefix save"
         );
         assert!(!env.dirs.data.join("prefixes/1").exists());
+    }
+
+    /// The prefix's user folder cannot be backed up (a full disk, here a file in the way): the
+    /// uninstall stops before deleting anything, rather than leaving the game half removed.
+    #[test]
+    fn a_prefix_that_cannot_be_backed_up_leaves_the_game_installed() {
+        let env = Env::new("prefix-backup-fails", true);
+        std::fs::create_dir_all(env.dirs.data.join("backups")).unwrap();
+        std::fs::write(env.dirs.data.join("backups/prefixes"), b"in the way").unwrap();
+        assert!(uninstall(&env.db, &env.dirs, "1", true).is_err());
+        assert!(env.game().join("Game.exe").exists());
+        assert!(env.game().join("data/a.pak").exists());
+        assert!(env.dirs.data.join("prefixes/1/drive_c/users").is_dir());
+        assert!(Install::get(&env.db, "1").unwrap().is_some());
     }
 
     #[test]
