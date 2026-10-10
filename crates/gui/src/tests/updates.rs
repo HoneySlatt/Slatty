@@ -58,13 +58,7 @@ fn a_game_busy_or_updated_elsewhere_is_passed_over_without_an_error() {
 }
 
 fn auto_app() -> App {
-    // Folders of its own: an update about to start tries its game's lock, which tests running at
-    // the same time on the same folders would hold for a moment.
-    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut app = library_app();
-    app.core.as_mut().unwrap().dirs =
-        slatty_core::paths::Dirs::under(&super::root().join(format!("updates-{n}")));
     app.updates.on = true;
     app
 }

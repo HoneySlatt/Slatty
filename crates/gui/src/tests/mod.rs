@@ -24,8 +24,14 @@ pub(crate) fn root() -> PathBuf {
 }
 
 fn core() -> Core {
+    // Locks of its own: queueing an install or starting an update takes the game's lock for a
+    // moment, which tests running at the same time on the same games would find held.
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut dirs = Dirs::under(&root());
+    dirs.state = root().join(format!("state-{n}"));
     Core {
-        dirs: Dirs::under(&root()),
+        dirs,
         db: Arc::new(Db::in_memory().unwrap()),
         http: slatty_core::http::client().unwrap(),
         downloads: Arc::new(tokio::sync::Semaphore::new(1)),

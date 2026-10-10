@@ -19,6 +19,33 @@ fn a_queue_change_cancels_the_drag_before_the_next_render() {
     assert!(app.queue.is_empty());
 }
 
+/// A game the command line is installing or updating is not queued over it: its job (folder,
+/// build, an update half applied) is left as it is.
+#[test]
+fn a_game_busy_elsewhere_is_not_queued_over() {
+    use slatty_core::installer::InstallJob;
+    let mut app = library_app();
+    let dirs = slatty_core::paths::Dirs::under(&super::root().join("queue-busy"));
+    app.core.as_mut().unwrap().dirs = dirs.clone();
+    let db = app.core.as_ref().unwrap().db.clone();
+    ready_to_install(&mut app, "5");
+    let busy = slatty_core::lock::game(&dirs, "5").unwrap();
+    let _ = app.enqueue("5".into());
+    assert!(app.queue.is_empty());
+    assert!(
+        InstallJob::load(&db, "5").unwrap().is_none(),
+        "nothing written"
+    );
+    assert!(app.notice.as_ref().is_some_and(|n| n.error));
+    assert!(
+        matches!(app.install_views.get("5"), Some(InstallView::Ready(_))),
+        "still ready to queue once free"
+    );
+    drop(busy);
+    let _ = app.enqueue("5".into());
+    assert_eq!(app.queue, ["5"]);
+}
+
 /// Offline at start, the queue waits for GOG, every game in its place, rather than each failing in
 /// turn; it is tried again by itself, or at once with Try now.
 #[test]

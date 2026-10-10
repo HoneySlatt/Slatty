@@ -98,8 +98,10 @@ impl App {
                 .collect(),
         };
         // Decided now, as the build is chosen: by its turn, GOG may have published a newer one.
-        // An interrupted install keeps the decision made when it started.
-        let saved = job.save(&core.db).and_then(|()| {
+        // An interrupted install keeps the decision made when it started. Written under the game's
+        // lock: the command line may be installing or updating it, its own job not to be replaced.
+        let saved = slatty_core::lock::game(&core.dirs, &game_id).and_then(|_busy| {
+            job.save(&core.db)?;
             if info.resumable {
                 return Ok(());
             }
