@@ -60,7 +60,7 @@ another account is now signed in.
 | Module | Responsibility |
 |---|---|
 | `login` | Browser sign-in, sign-out, avatar |
-| `library` | Library sync, covers and images (key art wider than 2560 pixels is scaled down once, in the cache), favorites, shelf, sort (numbers by value) and filters, per-game overview and play time. Only the rows of the cover grid in view are built (`GridWindow`, a row of margin each side, spaces of the right height for the rest), so a library of 10,000 games builds in about 2 ms, and the Achievements tab does the same; `library_at_10000_games` (ignored test) measures both |
+| `library` | Library sync, covers and images (key art wider than 2560 pixels is scaled down once, in the cache), favorites, shelf, sort (numbers by value) and filters, per-game overview and play time. Only the rows of the cover grid in view are built (`GridWindow`, a row of margin each side), and the Achievements tab does the same: at 10,000 games they build in about 6 and 4 ms. Each row of the whole grid is one child of its column (`ui::widgets::grid_rows`), a space of the same height when out of view, so a row still in view after a scroll keeps what Iced laid out for it: titles in a script the font lacks (Chinese, Japanese) are slow to shape again. `library_at_10000_games` (ignored test) measures both |
 | `play` | Launching a game and following its session |
 | `cloud` | Cloud save check, sync and conflict choices |
 | `achievements` | Loading achievements, confirmed manual changes |

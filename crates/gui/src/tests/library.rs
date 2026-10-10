@@ -372,12 +372,11 @@ fn a_library_of_10000_games_builds_only_the_covers_in_view() {
     }
     let offset = app.grid_view.expect("scrolled").absolute_offset().y;
     assert!(offset > 30_000.0, "{offset}");
-    let built: Vec<usize> = {
-        let mut ui = render(&app);
-        (1..=10_000)
-            .filter(|i| ui.find(format!("[FAKE] Game {i}")).is_ok())
-            .collect()
-    };
+    // A cover shows its title twice: on its placeholder and over it on hover.
+    let built: std::collections::BTreeSet<usize> = texts(&mut render(&app))
+        .iter()
+        .filter_map(|t| t.strip_prefix("[FAKE] Game ")?.parse().ok())
+        .collect();
     assert!(!built.contains(&1), "far above: not built");
     assert!(built.len() < 100, "a few rows: {}", built.len());
     assert!(built.iter().all(|i| *i > 1_000), "{built:?}");

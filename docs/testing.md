@@ -43,7 +43,9 @@ This times the Library and Achievements pages with 10,000 games whose titles are
 accented and partly not Latin, in no particular order: how long each view takes to build, and how
 much longer laying it out takes than with 14 such games. A view must build well within a 16 ms
 frame. Layout times include the test renderer's own start-up, so only the difference means
-something.
+something. They are those of a first display: the test lays out every widget anew, while the
+application keeps what it laid out for a row as long as the row stays in view. Scrolling is
+checked in the application itself.
 
 ### Tests that need real tools
 

@@ -500,18 +500,18 @@ impl NaturalKey {
     }
 }
 
-/// The part of the cover grid to build: a library of thousands of games shows a few dozen covers
-/// at once, and building or laying out the others would cost every frame.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// The rows of a cover grid to build: a library of thousands of games shows a few dozen covers at
+/// once, and building or laying out the others would cost every frame.
+#[derive(Debug, Clone, PartialEq)]
 pub struct GridWindow {
     pub columns: usize,
-    /// Indices of the games to build, from the first row in view to the last, a row more on each
-    /// side so a short scroll never shows a gap.
-    pub first: usize,
-    pub end: usize,
-    /// Space standing for the rows above and below, so the scrollbar stays true.
-    pub above: f32,
-    pub below: f32,
+    /// Every row of the grid.
+    pub rows: usize,
+    /// The rows to build, from the first in view to the last, a row more on each side so a short
+    /// scroll never shows a gap.
+    pub shown: std::ops::Range<usize>,
+    /// Height of a row, without the space below it.
+    pub row_height: f32,
 }
 
 impl GridWindow {
@@ -529,24 +529,26 @@ impl GridWindow {
     ) -> Self {
         let columns = (((width + spacing) / (max_width + spacing)).ceil() as usize).max(1);
         let cell = (width - spacing * (columns - 1) as f32) / columns as f32;
-        let pitch = cell_height.unwrap_or(cell * 4.0 / 3.0) + spacing;
+        let row_height = cell_height.unwrap_or(cell * 4.0 / 3.0);
+        let pitch = row_height + spacing;
         let rows = count.div_ceil(columns);
         let total = (rows as f32 * pitch - spacing).max(0.0);
         let offset = offset.clamp(0.0, (total - height).max(0.0));
-        let first_row = ((offset / pitch).floor() as usize)
+        let first = ((offset / pitch).floor() as usize)
             .saturating_sub(1)
             .min(rows);
-        let end_row = (((offset + height) / pitch).ceil() as usize + 1).min(rows);
-        let shown = end_row.saturating_sub(first_row);
-        let above = first_row as f32 * pitch;
-        let built = (shown as f32 * pitch - spacing).max(0.0);
+        let end = (((offset + height) / pitch).ceil() as usize + 1).min(rows);
         GridWindow {
             columns,
-            first: first_row * columns,
-            end: (end_row * columns).min(count),
-            above,
-            below: (total - above - built).max(0.0),
+            rows,
+            shown: first..end.max(first),
+            row_height,
         }
+    }
+
+    /// Indices of the cards of `row`, out of `count`.
+    pub fn cards(&self, row: usize, count: usize) -> std::ops::Range<usize> {
+        (row * self.columns).min(count)..((row + 1) * self.columns).min(count)
     }
 }
 
@@ -555,31 +557,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_the_rows_in_view_are_built_and_the_rest_keeps_its_height() {
+    fn only_the_rows_in_view_are_built() {
         // 10,000 covers, 4 columns of 100 wide: 2,500 rows of 133.3 plus 12 between.
         let w = GridWindow::new(10_000, 436.0, 100.0, 12.0, None, 0.0, 600.0);
-        assert_eq!(w.columns, 4);
-        assert_eq!((w.first, w.above), (0, 0.0));
-        let pitch = 100.0 * 4.0 / 3.0 + 12.0;
-        assert_eq!(w.end, 4 * ((600.0_f32 / pitch).ceil() as usize + 1));
-        let total = 2_500.0 * pitch - 12.0;
-        let built = (w.end / 4) as f32 * pitch - 12.0;
-        assert!(
-            (w.above + built + w.below - total).abs() < 0.5,
-            "the height of all rows"
-        );
+        assert_eq!((w.columns, w.rows), (4, 2_500));
+        assert!((w.row_height - 100.0 * 4.0 / 3.0).abs() < 0.01);
+        let pitch = w.row_height + 12.0;
+        assert_eq!(w.shown, 0..(600.0_f32 / pitch).ceil() as usize + 1);
+        assert_eq!(w.cards(0, 10_000), 0..4);
 
-        // Halfway down: a row of margin above, and the same total.
+        // Halfway down: a row of margin above.
         let w = GridWindow::new(10_000, 436.0, 100.0, 12.0, None, 1_000.0 * pitch, 600.0);
-        assert_eq!(w.first, 4 * 999);
-        let built = ((w.end - w.first) / 4) as f32 * pitch - 12.0;
-        assert!((w.above + built + w.below - total).abs() < 0.5);
-        // Past the end (the library just got shorter): the last rows.
+        assert_eq!(w.shown.start, 999);
+        // Past the end (the library just got shorter): the last rows, the last one short.
         let w = GridWindow::new(10, 436.0, 100.0, 12.0, None, 1e9, 600.0);
-        assert_eq!((w.first, w.end), (0, 10));
-        assert_eq!(
-            GridWindow::new(0, 436.0, 100.0, 12.0, None, 0.0, 600.0).end,
-            0
+        assert_eq!((w.rows, w.shown.clone()), (3, 0..3));
+        assert_eq!(w.cards(2, 10), 8..10);
+        assert!(
+            GridWindow::new(0, 436.0, 100.0, 12.0, None, 0.0, 600.0)
+                .shown
+                .is_empty()
         );
     }
 

@@ -2,11 +2,12 @@
 //! tokens only, so a custom theme changes them everywhere at once.
 
 use crate::theme::text;
-use iced::widget::{Space, button, container, image, row, stack, svg};
+use iced::widget::{Column, Space, button, container, image, row, stack, svg};
 use iced::{Alignment, ContentFit, Element, Length};
 
 use crate::Message;
 use crate::icons::{Icon, icon};
+use crate::library::GridWindow;
 use crate::theme::{self, bold, semibold, tokens};
 
 /// SlattyLauncher's emblem, in the accent colour.
@@ -123,4 +124,35 @@ pub fn inner(_: &iced::Theme) -> container::Style {
         border: iced::border::rounded(14),
         ..Default::default()
     }
+}
+
+/// A grid of `count` cards laid out by `w`, one child of the column per row of the whole grid: the
+/// rows in view hold their cards, the others are spaces of the same height. A row still in view
+/// after a scroll is then the same child as before, and Iced keeps what it laid out for it (the
+/// titles above all, slow to shape in scripts the interface font lacks).
+pub fn grid_rows<'a>(
+    w: &GridWindow,
+    count: usize,
+    spacing: f32,
+    card: impl Fn(usize) -> Element<'a, Message>,
+) -> Column<'a, Message> {
+    Column::with_children((0..w.rows).map(|r| {
+        if !w.shown.contains(&r) {
+            return Space::new().height(w.row_height).into();
+        }
+        let cards = w.cards(r, count);
+        let empty = w.columns - cards.len();
+        row(cards
+            .map(|i| {
+                container(card(i))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
+            })
+            .chain((0..empty).map(|_| Space::new().width(Length::Fill).into())))
+        .spacing(spacing)
+        .height(w.row_height)
+        .into()
+    }))
+    .spacing(spacing)
 }

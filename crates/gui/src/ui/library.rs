@@ -2,8 +2,8 @@
 
 use crate::theme::text;
 use iced::widget::{
-    Column, button, checkbox, column, container, grid, hover, image, mouse_area, pick_list,
-    progress_bar, row, scrollable, space,
+    Column, button, checkbox, column, container, hover, image, mouse_area, pick_list, progress_bar,
+    row, scrollable, space,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::installer::Progress;
@@ -11,7 +11,7 @@ use slatty_core::library::LibraryGame;
 use slatty_core::maintenance::Change;
 
 use super::format::*;
-use super::widgets::vertical_rule;
+use super::widgets::{grid_rows, vertical_rule};
 use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
 use crate::install::InstallMsg;
@@ -104,16 +104,9 @@ impl App {
                 offset,
                 height,
             );
-            let cards: Vec<Element<'_, Message>> =
-                games[w.first..w.end].iter().map(|g| self.card(g)).collect();
-            scrollable(column![
-                space().height(w.above),
-                grid(cards)
-                    .columns(w.columns)
-                    .spacing(GRID_SPACING)
-                    .height(grid::aspect_ratio(3, 4)),
-                space().height(w.below),
-            ])
+            scrollable(grid_rows(&w, games.len(), GRID_SPACING, |i| {
+                self.card(games[i])
+            }))
             .spacing(8)
             .on_scroll(Message::GridScrolled)
             .style(theme::scroller)

@@ -164,8 +164,11 @@ The interface follows Iced's state / message / update / view split:
 
 The library must stay fluid at **10,000 games**. Measure library and Achievements changes with
 `library_at_10000_games`, never with a small library, and judge them against a 16 ms frame. The
-cover grid and the Achievements grid build only the rows in view (`library::GridWindow`); keep
-any new grid or long list virtualized the same way.
+cover grid and the Achievements grid build only the rows in view (`library::GridWindow`), with
+one child per row of the whole grid (`ui::widgets::grid_rows`) so that a row keeps its place, and
+Iced its laid-out text, while it stays in view; keep any new grid or long list virtualized the
+same way. The simulator rebuilds every widget each time, so it cannot show what Iced keeps between
+frames: check scrolling in the real application too.
 
 ## Tests
 

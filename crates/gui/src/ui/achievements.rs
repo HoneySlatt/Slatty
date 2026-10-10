@@ -8,6 +8,7 @@ use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::achievements::Achievement;
 use slatty_core::library::LibraryGame;
 
+use super::widgets::grid_rows;
 use super::{inner, note, round_button};
 use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
@@ -67,24 +68,17 @@ impl App {
             view.map_or(0.0, |v| v.absolute_offset().y),
             view.map_or(self.window.height, |v| v.bounds().height),
         );
-        let cards: Vec<Element<'_, Message>> = games[w.first..w.end]
-            .iter()
-            .map(|&(g, done, total)| self.achievement_tile(g, done, total))
-            .collect();
+        let tiles = grid_rows(&w, games.len(), TILE_SPACING, |i| {
+            let (g, done, total) = games[i];
+            self.achievement_tile(g, done, total)
+        });
         column![
             header,
-            scrollable(column![
-                space().height(w.above),
-                grid(cards)
-                    .columns(w.columns)
-                    .spacing(TILE_SPACING)
-                    .height(Length::Shrink),
-                space().height(w.below),
-            ])
-            .spacing(8)
-            .on_scroll(Message::AchievementsScrolled)
-            .style(theme::scroller)
-            .height(Length::Fill)
+            scrollable(tiles)
+                .spacing(8)
+                .on_scroll(Message::AchievementsScrolled)
+                .style(theme::scroller)
+                .height(Length::Fill)
         ]
         .spacing(20)
         .padding(Padding::ZERO.top(4))

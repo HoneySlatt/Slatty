@@ -97,6 +97,19 @@ fn render(app: &App) -> Simulator<'_, Message> {
     Simulator::with_size(settings(), SIZE, app.view())
 }
 
+/// Every text shown, in one walk of the widget tree: a `find` per text walks all of it each time.
+fn texts(ui: &mut Simulator<'_, Message>) -> Vec<String> {
+    use iced_test::selector::Candidate;
+    let mut all = Vec::new();
+    let _ = ui.find(|candidate: Candidate<'_>| -> Option<()> {
+        if let Candidate::Text { content, .. } = candidate {
+            all.push(content.to_string());
+        }
+        None
+    });
+    all
+}
+
 fn snapshot(ui: &mut Simulator<'_, Message>, name: &str) {
     if let Ok(dir) = std::env::var("SLATTY_SNAPSHOT_DIR") {
         let snap = ui.snapshot(&crate::theme::theme()).unwrap();
