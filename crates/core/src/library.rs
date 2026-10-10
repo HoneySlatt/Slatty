@@ -53,7 +53,7 @@ struct ReleasesPage {
     next_page_token: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Release {
     platform_id: String,
     external_id: String,
@@ -87,16 +87,34 @@ async fn fetch_releases(http: &Client, tokens: &Tokens) -> Result<Vec<Release>> 
         "https://galaxy-library.gog.com/users/{}/releases",
         tokens.user_id
     );
-    let mut releases = Vec::new();
-    let mut page_token: Option<String> = None;
-    loop {
+    collect_releases(|page_token| {
         let mut req = http.get(&url).bearer_auth(tokens.access_token.expose());
         if let Some(t) = &page_token {
             req = req.query(&[("page_token", t)]);
         }
-        let page: ReleasesPage = http::json(req, "fetching the library").await?;
-        releases.extend(page.items.into_iter().filter(|r| r.platform_id == "gog"));
-        match page.next_page_token.filter(|t| !t.is_empty()) {
+        http::json(req, "fetching the library")
+    })
+    .await
+}
+
+/// Every GOG release of the listing, page after page as `page` reads them. A page already read
+/// stops it with an error rather than have it read forever.
+async fn collect_releases<F: Future<Output = Result<ReleasesPage>>>(
+    mut page: impl FnMut(Option<String>) -> F,
+) -> Result<Vec<Release>> {
+    let mut releases = Vec::new();
+    let mut page_token: Option<String> = None;
+    let mut seen = std::collections::HashSet::new();
+    loop {
+        let read = page(page_token.clone()).await?;
+        releases.extend(read.items.into_iter().filter(|r| r.platform_id == "gog"));
+        match read.next_page_token.filter(|t| !t.is_empty()) {
+            Some(t) if !seen.insert(t.clone()) => {
+                return Err(Error::parse(
+                    "fetching the library",
+                    "GOG gave a page already read",
+                ));
+            }
             Some(t) => page_token = Some(t),
             None => return Ok(releases),
         }
@@ -542,6 +560,40 @@ mod tests {
         let saved = load_cache(&dirs, "111").unwrap().unwrap();
         assert_eq!(saved.games[0].metadata, MetadataSource::Gamesdb);
         std::fs::remove_dir_all(dirs.cache.parent().unwrap()).unwrap();
+    }
+
+    /// GOG handing back a page already read would have the sync ask for it forever: it stops with
+    /// an error instead, and the library cached is kept.
+    #[tokio::test]
+    async fn a_library_listing_that_repeats_itself_stops() {
+        let page = |next: Option<&str>| ReleasesPage {
+            items: vec![Release {
+                platform_id: "gog".into(),
+                external_id: "1".into(),
+                certificate: None,
+            }],
+            next_page_token: next.map(String::from),
+        };
+        let asked = std::sync::atomic::AtomicUsize::new(0);
+        let result = collect_releases(|token| {
+            let n = asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            assert!(n < 10, "asked again and again");
+            // "a", then "b", then "a" again.
+            let next = match token.as_deref() {
+                None => Some("a"),
+                Some("a") => Some("b"),
+                _ => Some("a"),
+            };
+            std::future::ready(Ok(page(next)))
+        })
+        .await;
+        assert!(matches!(result, Err(Error::Parse { .. })), "{result:?}");
+
+        let pages =
+            collect_releases(|token| std::future::ready(Ok(page(token.is_none().then_some("a")))))
+                .await
+                .unwrap();
+        assert_eq!(pages.len(), 2, "every page of a listing that ends");
     }
 
     #[test]
