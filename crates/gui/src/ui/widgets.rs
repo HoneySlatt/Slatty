@@ -2,7 +2,7 @@
 //! tokens only, so a custom theme changes them everywhere at once.
 
 use crate::theme::text;
-use iced::widget::{Column, Space, button, column, container, image, row, stack, svg};
+use iced::widget::{Space, button, container, image, row, stack, svg};
 use iced::{Alignment, ContentFit, Element, Length};
 
 use crate::Message;
@@ -105,20 +105,6 @@ pub fn avatar<'a>(
 }
 
 /// A titled block of the settings page or of a panel.
-pub fn card<'a>(title: &'a str, items: Vec<Element<'a, Message>>) -> Element<'a, Message> {
-    container(
-        column![
-            text(title).size(17).font(semibold()),
-            Column::with_children(items).spacing(10)
-        ]
-        .spacing(14),
-    )
-    .padding(20)
-    .width(Length::Fill)
-    .style(theme::card)
-    .into()
-}
-
 pub fn round_button<'a>(ic: Icon, msg: Message) -> Element<'a, Message> {
     button(container(icon(ic, 20.0, tokens().text)).center(24))
         .padding(10)

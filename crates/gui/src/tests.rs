@@ -2221,3 +2221,30 @@ fn installs_started_during_a_download_wait_in_a_queue_that_can_be_reordered() {
     assert_eq!(app.queue, ["8"]);
     assert!(app.installing().is_none());
 }
+
+#[test]
+fn the_side_list_of_settings_brings_a_part_to_the_top() {
+    use crate::settings::{Section, SettingsMsg};
+    let mut app = library_app();
+    app.page = Page::Settings;
+    assert_eq!(app.settings_section, Section::Account);
+    let messages: Vec<Message> = {
+        let mut ui = render(&app);
+        for s in Section::ALL {
+            assert!(ui.find(s.title()).is_ok(), "{}", s.title());
+        }
+        ui.click("Installs").unwrap();
+        ui.into_messages().collect()
+    };
+    assert!(
+        matches!(
+            &messages[..],
+            [Message::Settings(SettingsMsg::Show(Section::Installs))]
+        ),
+        "{messages:?}"
+    );
+    for m in messages {
+        let _ = app.update(m);
+    }
+    assert_eq!(app.settings_section, Section::Installs);
+}

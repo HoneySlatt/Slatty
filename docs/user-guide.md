@@ -372,7 +372,10 @@ belong to them.
 
 ## Settings
 
-The interface's **Settings** tab holds the account (log out), the library refresh, and:
+The interface's **Settings** tab lists its parts on the left (Account, Library, Installs,
+Appearance, About); choosing one brings it to the top. **Account** shows who is signed in, with
+Log out. **Library** shows how many games you own and when the list was refreshed, with Refresh
+library, and the size of the covers. **Installs** holds:
 
 - **Default installation path:** where new games are installed unless the Install panel says
   otherwise. Type it, or pick a folder with **Browse**; it is saved as soon as it is an absolute
@@ -388,7 +391,7 @@ The interface's **Settings** tab holds the account (log out), the library refres
 `slatty install --dir` and `--proton` set the same values.
 
 **Appearance** picks a built-in theme (Carbonfox, Everforest, Pastel Glow, Gruvbox Dark
-or Light), the size of the library covers and the interface font, all applied at once and kept, and shows the theme file, `~/.config/slatty/theme.toml`: create it, edit it, and reload it to change colours,
+or Light) and the interface font, applied at once and kept, and shows the theme file, `~/.config/slatty/theme.toml`: create it, edit it, and reload it to change colours,
 corners and the page transition. See [theming](theming.md).
 
 ## Where data is stored

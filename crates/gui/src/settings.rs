@@ -71,6 +71,51 @@ impl fmt::Display for FontChoice {
     }
 }
 
+/// The parts of the Settings page, listed beside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Section {
+    #[default]
+    Account,
+    Library,
+    Installs,
+    Appearance,
+    About,
+}
+
+impl Section {
+    pub const ALL: [Section; 5] = [
+        Section::Account,
+        Section::Library,
+        Section::Installs,
+        Section::Appearance,
+        Section::About,
+    ];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Section::Account => "Account",
+            Section::Library => "Library",
+            Section::Installs => "Installs",
+            Section::Appearance => "Appearance",
+            Section::About => "About",
+        }
+    }
+
+    /// The id of its card, to find where it is.
+    pub fn id(self) -> &'static str {
+        match self {
+            Section::Account => "settings-account",
+            Section::Library => "settings-library",
+            Section::Installs => "settings-installs",
+            Section::Appearance => "settings-appearance",
+            Section::About => "settings-about",
+        }
+    }
+}
+
+/// The id of the page's scrolling area.
+pub const SETTINGS_SCROLL: &str = "settings-scroll";
+
 /// Windows or Linux, named for a pick list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlatformChoice(pub Platform);
@@ -112,6 +157,10 @@ pub enum SettingsMsg {
     Preset(crate::presets::Preset),
     /// Build installed when a game has both.
     Platform(PlatformChoice),
+    /// A part of the page, chosen in its side list: shown at the top.
+    Show(Section),
+    /// Where that part starts, below the first one, once measured.
+    ScrollTo(Option<f32>),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
 }
@@ -193,6 +242,32 @@ impl App {
                     self.notify_error(e.to_string());
                 }
             }
+            SettingsMsg::Show(section) => {
+                use iced::widget::selector::{find, id};
+                self.settings_section = section;
+                // Its offset in the page: how far its card is below the first one.
+                return find(id(section.id())).then(|card| {
+                    find(id(Section::Account.id())).map(move |first| {
+                        let top = |t: &Option<_>| {
+                            t.as_ref()
+                                .map(|t: &iced::widget::selector::Target| t.bounds().y)
+                        };
+                        Message::Settings(SettingsMsg::ScrollTo(
+                            top(&card).zip(top(&first)).map(|(c, f)| c - f),
+                        ))
+                    })
+                });
+            }
+            SettingsMsg::ScrollTo(Some(y)) => {
+                return iced::widget::operation::scroll_to(
+                    SETTINGS_SCROLL,
+                    iced::widget::operation::AbsoluteOffset {
+                        x: None,
+                        y: Some(y),
+                    },
+                );
+            }
+            SettingsMsg::ScrollTo(None) => {}
             SettingsMsg::CoverSize(size) => {
                 self.card_width = size.width();
                 if let Err(e) = settings::set_cover_width(&core.db, self.card_width) {

@@ -490,6 +490,36 @@ pub fn tonal(_: &Theme, status: button::Status) -> button::Style {
     }
 }
 
+/// An entry of a side list: tinted with the accent when it is the one shown.
+pub fn side_entry(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let t = tokens();
+        match (active, status) {
+            (true, _) => base(
+                Some(Color {
+                    a: 0.14,
+                    ..t.accent
+                }),
+                t.accent,
+                t.radius,
+            ),
+            (false, button::Status::Hovered | button::Status::Pressed) => {
+                base(Some(t.surface_high), t.text, t.radius)
+            }
+            (false, _) => base(None, t.text, t.radius),
+        }
+    }
+}
+
+/// The bar beside the entry of a side list that is shown.
+pub fn side_marker(_: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(tokens().accent)),
+        border: round(2.0),
+        ..container::Style::default()
+    }
+}
+
 /// An action that stands out without filling: outlined and labelled with the accent.
 pub fn accent_outline(_: &Theme, status: button::Status) -> button::Style {
     let t = tokens();

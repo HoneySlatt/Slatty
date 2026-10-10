@@ -207,6 +207,8 @@ pub struct App {
     pub install_views: HashMap<String, InstallView>,
     pub maintenance: HashMap<String, MaintenanceView>,
     pub library_root: String,
+    /// The part of the Settings page last chosen in its side list.
+    pub settings_section: settings::Section,
     /// Build installed when a game has both, unless changed in its install dialog.
     pub default_platform: Platform,
     pub proton: Option<PathBuf>,
@@ -280,6 +282,7 @@ impl Default for App {
             maintenance: HashMap::new(),
             library_root: String::new(),
             default_platform: Platform::Windows,
+            settings_section: settings::Section::Account,
             proton: None,
             proton_choices: Vec::new(),
             quit_confirm: None,

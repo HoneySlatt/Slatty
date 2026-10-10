@@ -28,7 +28,7 @@ use crate::icons::{Icon, icon};
 use crate::theme::{self, bold, tokens};
 use crate::{App, Message, Page, Panel};
 use widgets::{avatar, icon_tab, logo, nav_tab, vertical_rule};
-pub(super) use widgets::{card, inner, note, round_button};
+pub(super) use widgets::{inner, note, round_button};
 
 impl App {
     pub fn view(&self) -> Element<'_, Message> {

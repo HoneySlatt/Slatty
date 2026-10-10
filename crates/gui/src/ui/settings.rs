@@ -1,154 +1,106 @@
 //! Settings tab and the sign-in screen.
 
 use crate::theme::text;
-use iced::widget::{Space, button, column, container, pick_list, row, scrollable, text_input};
+use iced::widget::{
+    Column, Space, button, column, container, pick_list, row, scrollable, text_input,
+};
 use iced::{Alignment, Element, Length, Padding};
 
 use super::format::*;
+use super::note;
 use super::widgets::logo;
-use super::{card, note};
 use crate::icons::{Icon, icon};
 use crate::settings::{
-    COVER_SIZES, CoverSize, FontChoice, PlatformChoice, ProtonChoice, SettingsMsg,
+    COVER_SIZES, CoverSize, FontChoice, PlatformChoice, ProtonChoice, SETTINGS_SCROLL, Section,
+    SettingsMsg,
 };
 use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Message};
 
 impl App {
+    /// A side list of the parts of the page, and their cards; an entry brings its card to the top.
     pub(super) fn settings_page(&self) -> Element<'_, Message> {
-        let account = self.account.as_ref();
-        let choices: Vec<ProtonChoice> = self
-            .proton_choices
-            .iter()
-            .cloned()
-            .map(ProtonChoice)
-            .collect();
-        let selected = self.proton.clone().map(ProtonChoice);
-        let label = |t| text(t).size(15).width(210).color(tokens().muted);
-        let cache_note = match self.fetched_at {
-            Some(ts) => format!("Last refreshed {}", local_time(ts)),
-            None => "Never refreshed".into(),
-        };
-        let content = column![
-            text("Settings").size(30).font(bold()),
-            card(
-                "Account",
-                vec![
-                    row![
-                        label("Signed in as"),
-                        text(account.map(|a| a.username.as_str()).unwrap_or_default())
-                            .size(15)
-                            .width(Length::Fill),
-                        button(text("Log out").size(14))
-                            .padding([8, 16])
-                            .on_press(Message::Logout)
-                            .style(theme::tonal),
-                    ]
-                    .align_y(Alignment::Center)
-                    .into(),
-                ],
-            ),
-            card(
-                "Library",
-                vec![
-                    row![
-                        label("Games"),
-                        text(format!("{} owned · {cache_note}", self.library.len()))
-                            .size(15)
-                            .width(Length::Fill),
-                        button(
-                            text(if self.library_busy {
-                                "Refreshing…"
-                            } else {
-                                "Refresh library"
-                            })
-                            .size(14)
-                        )
-                        .padding([8, 16])
-                        .on_press_maybe((!self.library_busy).then_some(Message::SyncLibrary))
-                        .style(theme::tonal),
-                    ]
-                    .align_y(Alignment::Center)
-                    .into(),
-                ],
-            ),
-            card(
-                "Installs",
-                vec![
-                    row![
-                        label("Default installation path"),
-                        text_input("/home/…/Games/GOG", &self.library_root)
-                            .on_input(|v| Message::Settings(SettingsMsg::RootInput(v)))
-                            .on_submit(Message::Settings(SettingsMsg::SaveRoot))
-                            .style(theme::field)
-                            .font(theme::font())
-                            .padding([8, 12]),
-                        button(
-                            row![
-                                icon(Icon::FolderOpen, 16.0, tokens().text),
-                                text("Browse").size(14)
-                            ]
-                            .spacing(8)
-                            .align_y(Alignment::Center)
-                        )
-                        .padding([8, 16])
-                        .on_press(Message::Settings(SettingsMsg::BrowseRoot))
-                        .style(theme::tonal),
-                    ]
-                    .spacing(10)
-                    .align_y(Alignment::Center)
-                    .into(),
-                    row![
-                        label("Default platform"),
-                        pick_list(
-                            PlatformChoice::ALL,
-                            Some(PlatformChoice(self.default_platform)),
-                            |c| Message::Settings(SettingsMsg::Platform(c))
-                        )
-                        .style(theme::select)
-                        .font(theme::font())
-                        .padding([8, 16]),
-                        note("For games GOG offers on both."),
-                    ]
-                    .spacing(10)
-                    .align_y(Alignment::Center)
-                    .into(),
-                    row![
-                        label("Default Proton"),
-                        pick_list(choices, selected, |c| Message::Settings(
-                            SettingsMsg::Proton(c)
-                        ))
-                        .placeholder("No Proton build found (Steam or compatibilitytools.d)")
-                        .style(theme::select)
-                        .font(theme::font())
-                        .padding([8, 16]),
-                    ]
-                    .spacing(10)
-                    .align_y(Alignment::Center)
-                    .into(),
-                ],
-            ),
-            card("Appearance", vec![self.appearance()]),
-            card(
-                "About",
-                vec![
-                    text(format!(
-                        "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL)",
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .size(14)
-                    .color(tokens().muted)
-                    .into(),
-                ],
-            ),
-        ]
-        .spacing(16)
-        .max_width(860);
-        scrollable(container(content).padding(Padding::ZERO.top(10)))
-            .spacing(8)
-            .style(theme::scroller)
-            .height(Length::Fill)
+        let entries = Section::ALL.map(|s| {
+            let active = self.settings_section == s;
+            let color = if active {
+                tokens().accent
+            } else {
+                tokens().text
+            };
+            let marker: Element<'_, Message> = if active {
+                container(Space::new())
+                    .width(4)
+                    .height(28)
+                    .style(theme::side_marker)
+                    .into()
+            } else {
+                Space::new().width(4).into()
+            };
+            button(
+                row![
+                    marker,
+                    icon(section_icon(s), 20.0, color),
+                    text(s.title()).size(15).color(color)
+                ]
+                .spacing(14)
+                .align_y(Alignment::Center),
+            )
+            .padding(Padding::from([10, 12]).left(0))
+            .width(Length::Fill)
+            .on_press(Message::Settings(SettingsMsg::Show(s)))
+            .style(theme::side_entry(active))
             .into()
+        });
+        let side = container(Column::with_children(entries).spacing(6))
+            .padding(10)
+            .width(SIDE_WIDTH)
+            .height(Length::Fill)
+            .style(theme::card);
+        let cards = Section::ALL.map(|s| {
+            let rows = match s {
+                Section::Account => self.account_rows(),
+                Section::Library => self.library_rows(),
+                Section::Installs => self.installs_rows(),
+                Section::Appearance => self.appearance_rows(),
+                Section::About => vec![note(format!(
+                    "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL)",
+                    env!("CARGO_PKG_VERSION")
+                ))],
+            };
+            container(
+                column![
+                    row![
+                        icon(section_icon(s), 24.0, tokens().text),
+                        text(s.title()).size(18).font(semibold())
+                    ]
+                    .spacing(14)
+                    .align_y(Alignment::Center),
+                    // Under the title rather than under the icon.
+                    container(Column::with_children(rows).spacing(12))
+                        .padding(Padding::ZERO.left(38)),
+                ]
+                .spacing(14),
+            )
+            .id(s.id())
+            .padding(20)
+            .width(Length::Fill)
+            .style(theme::card)
+            .into()
+        });
+        let content = scrollable(
+            container(Column::with_children(cards).spacing(14)).padding(Padding::ZERO.right(14)),
+        )
+        .id(SETTINGS_SCROLL)
+        .spacing(8)
+        .style(theme::scroller)
+        .height(Length::Fill);
+        column![
+            text("Settings").size(32).font(bold()),
+            row![side, content].spacing(20)
+        ]
+        .spacing(18)
+        .padding(Padding::ZERO.top(10))
+        .into()
     }
 
     pub(super) fn login_view(&self) -> Element<'_, Message> {
@@ -195,28 +147,123 @@ impl App {
         container(content).padding(60).center_x(Length::Fill).into()
     }
 }
-
 impl App {
-    /// The theme file: where it is, and the way to create, edit and apply it.
-    fn appearance(&self) -> Element<'_, Message> {
+    fn account_rows(&self) -> Vec<Element<'_, Message>> {
+        let name = self.account.as_ref().map(|a| a.username.as_str());
+        vec![setting(
+            "Signed in as",
+            text(name.unwrap_or_default()).size(15).into(),
+            Some(action("Log out", Message::Logout)),
+        )]
+    }
+
+    fn library_rows(&self) -> Vec<Element<'_, Message>> {
+        let refreshed = match self.fetched_at {
+            Some(ts) => format!("Last refreshed {}", local_time(ts)),
+            None => "Never refreshed".into(),
+        };
+        let refresh = button(
+            text(if self.library_busy {
+                "Refreshing…"
+            } else {
+                "Refresh library"
+            })
+            .size(14),
+        )
+        .padding([8, 16])
+        .on_press_maybe((!self.library_busy).then_some(Message::SyncLibrary))
+        .style(theme::tonal);
+        vec![
+            setting(
+                "Games",
+                text(format!("{} owned · {refreshed}", self.library.len()))
+                    .size(15)
+                    .into(),
+                Some(refresh.into()),
+            ),
+            setting(
+                "Cover size",
+                select(pick_list(
+                    COVER_SIZES.map(CoverSize),
+                    Some(CoverSize::of(self.card_width)),
+                    |s| Message::Settings(SettingsMsg::CoverSize(s)),
+                )),
+                None,
+            ),
+        ]
+    }
+
+    fn installs_rows(&self) -> Vec<Element<'_, Message>> {
+        let protons: Vec<ProtonChoice> = self
+            .proton_choices
+            .iter()
+            .cloned()
+            .map(ProtonChoice)
+            .collect();
+        let browse = button(
+            row![
+                icon(Icon::FolderOpen, 16.0, tokens().text),
+                text("Browse").size(14)
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        )
+        .padding([8, 16])
+        .on_press(Message::Settings(SettingsMsg::BrowseRoot))
+        .style(theme::tonal);
+        vec![
+            setting(
+                "Default installation path",
+                text_input("/home/…/Games/GOG", &self.library_root)
+                    .on_input(|v| Message::Settings(SettingsMsg::RootInput(v)))
+                    .on_submit(Message::Settings(SettingsMsg::SaveRoot))
+                    .style(theme::field)
+                    .font(theme::font())
+                    .padding([8, 12])
+                    .into(),
+                Some(browse.into()),
+            ),
+            setting(
+                "Default platform",
+                select(pick_list(
+                    PlatformChoice::ALL,
+                    Some(PlatformChoice(self.default_platform)),
+                    |c| Message::Settings(SettingsMsg::Platform(c)),
+                )),
+                Some(note("For games GOG offers on both.")),
+            ),
+            setting(
+                "Default Proton",
+                select(
+                    pick_list(protons, self.proton.clone().map(ProtonChoice), |c| {
+                        Message::Settings(SettingsMsg::Proton(c))
+                    })
+                    .placeholder("No Proton build found (Steam or compatibilitytools.d)"),
+                ),
+                None,
+            ),
+        ]
+    }
+
+    /// The built-in themes, the font and the theme file, with the way to create, edit and apply it.
+    fn appearance_rows(&self) -> Vec<Element<'_, Message>> {
         let Some(core) = &self.core else {
-            return Space::new().into();
+            return Vec::new();
         };
         let path = crate::theme::file(&core.dirs.config);
         let exists = path.exists();
-        let action = |label, msg| {
-            button(text(label).size(14))
-                .padding([8, 16])
-                .on_press(Message::Settings(msg))
-                .style(theme::tonal)
-        };
-        let buttons = if exists {
+        let file_actions: Element<'_, Message> = if exists {
             row![
-                action("Edit", SettingsMsg::EditTheme),
-                action("Reload", SettingsMsg::ReloadTheme),
+                action("Edit", Message::Settings(SettingsMsg::EditTheme)),
+                action("Reload", Message::Settings(SettingsMsg::ReloadTheme)),
             ]
+            .spacing(8)
+            .into()
         } else {
-            row![action("Create theme file", SettingsMsg::CreateTheme)]
+            action(
+                "Create theme file",
+                Message::Settings(SettingsMsg::CreateTheme),
+            )
         };
         let current = match theme::font().family {
             iced::font::Family::Name(name) if name != theme::DEFAULT_FAMILY => {
@@ -233,65 +280,95 @@ impl App {
                     .map(FontChoice::Family),
             )
             .collect();
-        column![
-            row![
-                text("Theme").size(15).width(210).color(tokens().muted),
-                pick_list(crate::presets::Preset::ALL, Some(theme::preset()), |p| {
-                    Message::Settings(SettingsMsg::Preset(p))
-                })
-                .style(theme::select)
-                .font(theme::font())
-                .padding([8, 16])
-                .width(Length::Fill),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-            row![
-                text("Cover size").size(15).width(210).color(tokens().muted),
-                pick_list(
-                    COVER_SIZES.map(CoverSize),
-                    Some(CoverSize::of(self.card_width)),
-                    |s| Message::Settings(SettingsMsg::CoverSize(s))
-                )
-                .style(theme::select)
-                .font(theme::font())
-                .padding([8, 16])
-                .width(Length::Fill),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-            row![
-                text("Font").size(15).width(210).color(tokens().muted),
-                pick_list(fonts, Some(current), |f| Message::Settings(
-                    SettingsMsg::Font(f)
-                ))
-                .style(theme::select)
-                .font(theme::font())
-                .padding([8, 16])
-                .width(Length::Fill),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-            row![
-                text("Theme file").size(15).width(210).color(tokens().muted),
-                text(path.display().to_string())
-                    .size(14)
-                    .width(Length::Fill),
-                buttons.spacing(8),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-            text(if exists {
+        vec![
+            setting(
+                "Theme",
+                select(pick_list(
+                    crate::presets::Preset::ALL,
+                    Some(theme::preset()),
+                    |p| Message::Settings(SettingsMsg::Preset(p)),
+                )),
+                None,
+            ),
+            setting(
+                "Font",
+                select(pick_list(fonts, Some(current), |f| {
+                    Message::Settings(SettingsMsg::Font(f))
+                })),
+                None,
+            ),
+            setting(
+                "Theme file",
+                container(text(path.display().to_string()).size(14))
+                    .padding([9, 12])
+                    .width(Length::Fill)
+                    .style(theme::outlined)
+                    .into(),
+                Some(file_actions),
+            ),
+            note(if exists {
                 "Colours, corners and the page transition come from this file. Edit it, then \
                  Reload to see the change."
             } else {
                 "The default look is in use. Create the theme file to change colours, corners and \
                  the page transition."
-            })
-            .size(13)
-            .color(tokens().muted),
+            }),
         ]
-        .spacing(10)
-        .into()
     }
+}
+
+/// Width of the side list of the Settings page.
+const SIDE_WIDTH: f32 = 236.0;
+/// Width of the labels, and of the space for what follows a setting, so the settings line up.
+const LABEL_WIDTH: f32 = 240.0;
+const AFTER_WIDTH: f32 = 250.0;
+
+fn section_icon(s: Section) -> Icon {
+    match s {
+        Section::Account => Icon::User,
+        Section::Library => Icon::LayoutGrid,
+        Section::Installs => Icon::Download,
+        Section::Appearance => Icon::Palette,
+        Section::About => Icon::Info,
+    }
+}
+
+/// A setting: its name, its value or control, then a button or a note.
+fn setting<'a>(
+    label: &'a str,
+    control: Element<'a, Message>,
+    after: Option<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    row![
+        text(label)
+            .size(15)
+            .width(LABEL_WIDTH)
+            .color(tokens().muted),
+        container(control).width(Length::Fill),
+        container(after.unwrap_or_else(|| Space::new().into())).width(AFTER_WIDTH),
+    ]
+    .spacing(16)
+    .align_y(Alignment::Center)
+    .into()
+}
+
+fn select<'a, T, L, V>(list: iced::widget::PickList<'a, T, L, V, Message>) -> Element<'a, Message>
+where
+    T: ToString + PartialEq + Clone + 'a,
+    L: std::borrow::Borrow<[T]> + 'a,
+    V: std::borrow::Borrow<T> + 'a,
+{
+    list.style(theme::select)
+        .font(theme::font())
+        .padding([8, 16])
+        .width(Length::Fill)
+        .into()
+}
+
+fn action<'a>(label: &'a str, msg: Message) -> Element<'a, Message> {
+    button(text(label).size(14))
+        .padding([8, 16])
+        .on_press(msg)
+        .style(theme::tonal)
+        .into()
 }
