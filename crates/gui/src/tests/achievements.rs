@@ -119,6 +119,22 @@ fn achievements_tab_lists_games_by_completion() {
     );
 }
 
+/// With no game to show, the tab says why rather than stay blank.
+#[test]
+fn an_empty_achievements_tab_says_why() {
+    let mut app = library_app();
+    app.page = Page::Achievements;
+    app.overview_busy = true;
+    assert!(render(&app).find("Reading achievements from GOG…").is_ok());
+    app.overview_busy = false;
+    let mut ui = render(&app);
+    assert!(
+        ui.find("No game with achievements found. Refresh to ask GOG again.")
+            .is_ok()
+    );
+    snapshot(&mut ui, "achievements-empty");
+}
+
 /// A long title does not push a game's progress out of its tile, at the smallest window.
 #[test]
 fn a_long_title_leaves_the_progress_in_its_tile() {

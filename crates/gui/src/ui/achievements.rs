@@ -57,6 +57,17 @@ impl App {
             .style(theme::tonal),
         ]
         .align_y(Alignment::Center);
+        if games.is_empty() {
+            let why = if self.overview_busy {
+                "Reading achievements from GOG…"
+            } else {
+                "No game with achievements found. Refresh to ask GOG again."
+            };
+            return column![header, text(why).color(tokens().muted)]
+                .spacing(20)
+                .padding(Padding::ZERO.top(4))
+                .into();
+        }
         // Only the rows in view are built, as in the library.
         let view = self.achievements_view;
         let w = GridWindow::new(
