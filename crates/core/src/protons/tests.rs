@@ -449,6 +449,43 @@ async fn what_cut_off_runs_left_is_cleared_and_does_not_block_a_download() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// Unpacking that fails half way (a full disk, an archive cut short) leaves no half build behind:
+/// it can be large, and nothing else would remove it before the next Proton download.
+#[tokio::test]
+async fn a_build_that_fails_to_unpack_leaves_no_half_build() {
+    let root = root("unpack-fails");
+    let dirs = Dirs::under(&root);
+    let mut noise = 1u32;
+    let big: Vec<u8> = (0..200_000)
+        .map(|_| {
+            noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (noise >> 24) as u8
+        })
+        .collect();
+    let whole = gz(&build_tar(|t| {
+        entry(
+            t,
+            "GE-Proton11-7/files/big.bin",
+            Kind::File(0o644),
+            &big,
+            "",
+        )
+    }));
+    let archive = whole[..whole.len() * 3 / 4].to_vec();
+    let (api, _) = github(archive.clone(), sha512_hex(&archive)).await;
+    let http = crate::http::client().unwrap();
+    let release = latest(&http, &api, Source::GeProton).await.unwrap();
+    assert!(
+        install(&http, &dirs, &release, |_| {}, &CancellationToken::new())
+            .await
+            .is_err()
+    );
+    let staging = dir(&dirs).join(".staging");
+    assert!(!staging.join("GE-Proton11-7-x86_64").exists());
+    assert!(!dir(&dirs).join("GE-Proton11-7-x86_64").exists());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// Two processes (the interface and the command line) change the builds one at a time: the links
 /// are made, a build installed or removed, only by the one holding the lock.
 #[tokio::test]

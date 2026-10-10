@@ -483,13 +483,16 @@ async fn unpack_release(
     let (from, to, cancel) = (archive.clone(), unpacked.clone(), cancel.clone());
     let progress = std::sync::Arc::new(progress);
     let report = progress.clone();
+    // A half build (a full disk, a stop) can be large: it is not kept until the next download.
     tokio::task::spawn_blocking(move || {
         unpack(&from, &to, &cancel, &|done, total| {
             report(Stage::Unpacking { done, total })
         })
     })
     .await
-    .map_err(|e| Error::io("unpacking a Proton build", std::io::Error::other(e)))??;
+    .map_err(|e| Error::io("unpacking a Proton build", std::io::Error::other(e)))
+    .flatten()
+    .inspect_err(|_| drop(std::fs::remove_dir_all(&unpacked)))?;
     if !unpacked.join("proton").is_file() {
         let _ = std::fs::remove_dir_all(&unpacked);
         return Err(Error::Refused(format!(
