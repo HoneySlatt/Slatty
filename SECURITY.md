@@ -18,6 +18,10 @@ Include the steps to reproduce and the version or commit you tested.
   - Some GOG endpoints take tokens in the URL, so network errors are reported without their URL.
 - **Comet handoff.** Comet receives tokens through a file readable only by you, in a private runtime
   directory. The file is deleted as soon as Comet has read it.
+- **Comet runs as little as it can.** It acts for your GOG account and listens on this computer
+  (127.0.0.1:9977) while it runs, where any local program can reach it. It is started only for a
+  game that ships GOG's Galaxy SDK, stopped when the game ends, and never started once
+  **Achievements in game** is off (Settings → Privacy).
 - **Logs.** Comet's log may contain game client identifiers. Review it before sharing.
 - **Private files.** SlattyLauncher's folders (settings, data, cache, state) are made readable by
   you only (0700) at every start, and its database 0600: they hold your library, play times, save

@@ -15,6 +15,7 @@ const DEFAULT_PLATFORM: &str = "default_platform";
 const DOWNLOAD_QUEUE: &str = "download_queue";
 const UMU_LOOKUP: &str = "umu_lookup";
 const REPORT_PLAYTIME: &str = "report_playtime";
+const GAME_ACHIEVEMENTS: &str = "game_achievements";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -70,6 +71,16 @@ pub fn report_playtime(db: &Db) -> Result<bool> {
 
 pub fn set_report_playtime(db: &Db, on: bool) -> Result<()> {
     db.set_setting(REPORT_PLAYTIME, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether Comet is started while a game that uses GOG's Galaxy runs, so achievements unlocked in
+/// the game reach GOG. On until turned off.
+pub fn game_achievements(db: &Db) -> Result<bool> {
+    Ok(db.setting(GAME_ACHIEVEMENTS)?.as_deref() != Some("off"))
+}
+
+pub fn set_game_achievements(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(GAME_ACHIEVEMENTS, Some(if on { "on" } else { "off" }))
 }
 
 /// Game ids waiting in the download queue, in order.

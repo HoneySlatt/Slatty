@@ -2308,6 +2308,9 @@ fn what_leaves_the_computer_can_be_turned_off() {
     assert!(app.umu_lookup && app.report_playtime, "on until turned off");
     let _ = app.update(Message::Settings(SettingsMsg::UmuLookup(false)));
     let _ = app.update(Message::Settings(SettingsMsg::ReportPlaytime(false)));
+    let _ = app.update(Message::Settings(SettingsMsg::GameAchievements(false)));
+    assert!(!app.game_achievements);
+    assert!(!slatty_core::settings::game_achievements(&db).unwrap());
     assert!(!app.umu_lookup && !app.report_playtime);
     assert!(!slatty_core::settings::umu_lookup(&db).unwrap());
     assert!(!slatty_core::settings::report_playtime(&db).unwrap());

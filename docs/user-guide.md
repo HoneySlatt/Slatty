@@ -225,7 +225,9 @@ A launch goes through these steps:
    (see [cloud saves](#cloud-saves)). Offline, the game starts with your local saves. On the
    first launch this is where your saves from GOG's cloud arrive, right after the prefix is
    created and before the game starts.
-3. Comet starts, so the game can report achievements. Before the first session, Comet's dummy
+3. Comet starts, so the game can report achievements: only for a game that ships GOG's Galaxy SDK
+   (`Galaxy64.dll` and the like), and unless **Achievements in game** is off in Settings → Privacy.
+   Before the first session, Comet's dummy
    `GalaxyCommunication` service is registered in the prefix; some games need it to reach Comet.
 4. The game runs. SlattyLauncher waits until **every** game process has exited, not only the
    launcher.
@@ -391,9 +393,10 @@ library, and the size of the covers. **Installs** holds:
 
 `slatty install --dir` and `--proton` set the same values.
 
-**Privacy** has two switches, both on until turned off: **Proton fixes** (a game's GOG id goes to
+**Privacy** has three switches, all on until turned off: **Proton fixes** (a game's GOG id goes to
 umu's public database at its first launch, to pick its community fixes; off, the game runs without
-them) and **Play time on GOG** (each session goes to GOG so it counts on your profile, as Galaxy
+them), **Achievements in game** (Comet runs while a game that uses GOG's Galaxy runs; off,
+unlocks made in games are not reported, and unlocking by hand still works) and **Play time on GOG** (each session goes to GOG so it counts on your profile, as Galaxy
 does; sessions played while it is off are never sent). SlattyLauncher has no telemetry.
 
 **Appearance** picks a built-in theme (Carbonfox, Everforest, Pastel Glow, Gruvbox Dark

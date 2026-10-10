@@ -213,6 +213,7 @@ pub struct App {
     /// Privacy settings: a game's id to umu's database, play sessions to GOG.
     pub umu_lookup: bool,
     pub report_playtime: bool,
+    pub game_achievements: bool,
     pub proton: Option<PathBuf>,
     pub proton_choices: Vec<PathBuf>,
     /// Work that closing the window would interrupt, waiting for the user's choice.
@@ -286,6 +287,7 @@ impl Default for App {
             default_platform: Platform::Windows,
             umu_lookup: true,
             report_playtime: true,
+            game_achievements: true,
             settings_view: settings::SettingsView::default(),
             proton: None,
             proton_choices: Vec::new(),
@@ -383,6 +385,7 @@ pub struct Boot {
     default_platform: Platform,
     umu_lookup: bool,
     report_playtime: bool,
+    game_achievements: bool,
     proton: Option<PathBuf>,
     proton_choices: Vec<PathBuf>,
     favorites: Vec<String>,
@@ -474,6 +477,7 @@ impl App {
                 self.default_platform = boot.default_platform;
                 self.umu_lookup = boot.umu_lookup;
                 self.report_playtime = boot.report_playtime;
+                self.game_achievements = boot.game_achievements;
                 self.installs = boot
                     .installs
                     .into_iter()
@@ -856,6 +860,7 @@ async fn boot() -> Result<Boot, String> {
     let default_platform = slatty_core::settings::default_platform(&db).map_err(err)?;
     let umu_lookup = slatty_core::settings::umu_lookup(&db).map_err(err)?;
     let report_playtime = slatty_core::settings::report_playtime(&db).map_err(err)?;
+    let game_achievements = slatty_core::settings::game_achievements(&db).map_err(err)?;
     // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
     let proton_choices = slatty_core::settings::proton_candidates();
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
@@ -904,6 +909,7 @@ async fn boot() -> Result<Boot, String> {
         default_platform,
         umu_lookup,
         report_playtime,
+        game_achievements,
         favorites,
         playtime,
         overview,

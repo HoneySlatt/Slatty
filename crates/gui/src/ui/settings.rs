@@ -185,6 +185,18 @@ impl App {
             ),
             setting(
                 wide,
+                "Achievements in game",
+                switch(
+                    self.game_achievements,
+                    SettingsMsg::GameAchievements,
+                    "Starts Comet while a game that uses GOG's Galaxy runs, so what it unlocks \
+                     reaches GOG. Comet acts for your account and listens on this computer until \
+                     the game ends. Unlocking by hand still works when off.",
+                ),
+                None,
+            ),
+            setting(
+                wide,
                 "Play time on GOG",
                 switch(
                     self.report_playtime,

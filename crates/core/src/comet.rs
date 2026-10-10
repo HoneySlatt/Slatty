@@ -148,6 +148,41 @@ fn write_private(private_dir: &Path, token_file: &Path, tokens: &Tokens) -> Resu
         .map_err(|e| Error::io("write the Comet token file", e))
 }
 
+/// Files of GOG's Galaxy SDK, the only way a game reports achievements to Comet.
+const GALAXY_SDK: [&str; 4] = [
+    "galaxy.dll",
+    "galaxy64.dll",
+    "galaxypeer.dll",
+    "galaxypeer64.dll",
+];
+
+/// Whether a game ships GOG's Galaxy SDK: Comet is started for those only. The files slatty
+/// installed are looked through; a game installed elsewhere is searched a few folders deep.
+pub fn uses_galaxy(dirs: &Dirs, install: &crate::install::Install) -> bool {
+    let is_sdk = |name: &str| {
+        let name = name.rsplit(['/', '\\']).next().unwrap_or(name);
+        GALAXY_SDK.iter().any(|sdk| name.eq_ignore_ascii_case(sdk))
+    };
+    if let Ok(Some(record)) = crate::installer::InstallRecord::load(dirs, &install.game_id) {
+        return record.files.iter().any(|f| is_sdk(&f.path));
+    }
+    fn search(dir: &Path, depth: u32, is_sdk: &dyn Fn(&str) -> bool) -> bool {
+        std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| {
+                let name = e.file_name().to_string_lossy().into_owned();
+                match e.file_type() {
+                    Ok(t) if t.is_dir() => depth > 0 && search(&e.path(), depth - 1, is_sdk),
+                    Ok(_) => is_sdk(&name),
+                    Err(_) => false,
+                }
+            })
+    }
+    search(&install.path, 4, &is_sdk)
+}
+
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::PermissionsExt;
@@ -181,5 +216,51 @@ mod tests {
         let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
         assert_eq!(v["refresh_token"], "r");
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn comet_is_for_games_that_ship_the_galaxy_sdk() {
+        use crate::install::{Install, Platform};
+        use crate::installer::{InstallRecord, RecordedFile};
+        let root = std::env::temp_dir().join(format!("slatty-galaxy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dirs = Dirs::under(&root.join("app"));
+        let game = root.join("Game");
+        std::fs::create_dir_all(game.join("bin/x64")).unwrap();
+        let install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: game.clone(),
+            client_id: None,
+            runner: crate::runner::Runner::Native,
+            umu_id: None,
+        };
+        // Installed elsewhere: its folder is searched.
+        assert!(!uses_galaxy(&dirs, &install));
+        std::fs::write(game.join("bin/x64/Galaxy64.dll"), b"").unwrap();
+        assert!(uses_galaxy(&dirs, &install));
+        // Installed by slatty: its record says.
+        let record = |path: &str| InstallRecord {
+            build_id: "b".into(),
+            version: "1".into(),
+            language: "en".into(),
+            path: Some(game.clone()),
+            dlcs: Vec::new(),
+            setup_build: None,
+            files: vec![RecordedFile {
+                path: path.into(),
+                size: 1,
+            }],
+        };
+        record("Game_Data\\Plugins\\GalaxyCSharp.dll")
+            .save(&dirs, "1")
+            .unwrap();
+        assert!(!uses_galaxy(&dirs, &install), "a wrapper is not the SDK");
+        record("Game_Data\\Plugins\\x86_64\\galaxy.dll")
+            .save(&dirs, "1")
+            .unwrap();
+        assert!(uses_galaxy(&dirs, &install));
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

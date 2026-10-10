@@ -221,6 +221,8 @@ pub enum SettingsMsg {
     UmuLookup(bool),
     /// Whether play sessions go to GOG.
     ReportPlaytime(bool),
+    /// Whether Comet runs while a game that uses GOG's Galaxy runs.
+    GameAchievements(bool),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
 }
@@ -349,6 +351,12 @@ impl App {
             SettingsMsg::UmuLookup(on) => {
                 self.umu_lookup = on;
                 if let Err(e) = settings::set_umu_lookup(&core.db, on) {
+                    self.notify_error(e.to_string());
+                }
+            }
+            SettingsMsg::GameAchievements(on) => {
+                self.game_achievements = on;
+                if let Err(e) = settings::set_game_achievements(&core.db, on) {
                     self.notify_error(e.to_string());
                 }
             }

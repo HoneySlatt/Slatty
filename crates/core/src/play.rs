@@ -135,7 +135,13 @@ pub async fn play(
     let spec = runner::launch_spec(&install)?;
     // GOG keeps no cloud saves for Linux builds, and they lack the Galaxy SDK that Comet talks to.
     let native = install.platform == Platform::Linux;
-    let (cloud, use_comet) = (req.cloud && !native, req.comet && !native);
+    let cloud = req.cloud && !native;
+    // Comet acts for the account and listens on this computer while it runs: only for a game that
+    // can talk to it, and only if allowed in Settings.
+    let use_comet = req.comet
+        && !native
+        && crate::settings::game_achievements(db)?
+        && crate::comet::uses_galaxy(dirs, &install);
     let user_id = Account::active(db)?.map(|a| a.user_id);
 
     if let Some(init) = runner::prefix_init_spec(&install)? {
