@@ -408,6 +408,7 @@ impl App {
                 }
             }
             MaintenanceMsg::Updated(game_id, result) => {
+                self.update_ended(&game_id, &result);
                 match &result {
                     Ok(_) => self.forget_interrupted(&game_id),
                     Err(_) => self.sync_interrupted(&game_id),

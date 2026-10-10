@@ -44,6 +44,8 @@ pub struct Boot {
     /// Whether followed Proton builds are kept up to date, and whether a check is due now.
     pub proton_updates: bool,
     pub proton_update_due: bool,
+    /// Whether games on their newest build are updated without asking.
+    pub auto_update: bool,
     pub favorites: Vec<String>,
     pub playtime: HashMap<String, Playtime>,
     pub overview: HashMap<String, GameOverview>,
@@ -123,6 +125,7 @@ pub async fn boot() -> Result<Boot, String> {
     let proton_downloads = slatty_core::settings::proton_downloads(&db).map_err(err)?;
     let downloaded_protons = slatty_core::protons::installed(&dirs);
     let proton_updates = slatty_core::settings::proton_updates(&db).map_err(err)?;
+    let auto_update = slatty_core::settings::auto_update(&db).map_err(err)?;
     let proton_update_due =
         slatty_core::protons::update_due(&db, chrono::Utc::now().timestamp()).map_err(err)?;
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
@@ -174,6 +177,7 @@ pub async fn boot() -> Result<Boot, String> {
         downloaded_protons,
         proton_updates,
         proton_update_due,
+        auto_update,
         default_platform,
         umu_lookup,
         report_playtime,

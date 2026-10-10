@@ -16,6 +16,7 @@ mod settings;
 mod tests;
 mod theme;
 mod ui;
+mod updates;
 mod work;
 
 use std::collections::{HashMap, HashSet};
@@ -250,6 +251,8 @@ pub struct App {
     pub proton_choices: Vec<PathBuf>,
     /// Proton builds from GitHub (Settings → Runners).
     pub runners: runners::RunnersView,
+    /// Games updated without asking (Settings → Installs).
+    pub updates: updates::AutoUpdates,
     /// Work that closing the window would interrupt, waiting for the user's choice.
     pub quit_confirm: Option<Vec<String>>,
     pub interrupted: Vec<(String, Interrupted)>,
@@ -340,6 +343,7 @@ impl Default for App {
             proton: None,
             proton_choices: Vec::new(),
             runners: runners::RunnersView::default(),
+            updates: updates::AutoUpdates::default(),
             quit_confirm: None,
             interrupted: Vec::new(),
             queue: Vec::new(),
@@ -419,6 +423,7 @@ pub enum Message {
     Maintenance(MaintenanceMsg),
     Settings(SettingsMsg),
     Runners(runners::RunnersMsg),
+    Updates(updates::UpdatesMsg),
     DismissNotice,
     CloseRequested,
     ConfirmQuit,
@@ -460,8 +465,14 @@ impl App {
         } else {
             Subscription::none()
         };
+        let update_checks = if self.updates.on && self.account.is_some() {
+            iced::time::every(updates::EVERY).map(|_| Message::Updates(updates::UpdatesMsg::Check))
+        } else {
+            Subscription::none()
+        };
         Subscription::batch([
             frames,
+            update_checks,
             keyboard::listen().map(Message::Key),
             iced::window::close_requests().map(|_| Message::CloseRequested),
             iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),
@@ -472,6 +483,8 @@ impl App {
     fn update(&mut self, message: Message) -> Task<Message> {
         let shown = self.location();
         let task = self.handle(message);
+        // Whatever ended (a game, an install, an update) may let a waiting update start.
+        let task = Task::batch([task, self.next_update()]);
         let now = self.location();
         if now != shown {
             self.now = Instant::now();
@@ -538,6 +551,7 @@ impl App {
                 self.runners.downloads = boot.proton_downloads;
                 self.runners.downloaded = boot.downloaded_protons;
                 self.runners.updates = boot.proton_updates;
+                self.updates.on = boot.auto_update;
                 let proton_update = if boot.proton_update_due {
                     self.update_runners(runners::RunnersMsg::Update)
                 } else {
@@ -585,10 +599,12 @@ impl App {
                 }
                 let avatar = self.fetch_avatar();
                 let resume = self.resume_interrupted();
+                let check = self.update_updates(updates::UpdatesMsg::Check);
+                let tasks = [avatar, resume, proton_update, check];
                 if let Some(cache) = boot.library {
-                    return Task::batch([avatar, resume, proton_update, self.set_library(cache)]);
+                    return Task::batch(tasks.into_iter().chain([self.set_library(cache)]));
                 }
-                return Task::batch([avatar, resume, proton_update]);
+                return Task::batch(tasks);
             }
             Message::Booted(Err(e)) => self.fatal = Some(e),
             Message::OpenLoginPage => self.open_login_page(),
@@ -706,6 +722,7 @@ impl App {
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Runners(msg) => return self.update_runners(msg),
+            Message::Updates(msg) => return self.update_updates(msg),
             Message::Edit(msg) => return self.update_edit(msg),
             Message::OpenDialog(id, panel) => {
                 self.dialog = Some((id.clone(), panel));

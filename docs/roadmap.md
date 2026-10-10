@@ -48,7 +48,8 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 - **Maintenance.** Verify, repair, uninstall.
 - **Updates.** Detect a newer build; update in place, file by file, resumable. Unchanged chunks
   of changed files are copied locally instead of downloaded. GOG's binary patches (xdelta3) are applied
-  when available.
+  when available. Games on their newest build are updated without asking, one after the other and
+  never while a game runs; an older build chosen is left as it is.
 - **DLC and languages.** Owned DLC installed by default; add, remove or switch language later.
 - **Post-install setup.** GOG script interpreter or setup programs, game-folder dependencies, shared
   redistributables.

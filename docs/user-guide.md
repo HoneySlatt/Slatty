@@ -361,6 +361,13 @@ or as its game version) stays on it and is updated only when you ask; updating i
 newest build, makes it follow updates again. A language or DLC change does not change this.
 Checking a Windows game takes one request to GOG (the list of builds).
 
+The interface checks these games at start and every six hours while it stays open, and applies
+the updates it finds one after the other, never while a game runs or an install downloads; they
+wait in the **Updates** part of the Downloads tab, where the one being applied shows its progress
+and **Pause**. While a game updates, its page shows **Updating** instead of Play. A paused update
+waits until you apply it again from Manage; one stopped by a closed window is finished at the next
+start, as any update. The switch is in Settings → Installs.
+
 An update compares each file of the new build with the one on disk:
 
 - unchanged files are kept;
@@ -494,6 +501,7 @@ library, and the size of the covers. **Installs** holds:
   Hotfix) that Steam downloaded in any of its libraries, and those umu downloaded. Valve's builds
   are kept up to date by Steam; a game set to one that Steam removes needs another one chosen in its
   settings. Each game can use another build.
+- **Update games automatically:** on until turned off; see [Updates](#updates).
 
 `slatty install --dir` and `--proton` set the same values.
 

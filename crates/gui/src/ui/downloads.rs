@@ -14,6 +14,7 @@ use super::widgets::{round_button, vertical_rule};
 use crate::downloads::{DownloadsMsg, ROW_HEIGHT, ROW_SPACING};
 use crate::icons::{Icon, icon};
 use crate::install::{Cancelling, InstallMsg, InstallView};
+use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Interrupted, Message, Panel};
 
@@ -51,7 +52,7 @@ impl App {
         for (id, kind) in &stopped {
             downloading = downloading.push(self.stopped_card(id, *kind));
         }
-        if active == 0 {
+        if active == 0 && self.updates.current.is_none() {
             downloading = downloading.push(note(if self.queue.is_empty() {
                 "Nothing is downloading. Installs started while another one downloads wait here."
             } else {
@@ -63,6 +64,12 @@ impl App {
             content = content
                 .push(heading("Queue", Some(self.queue.len())))
                 .push(self.queue_list());
+        }
+        let updates = usize::from(self.updates.current.is_some()) + self.updates.waiting.len();
+        if updates > 0 {
+            content = content
+                .push(heading("Updates", Some(updates)))
+                .push(self.updates_list());
         }
         if !self.completed.is_empty() {
             content = content
@@ -80,6 +87,68 @@ impl App {
             .style(theme::scroller)
             .height(Length::Fill)
             .into()
+    }
+
+    /// The game updating without asking, with its progress and Pause, then those waiting.
+    fn updates_list(&self) -> Element<'_, Message> {
+        let mut list = Column::new().spacing(ROW_SPACING);
+        if let Some(id) = self.updates.current.as_deref() {
+            let progress = self
+                .maintenance
+                .get(id)
+                .and_then(|m| m.progress)
+                .unwrap_or_default();
+            list = list.push(
+                container(
+                    column![
+                        row![
+                            text(self.title_of(id))
+                                .size(18)
+                                .font(semibold())
+                                .width(Length::Fill),
+                            round_button(
+                                Icon::Pause,
+                                Message::Maintenance(MaintenanceMsg::Pause(id.to_string()))
+                            ),
+                        ]
+                        .align_y(Alignment::Center),
+                        row![
+                            progress_bar(0.0..=1.0, fraction(progress))
+                                .girth(10)
+                                .style(theme::progress),
+                            text(format!("Updating {:.0} %", fraction(progress) * 100.0))
+                                .size(15)
+                                .width(Length::Shrink),
+                        ]
+                        .spacing(14)
+                        .align_y(Alignment::Center),
+                    ]
+                    .spacing(12),
+                )
+                .padding(18)
+                .width(Length::Fill)
+                .style(theme::card),
+            );
+        }
+        for id in &self.updates.waiting {
+            list = list.push(
+                container(
+                    row![
+                        text(self.title_of(id)).size(15).width(Length::Fill),
+                        text("Waiting").size(14).color(tokens().muted),
+                    ]
+                    .align_y(Alignment::Center),
+                )
+                .padding([14, 18])
+                .width(Length::Fill)
+                .style(theme::card),
+            );
+        }
+        list.push(note(
+            "Games on their newest build are updated one after the other, never while a game \
+             runs or an install downloads. A paused update waits until you apply it in Manage.",
+        ))
+        .into()
     }
 
     /// The running install: progress, speed, time left, Pause and Cancel.

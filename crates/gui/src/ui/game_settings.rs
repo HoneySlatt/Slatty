@@ -297,7 +297,7 @@ fn version<'a>(game_id: &'a str, c: &'a ContentInfo, busy: bool) -> Element<'a, 
                 ))
             }))
             .style(theme::tonal),
-        note("Only the files that differ are downloaded. Saves made with a newer version may not load in an older one."),
+        note("Only the files that differ are downloaded. Saves made with a newer version may not load in an older one. An older version stays as it is: it is not updated automatically until you update the game or choose the newest version."),
     ]
     .spacing(10)
     .into()

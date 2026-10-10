@@ -16,6 +16,7 @@ use crate::settings::{
     SettingsMsg,
 };
 use crate::theme::{self, bold, semibold, tokens};
+use crate::updates::UpdatesMsg;
 use crate::{App, Message};
 use slatty_core::protons::{Release, Source, Stage};
 
@@ -591,6 +592,23 @@ impl App {
                     })
                     .placeholder("No Proton build found (Steam or compatibilitytools.d)"),
                 ),
+                None,
+            ),
+            setting(
+                wide,
+                "Update games automatically",
+                column![
+                    toggler(self.updates.on)
+                        .on_toggle(|on| Message::Updates(UpdatesMsg::Toggle(on)))
+                        .size(22),
+                    note(
+                        "Checks at start and every six hours, and updates games on their newest \
+                         build one after the other, never while a game runs. A game on an older \
+                         version you chose stays on it.",
+                    ),
+                ]
+                .spacing(8)
+                .into(),
                 None,
             ),
         ]

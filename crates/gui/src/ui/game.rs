@@ -170,6 +170,18 @@ impl App {
         let main = if self.installs.contains_key(&g.id) {
             if this_running {
                 big(Icon::Stop, "Stop".into(), Some(Message::StopGame), true)
+            } else if self.updates.current.as_deref() == Some(g.id.as_str()) {
+                // Playable again once the update is done, or paused from Downloads.
+                let progress = self.maintenance.get(&g.id).and_then(|m| m.progress);
+                big(
+                    Icon::Download,
+                    format!(
+                        "Updating {:.0} %",
+                        progress.map(fraction).unwrap_or_default() * 100.0
+                    ),
+                    None,
+                    false,
+                )
             } else {
                 big(
                     Icon::Play,
