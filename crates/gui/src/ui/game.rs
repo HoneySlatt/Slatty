@@ -482,10 +482,18 @@ impl App {
                 .size(14)
                 .color(tokens().muted)
                 .into(),
+            // The reason can be long (a keyring error): it shows on hover, the card keeps its size.
             Some(Loadable::Failed(e)) => column![
-                text(format!("Unavailable: {e}"))
-                    .size(13)
-                    .color(tokens().muted),
+                tooltip(
+                    text("Achievements unavailable")
+                        .size(14)
+                        .color(tokens().muted),
+                    container(text(e).size(13))
+                        .padding([4, 10])
+                        .max_width(360)
+                        .style(theme::block),
+                    tooltip::Position::Top,
+                ),
                 button(text("Retry").size(14))
                     .on_press(Message::LoadAchievements(g.id.clone()))
                     .style(theme::link),

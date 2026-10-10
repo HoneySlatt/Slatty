@@ -298,3 +298,23 @@ fn a_product_with_nothing_to_install_says_so_instead_of_install() {
     assert_eq!(app.installability.get("6"), Some(&None));
     assert!(!app.installability.contains_key("7"));
 }
+
+/// Why achievements could not be read can be long (a keyring error is): the card of the game page,
+/// one line high, says they are unavailable and offers Retry; the reason shows on hover.
+#[test]
+fn an_achievement_error_stays_inside_its_card() {
+    let mut app = library_app();
+    let reason = "secret storage unavailable: No default store has been set, so cannot search or \
+                  create entries";
+    open(&mut app, "4", None);
+    app.achievements
+        .insert("4".into(), crate::Loadable::Failed(reason.into()));
+    let mut ui = render(&app);
+    assert!(ui.find("Achievements unavailable").is_ok());
+    assert!(ui.find(format!("Unavailable: {reason}").as_str()).is_err());
+    ui.click("Retry").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::LoadAchievements(id) if id == "4"))
+    );
+}
