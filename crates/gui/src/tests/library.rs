@@ -370,7 +370,8 @@ fn a_library_of_10000_games_builds_only_the_covers_in_view() {
     for m in messages {
         let _ = app.update(m);
     }
-    let offset = app.grid_view.expect("scrolled").absolute_offset().y;
+    let scrolled = app.grid_view.expect("scrolled");
+    let offset = scrolled.absolute_offset().y;
     assert!(offset > 30_000.0, "{offset}");
     // A cover shows its title twice: on its placeholder and over it on hover.
     let built: std::collections::BTreeSet<usize> = texts(&mut render(&app))
@@ -381,9 +382,36 @@ fn a_library_of_10000_games_builds_only_the_covers_in_view() {
     assert!(built.len() < 100, "a few rows: {}", built.len());
     assert!(built.iter().all(|i| *i > 1_000), "{built:?}");
 
-    // Back from a game page, the grid shows its top again.
-    open(&mut app, "3", None);
+    // Back from a game page, the grid is where it was left, with the same rows built.
+    let _ = app.update(Message::Select("3".into()));
     let _ = app.update(Message::CloseDetail);
+    assert_eq!(app.grid_view.map(|v| v.absolute_offset().y), Some(offset));
+    assert!(render(&app).find("[FAKE] Game 1").is_err());
+    // Through Escape too.
+    let _ = app.update(Message::Select("3".into()));
+    let _ = app.update(Message::Key(iced::keyboard::Event::KeyPressed {
+        key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+        modified_key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers: iced::keyboard::Modifiers::empty(),
+        text: None,
+        repeat: false,
+    }));
+    assert_eq!(app.grid_view.map(|v| v.absolute_offset().y), Some(offset));
+
+    // Another tab, then the library again: its top.
+    let _ = app.update(Message::ShowPage(Page::Settings));
+    let _ = app.update(Message::ShowPage(Page::Library));
     assert!(app.grid_view.is_none());
     assert!(render(&app).find("[FAKE] Game 1").is_ok());
+    // A game page reached from another tab brings no old position back.
+    app.grid_view = Some(scrolled);
+    let _ = app.update(Message::Select("3".into()));
+    let _ = app.update(Message::ShowPage(Page::Downloads));
+    let _ = app.update(Message::Select("4".into()));
+    let _ = app.update(Message::CloseDetail);
+    assert!(app.grid_view.is_none());
 }

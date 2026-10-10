@@ -108,6 +108,7 @@ impl App {
                 self.card(games[i])
             }))
             .spacing(8)
+            .id(crate::library::GRID)
             .on_scroll(Message::GridScrolled)
             .style(theme::scroller)
             .height(Length::Fill)

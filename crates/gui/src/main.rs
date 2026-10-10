@@ -194,6 +194,8 @@ pub struct App {
     pub card_width: f32,
     /// Where the cover grid is scrolled to and how large it shows: only the rows in view are built.
     pub grid_view: Option<iced::widget::scrollable::Viewport>,
+    /// Where the cover grid was left for the game page open, to find it there again.
+    pub library_scroll: Option<iced::widget::scrollable::Viewport>,
     /// The same for the grid of the Achievements tab.
     pub achievements_view: Option<iced::widget::scrollable::Viewport>,
     pub filters: Filters,
@@ -292,6 +294,7 @@ impl Default for App {
             sort: Sort::default(),
             card_width: 150.0,
             grid_view: None,
+            library_scroll: None,
             achievements_view: None,
             filters: Filters::default(),
             filters_open: false,
@@ -461,12 +464,30 @@ impl App {
     fn update(&mut self, message: Message) -> Task<Message> {
         let shown = self.location();
         let task = self.handle(message);
-        if self.location() != shown {
+        let now = self.location();
+        if now != shown {
             self.now = Instant::now();
             self.page_shown = Self::fade_in(self.now);
-            // A page shown again starts at its top: so does the part of the grid built.
-            self.grid_view = None;
+            // A page shown again starts at its top, and so does the part of the grid built; but
+            // the library is found where it was left when a game page goes back to it.
+            let library = (Page::Library, None, None);
+            let back = if now == library && shown.1.is_some() {
+                self.library_scroll.take()
+            } else {
+                None
+            };
+            if now.1.is_none() {
+                self.library_scroll = None;
+            }
+            if shown == library && now.1.is_some() {
+                self.library_scroll = self.grid_view;
+            }
+            self.grid_view = back;
             self.achievements_view = None;
+            if let Some(view) = back {
+                let to = view.absolute_offset();
+                return Task::batch([task, operation::scroll_to(library::GRID, to)]);
+            }
         }
         task
     }

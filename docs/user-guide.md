@@ -66,7 +66,8 @@ dot says you are signed in.
 The size of the covers is set in Settings → Appearance.
 
 Hovering a cover shows its title, a settings button and a play (or install) button. Clicking it
-opens the game page. The install button opens the install choices in a dialog over the library,
+opens the game page; going back (the Library link or Escape) finds the library scrolled where you
+left it. Another tab shows it from the top. The install button opens the install choices in a dialog over the library,
 which stays where it was, and so does the settings button of an installed game; the game page has
 the same choices in its drawers.
 

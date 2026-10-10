@@ -15,6 +15,9 @@ use slatty_core::overview::{self, GameOverview};
 use crate::work::tokens_for;
 use crate::{App, Core, Message, err};
 
+/// The cover grid of the Library tab, scrolled back to where it was after a game page.
+pub const GRID: &str = "library-grid";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Shelf {
     #[default]
