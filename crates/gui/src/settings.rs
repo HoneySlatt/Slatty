@@ -136,7 +136,7 @@ impl SettingsView {
             .zip(self.tops)
             .filter(|(_, top)| top.is_some_and(|t| t <= offset + 24.0))
             .map(|(s, _)| s)
-            .last()
+            .next_back()
             .unwrap_or(Section::Account)
     }
 }
