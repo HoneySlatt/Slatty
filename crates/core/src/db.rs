@@ -118,9 +118,24 @@ impl Db {
     }
 
     fn init(mut conn: Connection) -> Result<Self> {
-        conn.pragma_update(None, "journal_mode", "WAL")?;
+        // First: another process may hold the database while it switches it to WAL or migrates it.
+        let wait = std::time::Duration::from_secs(5);
+        conn.busy_timeout(wait)?;
+        // Switching to WAL takes the database alone, and SQLite does not wait for that: it is tried
+        // again while another process opening it at the same time holds it.
+        let deadline = std::time::Instant::now() + wait;
+        loop {
+            match conn.pragma_update(None, "journal_mode", "WAL") {
+                Err(rusqlite::Error::SqliteFailure(e, _))
+                    if e.code == rusqlite::ErrorCode::DatabaseBusy
+                        && std::time::Instant::now() < deadline =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                done => break done?,
+            }
+        }
         conn.pragma_update(None, "foreign_keys", true)?;
-        conn.busy_timeout(std::time::Duration::from_secs(5))?;
         migrate(&mut conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
@@ -155,25 +170,58 @@ impl Db {
     }
 }
 
+/// Each step runs in a transaction that takes the database for writing first, and reads the version
+/// inside it: another process migrating at the same time is waited for, and its steps not run again.
 fn migrate(conn: &mut Connection) -> Result<()> {
-    let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-    if version > MIGRATIONS.len() as i64 {
-        return Err(Error::Unsupported(format!(
-            "state database version {version} is newer than this build supports"
-        )));
-    }
-    for (i, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
-        let tx = conn.transaction()?;
+    loop {
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        if version > MIGRATIONS.len() as i64 {
+            return Err(Error::Unsupported(format!(
+                "state database version {version} is newer than this build supports"
+            )));
+        }
+        let Some(sql) = MIGRATIONS.get(version as usize) else {
+            return Ok(());
+        };
         tx.execute_batch(sql)?;
-        tx.pragma_update(None, "user_version", i as i64 + 1)?;
+        tx.pragma_update(None, "user_version", version + 1)?;
         tx.commit()?;
     }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The interface and the command line started at once on a database to create or bring up to
+    /// date: each opens it, neither fails on the other's steps.
+    #[test]
+    fn processes_opening_a_database_at_once_both_get_it() {
+        let root = std::env::temp_dir().join(format!("slatty-db-race-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        for round in 0..20 {
+            let path = root.join(format!("{round}.db"));
+            let start = std::sync::Arc::new(std::sync::Barrier::new(4));
+            let opened: Vec<_> = (0..4)
+                .map(|_| {
+                    let (path, start) = (path.clone(), start.clone());
+                    std::thread::spawn(move || {
+                        start.wait();
+                        Db::open(&path).map(drop)
+                    })
+                })
+                .collect();
+            for result in opened {
+                result
+                    .join()
+                    .unwrap()
+                    .unwrap_or_else(|e| panic!("round {round}: {e}"));
+            }
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn migrates_and_stores_settings() {
