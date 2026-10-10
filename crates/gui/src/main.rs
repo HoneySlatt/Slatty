@@ -441,6 +441,20 @@ pub enum Message {
     Key(keyboard::Event),
 }
 
+/// The keys the window answers itself (Tab, Shift+Tab, Escape), as a message. The others send
+/// none: every message rebuilds the page, and each key a field does not take (its release, a
+/// modifier) would.
+fn key_message(event: keyboard::Event) -> Option<Message> {
+    use keyboard::key::Named;
+    match &event {
+        keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(Named::Tab | Named::Escape),
+            ..
+        } => Some(Message::Key(event)),
+        _ => None,
+    }
+}
+
 impl Message {
     /// Whether the message leaves the games the Library and Achievements tabs list as they were:
     /// those that come many times a second.
@@ -501,7 +515,7 @@ impl App {
         Subscription::batch([
             frames,
             update_checks,
-            keyboard::listen().map(Message::Key),
+            keyboard::listen().filter_map(key_message),
             iced::window::close_requests().map(|_| Message::CloseRequested),
             iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),
         ])

@@ -288,6 +288,34 @@ fn the_library_order_is_kept() {
     }
 }
 
+#[test]
+fn only_the_keys_the_window_answers_send_a_message() {
+    use iced::keyboard::key::{Named, NativeCode, Physical};
+    use iced::keyboard::{Event, Key, Location, Modifiers};
+    let physical_key = Physical::Unidentified(NativeCode::Unidentified);
+    let press = |key: Key| Event::KeyPressed {
+        modified_key: key.clone(),
+        key,
+        physical_key,
+        location: Location::Standard,
+        modifiers: Modifiers::empty(),
+        text: None,
+        repeat: false,
+    };
+    assert!(crate::key_message(press(Key::Named(Named::Escape))).is_some());
+    assert!(crate::key_message(press(Key::Named(Named::Tab))).is_some());
+    assert!(crate::key_message(press(Key::Character("a".into()))).is_none());
+    let release = Event::KeyReleased {
+        key: Key::Named(Named::Escape),
+        modified_key: Key::Named(Named::Escape),
+        physical_key,
+        location: Location::Standard,
+        modifiers: Modifiers::empty(),
+    };
+    assert!(crate::key_message(release).is_none());
+    assert!(crate::key_message(Event::ModifiersChanged(Modifiers::SHIFT)).is_none());
+}
+
 /// At start the covers already cached come in one message; only those missing are downloaded,
 /// each on its own.
 #[test]
