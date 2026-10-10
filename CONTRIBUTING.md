@@ -3,6 +3,8 @@
 Thanks for your interest. SlattyLauncher is young; issues describing what works or fails with a
 given game are as valuable as code.
 
+If you work with an AI coding agent, point it to [AGENTS.md](AGENTS.md) first.
+
 ## Development environment
 
 ```sh

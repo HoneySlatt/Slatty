@@ -90,7 +90,7 @@ The [user guide](docs/user-guide.md) covers every command.
 - [Compatibility](docs/compatibility.md): results of real tests
 - [Testing](docs/testing.md): automated tests and manual checks against GOG
 - [Roadmap](docs/roadmap.md)
-- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [AI agents](AGENTS.md)
 
 ## Credits
 
