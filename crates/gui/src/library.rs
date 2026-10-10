@@ -336,7 +336,7 @@ impl App {
                         .ok()
                         .flatten()
                 },
-                move |bytes| Message::Cover(id, bytes),
+                move |path| Message::Cover(id, path),
             )
         }));
         let all = self.library.iter().map(|g| g.id.clone()).collect();

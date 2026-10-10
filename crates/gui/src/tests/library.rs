@@ -26,7 +26,7 @@ fn late_account_results_are_ignored_after_signing_back_in() {
     app.overview_busy = true;
     let results = [
         Message::Avatar(Some("https://invalid.example/old-avatar".into())),
-        Message::Cover("1".into(), Some(vec![1])),
+        Message::Cover("1".into(), Some("/covers/1.jpg".into())),
         Message::Image("old-image".into(), Some(vec![1])),
         Message::OverviewFetched("1".into(), Ok(GameOverview::default())),
         Message::OverviewDone,

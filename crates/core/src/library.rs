@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -203,26 +204,57 @@ fn installability(product: &Value) -> Option<NotInstallable> {
     })
 }
 
-/// Cover image bytes, served from the per-account disk cache when present.
+/// The file of a game's cover in the per-account cache, downloaded when missing. It is named after
+/// its format (`<id>.jpg`), which image decoders go by, so the interface can show it from the
+/// file rather than keep its bytes.
 pub async fn cover(
     http: &Client,
     dirs: &Dirs,
     user_id: &str,
     game: &LibraryGame,
-) -> Result<Option<Vec<u8>>> {
+) -> Result<Option<PathBuf>> {
     let Some(url) = &game.cover else {
         return Ok(None);
     };
-    let path = dirs
-        .account_cache(user_id)
-        .join("covers")
-        .join(format!("{}.img", game.id));
-    if let Ok(bytes) = tokio::fs::read(&path).await {
-        return Ok(Some(bytes));
+    let folder = dirs.account_cache(user_id).join("covers");
+    let (cache, id) = (folder.clone(), game.id.clone());
+    if let Some(path) = tokio::task::spawn_blocking(move || cached_cover(&cache, &id))
+        .await
+        .expect("cover task panicked")
+    {
+        return Ok(Some(path));
     }
     let bytes = http::bytes(http.get(url), "downloading a cover").await?;
+    let ext = crate::custom::image_extension(&bytes)
+        .ok_or_else(|| Error::parse("downloading a cover", "not an image"))?;
+    let path = folder.join(format!("{}.{ext}", game.id));
     fsutil::write_atomic(&path, &bytes)?;
-    Ok(Some(bytes))
+    Ok(Some(path))
+}
+
+const COVER_EXTENSIONS: [&str; 5] = ["jpg", "png", "webp", "gif", "bmp"];
+
+/// A cover already in the cache. One an earlier version kept as `<id>.img` is renamed after its
+/// format, or dropped when it is not an image.
+fn cached_cover(folder: &Path, id: &str) -> Option<PathBuf> {
+    if let Some(path) = COVER_EXTENSIONS
+        .iter()
+        .map(|ext| folder.join(format!("{id}.{ext}")))
+        .find(|p| p.is_file())
+    {
+        return Some(path);
+    }
+    let old = folder.join(format!("{id}.img"));
+    let mut head = [0u8; 16];
+    let read = std::fs::File::open(&old).and_then(|mut f| std::io::Read::read(&mut f, &mut head));
+    let ext = crate::custom::image_extension(&head[..read.ok()?]);
+    let Some(ext) = ext else {
+        let _ = std::fs::remove_file(&old);
+        return None;
+    };
+    let path = folder.join(format!("{id}.{ext}"));
+    std::fs::rename(&old, &path).ok()?;
+    Some(path)
 }
 
 /// Where an image downloaded from `url` is cached for the account.
@@ -316,6 +348,71 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    fn game_with_cover(id: &str, url: String) -> LibraryGame {
+        LibraryGame {
+            id: id.into(),
+            title: "[FAKE] Game".into(),
+            cover: Some(url),
+            icon: None,
+            background: None,
+            logo: None,
+            os: Vec::new(),
+            metadata: MetadataSource::Gamesdb,
+        }
+    }
+
+    #[tokio::test]
+    async fn covers_are_kept_as_files_named_after_their_format() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let dirs = Dirs::under(
+            &std::env::temp_dir().join(format!("slatty-covers-{}", std::process::id())),
+        );
+        let folder = dirs.account_cache("111").join("covers");
+        std::fs::create_dir_all(&folder).unwrap();
+        let http = http::client().unwrap();
+        // Nothing listens there: a cover found in the cache is never downloaded.
+        let offline = "http://127.0.0.1:9/cover.jpg".to_string();
+
+        // Cached by an earlier version: renamed after its format, without a download.
+        std::fs::write(folder.join("1.img"), [0xFF, 0xD8, 0xFF, 0xE0, 1, 2]).unwrap();
+        let path = cover(&http, &dirs, "111", &game_with_cover("1", offline.clone()))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(path, folder.join("1.jpg"));
+        assert!(path.is_file() && !folder.join("1.img").exists());
+        let game = game_with_cover("1", offline.clone());
+        let again = cover(&http, &dirs, "111", &game).await.unwrap();
+        assert_eq!(again, Some(path));
+
+        // Not an image: dropped, and asked for again.
+        std::fs::write(folder.join("2.img"), b"<html>").unwrap();
+        assert!(
+            cover(&http, &dirs, "111", &game_with_cover("2", offline))
+                .await
+                .is_err()
+        );
+        assert!(!folder.join("2.img").exists());
+
+        // Downloaded: named after what it is, whatever its address says.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/cover.jpg", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let _ = socket.read(&mut [0u8; 4096]).await;
+            let png = b"\x89PNG\r\n\x1a\n";
+            let head = format!("HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n", png.len());
+            socket.write_all(head.as_bytes()).await.unwrap();
+            socket.write_all(png).await.unwrap();
+        });
+        let path = cover(&http, &dirs, "111", &game_with_cover("3", url))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(path, folder.join("3.png"));
+        std::fs::remove_dir_all(dirs.cache.parent().unwrap()).unwrap();
     }
 
     #[test]

@@ -378,7 +378,7 @@ pub enum Message {
     CloseDetail,
     OpenPanel(Panel),
     ClosePanel,
-    Cover(String, Option<Vec<u8>>),
+    Cover(String, Option<PathBuf>),
     Image(String, Option<Vec<u8>>),
     ScanOverview,
     OverviewFetched(String, Result<GameOverview, String>),
@@ -609,8 +609,8 @@ impl App {
                 self.panel = None;
                 self.edit = None;
             }
-            Message::Cover(id, Some(bytes)) => {
-                self.covers.insert(id, image::Handle::from_bytes(bytes));
+            Message::Cover(id, Some(path)) => {
+                self.covers.insert(id, image::Handle::from_path(path));
             }
             Message::Cover(_, None) => {}
             Message::Image(url, Some(bytes)) => {
