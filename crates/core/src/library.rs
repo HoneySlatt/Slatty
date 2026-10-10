@@ -204,9 +204,7 @@ fn installability(product: &Value) -> Option<NotInstallable> {
     })
 }
 
-/// The file of a game's cover in the per-account cache, downloaded when missing. It is named after
-/// its format (`<id>.jpg`), which image decoders go by, so the interface can show it from the
-/// file rather than keep its bytes.
+/// The file of a game's cover in the per-account cache, downloaded when missing.
 pub async fn cover(
     http: &Client,
     dirs: &Dirs,
@@ -217,34 +215,59 @@ pub async fn cover(
         return Ok(None);
     };
     let folder = dirs.account_cache(user_id).join("covers");
-    let (cache, id) = (folder.clone(), game.id.clone());
-    if let Some(path) = tokio::task::spawn_blocking(move || cached_cover(&cache, &id))
+    cached(http, folder, game.id.clone(), url, "downloading a cover")
         .await
-        .expect("cover task panicked")
-    {
-        return Ok(Some(path));
-    }
-    let bytes = http::bytes(http.get(url), "downloading a cover").await?;
-    let ext = crate::custom::image_extension(&bytes)
-        .ok_or_else(|| Error::parse("downloading a cover", "not an image"))?;
-    let path = folder.join(format!("{}.{ext}", game.id));
-    fsutil::write_atomic(&path, &bytes)?;
-    Ok(Some(path))
+        .map(Some)
 }
 
-const COVER_EXTENSIONS: [&str; 5] = ["jpg", "png", "webp", "gif", "bmp"];
+/// The file of any GOG image (key art, logo, achievement icon) in the per-account cache, kept by
+/// URL, downloaded when missing.
+pub async fn image(http: &Client, dirs: &Dirs, user_id: &str, url: &str) -> Result<PathBuf> {
+    let folder = dirs.account_cache(user_id).join("images");
+    let name = fsutil::sha256_hex(url.as_bytes());
+    cached(http, folder, name, url, "downloading an image").await
+}
 
-/// A cover already in the cache. One an earlier version kept as `<id>.img` is renamed after its
-/// format, or dropped when it is not an image.
-fn cached_cover(folder: &Path, id: &str) -> Option<PathBuf> {
-    if let Some(path) = COVER_EXTENSIONS
+/// `<folder>/<name>.<format>`, downloaded from `url` when missing. Named after its format, which
+/// image decoders go by, so the interface shows an image from its file rather than keep its bytes.
+async fn cached(
+    http: &Client,
+    folder: PathBuf,
+    name: String,
+    url: &str,
+    context: &'static str,
+) -> Result<PathBuf> {
+    let (dir, stem) = (folder.clone(), name.clone());
+    if let Some(path) = tokio::task::spawn_blocking(move || cached_file(&dir, &stem))
+        .await
+        .expect("cache task panicked")
+    {
+        return Ok(path);
+    }
+    let bytes = http::bytes(http.get(url), context).await?;
+    let ext = crate::custom::image_extension(&bytes)
+        .ok_or_else(|| Error::parse(context, "not an image"))?;
+    let path = folder.join(format!("{name}.{ext}"));
+    fsutil::write_atomic(&path, &bytes)?;
+    Ok(path)
+}
+
+const IMAGE_EXTENSIONS: [&str; 5] = ["jpg", "png", "webp", "gif", "bmp"];
+
+/// An image already in the cache. One an earlier version kept without its format in its name
+/// (`<id>.img` for a cover, the bare hash for an image) is renamed after it, or dropped when it is
+/// not an image.
+fn cached_file(folder: &Path, name: &str) -> Option<PathBuf> {
+    if let Some(path) = IMAGE_EXTENSIONS
         .iter()
-        .map(|ext| folder.join(format!("{id}.{ext}")))
+        .map(|ext| folder.join(format!("{name}.{ext}")))
         .find(|p| p.is_file())
     {
         return Some(path);
     }
-    let old = folder.join(format!("{id}.img"));
+    let old = [folder.join(format!("{name}.img")), folder.join(name)]
+        .into_iter()
+        .find(|p| p.is_file())?;
     let mut head = [0u8; 16];
     let read = std::fs::File::open(&old).and_then(|mut f| std::io::Read::read(&mut f, &mut head));
     let ext = crate::custom::image_extension(&head[..read.ok()?]);
@@ -252,27 +275,9 @@ fn cached_cover(folder: &Path, id: &str) -> Option<PathBuf> {
         let _ = std::fs::remove_file(&old);
         return None;
     };
-    let path = folder.join(format!("{id}.{ext}"));
+    let path = folder.join(format!("{name}.{ext}"));
     std::fs::rename(&old, &path).ok()?;
     Some(path)
-}
-
-/// Where an image downloaded from `url` is cached for the account.
-pub fn image_path(dirs: &Dirs, user_id: &str, url: &str) -> std::path::PathBuf {
-    dirs.account_cache(user_id)
-        .join("images")
-        .join(fsutil::sha256_hex(url.as_bytes()))
-}
-
-/// Bytes of any GOG image (key art, logo, achievement icon), cached per account by URL.
-pub async fn image(http: &Client, dirs: &Dirs, user_id: &str, url: &str) -> Result<Vec<u8>> {
-    let path = image_path(dirs, user_id, url);
-    if let Ok(bytes) = tokio::fs::read(&path).await {
-        return Ok(bytes);
-    }
-    let bytes = http::bytes(http.get(url), "downloading an image").await?;
-    fsutil::write_atomic(&path, &bytes)?;
-    Ok(bytes)
 }
 
 fn cache_file(dirs: &Dirs, user_id: &str) -> std::path::PathBuf {
@@ -412,6 +417,16 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(path, folder.join("3.png"));
+
+        // Other images are kept by the hash of their address, which an earlier version used alone.
+        let images = dirs.account_cache("111").join("images");
+        let art = "http://127.0.0.1:9/art.jpg";
+        let hash = fsutil::sha256_hex(art.as_bytes());
+        std::fs::create_dir_all(&images).unwrap();
+        std::fs::write(images.join(&hash), [0xFF, 0xD8, 0xFF, 0xE0]).unwrap();
+        let path = image(&http, &dirs, "111", art).await.unwrap();
+        assert_eq!(path, images.join(format!("{hash}.jpg")));
+        assert!(!images.join(&hash).exists());
         std::fs::remove_dir_all(dirs.cache.parent().unwrap()).unwrap();
     }
 

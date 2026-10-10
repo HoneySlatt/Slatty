@@ -176,7 +176,7 @@ fn the_cover_does_not_stand_in_while_the_key_art_downloads() {
     assert!(app.images_requested.contains(&art));
     assert!(app.hero_art(&game).is_none(), "plain while downloading");
 
-    let _ = app.update(Message::Image(art.clone(), Some(vec![1u8])));
+    let _ = app.update(Message::Image(art.clone(), Some("/images/art.jpg".into())));
     assert!(app.hero_art(&game).is_some());
     assert!(app.animating(), "the key art fades in");
     settle(&mut app);

@@ -384,7 +384,7 @@ pub enum Message {
     OpenPanel(Panel),
     ClosePanel,
     Cover(String, Option<PathBuf>),
-    Image(String, Option<Vec<u8>>),
+    Image(String, Option<PathBuf>),
     ScanOverview,
     OverviewFetched(String, Result<GameOverview, String>),
     OverviewDone,
@@ -618,13 +618,13 @@ impl App {
                 self.covers.insert(id, image::Handle::from_path(path));
             }
             Message::Cover(_, None) => {}
-            Message::Image(url, Some(bytes)) => {
+            Message::Image(url, Some(path)) => {
                 // The key art of the open game fades in once downloaded.
                 if self.selected_game().and_then(|g| g.background.as_ref()) == Some(&url) {
                     self.now = Instant::now();
                     self.art_shown = Self::fade_in(self.now);
                 }
-                self.images.insert(url, image::Handle::from_bytes(bytes));
+                self.images.insert(url, image::Handle::from_path(path));
             }
             Message::Image(url, None) => {
                 self.images_requested.remove(&url);
