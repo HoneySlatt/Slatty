@@ -651,3 +651,65 @@ fn builds_downloaded_before_the_links_get_one_to_the_last_unpacked() {
     assert!(std::fs::symlink_metadata(latest_link(&dirs, Source::ProtonCachyOs)).is_err());
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn versions_are_ordered_by_their_numbers() {
+    let is_newer = |a: &str, b: &str| newer(a, Path::new(b));
+    assert!(is_newer("GE-Proton11-7-x86_64", "GE-Proton11-6-x86_64"));
+    assert!(is_newer("GE-Proton11-10-x86_64", "GE-Proton11-9-x86_64"));
+    assert!(is_newer("GE-Proton11-1-x86_64", "GE-Proton9-7"));
+    assert!(is_newer("UMU-Proton-10.0-5", "UMU-Proton-10.0-4"));
+    assert!(is_newer(
+        "proton-cachyos-11.0-20261005-slr-x86_64_v3",
+        "proton-cachyos-11.0-20260703-slr-x86_64_v3"
+    ));
+    assert!(!is_newer(
+        "proton-cachyos-10.0-sunset-slr-x86_64_v3",
+        "proton-cachyos-11.0-20260602-slr-x86_64_v3"
+    ));
+    assert!(!is_newer("GE-Proton11-7-x86_64", "GE-Proton11-7-x86_64"));
+}
+
+#[tokio::test]
+async fn an_older_release_never_takes_the_place_of_a_newer_build() {
+    let root = root("older");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    crate::settings::set_proton_downloads(&db, true).unwrap();
+    let newer_build = fake_build(&dirs, "GE-Proton12-1-x86_64");
+    std::os::unix::fs::symlink("GE-Proton12-1-x86_64", latest_link(&dirs, Source::GeProton))
+        .unwrap();
+    game_on(&db, &root, "1", &latest_link(&dirs, Source::GeProton));
+    // GitHub's latest is 11-7, older than what the link leads to.
+    let archive = gz(&build_tar(|_| {}));
+    let (api, seen) = github(archive.clone(), sha512_hex(&archive)).await;
+    let http = crate::http::client().unwrap();
+    let updated = update(
+        &db,
+        &http,
+        &dirs,
+        &api,
+        |_, _| {},
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert!(updated.is_empty());
+    assert!(
+        seen.lock().unwrap().iter().all(|r| r.starts_with(LATEST)),
+        "nothing downloaded"
+    );
+    assert_eq!(
+        latest_target(&dirs, Source::GeProton),
+        Some(newer_build.clone())
+    );
+
+    // Installed by hand, the older build is there, and the link still leads to the newer one.
+    let release = latest(&http, &api, Source::GeProton).await.unwrap();
+    install(&http, &dirs, &release, |_| {}, &CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(release.path(&dirs).join("proton").is_file());
+    assert_eq!(latest_target(&dirs, Source::GeProton), Some(newer_build));
+    std::fs::remove_dir_all(root).unwrap();
+}

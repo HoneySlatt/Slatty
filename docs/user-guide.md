@@ -457,7 +457,9 @@ slatty proton update                   # or now
   runs the newest build from its next launch; one set to a numbered build keeps it.
 - **Keep up to date** (Settings → Runners, or `slatty proton updates on`), off until turned on,
   checks once a day at start the projects a game or the default follows as `-latest`, downloads a
-  newer build in the background and switches to it once it is checked and unpacked. A game already
+  newer build in the background and switches to it once it is checked and unpacked. A `-latest`
+  link never goes back to an older version, even when a project publishes one last (CachyOS's
+  `10.0-sunset` came out between two 11.0 builds). A game already
   running keeps the build it started with. The build before stays, to choose it by its number for a
   game a new build breaks; older builds no game uses are deleted. **Update now** and
   `slatty proton update` do the same at once.

@@ -135,6 +135,23 @@ fn latest_target(dirs: &Dirs, source: Source) -> Option<PathBuf> {
         .map(|t| dir(dirs).join(t))
 }
 
+/// The build the `-latest` link of `source` leads to, when it is still there.
+fn current_newest(dirs: &Dirs, source: Source) -> Option<PathBuf> {
+    latest_target(dirs, source).filter(|p| p.join("proton").is_file())
+}
+
+/// Whether the build named `name` is a later version than the one at `than`, by the numbers in
+/// their names, in order (`GE-Proton11-7` → 11, 7; `proton-cachyos-11.0-20261005-slr` → 11, 0,
+/// 20261005).
+fn newer(name: &str, than: &Path) -> bool {
+    let numbers = |s: &str| -> Vec<u64> {
+        s.split(|c: char| !c.is_ascii_digit())
+            .filter_map(|n| n.parse().ok())
+            .collect()
+    };
+    numbers(name) > numbers(&than.file_name().unwrap_or_default().to_string_lossy())
+}
+
 /// Points the `-latest` link of `source` at the build named `name`, replacing the old link in one
 /// step.
 fn point_latest(dirs: &Dirs, source: Source, name: &str) -> Result<()> {
@@ -218,8 +235,13 @@ pub async fn update(
     let mut updated = Vec::new();
     for source in followed(db, dirs)? {
         let release = latest(http, api, source).await?;
-        let previous = latest_target(dirs, source);
-        if previous.as_ref() == Some(&release.path(dirs)) {
+        let previous = current_newest(dirs, source);
+        // Never back: a project can publish an older line after a newer one (CachyOS's
+        // `10.0-sunset` came out between two 11.0 builds).
+        if previous
+            .as_deref()
+            .is_some_and(|p| !newer(&release.name, p))
+        {
             continue;
         }
         let (report, name) = (progress.clone(), release.name.clone());
@@ -352,7 +374,9 @@ pub async fn install(
     if !dest.join("proton").is_file() {
         unpack_release(http, dirs, release, progress, cancel).await?;
     }
-    point_latest(dirs, release.source, &release.name)?;
+    if current_newest(dirs, release.source).is_none_or(|c| newer(&release.name, &c)) {
+        point_latest(dirs, release.source, &release.name)?;
+    }
     Ok(dest)
 }
 
