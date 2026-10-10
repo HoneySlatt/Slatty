@@ -2298,3 +2298,21 @@ fn the_side_list_of_settings_follows_the_scroll() {
     let _ = app.update(Message::WindowResized(Size::new(1000.0, 800.0)));
     assert!(app.settings_view.tops.iter().all(Option::is_none));
 }
+
+#[test]
+fn what_leaves_the_computer_can_be_turned_off() {
+    use crate::settings::SettingsMsg;
+    let mut app = library_app();
+    app.page = Page::Settings;
+    let db = app.core.as_ref().unwrap().db.clone();
+    assert!(app.umu_lookup && app.report_playtime, "on until turned off");
+    let _ = app.update(Message::Settings(SettingsMsg::UmuLookup(false)));
+    let _ = app.update(Message::Settings(SettingsMsg::ReportPlaytime(false)));
+    assert!(!app.umu_lookup && !app.report_playtime);
+    assert!(!slatty_core::settings::umu_lookup(&db).unwrap());
+    assert!(!slatty_core::settings::report_playtime(&db).unwrap());
+    app.window = Size::new(1440.0, 1900.0);
+    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    assert!(ui.find("Play time on GOG").is_ok());
+    snapshot(&mut ui, "settings-privacy");
+}

@@ -36,6 +36,19 @@ impl Dirs {
         }
     }
 
+    /// Creates SlattyLauncher's folders readable by the user only (0700), and closes those an
+    /// earlier version left readable by others: they hold the library, play times, saves
+    /// backups and Wine prefixes.
+    pub fn keep_private(&self) -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        for dir in [&self.config, &self.data, &self.cache, &self.state] {
+            ensure_dir(dir)?;
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+                .map_err(|e| Error::io(format!("protect {}", dir.display()), e))?;
+        }
+        Ok(())
+    }
+
     pub fn db_file(&self) -> PathBuf {
         self.data.join("state.db")
     }
@@ -59,4 +72,30 @@ impl Dirs {
 
 pub fn ensure_dir(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| Error::io(format!("create {}", path.display()), e))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    #[test]
+    fn slatty_files_are_readable_by_the_user_only() {
+        let root = std::env::temp_dir().join(format!("slatty-private-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dirs = Dirs::under(&root);
+        // Left open by an earlier version.
+        ensure_dir(&dirs.data).unwrap();
+        std::fs::set_permissions(&dirs.data, std::fs::Permissions::from_mode(0o755)).unwrap();
+        dirs.keep_private().unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        for dir in [&dirs.config, &dirs.data, &dirs.cache, &dirs.state] {
+            assert_eq!(mode(dir), 0o700, "{}", dir.display());
+        }
+        let db = crate::db::Db::open(&dirs.db_file()).unwrap();
+        drop(db);
+        assert_eq!(mode(&dirs.db_file()), 0o600);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

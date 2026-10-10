@@ -244,6 +244,7 @@ impl<S: ContentSource> Download<'_, S> {
                         }
                         bad.lock().unwrap().push(rel.clone());
                         if download {
+                            refuse_outside(dir, &dest)?;
                             let local = self.download_file(&dest, file, &|n| report(0, n)).await?;
                             reused.fetch_add(local, Ordering::Relaxed);
                         }
@@ -413,6 +414,49 @@ fn local_chunks(path: &Path, file: &DepotFile) -> Result<Option<std::sync::Arc<L
     let wanted: HashSet<&str> = file.chunks.iter().map(|c| c.md5.as_str()).collect();
     offsets.retain(|md5, _| wanted.contains(md5.as_str()));
     Ok((!offsets.is_empty()).then(|| std::sync::Arc::new(LocalChunks { file: f, offsets })))
+}
+
+/// Whether `path` is still under `root` once the links on its way are followed. The part of each
+/// that exists is resolved on disk; the rest, which holds no link yet, is followed by its names.
+pub fn leads_inside(root: &Path, path: &Path) -> bool {
+    match (resolve(root), resolve(path)) {
+        (Some(root), Some(path)) => path.starts_with(root),
+        _ => false,
+    }
+}
+
+fn resolve(path: &Path) -> Option<PathBuf> {
+    let mut existing = path;
+    let mut rest = Vec::new();
+    let mut real = loop {
+        if let Ok(real) = existing.canonicalize() {
+            break real;
+        }
+        rest.push(existing.file_name()?);
+        existing = existing.parent()?;
+    };
+    for part in rest.into_iter().rev() {
+        match Path::new(part).components().next() {
+            Some(Component::ParentDir) => {
+                real.pop();
+            }
+            Some(Component::Normal(name)) => real.push(name),
+            _ => {}
+        }
+    }
+    Some(real)
+}
+
+/// Refuses to write `dest` when its folder leads out of `root` through a link (one a game or
+/// someone else made, or one an installer chained to another).
+pub fn refuse_outside(root: &Path, dest: &Path) -> Result<()> {
+    match dest.parent() {
+        Some(parent) if leads_inside(root, parent) => Ok(()),
+        _ => Err(Error::Refused(format!(
+            "{} leads out of the game folder through a link; nothing was written there",
+            dest.display()
+        ))),
+    }
 }
 
 /// True when `path` already holds exactly this file, checked chunk by chunk.

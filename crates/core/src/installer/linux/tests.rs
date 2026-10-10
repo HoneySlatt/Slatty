@@ -336,3 +336,69 @@ fn reads_the_linux_installers_of_a_game_and_its_dlc() {
         "English otherwise"
     );
 }
+
+#[tokio::test]
+async fn links_chained_out_of_the_game_are_removed_and_never_written_through() {
+    let link = |name, target: &'static [u8]| File {
+        name,
+        data: target,
+        mode: 0o120777,
+        deflate: false,
+    };
+    // Each stays inside by its own path; together they lead to the folder above the game.
+    let bytes = installer(
+        b"#!/bin/sh\n",
+        &[
+            File {
+                name: "data/noarch/sub/",
+                data: b"",
+                mode: 0o40755,
+                deflate: false,
+            },
+            link("data/noarch/sub/up", b".."),
+            link("data/noarch/escape", b"sub/up/.."),
+            File {
+                name: "data/noarch/game.bin",
+                data: b"game",
+                mode: 0o100644,
+                deflate: false,
+            },
+        ],
+        false,
+    );
+    let source = Fake::new(vec![bytes]);
+    let set = LinuxSet::new(&[Part {
+        installer: installer_of("1"),
+        entries: read_entries(&source, 0).await.unwrap(),
+    }])
+    .unwrap();
+    let root = temp("chain");
+    let target = root.join("Game");
+    let dl = LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &plenty,
+    };
+    let skipped = dl.run(&set, &root.join(".p"), &target).await.unwrap();
+    assert_eq!(skipped, 1);
+    assert!(
+        std::fs::read_link(target.join("sub/up")).is_ok(),
+        "harmless alone"
+    );
+    assert!(std::fs::symlink_metadata(target.join("escape")).is_err());
+
+    // A link someone else made out of the folder is never written through.
+    std::os::unix::fs::symlink(&root, target.join("outside")).unwrap();
+    let through = LinuxSet {
+        files: vec![LinuxFile {
+            path: PathBuf::from("outside/planted.bin"),
+            ..set.files[0].clone()
+        }],
+        ..Default::default()
+    };
+    let result = dl.check_installed(&through, &target, true).await;
+    assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
+    assert!(!root.join("planted.bin").exists());
+    std::fs::remove_dir_all(root).unwrap();
+}

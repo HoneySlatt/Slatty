@@ -210,6 +210,9 @@ pub struct App {
     pub settings_view: settings::SettingsView,
     /// Build installed when a game has both, unless changed in its install dialog.
     pub default_platform: Platform,
+    /// Privacy settings: a game's id to umu's database, play sessions to GOG.
+    pub umu_lookup: bool,
+    pub report_playtime: bool,
     pub proton: Option<PathBuf>,
     pub proton_choices: Vec<PathBuf>,
     /// Work that closing the window would interrupt, waiting for the user's choice.
@@ -281,6 +284,8 @@ impl Default for App {
             maintenance: HashMap::new(),
             library_root: String::new(),
             default_platform: Platform::Windows,
+            umu_lookup: true,
+            report_playtime: true,
             settings_view: settings::SettingsView::default(),
             proton: None,
             proton_choices: Vec::new(),
@@ -376,6 +381,8 @@ pub struct Boot {
     interrupted: Vec<String>,
     library_root: PathBuf,
     default_platform: Platform,
+    umu_lookup: bool,
+    report_playtime: bool,
     proton: Option<PathBuf>,
     proton_choices: Vec<PathBuf>,
     favorites: Vec<String>,
@@ -465,6 +472,8 @@ impl App {
                 self.proton = boot.proton;
                 self.proton_choices = boot.proton_choices;
                 self.default_platform = boot.default_platform;
+                self.umu_lookup = boot.umu_lookup;
+                self.report_playtime = boot.report_playtime;
                 self.installs = boot
                     .installs
                     .into_iter()
@@ -816,6 +825,7 @@ fn summary(r: &InstallRecord) -> InstallSummary {
 
 async fn boot() -> Result<Boot, String> {
     let dirs = Dirs::from_system().map_err(err)?;
+    dirs.keep_private().map_err(err)?;
     let db = Db::open(&dirs.db_file()).map_err(err)?;
     let http = slatty_core::http::client().map_err(err)?;
     let interrupted = slatty_core::play::recover_unfinished(&db)
@@ -844,6 +854,8 @@ async fn boot() -> Result<Boot, String> {
     let library_root = slatty_core::settings::library_root(&db).map_err(err)?;
     let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
     let default_platform = slatty_core::settings::default_platform(&db).map_err(err)?;
+    let umu_lookup = slatty_core::settings::umu_lookup(&db).map_err(err)?;
+    let report_playtime = slatty_core::settings::report_playtime(&db).map_err(err)?;
     // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
     let proton_choices = slatty_core::settings::proton_candidates();
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
@@ -890,6 +902,8 @@ async fn boot() -> Result<Boot, String> {
         proton,
         proton_choices,
         default_platform,
+        umu_lookup,
+        report_playtime,
         favorites,
         playtime,
         overview,

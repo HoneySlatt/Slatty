@@ -17,7 +17,7 @@ use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
 
 use super::zip::{self, ZipEntry};
-use super::{Checked, Progress, RecordedFile, safe_relative};
+use super::{Checked, Progress, RecordedFile, leads_inside, refuse_outside, safe_relative};
 use crate::auth::Tokens;
 use crate::error::{Error, Result};
 use crate::fsutil;
@@ -490,6 +490,7 @@ impl<S: Source> LinuxDownload<'_, S> {
                         }
                         bad.lock().unwrap().push(file.path.clone());
                         if download {
+                            refuse_outside(dir, &dest)?;
                             self.download_file(&dest, file, &|n| report(0, n)).await?;
                         }
                         report(1, if download { 0 } else { file.entry.size });
@@ -516,6 +517,22 @@ impl<S: Source> LinuxDownload<'_, S> {
                 LinkState::Outside => skipped += 1,
             }
         }
+        // Checked again once all are made: a link can lead out through another one, whatever its
+        // own path says.
+        for link in &set.links {
+            let dest = dir.join(&link.path);
+            let Ok(target) = std::fs::read_link(&dest) else {
+                continue;
+            };
+            if !leads_inside(dir, &dest.parent().unwrap_or(dir).join(&target)) {
+                if download {
+                    std::fs::remove_file(&dest)
+                        .map_err(|e| Error::io(format!("delete {}", dest.display()), e))?;
+                }
+                bad.lock().unwrap().retain(|p| *p != link.path);
+                skipped += 1;
+            }
+        }
         let mut bad = bad.into_inner().unwrap();
         if download {
             for d in &set.dirs {
@@ -540,10 +557,15 @@ impl<S: Source> LinuxDownload<'_, S> {
     async fn place_link(&self, dir: &Path, link: &LinuxFile, download: bool) -> Result<LinkState> {
         let raw = self.read_data(link).await?;
         let target = PathBuf::from(String::from_utf8_lossy(&raw).into_owned());
+        let dest = dir.join(&link.path);
         if !stays_inside(&link.path, &target) {
+            // Nor is an older copy of it kept.
+            if download && std::fs::read_link(&dest).is_ok() {
+                std::fs::remove_file(&dest)
+                    .map_err(|e| Error::io(format!("delete {}", dest.display()), e))?;
+            }
             return Ok(LinkState::Outside);
         }
-        let dest = dir.join(&link.path);
         if std::fs::read_link(&dest).is_ok_and(|t| t == target) {
             return Ok(LinkState::Right);
         }

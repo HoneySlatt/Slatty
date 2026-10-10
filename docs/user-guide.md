@@ -373,7 +373,7 @@ belong to them.
 ## Settings
 
 The interface's **Settings** tab lists its parts on the left (Account, Library, Installs,
-Appearance, About); choosing one brings it to the top, and the list follows the page as it
+Appearance, Privacy, About); choosing one brings it to the top, and the list follows the page as it
 scrolls. **Account** shows who is signed in, with
 Log out. **Library** shows how many games you own and when the list was refreshed, with Refresh
 library, and the size of the covers. **Installs** holds:
@@ -390,6 +390,11 @@ library, and the size of the covers. **Installs** holds:
   settings. Each game can use another build.
 
 `slatty install --dir` and `--proton` set the same values.
+
+**Privacy** has two switches, both on until turned off: **Proton fixes** (a game's GOG id goes to
+umu's public database at its first launch, to pick its community fixes; off, the game runs without
+them) and **Play time on GOG** (each session goes to GOG so it counts on your profile, as Galaxy
+does; sessions played while it is off are never sent). SlattyLauncher has no telemetry.
 
 **Appearance** picks a built-in theme (Carbonfox, Everforest, Pastel Glow, Gruvbox Dark
 or Light) and the interface font, applied at once and kept, and shows the theme file, `~/.config/slatty/theme.toml`: create it, edit it, and reload it to change colours,

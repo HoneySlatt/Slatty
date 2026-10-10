@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 use rusqlite::{Connection, OptionalExtension, params};
@@ -88,10 +88,20 @@ pub struct Db {
 
 impl Db {
     pub fn open(path: &Path) -> Result<Self> {
+        use std::os::unix::fs::PermissionsExt;
         if let Some(parent) = path.parent() {
             crate::paths::ensure_dir(parent)?;
         }
-        Self::init(Connection::open(path)?)
+        let db = Self::init(Connection::open(path)?)?;
+        // Readable by the user only, with the journal SQLite keeps beside it.
+        for suffix in ["", "-wal", "-shm"] {
+            let file = PathBuf::from(format!("{}{suffix}", path.display()));
+            if file.exists() {
+                std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))
+                    .map_err(|e| Error::io(format!("protect {}", file.display()), e))?;
+            }
+        }
+        Ok(db)
     }
 
     pub fn in_memory() -> Result<Self> {

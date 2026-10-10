@@ -2,7 +2,7 @@
 
 use crate::theme::text;
 use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text_input,
+    Column, Space, button, column, container, pick_list, row, scrollable, text_input, toggler,
 };
 use iced::{Alignment, Element, Length, Padding};
 
@@ -65,6 +65,7 @@ impl App {
                 Section::Library => self.library_rows(wide),
                 Section::Installs => self.installs_rows(wide),
                 Section::Appearance => self.appearance_rows(wide),
+                Section::Privacy => self.privacy_rows(wide),
                 Section::About => vec![note(format!(
                     "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL)",
                     env!("CARGO_PKG_VERSION")
@@ -157,6 +158,49 @@ impl App {
     }
 }
 impl App {
+    /// What leaves the computer besides GOG's own services, each with its switch.
+    fn privacy_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
+        // The switch, with what it lets out below it.
+        let switch = |on: bool, msg: fn(bool) -> SettingsMsg, what: &'static str| {
+            column![
+                toggler(on)
+                    .on_toggle(move |v| Message::Settings(msg(v)))
+                    .size(22),
+                note(what),
+            ]
+            .spacing(8)
+            .into()
+        };
+        vec![
+            setting(
+                wide,
+                "Proton fixes",
+                switch(
+                    self.umu_lookup,
+                    SettingsMsg::UmuLookup,
+                    "At a game's first launch, sends its GOG id to umu's public database to pick \
+                     its community fixes.",
+                ),
+                None,
+            ),
+            setting(
+                wide,
+                "Play time on GOG",
+                switch(
+                    self.report_playtime,
+                    SettingsMsg::ReportPlaytime,
+                    "Sends each session to GOG, as Galaxy does, so it counts on your profile. \
+                     Sessions played while off are never sent.",
+                ),
+                None,
+            ),
+            note(
+                "No telemetry: SlattyLauncher talks to GOG, to the download servers GOG names, \
+                 and to umu's database when allowed above.",
+            ),
+        ]
+    }
+
     fn account_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         let name = self.account.as_ref().map(|a| a.username.as_str());
         vec![setting(
@@ -347,6 +391,7 @@ fn section_icon(s: Section) -> Icon {
         Section::Library => Icon::LayoutGrid,
         Section::Installs => Icon::Download,
         Section::Appearance => Icon::Palette,
+        Section::Privacy => Icon::Shield,
         Section::About => Icon::Info,
     }
 }

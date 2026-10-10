@@ -51,6 +51,10 @@ pub async fn resolve(db: &Db, http: &Client, install: &mut Install) {
     if install.umu_id.is_some() || !matches!(install.runner, Runner::Umu { .. }) {
         return;
     }
+    // Turned off in Settings: nothing is sent, and the game runs without fixes.
+    if !crate::settings::umu_lookup(db).unwrap_or(true) {
+        return;
+    }
     match tokio::time::timeout(Duration::from_secs(5), lookup(http, &install.game_id)).await {
         Ok(Ok(id)) => {
             install.umu_id = Some(id);
@@ -83,5 +87,33 @@ mod tests {
         for bad in ["1091500", "umu-", "umu-1; rm -rf ~", "umu-1\nX=1"] {
             assert_eq!(parse(&json!([{"umu_id": bad}])), UNKNOWN, "{bad:?}");
         }
+    }
+
+    #[tokio::test]
+    async fn nothing_is_looked_up_once_turned_off() {
+        let db = Db::in_memory().unwrap();
+        crate::settings::set_umu_lookup(&db, false).unwrap();
+        let mut install = crate::install::Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: crate::install::Platform::Windows,
+            path: "/games/Game".into(),
+            client_id: None,
+            runner: Runner::Umu {
+                proton: "/proton".into(),
+                prefix: "/prefix".into(),
+            },
+            umu_id: None,
+        };
+        // Every request goes through a local proxy, which would see a lookup.
+        let proxy = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        proxy.set_nonblocking(true).unwrap();
+        let http = Client::builder()
+            .proxy(reqwest::Proxy::all(format!("http://{}", proxy.local_addr().unwrap())).unwrap())
+            .build()
+            .unwrap();
+        resolve(&db, &http, &mut install).await;
+        assert_eq!(install.umu_id, None);
+        assert!(proxy.accept().is_err(), "no request made");
     }
 }

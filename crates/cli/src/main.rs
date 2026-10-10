@@ -84,6 +84,7 @@ async fn run() -> Result<()> {
         .init();
     let cli = Cli::parse();
     let dirs = Dirs::from_system()?;
+    dirs.keep_private()?;
     if let Command::Doctor = cli.command {
         for c in slatty_core::doctor::run(&dirs) {
             println!(

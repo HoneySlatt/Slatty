@@ -79,15 +79,17 @@ pub enum Section {
     Library,
     Installs,
     Appearance,
+    Privacy,
     About,
 }
 
 impl Section {
-    pub const ALL: [Section; 5] = [
+    pub const ALL: [Section; 6] = [
         Section::Account,
         Section::Library,
         Section::Installs,
         Section::Appearance,
+        Section::Privacy,
         Section::About,
     ];
 
@@ -97,6 +99,7 @@ impl Section {
             Section::Library => "Library",
             Section::Installs => "Installs",
             Section::Appearance => "Appearance",
+            Section::Privacy => "Privacy",
             Section::About => "About",
         }
     }
@@ -108,6 +111,7 @@ impl Section {
             Section::Library => "settings-library",
             Section::Installs => "settings-installs",
             Section::Appearance => "settings-appearance",
+            Section::Privacy => "settings-privacy",
             Section::About => "settings-about",
         }
     }
@@ -118,7 +122,7 @@ impl Section {
 pub struct SettingsView {
     pub section: Section,
     /// Where each part starts, measured once and again after the window changed size.
-    pub tops: [Option<f32>; 5],
+    pub tops: [Option<f32>; 6],
     /// The offset an entry of the side list asked for: until the page leaves it, that entry
     /// stays highlighted, even when its part cannot reach the top.
     pub target: Option<f32>,
@@ -213,6 +217,10 @@ pub enum SettingsMsg {
     },
     /// Where a part starts, below the first one.
     Measured(Section, f32),
+    /// Whether a game's id may go to umu's database for its Proton fixes.
+    UmuLookup(bool),
+    /// Whether play sessions go to GOG.
+    ReportPlaytime(bool),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
 }
@@ -337,6 +345,18 @@ impl App {
             SettingsMsg::Measured(section, y) => {
                 let i = Section::ALL.iter().position(|s| *s == section).unwrap_or(0);
                 self.settings_view.tops[i] = Some(y);
+            }
+            SettingsMsg::UmuLookup(on) => {
+                self.umu_lookup = on;
+                if let Err(e) = settings::set_umu_lookup(&core.db, on) {
+                    self.notify_error(e.to_string());
+                }
+            }
+            SettingsMsg::ReportPlaytime(on) => {
+                self.report_playtime = on;
+                if let Err(e) = settings::set_report_playtime(&core.db, on) {
+                    self.notify_error(e.to_string());
+                }
             }
             SettingsMsg::CoverSize(size) => {
                 self.card_width = size.width();

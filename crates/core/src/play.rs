@@ -375,6 +375,10 @@ async fn report_playtime(
     let Some(user_id) = user_id else {
         return Ok(0);
     };
+    if !crate::settings::report_playtime(db)? {
+        crate::playtime::keep_private(db, user_id)?;
+        return Ok(0);
+    }
     if crate::playtime::unreported(db, user_id)?.is_empty() {
         return Ok(0);
     }

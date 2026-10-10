@@ -13,6 +13,8 @@ const COVER_WIDTH: &str = "cover_width";
 const LIBRARY_SORT: &str = "library_sort";
 const DEFAULT_PLATFORM: &str = "default_platform";
 const DOWNLOAD_QUEUE: &str = "download_queue";
+const UMU_LOOKUP: &str = "umu_lookup";
+const REPORT_PLAYTIME: &str = "report_playtime";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -48,6 +50,26 @@ pub fn set_default_platform(db: &Db, platform: Platform) -> Result<()> {
         Platform::Windows => "windows",
     };
     db.set_setting(DEFAULT_PLATFORM, Some(value))
+}
+
+/// Whether a game's GOG id may be sent to umu's public database, at its first launch, to pick
+/// its Proton fixes. On until turned off.
+pub fn umu_lookup(db: &Db) -> Result<bool> {
+    Ok(db.setting(UMU_LOOKUP)?.as_deref() != Some("off"))
+}
+
+pub fn set_umu_lookup(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(UMU_LOOKUP, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether play sessions are sent to GOG, so they count in the play time of its profile. On until
+/// turned off.
+pub fn report_playtime(db: &Db) -> Result<bool> {
+    Ok(db.setting(REPORT_PLAYTIME)?.as_deref() != Some("off"))
+}
+
+pub fn set_report_playtime(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(REPORT_PLAYTIME, Some(if on { "on" } else { "off" }))
 }
 
 /// Game ids waiting in the download queue, in order.

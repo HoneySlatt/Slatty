@@ -82,6 +82,16 @@ fn mark_reported(db: &Db, id: i64) -> Result<()> {
     Ok(())
 }
 
+/// Marks the pending sessions as never to be sent: play time reporting is off, and turning it on
+/// again sends only the sessions played after.
+pub fn keep_private(db: &Db, user_id: &str) -> Result<()> {
+    db.conn().execute(
+        "UPDATE sessions SET reported = 2 WHERE state = 'ended' AND reported = 0 AND user_id = ?1",
+        params![user_id],
+    )?;
+    Ok(())
+}
+
 /// Sends every pending session; stops at the first failure so the rest is retried later.
 /// Returns the minutes reported.
 pub async fn report_pending(db: &Db, http: &Client, tokens: &Tokens) -> Result<i64> {
@@ -123,5 +133,26 @@ mod tests {
         );
         mark_reported(&db, 1).unwrap();
         assert!(unreported(&db, "me").unwrap().is_empty());
+    }
+
+    #[test]
+    fn sessions_played_while_reporting_is_off_are_never_sent() {
+        let db = Db::in_memory().unwrap();
+        let session = |id: i64| {
+            db.conn()
+                .execute(
+                    "INSERT INTO sessions (id, game_id, user_id, started_at, ended_at, state, reported)
+                     VALUES (?1, 'g', 'me', ?2, ?2 + 600, 'ended', 0)",
+                    params![id, id * 1000],
+                )
+                .unwrap();
+        };
+        session(1);
+        keep_private(&db, "me").unwrap();
+        assert!(unreported(&db, "me").unwrap().is_empty());
+        // Turned on again: only what is played after goes out.
+        session(2);
+        let pending = unreported(&db, "me").unwrap();
+        assert_eq!(pending.iter().map(|s| s.id).collect::<Vec<_>>(), [2]);
     }
 }

@@ -19,10 +19,26 @@ Include the steps to reproduce and the version or commit you tested.
 - **Comet handoff.** Comet receives tokens through a file readable only by you, in a private runtime
   directory. The file is deleted as soon as Comet has read it.
 - **Logs.** Comet's log may contain game client identifiers. Review it before sharing.
+- **Private files.** SlattyLauncher's folders (settings, data, cache, state) are made readable by
+  you only (0700) at every start, and its database 0600: they hold your library, play times, save
+  backups and Wine prefixes.
+- **Game files stay in the game folder.** Paths from GOG's manifests, installers and cloud
+  listings are checked before anything is written. Symbolic links from Linux installers are
+  resolved on disk once all are made, and one that leads out of the game folder, even through
+  another link, is removed. No file is written through a link that leads out of the game folder.
+
+## What leaves your computer
+
+- No telemetry.
+- GOG's services and the download servers GOG names: your library, downloads, cloud saves,
+  achievements and, unless turned off in Settings → Privacy, your play sessions (as Galaxy sends
+  them). Sessions played while this is off are never sent later.
+- umu's public game database (`umu.openwinecomponents.org`): a game's GOG product id, once, at its
+  first launch, to pick its Proton fixes. It can be turned off in Settings → Privacy; the game then
+  runs without fixes.
 
 ## Scope
 
-SlattyLauncher talks to GOG services, to the CDN addresses GOG returns, and to umu's public game
-database (`umu.openwinecomponents.org`), which receives only a game's GOG product id, once, to pick
-the game's Proton fixes. It runs games with your user rights; it does not sandbox them beyond what
-umu and Proton provide.
+SlattyLauncher runs games with your user rights and does not sandbox them beyond what umu and
+Proton provide. A Windows game sees your files through Wine's drives (`z:` is the whole system, as
+in every Wine or Proton launcher), and a Linux game runs as you.

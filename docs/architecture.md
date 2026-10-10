@@ -263,5 +263,10 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
   0600 handoff file. They never appear in process arguments or logs. The `Secret` type hides its
   value from `Debug`.
 - HTTP errors never include URLs, since some GOG endpoints take tokens in the query string.
+- SlattyLauncher's folders are 0700 and its database 0600, set again at every start.
+- Nothing is written through a symbolic link that leads out of the game folder; links from Linux
+  installers are resolved on disk once all are made, and those leading out are removed.
+- Besides GOG, only umu's game database is contacted, and both it and play time reporting can be
+  turned off (Settings → Privacy).
 - Writes to installed games, saves and prefixes are staged and renamed. Every destructive action
   either refuses when the situation looks wrong, or keeps a copy.
