@@ -4,16 +4,67 @@ use crate::updates::UpdatesMsg;
 
 /// Games 3 and 5 have an update; 4 is up to date and 6 could not be checked.
 fn found() -> Message {
+    let update = |from: &str, to: &str, build: &str| {
+        Ok(Some(slatty_core::maintenance::UpdateCheck {
+            installed_version: from.into(),
+            available_version: to.into(),
+            available_build: build.into(),
+        }))
+    };
     Message::Updates(UpdatesMsg::Checked(vec![
-        ("3".into(), Ok(Some("1.0 → 1.1".into()))),
+        ("3".into(), update("1.0", "1.1", "b31")),
         ("4".into(), Ok(None)),
-        ("5".into(), Ok(Some("2.0 → 2.1".into()))),
+        ("5".into(), update("2.0", "2.1", "b51")),
         ("6".into(), Err("GOG did not answer".into())),
     ]))
 }
 
+/// A game busy elsewhere when its turn comes (played from the command line, or from before the
+/// interface was restarted) is left for the next check, and one updated elsewhere since its check
+/// is not updated again: neither shows an error.
+#[test]
+fn a_game_busy_or_updated_elsewhere_is_passed_over_without_an_error() {
+    let mut app = auto_app();
+    // Folders of its own: the record it writes would show in other tests.
+    let dirs = slatty_core::paths::Dirs::under(&super::root().join("updated-elsewhere"));
+    app.core.as_mut().unwrap().dirs = dirs.clone();
+    let _running = slatty_core::lock::game(&dirs, "3").unwrap();
+    let mut record = slatty_core::installer::InstallRecord {
+        build_id: "b51".into(),
+        version: "2.1".into(),
+        language: "en-US".into(),
+        path: None,
+        dlcs: Vec::new(),
+        setup_build: None,
+        files: Vec::new(),
+    };
+    record.save(&dirs, "5").unwrap();
+    let _ = app.update(found());
+    assert!(app.updates.current.is_none(), "{:?}", app.updates.current);
+    assert!(app.updates.waiting.is_empty());
+    assert!(
+        app.notice.is_none(),
+        "{:?}",
+        app.notice.as_ref().map(|n| &n.text)
+    );
+    assert!(!app.maintenance["5"].update_available, "no longer said");
+
+    // Still behind once the game is free: found again, and updated.
+    drop(_running);
+    record.build_id = "b50".into();
+    record.save(&dirs, "5").unwrap();
+    let _ = app.update(found());
+    assert_eq!(app.updates.current.as_deref(), Some("3"));
+}
+
 fn auto_app() -> App {
+    // Folders of its own: an update about to start tries its game's lock, which tests running at
+    // the same time on the same folders would hold for a moment.
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut app = library_app();
+    app.core.as_mut().unwrap().dirs =
+        slatty_core::paths::Dirs::under(&super::root().join(format!("updates-{n}")));
     app.updates.on = true;
     app
 }

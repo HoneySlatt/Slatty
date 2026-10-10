@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 use iced::Task;
+use slatty_core::installer::InstallRecord;
 use slatty_core::maintenance::{self, Change};
 
 use crate::maintenance::MaintenanceMsg;
@@ -20,6 +21,8 @@ pub struct AutoUpdates {
     pub checking: bool,
     /// Games with an update found, waiting their turn.
     pub waiting: Vec<String>,
+    /// The build each was found to update to.
+    pub builds: std::collections::HashMap<String, String>,
     /// The game being updated.
     pub current: Option<String>,
 }
@@ -28,8 +31,8 @@ pub struct AutoUpdates {
 pub enum UpdatesMsg {
     Toggle(bool),
     Check,
-    /// Each game checked, with the versions of its update when there is one.
-    Checked(Vec<(String, Result<Option<String>, String>)>),
+    /// Each game checked, with its update when there is one.
+    Checked(Vec<(String, Result<Option<maintenance::UpdateCheck>, String>)>),
 }
 
 impl App {
@@ -74,11 +77,6 @@ impl App {
                                 &core.db, &core.dirs, &core.http, &tokens, &id,
                             )
                             .await
-                            .map(|u| {
-                                u.map(|u| {
-                                    format!("{} → {}", u.installed_version, u.available_version)
-                                })
-                            })
                             .map_err(err);
                             found.push((id, check));
                         }
@@ -103,12 +101,14 @@ impl App {
                         continue;
                     }
                     match check {
-                        Ok(what) => {
+                        Ok(found) => {
                             view.update_available = true;
                             view.lines = vec![format!(
-                                "Update available: {what}. It is applied by itself."
+                                "Update available: {} → {}. It is applied by itself.",
+                                found.installed_version, found.available_version
                             )];
                             let updates = &mut self.updates;
+                            updates.builds.insert(id.clone(), found.available_build);
                             if updates.current.as_ref() != Some(&id)
                                 && !updates.waiting.contains(&id)
                             {
@@ -143,12 +143,24 @@ impl App {
             return Task::none();
         };
         // Since its check, a game may have been moved to an older version or had an update paused,
-        // here or from the command line: those choices stand.
+        // here or from the command line: those choices stand. One busy elsewhere (played from the
+        // command line, or since before the interface was restarted) waits for the next check, and
+        // one updated elsewhere is not updated again: no error for either.
         while !self.updates.waiting.is_empty() {
             let id = self.updates.waiting.remove(0);
             let held = slatty_core::settings::held_back(&core.db, &id).unwrap_or(true);
             let pending = maintenance::update_pending(&core.db, &id).map_or(true, |p| p.is_some());
-            if !held && !pending {
+            let busy = slatty_core::lock::game(&core.dirs, &id).is_err();
+            let found = self.updates.builds.remove(&id);
+            let updated = InstallRecord::load(&core.dirs, &id)
+                .ok()
+                .flatten()
+                .is_some_and(|r| Some(&r.build_id) == found.as_ref());
+            if updated && let Some(view) = self.maintenance.get_mut(&id) {
+                view.update_available = false;
+                view.lines.clear();
+            }
+            if !held && !pending && !busy && !updated {
                 self.updates.current = Some(id.clone());
                 return self.update_maintenance(MaintenanceMsg::Apply(id, Change::Update));
             }
