@@ -840,6 +840,57 @@ fn jobs_left_behind_by_a_registered_install_are_forgotten() {
 }
 
 #[test]
+fn a_game_id_unsafe_in_a_file_name_is_never_used() {
+    use crate::install::{Install, Platform};
+    use crate::runner::Runner;
+    let root = std::env::temp_dir().join(format!("slatty-unsafe-id-{}", std::process::id()));
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    let refused = |r: Result<()>| assert!(matches!(r, Err(Error::Refused(_))), "{r:?}");
+    let id = "../1";
+    refused(crate::lock::game(&dirs, id).map(drop));
+    refused(
+        Install {
+            game_id: id.into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: "/games/Game".into(),
+            client_id: None,
+            runner: Runner::Native,
+            umu_id: None,
+        }
+        .save(&db),
+    );
+    refused(
+        InstallJob {
+            game_id: id.into(),
+            build_id: "b".into(),
+            language: "en-US".into(),
+            root: "/games".into(),
+            directory: "Game".into(),
+            state: QUEUED.into(),
+            dlcs: vec![],
+        }
+        .save(&db),
+    );
+    refused(
+        InstallRecord {
+            build_id: "b".into(),
+            version: "1".into(),
+            language: "en-US".into(),
+            path: None,
+            dlcs: vec![],
+            setup_build: None,
+            files: vec![],
+        }
+        .save(&dirs, id),
+    );
+    assert!(Install::list(&db).unwrap().is_empty());
+    assert!(InstallJob::list(&db).unwrap().is_empty());
+    assert!(!root.exists(), "nothing written");
+}
+
+#[test]
 fn a_queued_install_waits_and_keeps_its_place() {
     let db = Db::in_memory().unwrap();
     let job = InstallJob {

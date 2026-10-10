@@ -74,11 +74,30 @@ pub fn ensure_dir(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| Error::io(format!("create {}", path.display()), e))
 }
 
+/// Refuses a game id that could not safely name a file: GOG's ids are letters and digits.
+pub fn check_game_id(game_id: &str) -> Result<()> {
+    if game_id.is_empty() || !game_id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return Err(Error::Refused(format!("unexpected game id `{game_id}`")));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::PermissionsExt;
 
     use super::*;
+
+    #[test]
+    fn game_ids_unsafe_in_a_file_name_are_refused() {
+        assert!(check_game_id("1456487183").is_ok());
+        for id in ["", "..", "../1", "1/2", "1.2", "-1", "4 4", "é"] {
+            assert!(
+                matches!(check_game_id(id), Err(Error::Refused(_))),
+                "{id:?}"
+            );
+        }
+    }
 
     #[test]
     fn slatty_files_are_readable_by_the_user_only() {

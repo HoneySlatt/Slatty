@@ -82,9 +82,7 @@ fn read(r: &rusqlite::Row<'_>, first: usize) -> rusqlite::Result<Custom> {
 /// Saves a game's customisation. A game with nothing left customised is forgotten, along with its
 /// copied images.
 pub fn save(db: &Db, dirs: &Dirs, game_id: &str, changes: Changes) -> Result<Custom> {
-    if game_id.is_empty() || !game_id.chars().all(|c| c.is_ascii_alphanumeric()) {
-        return Err(Error::Refused(format!("unexpected game id `{game_id}`")));
-    }
+    crate::paths::check_game_id(game_id)?;
     let old = get(db, game_id)?;
     let folder = dirs.data.join("custom").join(game_id);
     let text = |s: &str| Some(s.trim().to_string()).filter(|s| !s.is_empty());

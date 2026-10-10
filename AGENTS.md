@@ -101,6 +101,8 @@ These act on a real person's account, disk or system. Ask the human first, every
   folder appears only once every file is verified.
 - An operation that changes a game's files or saves holds `lock::game(dirs, game_id)` for its
   whole duration.
+- A game id names files (locks, records, prefixes, covers): check it with `paths::check_game_id`
+  before building a path from it. `lock::game`, install records, jobs and covers already do.
 - A destructive action either refuses when the situation looks wrong, or keeps a copy first. Only
   files SlattyLauncher installed (its install record) are ever deleted from a game folder.
 - Cloud sync decides with content hashes and per-file history, never dates. Conflicts never

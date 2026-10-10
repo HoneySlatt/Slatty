@@ -59,6 +59,7 @@ impl InstallRecord {
     }
 
     pub fn save(&self, dirs: &Dirs, game_id: &str) -> Result<()> {
+        crate::paths::check_game_id(game_id)?;
         let json =
             serde_json::to_vec_pretty(self).map_err(|e| Error::parse("install record", e))?;
         fsutil::write_atomic(&Self::file(dirs, game_id), &json)

@@ -32,6 +32,7 @@ pub struct Install {
 
 impl Install {
     pub fn save(&self, db: &Db) -> Result<()> {
+        crate::paths::check_game_id(&self.game_id)?;
         let runner = serde_json::to_string(&self.runner).map_err(|e| Error::parse("runner", e))?;
         let platform =
             serde_json::to_value(self.platform).map_err(|e| Error::parse("platform", e))?;
