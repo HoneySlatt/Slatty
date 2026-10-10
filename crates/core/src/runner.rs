@@ -119,8 +119,9 @@ fn native_command(
         }
         None => {}
     }
-    let first = std::fs::read(script)
+    let first = crate::fsutil::read_game_file(script)
         .ok()
+        .flatten()
         .and_then(|b| b.split(|c| *c == b'\n').next().map(<[u8]>::to_vec))
         .map(|l| String::from_utf8_lossy(&l).into_owned())
         .unwrap_or_default();
@@ -145,7 +146,10 @@ fn native_command(
 /// its own options or verbs (`--config` with the script as its configuration, `winetricks`,
 /// Proton's `run`), and the game can rewrite its script between two sessions.
 fn interpreter_name(script: &Path) -> Result<String> {
-    let bytes = std::fs::read(script).unwrap_or_default();
+    let bytes = crate::fsutil::read_game_file(script)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
     let first = bytes.split(|c| *c == b'\n').next().unwrap_or_default();
     let line = String::from_utf8_lossy(first);
     let mut words = line
@@ -664,6 +668,14 @@ mod tests {
                 "{first}"
             );
         }
+        // A pipe in its place is not waited on.
+        std::fs::remove_file(&script).unwrap();
+        nix::unistd::mkfifo(&script, nix::sys::stat::Mode::S_IRWXU).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let pipe = script.clone();
+        std::thread::spawn(move || tx.send(interpreter_name(&pipe).ok()));
+        let name = rx.recv_timeout(std::time::Duration::from_secs(5));
+        assert_eq!(name.expect("not blocked").as_deref(), Some("sh"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

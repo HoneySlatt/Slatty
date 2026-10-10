@@ -41,6 +41,24 @@ pub(crate) fn restart_staging(path: &Path) -> Result<std::fs::File> {
         .map_err(|e| Error::io(format!("create {}", path.display()), e))
 }
 
+/// Reads a file a game can write (its folder); `None` when it is not a regular file: reading a pipe
+/// would wait forever for a writer. It is opened without waiting, then checked, so it cannot be
+/// swapped for a pipe in between.
+pub fn read_game_file(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(nix::fcntl::OFlag::O_NONBLOCK.bits())
+        .open(path)?;
+    if !file.metadata()?.is_file() {
+        return Ok(None);
+    }
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    Ok(Some(bytes))
+}
+
 /// Flushes everything written to the filesystem holding `path`: one call after many files is far
 /// cheaper than syncing each of them.
 pub fn sync_filesystem(path: &Path) -> Result<()> {

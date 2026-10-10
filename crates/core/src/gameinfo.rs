@@ -77,8 +77,11 @@ pub fn read(dir: &Path, game_id: Option<&str>) -> Result<GameInfo> {
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.starts_with("goggame-") && name.ends_with(".info") {
-            let bytes =
-                std::fs::read(entry.path()).map_err(|e| Error::io(format!("read {name}"), e))?;
+            let Some(bytes) = crate::fsutil::read_game_file(&entry.path())
+                .map_err(|e| Error::io(format!("read {name}"), e))?
+            else {
+                continue;
+            };
             let info: GameInfo =
                 serde_json::from_slice(&bytes).map_err(|e| Error::parse("goggame info file", e))?;
             infos.push(info);
@@ -219,6 +222,30 @@ mod tests {
         .unwrap();
         assert_eq!(read(&root, None).unwrap().name, "Base");
         assert_eq!(read(&root, Some("2")).unwrap().name, "DLC");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A game writes its own folder: a pipe named like an info file would block the launcher on
+    /// reading it, at every start.
+    #[test]
+    fn only_files_are_read_as_info_files() {
+        let root = std::env::temp_dir().join(format!("slatty-gi3-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("goggame-1.info"),
+            r#"{"gameId":"1","name":"Base"}"#,
+        )
+        .unwrap();
+        nix::unistd::mkfifo(
+            &root.join("goggame-3.info"),
+            nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR,
+        )
+        .unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let dir = root.clone();
+        std::thread::spawn(move || tx.send(read(&dir, Some("1")).map(|i| i.name)));
+        let read = rx.recv_timeout(std::time::Duration::from_secs(5));
+        assert_eq!(read.expect("not blocked").unwrap(), "Base");
         std::fs::remove_dir_all(root).unwrap();
     }
 }

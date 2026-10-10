@@ -170,9 +170,15 @@ pub fn from_dir(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Ins
                 "native Linux installs must use the native runner".into(),
             ));
         }
-        let title = std::fs::read_to_string(path.join("gameinfo"))
+        let title = crate::fsutil::read_game_file(&path.join("gameinfo"))
             .ok()
-            .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
+            .flatten()
+            .and_then(|b| {
+                String::from_utf8_lossy(&b)
+                    .lines()
+                    .next()
+                    .map(|l| l.trim().to_string())
+            })
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| id.to_string());
         return Ok(Install {
