@@ -17,6 +17,9 @@ pub const TAIL: u64 = 22 + 0xffff + 20 + 56;
 pub const STORED: u16 = 0;
 pub const DEFLATED: u16 = 8;
 
+/// The largest directory read: far above any game's, far below what would strain memory.
+const MAX_DIRECTORY: u64 = 64 << 20;
+
 /// One entry of the zip's directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ZipEntry {
@@ -86,6 +89,10 @@ pub fn directory(tail: &[u8], size: u64) -> Result<Directory> {
     let shift = start
         .checked_sub(recorded)
         .ok_or_else(|| bad("directory before its recorded offset"))?;
+    // A game's directory is a few hundred KiB; a damaged one is not read into memory.
+    if len > MAX_DIRECTORY || entries > len / 46 {
+        return Err(bad("directory size or entry count out of range"));
+    }
     Ok(Directory {
         start,
         len,
@@ -122,7 +129,7 @@ pub fn entries(dir: &Directory, raw: &[u8]) -> Result<Vec<ZipEntry>> {
             if id == 1 {
                 let mut f = e + 4;
                 for field in [&mut size, &mut compressed, &mut header] {
-                    if *field == 0xffff_ffff && f + 8 <= e + 4 + n {
+                    if *field == 0xffff_ffff && f + 8 <= (e + 4 + n).min(extra_at + extra_len) {
                         *field = u64_at(raw, f);
                         f += 8;
                     }
@@ -335,5 +342,36 @@ mod tests {
     #[test]
     fn a_file_without_a_zip_is_refused() {
         assert!(directory(&[0u8; 100], 100).is_err());
+    }
+
+    #[test]
+    fn a_damaged_directory_is_refused_not_trusted() {
+        let files = [File {
+            name: "data/noarch/a",
+            data: b"a",
+            mode: 0o100644,
+            deflate: false,
+        }];
+        let mut bytes = installer(b"#!/bin/sh\n", &files, false);
+        let n = bytes.len();
+        // An entry count far beyond what the directory can hold.
+        bytes[n - 12..n - 10].copy_from_slice(&0xfff0u16.to_le_bytes());
+        bytes[n - 14..n - 12].copy_from_slice(&0xfff0u16.to_le_bytes());
+        let tail = &bytes[n.saturating_sub(TAIL as usize)..];
+        assert!(directory(tail, n as u64).is_err());
+
+        // A ZIP64 field running past the end of the directory.
+        let bytes = installer(b"#!/bin/sh\n", &files, false);
+        let n = bytes.len();
+        let dir = directory(&bytes[n.saturating_sub(TAIL as usize)..], n as u64).unwrap();
+        let mut raw = bytes[dir.start as usize..(dir.start + dir.len) as usize].to_vec();
+        raw[20..24].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
+        raw[30..32].copy_from_slice(&4u16.to_le_bytes());
+        raw.splice(46 + 13..46 + 13, [1u8, 0, 200, 0]);
+        let dir = Directory {
+            len: raw.len() as u64,
+            ..dir
+        };
+        let _ = entries(&dir, &raw);
     }
 }

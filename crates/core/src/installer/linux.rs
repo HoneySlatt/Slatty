@@ -176,11 +176,16 @@ pub trait Source: Send + Sync {
         end: u64,
     ) -> impl Future<Output = Result<Vec<u8>>> + Send {
         async move {
+            let want = end.saturating_sub(start) as usize;
             let mut body = self.open(part, start, end).await?;
-            let mut out = Vec::with_capacity((end - start) as usize);
-            while let Some(bytes) = body.next().await {
+            let mut out = Vec::with_capacity(want.min(1 << 20));
+            // Never more than asked, whatever the server sends.
+            while out.len() < want
+                && let Some(bytes) = body.next().await
+            {
                 out.extend(bytes?);
             }
+            out.truncate(want);
             Ok(out)
         }
     }
@@ -592,6 +597,10 @@ impl<S: Source> LinuxDownload<'_, S> {
     /// The whole content of a small entry.
     async fn read_data(&self, file: &LinuxFile) -> Result<Vec<u8>> {
         let e = &file.entry;
+        // A link holds a path: a large one is a damaged entry, not read into memory.
+        if e.compressed > 1 << 16 || e.size > 1 << 16 {
+            return Err(corrupted(&file.path));
+        }
         let raw = self
             .source
             .read(file.part, e.header, self.end_of(file).await?)

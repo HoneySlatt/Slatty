@@ -2412,3 +2412,44 @@ fn a_cut_off_download_that_cannot_resume_waits_instead_of_being_retried() {
     assert_eq!(app.queue, ["6"], "held by the download waiting");
     assert!(app.auto_resume.is_none());
 }
+
+#[test]
+#[ignore]
+fn timing_probe() {
+    let mut app = library_app();
+    app.library = (1..=500)
+        .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
+        .collect();
+    let time = |app: &App, name: &str| {
+        let _ = app.view();
+        let n = 50;
+        let t = std::time::Instant::now();
+        for _ in 0..n {
+            let _ = app.view();
+        }
+        println!("{name}: {:?} per view", t.elapsed() / n);
+    };
+    time(&app, "library 500");
+    app.page = Page::Achievements;
+    time(&app, "achievements");
+    app.page = Page::Downloads;
+    time(&app, "downloads");
+    app.page = Page::Settings;
+    time(&app, "settings");
+    app.page = Page::Library;
+    open(&mut app, "3", None);
+    time(&app, "game page");
+    let mut ui = Simulator::with_size(settings(), SIZE, app.view());
+    let t = std::time::Instant::now();
+    for _ in 0..10 {
+        ui = Simulator::with_size(settings(), SIZE, app.view());
+    }
+    drop(ui);
+    println!("game page layout: {:?}", t.elapsed() / 10);
+    app.selected = None;
+    let t = std::time::Instant::now();
+    for _ in 0..10 {
+        let _ = Simulator::with_size(settings(), SIZE, app.view());
+    }
+    println!("library 500 layout: {:?}", t.elapsed() / 10);
+}

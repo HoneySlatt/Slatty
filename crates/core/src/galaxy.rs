@@ -131,7 +131,7 @@ struct DepotItems {
 
 /// `abcdef…` → `ab/cd/abcdef…`, the CDN layout for manifests and chunks.
 pub fn galaxy_path(hash: &str) -> String {
-    if hash.contains('/') || hash.len() < 4 {
+    if hash.contains('/') || hash.len() < 4 || !hash.is_ascii() {
         hash.to_string()
     } else {
         format!("{}/{}/{hash}", &hash[0..2], &hash[2..4])
@@ -598,6 +598,11 @@ mod tests {
     fn galaxy_path_splits_hash() {
         assert_eq!(galaxy_path("abcdef0123"), "ab/cd/abcdef0123");
         assert_eq!(galaxy_path("ab/cd/abcdef"), "ab/cd/abcdef");
+        assert_eq!(
+            galaxy_path("aé123"),
+            "aé123",
+            "never cut inside a character"
+        );
     }
 
     #[test]
