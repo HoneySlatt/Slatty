@@ -74,7 +74,8 @@ pub fn ensure_dir(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| Error::io(format!("create {}", path.display()), e))
 }
 
-/// Refuses a game id that could not safely name a file: GOG's ids are letters and digits.
+/// Refuses a game id that could not safely name a file or go into an address: GOG's ids are
+/// letters and digits.
 pub fn check_game_id(game_id: &str) -> Result<()> {
     if game_id.is_empty() || !game_id.bytes().all(|b| b.is_ascii_alphanumeric()) {
         return Err(Error::Refused(format!("unexpected game id `{game_id}`")));

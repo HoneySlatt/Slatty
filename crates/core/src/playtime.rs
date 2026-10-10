@@ -54,7 +54,8 @@ pub struct Unreported {
 }
 
 /// Sessions of this account that ended cleanly, lasted at least a minute (GOG ignores shorter
-/// ones) and were not sent yet.
+/// ones) and were not sent yet. A game id that could change the address the session is sent to,
+/// with the account's token, is left out.
 pub fn unreported(db: &Db, user_id: &str) -> Result<Vec<Unreported>> {
     let conn = db.conn();
     let mut stmt = conn.prepare(
@@ -71,7 +72,11 @@ pub fn unreported(db: &Db, user_id: &str) -> Result<Vec<Unreported>> {
             minutes: r.get(3)?,
         })
     })?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let rows = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows
+        .into_iter()
+        .filter(|s| crate::paths::check_game_id(&s.game_id).is_ok())
+        .collect())
 }
 
 fn mark_reported(db: &Db, id: i64) -> Result<()> {
@@ -133,6 +138,21 @@ mod tests {
         );
         mark_reported(&db, 1).unwrap();
         assert!(unreported(&db, "me").unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_session_whose_game_id_would_change_the_address_is_never_sent() {
+        let db = Db::in_memory().unwrap();
+        db.conn()
+            .execute_batch(
+                "INSERT INTO sessions (id, game_id, user_id, started_at, ended_at, state, reported) VALUES
+                   (1, '../../users/x', 'me', 1000, 1600, 'ended', 0),
+                   (2, '1?a=b', 'me', 2000, 2600, 'ended', 0),
+                   (3, '1456487183', 'me', 3000, 3600, 'ended', 0);",
+            )
+            .unwrap();
+        let pending = unreported(&db, "me").unwrap();
+        assert_eq!(pending.iter().map(|s| s.id).collect::<Vec<_>>(), [3]);
     }
 
     #[test]
