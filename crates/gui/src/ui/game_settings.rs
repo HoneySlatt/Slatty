@@ -41,6 +41,31 @@ impl App {
             "Folder",
             text(install.path.display().to_string()).size(15).into(),
         )];
+        // A game that can be started several ways: the one its Play starts.
+        if let Some(options) = self.launch_options.get(&g.id).filter(|o| o.len() > 1) {
+            let id = g.id.clone();
+            let current = self
+                .launch_choices
+                .get(&g.id)
+                .filter(|c| options.contains(c))
+                .unwrap_or(&options[0]);
+            sections.push(section(
+                Icon::Play,
+                "Launch",
+                column![
+                    pick_list(options.as_slice(), Some(current), move |c: String| {
+                        Message::Settings(SettingsMsg::LaunchTask(id.clone(), c))
+                    })
+                    .style(theme::select)
+                    .font(theme::font())
+                    .padding([10, 14])
+                    .width(Length::Fill),
+                    note("What Play starts: the game, or one of its tools."),
+                ]
+                .spacing(10)
+                .into(),
+            ));
+        }
         // A native build runs without Proton.
         let native = install.runner == Runner::Native;
         sections.push(section(

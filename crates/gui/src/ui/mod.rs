@@ -93,6 +93,10 @@ impl App {
             Some(d) => self.edit_dialog(page, d),
             None => page,
         };
+        let page = match &self.launch_prompt {
+            Some(game_id) => self.launch_dialog(page, game_id),
+            None => page,
+        };
         let page = match &self.quit_confirm {
             Some(work) => quit_dialog(page, work),
             None => page,
@@ -258,7 +262,75 @@ fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a
 }
 
 impl App {
-    /// A page just shown fades in from the background while rising slightly. The layers stay the
+    /// Asks how a game that can be started several ways is started, the first time.
+    fn launch_dialog<'a>(
+        &'a self,
+        page: Element<'a, Message>,
+        game_id: &'a str,
+    ) -> Element<'a, Message> {
+        let options = self
+            .launch_options
+            .get(game_id)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let choices = options.iter().enumerate().map(|(i, name)| {
+            button(
+                row![
+                    icon(
+                        if i == 0 { Icon::Play } else { Icon::Wrench },
+                        18.0,
+                        tokens().text
+                    ),
+                    text(name.as_str()).size(15).width(Length::Fill),
+                ]
+                .push((i == 0).then(|| text("Default").size(13).color(tokens().muted)))
+                .spacing(12)
+                .align_y(Alignment::Center),
+            )
+            .padding([12, 16])
+            .width(Length::Fill)
+            .on_press(Message::LaunchAs(game_id.to_string(), name.clone()))
+            .style(theme::row_button)
+            .into()
+        });
+        let dialog = container(
+            column![
+                text(format!("Start {}", self.title_of(game_id)))
+                    .size(24)
+                    .font(bold()),
+                note(
+                    "This game can be started several ways. Your choice is kept for the next \
+                      launches; Game settings can change it."
+                ),
+                Column::with_children(choices).spacing(6),
+                row![
+                    space().width(Length::Fill),
+                    button(text("Cancel").size(14))
+                        .padding([10, 18])
+                        .on_press(Message::CancelLaunch)
+                        .style(theme::tonal),
+                ],
+            ]
+            .spacing(18),
+        )
+        .padding(26)
+        .max_width(560)
+        .style(theme::card);
+        stack![
+            page,
+            mouse_area(
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(theme::backdrop)
+            )
+            .on_press(Message::CancelLaunch),
+            center(opaque(dialog)),
+        ]
+        .into()
+    }
+
+    /// A page just shown fades in) from the background while rising slightly. The layers stay the
     /// same once it has arrived, so the page keeps its state (scrolling, focus).
     fn arriving<'a>(&self, page: Element<'a, Message>) -> Element<'a, Message> {
         let shown: f32 = self.page_shown.interpolate(0.0, 1.0, self.now);

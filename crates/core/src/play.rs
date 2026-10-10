@@ -132,7 +132,8 @@ pub async fn play(
             "an update of this game is unfinished; finish it before playing".into(),
         ));
     }
-    let spec = runner::launch_spec(&install)?;
+    let choice = crate::settings::launch_choice(db, &install.game_id)?;
+    let spec = runner::launch_spec(&install, choice.as_deref())?;
     // GOG keeps no cloud saves for Linux builds, and they lack the Galaxy SDK that Comet talks to.
     let native = install.platform == Platform::Linux;
     let cloud = req.cloud && !native;

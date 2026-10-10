@@ -2319,3 +2319,46 @@ fn what_leaves_the_computer_can_be_turned_off() {
     assert!(ui.find("Play time on GOG").is_ok());
     snapshot(&mut ui, "settings-privacy");
 }
+
+#[test]
+fn a_game_with_several_launch_options_asks_once_which_to_start() {
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    open(&mut app, "3", None);
+    app.launch_options.insert(
+        "3".into(),
+        vec!["[FAKE] Game 3".into(), "Configuration Tool".into()],
+    );
+    let _ = app.update(Message::Play("3".into()));
+    assert_eq!(app.launch_prompt.as_deref(), Some("3"));
+    assert!(app.play.is_none(), "nothing starts before the choice");
+    let messages: Vec<Message> = {
+        let mut ui = render(&app);
+        assert!(ui.find("Default").is_ok());
+        snapshot(&mut ui, "launch-choice");
+        ui.click("Configuration Tool").unwrap();
+        ui.into_messages().collect()
+    };
+    for m in messages {
+        let _ = app.update(m);
+    }
+    assert!(app.launch_prompt.is_none());
+    assert!(app.play.is_some(), "it starts once chosen");
+    assert_eq!(
+        slatty_core::settings::launch_choice(&db, "3")
+            .unwrap()
+            .as_deref(),
+        Some("Configuration Tool")
+    );
+
+    // Kept: the next Play does not ask, and Game settings shows it.
+    app.play = None;
+    let _ = app.update(Message::Play("3".into()));
+    assert!(app.launch_prompt.is_none() && app.play.is_some());
+    app.play = None;
+    app.panel = Some(Panel::GameSettings);
+    let mut ui = render(&app);
+    assert!(ui.find("Launch").is_ok());
+    assert_eq!(app.launch_choices["3"], "Configuration Tool");
+    snapshot(&mut ui, "launch-in-game-settings");
+}

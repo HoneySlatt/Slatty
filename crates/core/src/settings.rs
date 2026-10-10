@@ -83,6 +83,15 @@ pub fn set_game_achievements(db: &Db, on: bool) -> Result<()> {
     db.set_setting(GAME_ACHIEVEMENTS, Some(if on { "on" } else { "off" }))
 }
 
+/// The way a game is started, among its launch options, once chosen.
+pub fn launch_choice(db: &Db, game_id: &str) -> Result<Option<String>> {
+    db.setting(&format!("launch_task:{game_id}"))
+}
+
+pub fn set_launch_choice(db: &Db, game_id: &str, choice: &str) -> Result<()> {
+    db.set_setting(&format!("launch_task:{game_id}"), Some(choice))
+}
+
 /// Game ids waiting in the download queue, in order.
 pub fn download_queue(db: &Db) -> Result<Vec<String>> {
     Ok(db

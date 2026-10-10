@@ -105,10 +105,7 @@ impl App {
                                 Art::Cover => "Choose a cover",
                                 Art::Background => "Choose a background",
                             })
-                            .add_filter(
-                                "Images",
-                                &["png", "jpg", "jpeg", "webp", "gif", "bmp"],
-                            )
+                            .add_filter("Images", &["png", "jpg", "jpeg", "webp", "gif", "bmp"])
                             .pick_file()
                             .await
                             .map(|f| f.path().to_path_buf())

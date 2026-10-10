@@ -89,7 +89,8 @@ pub fn list(ctx: &Ctx) -> Result<()> {
 
 pub fn print_spec(ctx: &Ctx, game_id: &str) -> Result<()> {
     let install = get(ctx, game_id)?;
-    let spec = runner::launch_spec(&install)?;
+    let choice = slatty_core::settings::launch_choice(&ctx.db, game_id)?;
+    let spec = runner::launch_spec(&install, choice.as_deref())?;
     println!("program: {}", spec.program.display());
     println!("args:    {:?}", spec.args);
     println!("cwd:     {}", spec.cwd.display());

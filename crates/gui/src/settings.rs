@@ -223,6 +223,8 @@ pub enum SettingsMsg {
     ReportPlaytime(bool),
     /// Whether Comet runs while a game that uses GOG's Galaxy runs.
     GameAchievements(bool),
+    /// How one installed game is started, among its launch options.
+    LaunchTask(String, String),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
 }
@@ -366,6 +368,7 @@ impl App {
                     self.notify_error(e.to_string());
                 }
             }
+            SettingsMsg::LaunchTask(game_id, choice) => self.choose_launch(&game_id, choice),
             SettingsMsg::CoverSize(size) => {
                 self.card_width = size.width();
                 if let Err(e) = settings::set_cover_width(&core.db, self.card_width) {

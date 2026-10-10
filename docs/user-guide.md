@@ -87,7 +87,7 @@ panels:
 
 | Where | Panel |
 |---|---|
-| Sliders button (top right) | Game settings, in a drawer beside the page: folder, Proton build (used from the next launch; the platform for a Linux build), game version (switch to an older or newer build), language and DLC |
+| Sliders button (top right) | Game settings, in a drawer beside the page: folder, launch option (for a game that has several), Proton build (used from the next launch; the platform for a Linux build), game version (switch to an older or newer build), language and DLC |
 | ⋮ button (top right) | Manage, in a drawer beside the page: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
 | Cloud saves card | A drawer beside the page: status, save folder, what a sync would do (upload, download, compare, unchanged, deleted on one side), Check, Sync now, conflict choices |
 | Achievements card | Full list from the most common to the rarest, unlock or clear, in a drawer beside the page (over it in a narrow window) |
@@ -206,6 +206,11 @@ setup that runs at first launch (see below).
 ```sh
 slatty launch <game-id>
 ```
+
+**Launch options.** Some games can be started several ways: the game, and tools such as a
+configuration program (GOG lists them in the game's `goggame-<id>.info`). The first Play of such a
+game asks which one to start, and the choice is kept; **Launch** in Game settings changes it. The
+command line starts the one chosen, or the game itself.
 
 A launch goes through these steps:
 

@@ -214,6 +214,11 @@ pub struct App {
     pub umu_lookup: bool,
     pub report_playtime: bool,
     pub game_achievements: bool,
+    /// The ways each installed game can be started, its main one first, and the one chosen.
+    pub launch_options: HashMap<String, Vec<String>>,
+    pub launch_choices: HashMap<String, String>,
+    /// A game whose Play asks how to start it, the first time.
+    pub launch_prompt: Option<String>,
     pub proton: Option<PathBuf>,
     pub proton_choices: Vec<PathBuf>,
     /// Work that closing the window would interrupt, waiting for the user's choice.
@@ -288,6 +293,9 @@ impl Default for App {
             umu_lookup: true,
             report_playtime: true,
             game_achievements: true,
+            launch_options: HashMap::new(),
+            launch_choices: HashMap::new(),
+            launch_prompt: None,
             settings_view: settings::SettingsView::default(),
             proton: None,
             proton_choices: Vec::new(),
@@ -346,6 +354,9 @@ pub enum Message {
     OverviewDone,
     PlaytimesFetched(Vec<(String, u64)>),
     Play(String),
+    /// How a game is started, chosen when its first Play asks; it then starts.
+    LaunchAs(String, String),
+    CancelLaunch,
     Playing(PlayMsg),
     StopGame,
     LoadAchievements(String),
@@ -380,6 +391,8 @@ pub struct Boot {
     library: Option<LibraryCache>,
     installs: Vec<Install>,
     records: HashMap<String, InstallSummary>,
+    launch_options: HashMap<String, Vec<String>>,
+    launch_choices: HashMap<String, String>,
     interrupted: Vec<String>,
     library_root: PathBuf,
     default_platform: Platform,
@@ -478,6 +491,8 @@ impl App {
                 self.umu_lookup = boot.umu_lookup;
                 self.report_playtime = boot.report_playtime;
                 self.game_achievements = boot.game_achievements;
+                self.launch_options = boot.launch_options;
+                self.launch_choices = boot.launch_choices;
                 self.installs = boot
                     .installs
                     .into_iter()
@@ -595,6 +610,12 @@ impl App {
             Message::OverviewDone => self.overview_done(),
             Message::PlaytimesFetched(times) => self.playtimes_fetched(times),
             Message::Play(game_id) => return self.start_game(game_id),
+            Message::LaunchAs(game_id, choice) => {
+                self.launch_prompt = None;
+                self.choose_launch(&game_id, choice);
+                return self.start_game(game_id);
+            }
+            Message::CancelLaunch => self.launch_prompt = None,
             Message::Playing(msg) => return self.on_play(msg),
             Message::StopGame => self.stop_game(),
             Message::LoadAchievements(game_id) => return self.load_achievements(game_id),
@@ -658,6 +679,9 @@ impl App {
     /// Escape: closes the panel, else the game page, else the per-game achievements page.
     fn go_back(&mut self) {
         if self.quit_confirm.take().is_some() {
+            return;
+        }
+        if self.launch_prompt.take().is_some() {
             return;
         }
         if self.context_menu.take().is_some() {
@@ -805,6 +829,12 @@ impl App {
         let Some(core) = &self.core else {
             return;
         };
+        if let Some(install) = self.installs.get(game_id) {
+            self.launch_options.insert(
+                game_id.to_string(),
+                slatty_core::runner::launch_options(install),
+            );
+        }
         match InstallRecord::load(&core.dirs, game_id) {
             Ok(Some(r)) => {
                 self.records.insert(game_id.to_string(), summary(&r));
@@ -846,6 +876,19 @@ async fn boot() -> Result<Boot, String> {
         None => (None, HashMap::new()),
     };
     let installs = Install::list(&db).map_err(err)?;
+    let launch_options = installs
+        .iter()
+        .map(|i| (i.game_id.clone(), slatty_core::runner::launch_options(i)))
+        .collect();
+    let launch_choices = installs
+        .iter()
+        .filter_map(|i| {
+            slatty_core::settings::launch_choice(&db, &i.game_id)
+                .ok()
+                .flatten()
+                .map(|c| (i.game_id.clone(), c))
+        })
+        .collect();
     let records = installs
         .iter()
         .filter_map(|i| {
@@ -901,6 +944,8 @@ async fn boot() -> Result<Boot, String> {
         account,
         library,
         installs,
+        launch_options,
+        launch_choices,
         records,
         interrupted,
         library_root,

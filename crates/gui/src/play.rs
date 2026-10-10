@@ -36,6 +36,16 @@ impl App {
         if !self.can_play(&game_id) {
             return Task::none();
         }
+        // A game that can be started several ways asks which, once.
+        if self
+            .launch_options
+            .get(&game_id)
+            .is_some_and(|o| o.len() > 1)
+            && !self.launch_choices.contains_key(&game_id)
+        {
+            self.launch_prompt = Some(game_id);
+            return Task::none();
+        }
         let (stop_tx, stop_rx) = tokio::sync::mpsc::unbounded_channel();
         self.play = Some(PlayState {
             game_id: game_id.clone(),
@@ -44,6 +54,17 @@ impl App {
             running: true,
         });
         Task::run(play_stream(core, game_id, stop_rx), Message::Playing)
+    }
+
+    /// Keeps how a game is started, for its next launches.
+    pub fn choose_launch(&mut self, game_id: &str, choice: String) {
+        if let Some(core) = &self.core
+            && let Err(e) = slatty_core::settings::set_launch_choice(&core.db, game_id, &choice)
+        {
+            self.notify_error(e.to_string());
+            return;
+        }
+        self.launch_choices.insert(game_id.to_string(), choice);
     }
 
     pub fn stop_game(&self) {

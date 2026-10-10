@@ -20,15 +20,43 @@ pub struct GameInfo {
 pub struct PlayTask {
     #[serde(rename = "type")]
     pub kind: String,
+    pub name: Option<String>,
     pub path: Option<String>,
     pub arguments: Option<String>,
     pub working_dir: Option<String>,
     #[serde(default)]
     pub is_primary: bool,
+    /// A process a launcher of the game starts, not to be started by itself.
+    #[serde(default)]
+    pub is_hidden: bool,
     pub category: Option<String>,
 }
 
+impl PlayTask {
+    /// How it is named to choose it: its name, else its program.
+    pub fn label(&self) -> &str {
+        self.name
+            .as_deref()
+            .or(self.path.as_deref())
+            .unwrap_or_default()
+    }
+}
+
 impl GameInfo {
+    /// What the game can be started as, its main task first: the game itself, and tools such as a
+    /// configuration program. Tasks GOG hides, started by those tools, are left out.
+    pub fn launch_tasks(&self) -> Vec<&PlayTask> {
+        let primary = self.primary_task();
+        let mut tasks: Vec<&PlayTask> = primary.into_iter().collect();
+        tasks.extend(self.play_tasks.iter().filter(|t| {
+            t.kind == "FileTask"
+                && t.path.is_some()
+                && !t.is_hidden
+                && !primary.is_some_and(|p| std::ptr::eq(p, *t))
+        }));
+        tasks
+    }
+
     pub fn primary_task(&self) -> Option<&PlayTask> {
         let file_tasks = || {
             self.play_tasks

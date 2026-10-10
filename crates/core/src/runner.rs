@@ -32,7 +32,9 @@ pub struct LaunchSpec {
     pub env: Vec<(String, String)>,
 }
 
-pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
+/// How to start a game: as `choice` (one of its `launch_options`) when given and still offered,
+/// else as its main task.
+pub fn launch_spec(install: &Install, choice: Option<&str>) -> Result<LaunchSpec> {
     match (&install.platform, &install.runner) {
         (Platform::Linux, Runner::Native) => {
             let script = install.path.join("start.sh");
@@ -57,7 +59,7 @@ pub fn launch_spec(install: &Install) -> Result<LaunchSpec> {
             })
         }
         (Platform::Windows, Runner::Umu { .. } | Runner::Wine { .. }) => {
-            let (exe, args, cwd) = windows_task(install)?;
+            let (exe, args, cwd) = windows_task(install, choice)?;
             windows_command(install, prepend(exe, args), cwd)
         }
         (platform, runner) => Err(Error::Unsupported(format!(
@@ -175,9 +177,29 @@ fn prepend(exe: PathBuf, args: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-fn windows_task(install: &Install) -> Result<(PathBuf, Vec<String>, PathBuf)> {
+/// The ways a Windows game can be started, its main one first: the game, and tools such as a
+/// configuration program. None for a Linux build, which starts through its script.
+pub fn launch_options(install: &Install) -> Vec<String> {
+    if install.platform != Platform::Windows {
+        return Vec::new();
+    }
+    gameinfo::read(&install.path, Some(&install.game_id))
+        .map(|info| {
+            info.launch_tasks()
+                .iter()
+                .map(|t| t.label().to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn windows_task(
+    install: &Install,
+    choice: Option<&str>,
+) -> Result<(PathBuf, Vec<String>, PathBuf)> {
     let info: GameInfo = gameinfo::read(&install.path, Some(&install.game_id))?;
-    let task = info.primary_task().ok_or_else(|| {
+    let chosen = choice.and_then(|c| info.launch_tasks().into_iter().find(|t| t.label() == c));
+    let task = chosen.or_else(|| info.primary_task()).ok_or_else(|| {
         Error::NotFound(format!(
             "no launchable task in goggame-{}.info",
             install.game_id
@@ -272,6 +294,45 @@ mod tests {
         assert_eq!((program, args), (umu, arg));
         assert!(env.contains(&("UMU_NO_PROTON".into(), "1".into())));
         assert!(env.contains(&("RUNTIMEPATH".into(), "steamrt3".into())));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_game_can_be_started_as_one_of_its_visible_tasks() {
+        let dir = std::env::temp_dir().join(format!("slatty-tasks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // As in The Legend of Heroes: Trails in the Sky.
+        std::fs::write(
+            dir.join("goggame-1.info"),
+            r#"{"gameId":"1","name":"Game","playTasks":[
+              {"category":"game","isPrimary":true,"name":"Game","path":"game.exe","type":"FileTask"},
+              {"category":"launcher","name":"Configuration Tool","path":"Config.exe","type":"FileTask"},
+              {"category":"game","isHidden":true,"name":"Configuration Tool - launcher process","path":"game.exe","type":"FileTask"},
+              {"category":"document","name":"Support","link":"https://example.invalid","type":"URLTask"}]}"#,
+        )
+        .unwrap();
+        for exe in ["game.exe", "Config.exe"] {
+            std::fs::write(dir.join(exe), b"").unwrap();
+        }
+        let install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: dir.clone(),
+            client_id: None,
+            runner: Runner::Native,
+            umu_id: None,
+        };
+        assert_eq!(launch_options(&install), ["Game", "Configuration Tool"]);
+        let exe = |choice| windows_task(&install, choice).unwrap().0;
+        assert_eq!(exe(None), dir.join("game.exe"));
+        assert_eq!(exe(Some("Configuration Tool")), dir.join("Config.exe"));
+        assert_eq!(
+            exe(Some("No longer offered")),
+            dir.join("game.exe"),
+            "the main task"
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
