@@ -4,6 +4,7 @@ mod achievements;
 mod cloud;
 mod downloads;
 mod edit;
+mod even_grid;
 pub mod format;
 mod game;
 mod game_settings;

@@ -190,6 +190,8 @@ fn a_long_achievement_description_stays_in_its_card() {
         let mut ui = Simulator::with_size(settings(), size, app.view());
         if size.width < 1000.0 {
             snapshot(&mut ui, "achievements-long-description");
+        } else {
+            snapshot(&mut ui, "achievements-long-description-wide");
         }
         let name = ui.find("[FAKE] Long").unwrap().bounds();
         let text = ui.find(description).unwrap().bounds();
@@ -220,6 +222,23 @@ fn a_long_achievement_description_stays_in_its_card() {
             rarity.y + rarity.height + 28.0 <= next.y,
             "{size:?}: runs into the next card: {rarity:?} {next:?}"
         );
+        // Side by side (two to a row in the wider window), cards are as high as each other; a
+        // card alone on its row keeps the usual height.
+        let card = |ui: &mut Simulator<'_, Message>, id: &str| {
+            ui.find(iced_test::selector::id(format!("achievement-id-{id}")))
+                .unwrap()
+                .bounds()
+        };
+        let (common, long, next) = (
+            card(&mut ui, "Common"),
+            card(&mut ui, "Long"),
+            card(&mut ui, "Next"),
+        );
+        if size.width > 1000.0 {
+            assert_eq!(common.y, long.y, "one row");
+            assert_eq!(common.height, long.height, "{common:?} {long:?}");
+        }
+        assert_eq!(next.height, 112.0, "{size:?}");
     }
 }
 

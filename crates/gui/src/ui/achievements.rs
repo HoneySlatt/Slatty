@@ -2,12 +2,13 @@
 
 use crate::theme::text;
 use iced::widget::{
-    Column, Space, button, column, container, grid, image, progress_bar, row, scrollable, space,
+    Column, Space, button, column, container, image, progress_bar, row, scrollable, space,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::achievements::Achievement;
 use slatty_core::library::LibraryGame;
 
+use super::even_grid::even_grid;
 use super::widgets::grid_rows;
 use super::{inner, note, round_button};
 use crate::achievements::by_rarity;
@@ -225,7 +226,8 @@ impl App {
                 let cards: Vec<Element<'_, Message>> = by_rarity(list)
                     .into_iter()
                     .map(|a| {
-                        // At least the usual height, more for a long description.
+                        // At least the usual height, more for a long description; its row makes it
+                        // as high as the others beside it, its content centred.
                         container(
                             row![
                                 Space::new().height(ACHIEVEMENT_HEIGHT - 28.0),
@@ -236,14 +238,14 @@ impl App {
                         .id(format!("achievement-{}", a.achievement_id))
                         .padding([14, 18])
                         .width(Length::Fill)
+                        .align_y(Alignment::Center)
                         .style(theme::block)
                         .into()
                     })
                     .collect();
                 let mut list_view = Column::new().spacing(14);
                 list_view = list_view.extend(self.pending_confirmation(&g.id));
-                list_view =
-                    list_view.push(grid(cards).fluid(1100).spacing(14).height(Length::Shrink));
+                list_view = list_view.push(even_grid(cards, 1100.0, 14.0));
                 column![
                     summary,
                     scrollable(list_view)
