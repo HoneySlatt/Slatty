@@ -225,13 +225,19 @@ impl App {
                 let cards: Vec<Element<'_, Message>> = by_rarity(list)
                     .into_iter()
                     .map(|a| {
-                        container(self.achievement_row(&g.id, a, 64.0))
-                            .padding([14, 18])
-                            .width(Length::Fill)
-                            .height(ACHIEVEMENT_HEIGHT)
-                            .align_y(Alignment::Center)
-                            .style(theme::block)
-                            .into()
+                        // At least the usual height, more for a long description.
+                        container(
+                            row![
+                                Space::new().height(ACHIEVEMENT_HEIGHT - 28.0),
+                                self.achievement_row(&g.id, a, 64.0)
+                            ]
+                            .align_y(Alignment::Center),
+                        )
+                        .id(format!("achievement-{}", a.achievement_id))
+                        .padding([14, 18])
+                        .width(Length::Fill)
+                        .style(theme::block)
+                        .into()
                     })
                     .collect();
                 let mut list_view = Column::new().spacing(14);

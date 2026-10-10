@@ -164,6 +164,65 @@ fn a_long_title_leaves_the_progress_in_its_tile() {
     );
 }
 
+/// A long description, beside Unlock and at the smallest window, keeps its achievement's name and
+/// rarity inside its card.
+#[test]
+fn a_long_achievement_description_stays_in_its_card() {
+    let description = "[FAKE] Finish the whole story on the hardest difficulty without ever \
+                       saving, losing a companion or using a single item bought from a merchant, \
+                       then defeat the final guardian in under three minutes.";
+    let mut app = library_app();
+    app.manual_achievements = true;
+    let mut long = fake_achievement("Long", false);
+    long.description = description.into();
+    long.rarity = 12.5;
+    let mut common = fake_achievement("Common", false);
+    common.rarity = 40.0;
+    // Rarer: listed after it, below it at any width.
+    let mut next = fake_achievement("Next", false);
+    next.rarity = 5.0;
+    app.achievements
+        .insert("5".into(), crate::Loadable::Ready(vec![long, common, next]));
+    let _ = app.update(Message::OpenAchievements("5".into()));
+    settle(&mut app);
+    for size in [Size::new(800.0, 560.0), Size::new(1440.0, 900.0)] {
+        app.window = size;
+        let mut ui = Simulator::with_size(settings(), size, app.view());
+        if size.width < 1000.0 {
+            snapshot(&mut ui, "achievements-long-description");
+        }
+        let name = ui.find("[FAKE] Long").unwrap().bounds();
+        let text = ui.find(description).unwrap().bounds();
+        let rarity = ui.find("12.5% of players").unwrap().bounds();
+        let next = ui.find("[FAKE] Next").unwrap().bounds();
+        // A whole line (13 px text), not squeezed to what the card has left.
+        assert!(rarity.height >= 16.0, "{size:?}: {rarity:?}");
+        // Inside its card, its padding (14) kept.
+        let card = ui
+            .find(iced_test::selector::id("achievement-id-Long"))
+            .unwrap()
+            .bounds();
+        assert!(card.y + 13.5 <= name.y, "{size:?}: {card:?} {name:?}");
+        assert!(
+            rarity.y + rarity.height <= card.y + card.height - 13.5,
+            "{size:?}: {card:?} {rarity:?}"
+        );
+        assert!(
+            name.y + name.height <= text.y,
+            "{size:?}: {name:?} {text:?}"
+        );
+        assert!(
+            text.y + text.height <= rarity.y,
+            "{size:?}: {text:?} {rarity:?}"
+        );
+        // The card's padding (14) and the space between cards (14) lie between them.
+        assert!(
+            rarity.y + rarity.height + 28.0 <= next.y,
+            "{size:?}: runs into the next card: {rarity:?} {next:?}"
+        );
+    }
+}
+
 #[test]
 fn achievements_tab_opens_a_dedicated_page_per_game() {
     let mut app = app_with_achievements();
