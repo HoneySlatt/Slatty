@@ -264,8 +264,23 @@ async fn resolve(
 }
 
 /// Downloads what the setup needs, runs every command under the session supervisor, and marks
-/// the build as set up. Only for games installed by slatty with a Wine prefix.
+/// the build as set up. Only for games installed by slatty with a Wine prefix. Holds the game, so
+/// that no update changes its files and record meanwhile.
 pub async fn run(
+    dirs: &Dirs,
+    http: &Client,
+    tokens: &Tokens,
+    install: &Install,
+    supervisor: &Path,
+    force: bool,
+    emit: &(dyn Fn(SetupEvent) + Send + Sync),
+) -> Result<Vec<SetupCommand>> {
+    let _busy = crate::lock::game(dirs, &install.game_id)?;
+    run_held(dirs, http, tokens, install, supervisor, force, emit).await
+}
+
+/// `run`, for a caller already holding the game (a launch).
+pub(crate) async fn run_held(
     dirs: &Dirs,
     http: &Client,
     tokens: &Tokens,
@@ -400,6 +415,47 @@ mod tests {
             "/data/support/1".into(),
             "/data/redist".into(),
         )
+    }
+
+    /// `slatty setup` rewrites the game's install record once done: it waits for no update, which
+    /// would have its record overwritten, and is refused while the game is busy.
+    #[tokio::test]
+    async fn setup_is_refused_while_the_game_is_busy() {
+        let root = std::env::temp_dir().join(format!("slatty-setup-busy-{}", std::process::id()));
+        let dirs = Dirs::under(&root);
+        let install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: crate::install::Platform::Windows,
+            path: root.join("Game"),
+            client_id: None,
+            runner: runner::Runner::Umu {
+                proton: "/proton".into(),
+                prefix: root.join("prefix"),
+            },
+            umu_id: None,
+            isolated: true,
+        };
+        let tokens = Tokens {
+            user_id: "1".into(),
+            access_token: crate::secret::Secret::new("[FAKE]"),
+            refresh_token: crate::secret::Secret::new("[FAKE]"),
+            expires_at: i64::MAX,
+        };
+        let _update = crate::lock::game(&dirs, "1").unwrap();
+        let busy = run(
+            &dirs,
+            &crate::http::client().unwrap(),
+            &tokens,
+            &install,
+            Path::new("/nonexistent"),
+            true,
+            &|_| {},
+        )
+        .await
+        .unwrap_err();
+        assert!(busy.to_string().contains("another operation"), "{busy}");
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

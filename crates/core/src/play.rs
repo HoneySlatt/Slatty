@@ -186,7 +186,7 @@ pub async fn play(
                     }
                 })
             };
-            crate::setup::run(
+            crate::setup::run_held(
                 dirs,
                 http,
                 &tokens,
