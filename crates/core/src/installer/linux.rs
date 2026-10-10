@@ -96,37 +96,47 @@ fn parse_offer(raw: &[u8]) -> Result<Offer> {
         serde_json::Value::String(s) => s.clone(),
         other => other.to_string(),
     };
-    let linux = |p: &Product| -> Result<Vec<Installer>> {
-        p.downloads
-            .installers
-            .iter()
-            .filter(|i| i.os == "linux")
-            .map(|i| match i.files.as_slice() {
-                [file] => Ok(Installer {
+    // An installer in several parts is not handled: it is left out on its own, so that the other
+    // languages and DLC stay installable. Whether some Linux installer was left out, too.
+    let linux = |p: &Product| -> (Vec<Installer>, bool) {
+        let all = p.downloads.installers.iter().filter(|i| i.os == "linux");
+        let single: Vec<Installer> = all
+            .clone()
+            .filter_map(|i| match i.files.as_slice() {
+                [file] => Some(Installer {
                     product_id: id(&p.id),
                     language: i.language.clone(),
                     version: i.version.clone().unwrap_or_default(),
                     downlink: file.downlink.clone(),
                 }),
-                _ => Err(Error::Unsupported(format!(
-                    "the Linux installer of {} comes in several parts",
-                    p.title
-                ))),
+                _ => None,
             })
-            .collect()
+            .collect();
+        let left_out = all.count() > single.len();
+        if left_out {
+            tracing::warn!("a Linux installer of {} comes in several parts", p.title);
+        }
+        (single, left_out)
     };
     let product: Product =
         serde_json::from_slice(raw).map_err(|e| Error::parse("listing Linux installers", e))?;
     let mut dlcs = Vec::new();
     for d in &product.expanded_dlcs {
-        let installers = linux(d)?;
+        let (installers, _) = linux(d);
         if !installers.is_empty() {
             dlcs.push((id(&d.id), d.title.clone(), installers));
         }
     }
+    let (installers, left_out) = linux(&product);
+    if installers.is_empty() && left_out {
+        return Err(Error::Unsupported(format!(
+            "the Linux installer of {} comes in several parts",
+            product.title
+        )));
+    }
     Ok(Offer {
         title: product.title.clone(),
-        installers: linux(&product)?,
+        installers,
         dlcs,
     })
 }

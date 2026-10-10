@@ -146,7 +146,8 @@ builds (`Unsupported OS`):
 
 1. `plan_for` with `Platform::Linux` reads the game's and its DLC's Linux installers from
    `api.gog.com/products/<id>?expand=downloads,expanded_dlcs`, and picks one per product for the
-   language. Its build id is `linux:<version>`: that is how a job tells its platform, with no
+   language. An installer in several parts is not handled and left out on its own (a DLC, or a
+   language, so offered); a game left with none is refused. Its build id is `linux:<version>`: that is how a job tells its platform, with no
    column of its own.
 2. Each installer is a MojoSetup shell script followed by a zip. Its download link comes from the
    API's `downlink`. The CDN serves byte ranges but not suffix ranges, so the exact size comes from

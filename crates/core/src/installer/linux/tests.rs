@@ -382,6 +382,29 @@ fn links_must_stay_in_the_game() {
     assert!(!stays_inside(Path::new("a"), Path::new("/usr/lib/a")));
 }
 
+/// An installer in several parts (not handled) is left out on its own: the game and its other DLC
+/// stay installable. Only a game left with none is refused.
+#[test]
+fn an_installer_in_several_parts_leaves_the_rest_installable() {
+    let raw = br#"{"id":1,"title":"[FAKE] Game","downloads":{"installers":[
+        {"os":"linux","language":"de","version":"1","files":[{"downlink":"d1"},{"downlink":"d2"}]},
+        {"os":"linux","language":"en","version":"1","files":[{"downlink":"e"}]}]},
+        "expanded_dlcs":[
+          {"id":2,"title":"[FAKE] Big DLC","downloads":{"installers":[
+            {"os":"linux","language":"en","version":"1","files":[{"downlink":"b1"},{"downlink":"b2"}]}]}},
+          {"id":3,"title":"[FAKE] Small DLC","downloads":{"installers":[
+            {"os":"linux","language":"en","version":"1","files":[{"downlink":"s"}]}]}}]}"#;
+    let offer = parse_offer(raw).unwrap();
+    assert_eq!(offer.installers.len(), 1);
+    assert_eq!(offer.installers[0].downlink, "e");
+    assert_eq!(offer.dlcs.len(), 1);
+    assert_eq!(offer.dlcs[0].0, "3");
+
+    let raw = br#"{"id":1,"title":"[FAKE] Game","downloads":{"installers":[
+        {"os":"linux","language":"en","version":"1","files":[{"downlink":"a"},{"downlink":"b"}]}]}}"#;
+    assert!(matches!(parse_offer(raw), Err(Error::Unsupported(_))));
+}
+
 #[test]
 fn reads_the_linux_installers_of_a_game_and_its_dlc() {
     let raw = br#"{"id":1308320804,"title":"Hollow Knight","downloads":{"installers":[
