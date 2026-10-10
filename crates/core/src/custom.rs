@@ -86,22 +86,24 @@ pub fn save(db: &Db, dirs: &Dirs, game_id: &str, changes: Changes) -> Result<Cus
     let old = get(db, game_id)?;
     let folder = dirs.data.join("custom").join(game_id);
     let text = |s: &str| Some(s.trim().to_string()).filter(|s| !s.is_empty());
+    let cover = apply(&folder, "cover", old.cover.as_deref(), changes.cover)?;
+    let background = apply(
+        &folder,
+        "background",
+        old.background.as_deref(),
+        changes.background,
+    )
+    .inspect_err(|_| remove_replaced(&folder, cover.as_deref(), old.cover.as_deref()))?;
     let custom = Custom {
         title: text(&changes.title),
         sort_title: text(&changes.sort_title),
-        cover: apply(&folder, "cover", old.cover.as_deref(), changes.cover)?,
-        background: apply(
-            &folder,
-            "background",
-            old.background.as_deref(),
-            changes.background,
-        )?,
+        cover,
+        background,
         hidden: changes.hidden,
     };
-    if custom == Custom::default() {
+    let saved = if custom == Custom::default() {
         db.conn()
-            .execute("DELETE FROM game_custom WHERE game_id = ?1", [game_id])?;
-        let _ = std::fs::remove_dir(&folder);
+            .execute("DELETE FROM game_custom WHERE game_id = ?1", [game_id])
     } else {
         let path = |p: &Option<PathBuf>| p.as_ref().map(|p| p.to_string_lossy().into_owned());
         db.conn().execute(
@@ -118,13 +120,32 @@ pub fn save(db: &Db, dirs: &Dirs, game_id: &str, changes: Changes) -> Result<Cus
                 path(&custom.background),
                 custom.hidden
             ],
-        )?;
+        )
+    };
+    if let Err(e) = saved {
+        remove_replaced(&folder, custom.cover.as_deref(), old.cover.as_deref());
+        remove_replaced(
+            &folder,
+            custom.background.as_deref(),
+            old.background.as_deref(),
+        );
+        return Err(e.into());
+    }
+    // The database owns the new copies now; failures above never remove its previous images.
+    remove_replaced(&folder, old.cover.as_deref(), custom.cover.as_deref());
+    remove_replaced(
+        &folder,
+        old.background.as_deref(),
+        custom.background.as_deref(),
+    );
+    if custom == Custom::default() {
+        let _ = std::fs::remove_dir(&folder);
     }
     Ok(custom)
 }
 
 /// The image to keep after `change`. A new image gets a new file name, so nothing keeps showing
-/// the previous one from a cache; the replaced copy is deleted.
+/// the previous one from a cache. The previous copy stays until the database write succeeds.
 fn apply(
     folder: &Path,
     art: &str,
@@ -152,10 +173,13 @@ fn apply(
             Some(dest)
         }
     };
-    if let Some(old) = old.filter(|o| o.starts_with(folder)) {
+    Ok(new)
+}
+
+fn remove_replaced(folder: &Path, old: Option<&Path>, kept: Option<&Path>) {
+    if let Some(old) = old.filter(|o| Some(*o) != kept && o.starts_with(folder)) {
         let _ = std::fs::remove_file(old);
     }
-    Ok(new)
 }
 
 fn image_extension(bytes: &[u8]) -> Option<&'static str> {
@@ -315,5 +339,54 @@ mod tests {
             Err(Error::Refused(_))
         ));
         assert!(is_image(&env.picture("ok.png", PNG)));
+    }
+
+    #[test]
+    fn a_failed_background_change_preserves_the_previous_cover() {
+        let env = Env::new("partial-failure");
+        let first = save(
+            &env.db,
+            &env.dirs,
+            "42",
+            cover(ImageChange::Set(env.picture("first.png", PNG))),
+        )
+        .unwrap();
+        let result = save(
+            &env.db,
+            &env.dirs,
+            "42",
+            Changes {
+                background: ImageChange::Set(env.picture("invalid.txt", b"[FAKE] not an image")),
+                ..cover(ImageChange::Set(env.picture("second.png", PNG)))
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(all(&env.db).unwrap()["42"], first);
+        assert!(first.cover.unwrap().exists());
+        assert_eq!(
+            std::fs::read_dir(env.dirs.data.join("custom/42"))
+                .unwrap()
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_failed_database_write_preserves_custom_images() {
+        let env = Env::new("db-failure");
+        let first = save(
+            &env.db,
+            &env.dirs,
+            "42",
+            cover(ImageChange::Set(env.picture("first.png", PNG))),
+        )
+        .unwrap();
+        env.db
+            .conn()
+            .execute_batch("PRAGMA query_only = ON")
+            .unwrap();
+        assert!(save(&env.db, &env.dirs, "42", cover(ImageChange::Reset)).is_err());
+        assert_eq!(all(&env.db).unwrap()["42"], first);
+        assert!(first.cover.unwrap().exists());
     }
 }
