@@ -172,6 +172,7 @@ fn fake_plan() -> crate::install::PlanInfo {
         version: "1.0".into(),
         build_id: "b1".into(),
         versions: Vec::new(),
+        newest: true,
         language: "en-US".into(),
         languages: vec!["en-US".into(), "fr-FR".into()],
         download_size: 3 << 30,

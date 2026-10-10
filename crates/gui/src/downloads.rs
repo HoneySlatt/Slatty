@@ -97,7 +97,15 @@ impl App {
                 .map(|d| d.id.clone())
                 .collect(),
         };
-        if let Err(e) = job.save(&core.db) {
+        // Decided now, as the build is chosen: by its turn, GOG may have published a newer one.
+        // An interrupted install keeps the decision made when it started.
+        let saved = job.save(&core.db).and_then(|()| {
+            if info.resumable {
+                return Ok(());
+            }
+            slatty_core::settings::set_held_back(&core.db, &game_id, !info.newest)
+        });
+        if let Err(e) = saved {
             self.install_views.insert(game_id, InstallView::Ready(info));
             self.notify_error(e.to_string());
             return Task::none();

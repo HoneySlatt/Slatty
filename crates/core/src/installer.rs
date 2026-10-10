@@ -136,6 +136,9 @@ pub async fn install(
     });
     // A queued install has not started: a folder already where it goes is not its own.
     let job_resumed = job.as_ref().is_some_and(|j| !j.is_queued());
+    if let Some(held) = held_on_start(job.as_ref(), &plan) {
+        crate::settings::set_held_back(db, &req.game_id, held)?;
+    }
     let mut job = InstallJob {
         game_id: req.game_id.clone(),
         build_id: plan.build.build_id.clone(),
@@ -238,8 +241,6 @@ pub async fn install(
         runner,
     };
     install.save(db)?;
-    // An older build chosen at install is kept as it is; the newest is kept up to date.
-    crate::settings::set_held_back(db, &req.game_id, !plan.is_newest())?;
     InstallJob::delete(db, &req.game_id)?;
     emit(InstallEvent::Finished {
         path: target,
@@ -254,6 +255,13 @@ pub async fn install(
 /// finished and was renamed into place, but the game was not registered yet.
 fn published_unregistered(resumed: bool, partial: &Path, target: &Path) -> bool {
     resumed && !partial.exists() && target.is_dir()
+}
+
+/// Whether an install holds its game back from automatic updates (an older build chosen), decided
+/// when the build is chosen. An install from a job, queued or interrupted, keeps the decision made
+/// when the job was made: GOG may have published a newer build since, which the user never saw.
+fn held_on_start(job: Option<&InstallJob>, plan: &InstallPlan) -> Option<bool> {
+    job.is_none().then(|| !plan.is_newest())
 }
 
 #[cfg(test)]

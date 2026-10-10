@@ -19,6 +19,24 @@ fn a_queue_change_cancels_the_drag_before_the_next_render() {
     assert!(app.queue.is_empty());
 }
 
+/// Whether a queued game follows updates is decided as it is queued: by its turn GOG may have
+/// published a newer build, which would make the build chosen look older than it was.
+#[test]
+fn a_queued_install_follows_updates_as_chosen() {
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    for (id, newest) in [("5", true), ("6", true), ("7", false)] {
+        ready_to_install(&mut app, id);
+        if let Some(InstallView::Ready(info)) = app.install_views.get_mut(id) {
+            info.newest = newest;
+        }
+        let _ = app.update(Message::Install(InstallMsg::Start(id.into())));
+    }
+    assert_eq!(app.queue, ["6", "7"]);
+    assert!(!slatty_core::settings::held_back(&db, "6").unwrap());
+    assert!(slatty_core::settings::held_back(&db, "7").unwrap());
+}
+
 #[test]
 fn installs_started_during_a_download_wait_in_a_queue_that_can_be_reordered() {
     use crate::downloads::{DownloadsMsg, ROW_HEIGHT, ROW_SPACING};

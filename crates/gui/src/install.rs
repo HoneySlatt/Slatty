@@ -28,6 +28,8 @@ pub struct PlanInfo {
     /// The build to install, among the versions GOG offers.
     pub build_id: String,
     pub versions: Vec<Version>,
+    /// Whether `build_id` is the newest public build, as GOG listed them when planned.
+    pub newest: bool,
     pub language: String,
     pub languages: Vec<String>,
     pub download_size: u64,
@@ -563,6 +565,7 @@ async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, S
     .map_err(err)?;
     let free = free_space(root.display().to_string()).await;
     Ok(PlanInfo {
+        newest: plan.is_newest(),
         platform: plan.platform,
         platforms: choice.platforms,
         proton: choice.proton,

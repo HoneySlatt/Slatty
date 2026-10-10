@@ -913,3 +913,39 @@ fn a_queued_install_waits_and_keeps_its_place() {
     crate::settings::set_download_queue(&db, &[]).unwrap();
     assert!(crate::settings::download_queue(&db).unwrap().is_empty());
 }
+
+#[test]
+fn an_older_build_holds_a_game_back_as_chosen_not_as_resumed() {
+    let owned: HashSet<String> = ["1"].map(String::from).into();
+    let newer = Build {
+        build_id: "b2".into(),
+        version_name: "2.0".into(),
+        ..build()
+    };
+    let plan = |b: Build| {
+        let mut p = InstallPlan::new(
+            "1",
+            b,
+            meta(vec![depot("1", &["*"], 1)]),
+            None,
+            &owned,
+            &DlcSelection::AllOwned,
+        )
+        .unwrap();
+        p.builds = vec![newer.clone(), build()];
+        p
+    };
+    assert_eq!(held_on_start(None, &plan(build())), Some(true));
+    assert_eq!(held_on_start(None, &plan(newer.clone())), Some(false));
+    // Queued or interrupted on what was the newest build; GOG has published b2 since.
+    let job = InstallJob {
+        game_id: "1".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game".into(),
+        state: QUEUED.into(),
+        dlcs: vec![],
+    };
+    assert_eq!(held_on_start(Some(&job), &plan(build())), None);
+}
