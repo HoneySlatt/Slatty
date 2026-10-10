@@ -1,4 +1,5 @@
 mod achievements;
+mod boot;
 mod cloud;
 mod downloads;
 mod edit;
@@ -21,6 +22,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use achievements::{AchievementChange, PendingChange, achievement_icons};
+use boot::Boot;
 use cloud::{CloudRequest, CloudResult, CloudStatus, CloudView};
 use install::{InstallMsg, InstallView};
 pub use library::{Filters, Shelf, Sort};
@@ -32,16 +34,16 @@ use iced::animation::Easing;
 use iced::time::Instant;
 use iced::widget::{image, operation};
 use iced::{Animation, Size, Subscription, Task, keyboard};
-use slatty_core::account::{Account, AccountInfo};
+use slatty_core::account::AccountInfo;
 use slatty_core::achievements::Achievement;
 use slatty_core::db::Db;
 use slatty_core::http::HttpClient;
 use slatty_core::install::{Install, Platform};
 use slatty_core::installer::{InstallJob, InstallRecord};
 use slatty_core::library::{LibraryCache, LibraryGame};
-use slatty_core::overview::{self, GameOverview};
+use slatty_core::overview::GameOverview;
 use slatty_core::paths::Dirs;
-use slatty_core::session::{self, Playtime};
+use slatty_core::session::Playtime;
 use tokio::sync::Semaphore;
 
 fn main() -> iced::Result {
@@ -384,32 +386,6 @@ pub enum Message {
     Key(keyboard::Event),
 }
 
-#[derive(Debug, Clone)]
-pub struct Boot {
-    core: Core,
-    account: Option<AccountInfo>,
-    library: Option<LibraryCache>,
-    installs: Vec<Install>,
-    records: HashMap<String, InstallSummary>,
-    launch_options: HashMap<String, Vec<String>>,
-    launch_choices: HashMap<String, String>,
-    interrupted: Vec<String>,
-    library_root: PathBuf,
-    default_platform: Platform,
-    umu_lookup: bool,
-    report_playtime: bool,
-    game_achievements: bool,
-    proton: Option<PathBuf>,
-    proton_choices: Vec<PathBuf>,
-    favorites: Vec<String>,
-    playtime: HashMap<String, Playtime>,
-    overview: HashMap<String, GameOverview>,
-    jobs: Vec<(String, Interrupted)>,
-    queue: Vec<String>,
-    customs: HashMap<String, slatty_core::custom::Custom>,
-    cover_width: Option<f32>,
-    sort: Option<Sort>,
-}
 
 impl std::fmt::Debug for Core {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -425,7 +401,7 @@ impl App {
     fn boot() -> (Self, Task<Message>) {
         (
             App::default(),
-            Task::perform(async { boot().await.map(Box::new) }, Message::Booted),
+            Task::perform(async { boot::boot().await.map(Box::new) }, Message::Booted),
         )
     }
 
@@ -837,7 +813,7 @@ impl App {
         }
         match InstallRecord::load(&core.dirs, game_id) {
             Ok(Some(r)) => {
-                self.records.insert(game_id.to_string(), summary(&r));
+                self.records.insert(game_id.to_string(), boot::summary(&r));
             }
             _ => {
                 self.records.remove(game_id);
@@ -850,118 +826,3 @@ impl App {
     }
 }
 
-fn summary(r: &InstallRecord) -> InstallSummary {
-    InstallSummary {
-        version: r.version.clone(),
-        size: r.files.iter().map(|f| f.size).sum(),
-    }
-}
-
-async fn boot() -> Result<Boot, String> {
-    let dirs = Dirs::from_system().map_err(err)?;
-    dirs.keep_private().map_err(err)?;
-    let db = Db::open(&dirs.db_file()).map_err(err)?;
-    let http = slatty_core::http::client().map_err(err)?;
-    let interrupted = slatty_core::play::recover_unfinished(&db)
-        .map_err(err)?
-        .into_iter()
-        .map(|s| s.game_id)
-        .collect();
-    let account = Account::active(&db).map_err(err)?;
-    let (library, overview) = match &account {
-        Some(a) => (
-            slatty_core::library::load_cache(&dirs, &a.user_id).map_err(err)?,
-            overview::load(&dirs, &a.user_id).unwrap_or_default(),
-        ),
-        None => (None, HashMap::new()),
-    };
-    let installs = Install::list(&db).map_err(err)?;
-    let launch_options = installs
-        .iter()
-        .map(|i| (i.game_id.clone(), slatty_core::runner::launch_options(i)))
-        .collect();
-    let launch_choices = installs
-        .iter()
-        .filter_map(|i| {
-            slatty_core::settings::launch_choice(&db, &i.game_id)
-                .ok()
-                .flatten()
-                .map(|c| (i.game_id.clone(), c))
-        })
-        .collect();
-    let records = installs
-        .iter()
-        .filter_map(|i| {
-            InstallRecord::load(&dirs, &i.game_id)
-                .ok()
-                .flatten()
-                .map(|r| (i.game_id.clone(), summary(&r)))
-        })
-        .collect();
-    let library_root = slatty_core::settings::library_root(&db).map_err(err)?;
-    let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
-    let default_platform = slatty_core::settings::default_platform(&db).map_err(err)?;
-    let umu_lookup = slatty_core::settings::umu_lookup(&db).map_err(err)?;
-    let report_playtime = slatty_core::settings::report_playtime(&db).map_err(err)?;
-    let game_achievements = slatty_core::settings::game_achievements(&db).map_err(err)?;
-    // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
-    let proton_choices = slatty_core::settings::proton_candidates();
-    let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
-    let customs = slatty_core::custom::all(&db).map_err(err)?;
-    let cover_width = slatty_core::settings::cover_width(&db).map_err(err)?;
-    let sort = slatty_core::settings::library_sort(&db)
-        .map_err(err)?
-        .and_then(|s| Sort::from_key(&s));
-    let playtime = session::playtime(&db).map_err(err)?;
-    InstallJob::forget_finished(&db).map_err(err)?;
-    let (queued, jobs): (Vec<InstallJob>, Vec<InstallJob>) = InstallJob::list(&db)
-        .map_err(err)?
-        .into_iter()
-        .partition(InstallJob::is_queued);
-    let jobs = jobs
-        .iter()
-        .map(|j| (j.game_id.clone(), Interrupted::of(j)))
-        .collect();
-    // The queue in its saved order; a queued job missing from it goes last.
-    let mut queue: Vec<String> = slatty_core::settings::download_queue(&db)
-        .map_err(err)?
-        .into_iter()
-        .filter(|id| queued.iter().any(|j| &j.game_id == id))
-        .collect();
-    for j in queued {
-        if !queue.contains(&j.game_id) {
-            queue.push(j.game_id);
-        }
-    }
-    let core = Core {
-        dirs,
-        db: Arc::new(db),
-        http,
-        downloads: Arc::new(Semaphore::new(6)),
-    };
-    Ok(Boot {
-        core,
-        account,
-        library,
-        installs,
-        launch_options,
-        launch_choices,
-        records,
-        interrupted,
-        library_root,
-        proton,
-        proton_choices,
-        default_platform,
-        umu_lookup,
-        report_playtime,
-        game_achievements,
-        favorites,
-        playtime,
-        overview,
-        jobs,
-        queue,
-        customs,
-        cover_width,
-        sort,
-    })
-}

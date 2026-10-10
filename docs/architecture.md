@@ -46,7 +46,8 @@ core functions. Long operations report progress through callbacks or typed event
 ## Interface modules
 
 The interface follows Iced's state, message, update and view split. `main.rs` holds the
-application state, the `Message` enum, navigation and start-up; `update` only dispatches. Each
+application state, the `Message` enum and navigation; `update` only dispatches. `boot.rs` reads
+everything the first page needs, off the interface thread. Each
 feature keeps its state, message handling and background tasks in its own module, and the views
 live under `ui/`.
 
@@ -60,13 +61,14 @@ live under `ui/`.
 | `install` | Install plan, download with progress, pause, discard |
 | `downloads` | The download queue: installs waiting as `queued` jobs, started one after the other, reordered by dragging (`ui/downloads.rs` for the tab) |
 | `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
-| `settings` | Default installation path, default Proton, and the Proton build of each installed game |
+| `settings` | The Settings page (its side list follows the scroll), defaults for installs, privacy switches, the Proton build and launch option of each installed game |
 | `edit` | The menu a right click on a cover or on the key art of a game page opens, and the edit form, a dialog over the library and a drawer on the game page: draft, file picker, saving. `ui/pointer.rs` reports where a right click happened, without a message per mouse move |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
 | `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages, `install` for the Install drawer and dialog, `game_settings` for the Game settings drawer and dialog (library dialogs share `panels::library_dialog`), `manage` and `cloud` for their drawers (drawers share `panels::drawer`); `format` for text shown to the user |
 | `theme`, `presets`, `icons` | Design tokens (`Tokens`: every colour, the corner radii of the redesigned pages, and the page transition: a short fade with a slight rise, played when the page changes and set to zero to turn it off) and the widget styles built from them; Lucide icons. Views never name a colour; the tokens come from a built-in theme (`presets`), with `~/.config/slatty/theme.toml` on top when it exists, read at start, on Reload and when the theme changes (see [theming](theming.md)) |
 
-Interface tests (`tests.rs`) drive the real views with Iced's simulator and fictitious data.
+Interface tests (`tests/`, one module per area, helpers in `tests/mod.rs`) drive the real views with
+Iced's simulator and fictitious data.
 
 ## Main flows
 
