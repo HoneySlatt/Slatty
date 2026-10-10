@@ -38,6 +38,7 @@ Proton-CachyOS.
 | Date | Runner | Result | Notes |
 |---|---|---|---|
 | 2026-10-09 | Proton-GE (Steam Linux Runtime 4) with umu-launcher 1.4.4 | Fails | umu picks the `steamrt4-arm64` runtime on x86_64 and nothing starts. Use Proton-CachyOS or UMU-Proton |
+| 2026-10-10 | Isolation: umu-launcher 1.4.4, sniper runtime, UMU-Proton 10.0-4 (`/home` and the NAS each mounted on their own) | OK | A marker in the home folder stays hidden from a script in the runtime and from `Z:` under Proton, including for a program given by its path; the game's folder is writable and its own home receives what it writes there. Not isolated, the same launches see the marker. Found on the way: umu shared the whole of `/home` or `/mnt/share` through `STEAM_COMPAT_INSTALL_PATH`, and the container shares `TMPDIR`, `TMP`, `TEMP` and `TEMPDIR`. No real game yet |
 
 ## Games
 

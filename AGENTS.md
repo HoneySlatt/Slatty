@@ -48,6 +48,9 @@ cargo test --release -p slatty-gui library_at_10000_games -- --ignored --nocaptu
 TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored proton prefix galaxy_service
 cargo test -- --ignored comet
 
+# Isolation: a marker in the home folder stays hidden from a game run in umu's container
+TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored isolated
+
 # Dependency audit, after adding or updating a dependency (downloads the advisory database)
 nix shell nixpkgs#cargo-audit -c cargo audit
 ```
@@ -234,6 +237,11 @@ The public documentation is in English and must match the code. Update it in the
   remove both from `PATH`, because their sandboxes cannot see the test's temporary folder.
 - **umu's runtime cannot see `/tmp/nix-shell.*`.** Point `TMPDIR` inside the home folder for
   tests that run Proton.
+- **umu and its container share more than they are told.** umu shares, writable, the whole
+  filesystem under `STEAM_COMPAT_INSTALL_PATH`, which it takes from the program's folder when the
+  program is a file; pressure-vessel shares the folders `TMPDIR`, `TMP`, `TEMP` and `TEMPDIR` name.
+  An isolated launch must keep all of these out (`runner::isolation_env`); check a change with the
+  ignored isolation tests, which also run the same launch not isolated as a control.
 - **Comet listens on the fixed port 127.0.0.1:9977.** Another launcher's Comet (Heroic) makes it
   fail; `slatty doctor` reports it.
 - **The running binary can be replaced by a rebuild.** The session supervisor is started through

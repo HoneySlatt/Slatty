@@ -309,7 +309,7 @@ pub async fn run(
         emit(SetupEvent::Running(command.label.clone()));
         let mut args = vec![command.program.display().to_string()];
         args.extend(command.args.iter().cloned());
-        let spec = runner::windows_command(install, args, install.path.clone())?;
+        let spec = runner::windows_command(dirs, install, args, install.path.clone())?;
         let busy = crate::lock::session(dirs, &install.game_id);
         let outcome = SessionHandle::start(supervisor, &spec, &log, Some(&busy))
             .await?

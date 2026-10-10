@@ -813,6 +813,7 @@ fn jobs_left_behind_by_a_registered_install_are_forgotten() {
             client_id: None,
             runner: Runner::Native,
             umu_id: None,
+            isolated: false,
         }
         .save(&db)
         .unwrap();
@@ -858,6 +859,7 @@ fn a_game_id_unsafe_in_a_file_name_is_never_used() {
             client_id: None,
             runner: Runner::Native,
             umu_id: None,
+            isolated: false,
         }
         .save(&db),
     );

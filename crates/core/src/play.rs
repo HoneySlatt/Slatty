@@ -134,7 +134,7 @@ pub async fn play(
         ));
     }
     let choice = crate::settings::launch_choice(db, &install.game_id)?;
-    let spec = runner::launch_spec(&install, choice.as_deref())?;
+    let spec = runner::launch_spec(dirs, &install, choice.as_deref())?;
     // GOG keeps no cloud saves for Linux builds, and they lack the Galaxy SDK that Comet talks to.
     let native = install.platform == Platform::Linux;
     let cloud = req.cloud && !native;
@@ -145,7 +145,7 @@ pub async fn play(
         && crate::settings::game_achievements(db)?
         && crate::comet::uses_galaxy(dirs, &install);
 
-    if let Some(init) = runner::prefix_init_spec(&install)? {
+    if let Some(init) = runner::prefix_init_spec(dirs, &install)? {
         emit(PlayEvent::PreparingPrefix);
         let log = dirs.logs().join(format!("prefix-{}.log", install.game_id));
         let busy = crate::lock::session(dirs, &install.game_id);

@@ -22,8 +22,10 @@ async fn fresh_prefix_is_initialised_with_user_folders() {
             proton: proton.into(),
             prefix: root.join("pfx"),
         },
+        isolated: false,
     };
-    let spec = runner::prefix_init_spec(&install)
+    let dirs = slatty_core::paths::Dirs::under(&root.join("slatty"));
+    let spec = runner::prefix_init_spec(&dirs, &install)
         .unwrap()
         .expect("prefix needs initialising");
     let outcome = SessionHandle::start(
@@ -44,7 +46,7 @@ async fn fresh_prefix_is_initialised_with_user_folders() {
     );
     assert!(root.join("pfx/drive_c/users/steamuser").is_dir());
     assert!(
-        runner::prefix_init_spec(&install).unwrap().is_none(),
+        runner::prefix_init_spec(&dirs, &install).unwrap().is_none(),
         "second call must be a no-op"
     );
     std::fs::remove_dir_all(root).unwrap();
@@ -73,11 +75,13 @@ async fn galaxy_service_is_registered_and_stops_with_the_session() {
             proton: proton.into(),
             prefix: root.join("pfx"),
         },
+        isolated: false,
     };
     let supervisor = Path::new(env!("CARGO_BIN_EXE_slatty"));
     let dirs = Dirs::under(&root.join("slatty"));
     let run = |args: &[&str], log: &str| {
         let spec = runner::windows_command(
+            &dirs,
             &install,
             args.iter().map(|s| s.to_string()).collect(),
             install.path.clone(),

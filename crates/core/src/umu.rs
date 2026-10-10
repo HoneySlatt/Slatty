@@ -104,6 +104,7 @@ mod tests {
                 prefix: "/prefix".into(),
             },
             umu_id: None,
+            isolated: false,
         };
         // Every request goes through a local proxy, which would see a lookup.
         let proxy = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

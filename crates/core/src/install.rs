@@ -28,6 +28,14 @@ pub struct Install {
     /// Id in umu's database, which selects the game's Proton fixes: [`crate::umu::UNKNOWN`] when
     /// the game is not listed, `None` until it has been looked up.
     pub umu_id: Option<String>,
+    /// Whether the game runs without access to the user's files (see [`crate::runner`]).
+    pub isolated: bool,
+}
+
+/// Whether a game starts isolated until changed: a Windows build keeps its saves in its prefix and
+/// loses nothing, a Linux build may keep them in the home folder. Only umu can isolate.
+pub fn isolated_by_default(platform: Platform, runner: &Runner) -> bool {
+    platform == Platform::Windows && matches!(runner, Runner::Umu { .. })
 }
 
 impl Install {
@@ -37,11 +45,11 @@ impl Install {
         let platform =
             serde_json::to_value(self.platform).map_err(|e| Error::parse("platform", e))?;
         db.conn().execute(
-            "INSERT INTO installs (game_id, title, platform, path, client_id, runner, added_at, umu_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "INSERT INTO installs (game_id, title, platform, path, client_id, runner, added_at, umu_id, isolated)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(game_id) DO UPDATE SET title = excluded.title, platform = excluded.platform,
                 path = excluded.path, client_id = excluded.client_id, runner = excluded.runner,
-                umu_id = excluded.umu_id",
+                umu_id = excluded.umu_id, isolated = excluded.isolated",
             params![
                 self.game_id,
                 self.title,
@@ -50,7 +58,8 @@ impl Install {
                 self.client_id,
                 runner,
                 Utc::now().timestamp(),
-                self.umu_id
+                self.umu_id,
+                self.isolated
             ],
         )?;
         Ok(())
@@ -103,14 +112,30 @@ pub fn set_proton(db: &Db, game_id: &str, proton: &Path) -> Result<Install> {
     Ok(install)
 }
 
+/// Runs a game isolated from the user's files, or not, from its next launch on.
+pub fn set_isolated(db: &Db, game_id: &str, isolated: bool) -> Result<Install> {
+    let mut install = Install::get(db, game_id)?
+        .ok_or_else(|| Error::NotFound(format!("{game_id} is not installed")))?;
+    if isolated && !matches!(install.runner, Runner::Umu { .. } | Runner::Native) {
+        return Err(Error::Refused(format!(
+            "{} runs through Wine alone, which cannot isolate it; use Proton",
+            install.title
+        )));
+    }
+    install.isolated = isolated;
+    install.save(db)?;
+    Ok(install)
+}
+
 const SELECT: &str =
-    "SELECT game_id, title, platform, path, client_id, runner, umu_id FROM installs";
+    "SELECT game_id, title, platform, path, client_id, runner, umu_id, isolated FROM installs";
 
 fn from_row(row: &Row<'_>) -> rusqlite::Result<Result<Install>> {
     let platform: String = row.get(2)?;
     let runner: String = row.get(5)?;
     let path: String = row.get(3)?;
     let (game_id, title, client_id, umu_id) = (row.get(0)?, row.get(1)?, row.get(4)?, row.get(6)?);
+    let isolated = row.get(7)?;
     Ok((|| {
         Ok(Install {
             game_id,
@@ -121,6 +146,7 @@ fn from_row(row: &Row<'_>) -> rusqlite::Result<Result<Install>> {
             client_id,
             runner: serde_json::from_str(&runner).map_err(|e| Error::parse("runner", e))?,
             umu_id,
+            isolated,
         })
     })())
 }
@@ -150,6 +176,7 @@ pub fn from_dir(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Ins
             platform: Platform::Linux,
             path,
             client_id: None,
+            isolated: isolated_by_default(Platform::Linux, &runner),
             runner,
         });
     }
@@ -166,6 +193,7 @@ pub fn from_dir(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Ins
         platform: Platform::Windows,
         path,
         client_id: info.client_id,
+        isolated: isolated_by_default(Platform::Windows, &runner),
         runner,
     })
 }
@@ -238,6 +266,34 @@ mod tests {
         install.save(&db).unwrap();
         assert_eq!(Install::get(&db, "42").unwrap(), Some(install));
         assert_eq!(Install::list(&db).unwrap().len(), 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn isolation_is_on_for_proton_games_and_can_be_changed() {
+        let root = fixture("isolation");
+        let db = Db::in_memory().unwrap();
+        let proton = Runner::Umu {
+            proton: "/p".into(),
+            prefix: "/x".into(),
+        };
+        let install = from_dir(&root.join("Game"), None, proton).unwrap();
+        assert!(install.isolated);
+        install.save(&db).unwrap();
+        assert!(!set_isolated(&db, "42", false).unwrap().isolated);
+        assert!(!Install::get(&db, "42").unwrap().unwrap().isolated, "kept");
+
+        let wine = Runner::Wine {
+            wine: "/w".into(),
+            prefix: "/x".into(),
+        };
+        let install = from_dir(&root.join("Game"), None, wine).unwrap();
+        assert!(!install.isolated, "Wine alone cannot isolate");
+        install.save(&db).unwrap();
+        assert!(matches!(
+            set_isolated(&db, "42", true),
+            Err(Error::Refused(_))
+        ));
         std::fs::remove_dir_all(root).unwrap();
     }
 

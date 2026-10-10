@@ -85,6 +85,7 @@ fn installs_started_during_a_download_wait_in_a_queue_that_can_be_reordered() {
     )));
     let install = Install {
         umu_id: None,
+        isolated: true,
         game_id: "5".into(),
         title: "[FAKE] Game 5".into(),
         platform: Platform::Windows,

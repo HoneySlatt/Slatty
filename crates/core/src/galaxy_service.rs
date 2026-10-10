@@ -66,7 +66,7 @@ pub async fn ensure(dirs: &Dirs, install: &Install, exe: &Path, supervisor: &Pat
         .join(format!("galaxy-service-{}.log", install.game_id));
     for args in commands() {
         let label = args[..2].join(" ");
-        let spec = runner::windows_command(install, args, install.path.clone())?;
+        let spec = runner::windows_command(dirs, install, args, install.path.clone())?;
         let busy = crate::lock::session(dirs, &install.game_id);
         let outcome = SessionHandle::start(supervisor, &spec, &log, Some(&busy))
             .await?

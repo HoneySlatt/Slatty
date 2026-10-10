@@ -259,6 +259,26 @@ Ctrl+C asks the game to quit; a second Ctrl+C forces it. Options:
 
 Game output goes to `~/.local/state/slatty/logs/game-<id>.log`.
 
+### Isolation from your files
+
+An isolated game sees its own folder, its Wine prefix and a home folder of its own,
+`~/.local/share/slatty/homes/<id>/`, instead of yours. Wine's `z:` drive then shows nothing of your
+files. Windows games installed with Proton start isolated; Linux games do not, since their saves
+may be in your home folder.
+
+```sh
+slatty isolation <game-id>          # show
+slatty isolation <game-id> --off    # access to your files, from the next launch
+slatty isolation <game-id> --on
+```
+
+- An isolated Linux game runs in umu's Steam Linux Runtime (`umu-run` is needed), on NixOS too,
+  instead of `steam-run`. It does not find the saves it made in your home folder: it starts from
+  its own. To carry on with a save, copy it to the same place under its home folder.
+- A game run through Wine alone (imported with `--runner wine`) cannot be isolated.
+- Isolation keeps a game out of your files, not a hostile program out of your system: see
+  [SECURITY.md](../SECURITY.md#scope).
+
 ## Cloud saves
 
 ```sh
@@ -443,6 +463,7 @@ corners and the page transition. See [theming](theming.md).
 | System keyring, entry `slatty-launcher` / `key:steamgriddb` | Your SteamGridDB API key, once saved |
 | `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings, the titles you gave games and the games you hid |
 | `~/.local/share/slatty/prefixes/<id>/` | Wine prefixes of installed games (most saves live here) |
+| `~/.local/share/slatty/homes/<id>/` | The home folder of an isolated game: what it writes there, a Linux game's saves among them. Kept when the game is uninstalled |
 | `~/.local/share/slatty/manifests/<id>.json` | Files installed for each game |
 | `~/.local/share/slatty/custom/<id>/` | Covers and backgrounds you chose for a game |
 | `~/.local/share/slatty/backups/` | Copies made before any save is replaced or a prefix deleted |
@@ -461,6 +482,7 @@ Comet's log may contain game client identifiers; review it before sharing.
 | "secret storage unavailable" | A Secret Service keyring must be running and unlocked. |
 | A game does not start | `~/.local/state/slatty/logs/game-<id>.log`. `slatty launch-spec <id>` shows the exact command. |
 | The first launch fails while creating the prefix | `~/.local/state/slatty/logs/prefix-<id>.log` |
+| A game misbehaves since it runs isolated (missing files, settings not found) | `slatty isolation <id> --off`, and tell us which game. |
 | Achievements are not reported | `~/.local/state/slatty/logs/comet.log`. `slatty doctor` must find `GalaxyCommunication.exe`; the launch output says whether the Galaxy service was registered. |
 | A cloud conflict blocks the launch | `slatty cloud diff <id>`, then `slatty cloud sync <id> --prefer local` or `--prefer remote`. |
 | The session was interrupted (crash, power loss) | The next launch reports it. Check `slatty cloud status <id>` before playing. |

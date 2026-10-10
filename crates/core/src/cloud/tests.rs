@@ -594,6 +594,7 @@ async fn nothing_is_written_into_a_prefix_proton_has_not_created_yet() {
             prefix: root.join("pfx"),
         },
         umu_id: None,
+        isolated: false,
     };
     let tokens = Tokens {
         user_id: "u".into(),
@@ -633,6 +634,7 @@ async fn saves_are_not_synced_while_the_game_is_in_use() {
             prefix: root.join("pfx"),
         },
         umu_id: None,
+        isolated: false,
     };
     let tokens = Tokens {
         user_id: "u".into(),

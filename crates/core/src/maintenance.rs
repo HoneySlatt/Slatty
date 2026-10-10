@@ -664,6 +664,7 @@ mod tests {
             .unwrap();
             Install {
                 umu_id: None,
+                isolated: false,
                 game_id: "1".into(),
                 title: "[FAKE] Game".into(),
                 platform: Platform::Windows,
@@ -765,6 +766,19 @@ mod tests {
             b"prefix save"
         );
         assert!(!env.dirs.data.join("prefixes/1").exists());
+    }
+
+    #[test]
+    fn the_home_folder_of_an_isolated_game_outlives_its_uninstall() {
+        let env = Env::new("home", true);
+        let home = crate::runner::isolated_home(&env.dirs, "1").unwrap();
+        std::fs::create_dir_all(home.join(".local/share/Game")).unwrap();
+        std::fs::write(home.join(".local/share/Game/save"), b"linux save").unwrap();
+        uninstall(&env.db, &env.dirs, "1", true).unwrap();
+        assert_eq!(
+            std::fs::read(home.join(".local/share/Game/save")).unwrap(),
+            b"linux save"
+        );
     }
 
     /// The prefix's user folder cannot be backed up (a full disk, here a file in the way): the

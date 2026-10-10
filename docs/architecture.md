@@ -29,7 +29,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `installer` | Install plans, staged verified downloads, resumable jobs, install records; `installer::linux` and `installer::zip` read Linux builds file by file from GOG's offline installers |
 | `maintenance` | Verify, repair, uninstall, updates and content changes |
 | `patches` | GOG's binary patches between builds: lookup, delta download, xdelta3 application |
-| `runner` | Launch commands for umu/Proton, Wine and native games; prefix creation |
+| `runner` | Launch commands for umu/Proton, Wine and native games; prefix creation; isolation (see [Game isolation](#game-isolation)) |
 | `umu` | Game id in umu's database, looked up once per game, so umu applies its fixes for it |
 | `session` | Session supervisor (subreaper), session records, play time |
 | `play` | Full play flow: prefix, cloud, Comet, session, upload, achievement diff |
@@ -203,6 +203,31 @@ It records an "updating" job with the target build, language and DLC. Then:
 While the job exists, launching the game and verifying it are refused, and running the update again
 resumes it with the pinned build.
 
+### Game isolation
+
+An isolated game (`Install::isolated`; on by default for Windows builds run through Proton) runs
+in the container umu already uses, pressure-vessel from the Steam Linux Runtime, told through its
+environment (`runner::isolation_env`) to share less:
+
+- `PRESSURE_VESSEL_HOME`: a home folder of the game's own, `~/.local/share/slatty/homes/<id>`,
+  mounted where the user's is;
+- `PRESSURE_VESSEL_FILESYSTEMS_RW`: the game folder; `PRESSURE_VESSEL_FILESYSTEMS_RO`: umu's data,
+  the redistributables and the game's support files. The prefix is shared by umu itself;
+- `TMPDIR`, `TMP`, `TEMP`, `TEMPDIR` set to `/tmp`, which is private in the container: it shares
+  the folders they name.
+
+umu shares, writable, the whole filesystem a game is on (its "game drive": the first mount point
+above `STEAM_COMPAT_INSTALL_PATH`, which it otherwise takes from the program's folder). With `/home`
+or a library disk mounted on its own, that is all of it. An isolated game is therefore started
+without `STEAM_COMPAT_INSTALL_PATH`, and never by a path umu can open: a Windows program by its
+`Z:\…` path, which Proton resolves in the container, a Linux script through its interpreter
+(`bash start.sh`). Proton's fixes then find the game from the working directory.
+
+A Linux game runs isolated in umu without Proton (the sniper runtime), on NixOS too, rather than in
+`steam-run`, which shares everything. Wine alone cannot isolate: such a game is refused while marked
+isolated. The ignored tests in `cli/tests/isolation.rs` run a marker check through the real
+container, and the same launch not isolated as a control.
+
 ### Game sessions
 
 A launch spawns the running binary again (through `/proc/self/exe`, which still works after the
@@ -252,6 +277,7 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
 | Essential state | `~/.local/share/slatty/state.db` (accounts, installs, sessions, sync history, install jobs, settings) | no |
 | Install records | `~/.local/share/slatty/manifests/` | from GOG, for the same build |
 | Prefixes and backups | `~/.local/share/slatty/{prefixes,backups}/` | no |
+| Home folders of isolated games | `~/.local/share/slatty/homes/` | no (Linux games' saves) |
 | Cache | `~/.cache/slatty/<user id>/` | yes |
 | Logs | `~/.local/state/slatty/logs/` | yes |
 
@@ -263,6 +289,7 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
 | Iced rather than GPUI (reviewed 2026-10-09) | Maintenance comes first. Iced has versioned releases and documentation. GPUI has had no maintained release since 0.2.2 (October 2025); its ecosystem pins weekly third-party snapshots (`gpui-pre`) with frequent breaking changes. Rich pages remain possible with Iced's `markdown`, `table` and `sensor` widgets. |
 | No web view | Native application; sign-in happens in the user's own browser |
 | Address pasted back after sign-in | GOG accepts only the Galaxy redirect URI; no local redirect is known to work |
+| Isolation through umu's own container rather than another sandbox | pressure-vessel already runs every Proton game; its documented options hide the home folder with no second container to keep working with GPUs, sound and gamepads. It shares the D-Bus session bus, so it keeps games out of files, not out of the system |
 | Comet as a supervised companion process | Its library API is not meant for embedding (global state, fixed port, panics on errors) |
 | Subreaper supervisor process for sessions | Launchers that exit early and Wine processes must not end the session too soon |
 | Content hashes, not dates, for cloud sync | Dates are unreliable across machines and Wine; hashes plus per-file history detect real changes |

@@ -83,6 +83,12 @@ CREATE TABLE game_custom (
     r#"
 ALTER TABLE game_custom ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 "#,
+    // Windows games keep their saves in their prefix: they lose nothing when isolated. Linux games
+    // may keep theirs in the home folder, which isolation hides. Only umu runs a game isolated.
+    r#"
+ALTER TABLE installs ADD COLUMN isolated INTEGER NOT NULL DEFAULT 1;
+UPDATE installs SET isolated = 0 WHERE platform = 'linux' OR runner NOT LIKE '%"kind":"umu"%';
+"#,
 ];
 
 pub struct Db {
@@ -178,5 +184,35 @@ mod tests {
         assert_eq!(db.setting("x").unwrap().as_deref(), Some("2"));
         db.set_setting("x", None).unwrap();
         assert_eq!(db.setting("x").unwrap(), None);
+    }
+
+    #[test]
+    fn games_installed_before_isolation_are_isolated_when_windows_builds() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for sql in &MIGRATIONS[..7] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", 7).unwrap();
+        conn.execute_batch(
+            r#"INSERT INTO installs (game_id, title, platform, path, runner, added_at) VALUES
+               ('1', '[FAKE] Windows', 'windows', '/g/1',
+                '{"kind":"umu","proton":"/p","prefix":"/x"}', 0),
+               ('2', '[FAKE] Linux', 'linux', '/g/2', '{"kind":"native"}', 0),
+               ('3', '[FAKE] Wine', 'windows', '/g/3',
+                '{"kind":"wine","wine":"/w","prefix":"/x"}', 0);"#,
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        let isolated = |id: &str| -> bool {
+            conn.query_row(
+                "SELECT isolated FROM installs WHERE game_id = ?1",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        assert!(isolated("1"));
+        assert!(!isolated("2"));
+        assert!(!isolated("3"), "Wine alone cannot isolate");
     }
 }

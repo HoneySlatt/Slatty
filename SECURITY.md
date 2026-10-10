@@ -52,6 +52,27 @@ Include the steps to reproduce and the version or commit you tested.
 
 ## Scope
 
-SlattyLauncher runs games with your user rights and does not sandbox them beyond what umu and
-Proton provide. A Windows game sees your files through Wine's drives (`z:` is the whole system, as
-in every Wine or Proton launcher), and a Linux game runs as you.
+SlattyLauncher runs games with your user rights.
+
+**Isolated games** (Windows games installed with Proton, by default; see the
+[user guide](docs/user-guide.md#isolation-from-your-files)) run in the container umu already uses,
+pressure-vessel from the Steam Linux Runtime, told to share less:
+
+- the game sees its own folder (writable), its Wine prefix, a home folder of its own, and read-only
+  umu's runtime and the setup files SlattyLauncher downloads for it;
+- your home folder, your `/tmp` and other disks stay out of view (checked with `/home` and a
+  network share each mounted on their own), so Wine's `z:` drive shows nothing of your files.
+
+What isolation leaves open:
+
+- **D-Bus.** The container shares your session bus. Through it, a program could ask other
+  services to act for it, such as starting a command outside the container.
+- **Display, sound and devices.** Wayland or X11, PipeWire or PulseAudio, the GPU, `/dev` (gamepads)
+  and the network are shared, as games need them. Comet's port (127.0.0.1:9977) is reachable.
+- **Processes.** Other processes of yours are visible in `/proc`, though not their files or
+  environment.
+
+Isolation keeps a game out of your files; it is not a boundary against a program written to break
+out. Games that are not isolated, and Linux games by default, see your files: a Windows game
+through Wine's `z:` drive (the whole system, as in every Wine or Proton launcher), a Linux game as
+you.

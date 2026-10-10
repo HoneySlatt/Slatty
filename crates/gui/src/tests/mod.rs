@@ -74,6 +74,7 @@ fn library_app() -> App {
                 proton: "/proton/GE-Proton".into(),
                 prefix: "/prefixes/jeu3".into(),
             },
+            isolated: true,
         },
     );
     app

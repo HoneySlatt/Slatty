@@ -90,7 +90,7 @@ pub fn list(ctx: &Ctx) -> Result<()> {
 pub fn print_spec(ctx: &Ctx, game_id: &str) -> Result<()> {
     let install = get(ctx, game_id)?;
     let choice = slatty_core::settings::launch_choice(&ctx.db, game_id)?;
-    let spec = runner::launch_spec(&install, choice.as_deref())?;
+    let spec = runner::launch_spec(&ctx.dirs, &install, choice.as_deref())?;
     println!("program: {}", spec.program.display());
     println!("args:    {:?}", spec.args);
     println!("cwd:     {}", spec.cwd.display());
@@ -119,6 +119,36 @@ fn print_runner(install: &Install) {
             println!("Runner: {}\nPrefix: {}", wine.display(), prefix.display())
         }
     }
+}
+
+#[derive(Args)]
+pub struct IsolationArgs {
+    game_id: String,
+    /// Run the game without access to your files, from its next launch on
+    #[arg(long, conflicts_with = "off")]
+    on: bool,
+    /// Give the game access to your files again, from its next launch on
+    #[arg(long)]
+    off: bool,
+}
+
+pub fn isolation(ctx: &Ctx, args: IsolationArgs) -> Result<()> {
+    let install = if args.on || args.off {
+        install::set_isolated(&ctx.db, &args.game_id, args.on)?
+    } else {
+        get(ctx, &args.game_id)?
+    };
+    if install.isolated {
+        let home = runner::isolated_home(&ctx.dirs, &install.game_id)?;
+        println!(
+            "{} runs isolated: it sees its own folder, and {} as its home folder.",
+            install.title,
+            home.display()
+        );
+    } else {
+        println!("{} runs with access to your files.", install.title);
+    }
+    Ok(())
 }
 
 pub fn forget(ctx: &Ctx, game_id: &str) -> Result<()> {

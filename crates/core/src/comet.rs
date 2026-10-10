@@ -235,6 +235,7 @@ mod tests {
             client_id: None,
             runner: crate::runner::Runner::Native,
             umu_id: None,
+            isolated: false,
         };
         // Installed elsewhere: its folder is searched.
         assert!(!uses_galaxy(&dirs, &install));

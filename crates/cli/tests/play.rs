@@ -38,6 +38,7 @@ fn fake_native_game(name: &str, script: &str) -> (PathBuf, Dirs, Db) {
         path: game,
         client_id: None,
         runner: Runner::Native,
+        isolated: false,
     }
     .save(&db)
     .unwrap();

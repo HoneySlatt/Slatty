@@ -85,6 +85,10 @@ TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored prot
 
 # Real Comet with fake tokens: tokens never in argv, handoff file removed, clean shutdown
 cargo test -- --ignored comet
+
+# Isolation: a marker in the home folder stays hidden from a Linux script in umu's runtime and from
+# Wine's z: drive under Proton, and shows when the same launch is not isolated
+TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored isolated
 ```
 
 `TMPDIR` must point inside your home folder: the Steam runtime container used by umu cannot see
