@@ -270,6 +270,29 @@ fn games_known_only_by_play_time_are_read_again() {
     );
 }
 
+/// A game read again whose play time GOG did not give this time keeps the one known.
+#[test]
+fn a_play_time_not_read_again_is_kept() {
+    let mut app = library_app();
+    app.overview.insert(
+        "3".into(),
+        GameOverview {
+            playtime_minutes: Some(185),
+            ..Default::default()
+        },
+    );
+    let _ = app.update(Message::OverviewFetched(
+        "3".into(),
+        Ok(GameOverview {
+            achievements: Some((1, 4)),
+            checked: true,
+            ..Default::default()
+        }),
+    ));
+    assert_eq!(app.overview["3"].playtime_minutes, Some(185));
+    assert_eq!(app.overview["3"].achievements, Some((1, 4)));
+}
+
 #[test]
 fn a_new_page_fades_in_then_stops_drawing_frames() {
     use std::time::Duration;

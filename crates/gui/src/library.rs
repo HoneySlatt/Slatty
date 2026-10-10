@@ -159,7 +159,11 @@ impl App {
 
     /// Saved once the scan is done: writing the cache after each game stalls the interface.
     pub fn overview_fetched(&mut self, id: String, result: Result<GameOverview, String>) {
-        if let Ok(o) = result {
+        if let Ok(mut o) = result {
+            // GOG did not give the play time this time: the one known stays.
+            if o.playtime_minutes.is_none() {
+                o.playtime_minutes = self.overview.get(&id).and_then(|k| k.playtime_minutes);
+            }
             self.overview.insert(id, o);
         }
     }
