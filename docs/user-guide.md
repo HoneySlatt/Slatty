@@ -72,7 +72,7 @@ the same choices in its drawers.
 Right-click a cover and choose **Edit game** to change its **Title**, its **Sorting title** (used
 when the library is sorted by name, for example "Witcher 3" for "The Witcher 3"), its **Cover**
 and its **Background** (the key art of the game page). Click a picture to choose an image file (PNG, JPEG,
-WebP, GIF, BMP or AVIF); it is copied into SlattyLauncher's data, so the original can be moved or
+WebP, GIF or BMP); it is copied into SlattyLauncher's data, so the original can be moved or
 deleted. Nothing changes until **Save**; **Reset to default** goes back to GOG's title and images.
 On a game page, right-click the key art (not the title or the buttons over it) for the same menu;
 the form then opens in a drawer beside the page.

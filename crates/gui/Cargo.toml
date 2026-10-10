@@ -11,8 +11,9 @@ path = "src/main.rs"
 
 [dependencies]
 chrono = "0.4.45"
-iced = { version = "0.14", features = ["advanced", "image", "selector", "svg", "tokio"] }
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+iced = { version = "0.14", features = ["advanced", "image-without-codecs", "selector", "svg", "tokio"] }
+# Only the formats GOG serves and those a custom image may be in: fewer decoders face downloads.
+image = { version = "0.25", default-features = false, features = ["bmp", "gif", "jpeg", "png", "webp"] }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 serde.workspace = true
 slatty-core.workspace = true

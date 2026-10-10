@@ -107,7 +107,7 @@ impl App {
                             })
                             .add_filter(
                                 "Images",
-                                &["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif"],
+                                &["png", "jpg", "jpeg", "webp", "gif", "bmp"],
                             )
                             .pick_file()
                             .await

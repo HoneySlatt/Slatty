@@ -27,6 +27,20 @@ cargo test
   [docs/compatibility.md](docs/compatibility.md) only after a real check.
 - Update the documentation when behaviour changes: user guide, cloud saves, GOG integration.
 
+## Dependency audit
+
+Check the dependencies against the RustSec advisories (this downloads the advisory database):
+
+```sh
+nix shell nixpkgs#cargo-audit -c cargo audit
+```
+
+The last audit (2026-10-10) found no vulnerability. Four warnings come with Iced 0.14 and should go
+with an Iced update: `paste` (unmaintained; only in macOS's Metal backend, not built on Linux),
+`rustybuzz` and `ttf-parser` (unmaintained; text and font reading), and `lru` (unsound only when a
+key's `Drop` panics, which the glyph cache's keys never do). Image decoding is limited to the
+formats SlattyLauncher shows (JPEG, PNG, WebP, GIF, BMP), so fewer decoders face downloaded files.
+
 ## Code style
 
 - Code, comments and commit messages are in English.

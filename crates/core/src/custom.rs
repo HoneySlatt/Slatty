@@ -133,7 +133,7 @@ fn apply(
                 .map_err(|e| Error::io(format!("read {}", source.display()), e))?;
             let ext = image_extension(&bytes).ok_or_else(|| {
                 Error::Refused(format!(
-                    "{} is not a PNG, JPEG, WebP, GIF, BMP or AVIF image",
+                    "{} is not a PNG, JPEG, WebP, GIF or BMP image",
                     source.display()
                 ))
             })?;
@@ -173,21 +173,6 @@ fn image_extension(bytes: &[u8]) -> Option<&'static str> {
         ] => Some("webp"),
         [b'G', b'I', b'F', b'8', ..] => Some("gif"),
         [b'B', b'M', ..] => Some("bmp"),
-        [
-            _,
-            _,
-            _,
-            _,
-            b'f',
-            b't',
-            b'y',
-            b'p',
-            b'a',
-            b'v',
-            b'i',
-            b'f',
-            ..,
-        ] => Some("avif"),
         _ => None,
     }
 }
