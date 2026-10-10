@@ -244,6 +244,7 @@ impl App {
             MaintenanceMsg::Uninstalled(game_id, Ok(lines)) => {
                 self.installs.remove(&game_id);
                 self.records.remove(&game_id);
+                self.updates.waiting.retain(|w| *w != game_id);
                 self.panel = None;
                 self.cloud.remove(&game_id);
                 self.maintenance.remove(&game_id);
@@ -302,6 +303,8 @@ impl App {
                     self.notify_error("The game is running.".into());
                     return Task::none();
                 }
+                // A change asked for here replaces the automatic update the game was waiting for.
+                self.updates.waiting.retain(|w| *w != game_id);
                 let view = self.maintenance.entry(game_id.clone()).or_default();
                 view.update_available = false;
                 view.content = None;

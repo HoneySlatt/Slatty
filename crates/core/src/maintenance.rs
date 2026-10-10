@@ -278,7 +278,8 @@ pub fn auto_update_candidates(db: &Db, dirs: &Dirs) -> Result<Vec<String>> {
     }
     let mut ids = Vec::new();
     for install in Install::list(db)? {
-        if InstallRecord::load(dirs, &install.game_id)?.is_some()
+        // A record that cannot be read leaves that game out; its update would fail anyway.
+        if matches!(InstallRecord::load(dirs, &install.game_id), Ok(Some(_)))
             && !crate::settings::held_back(db, &install.game_id)?
         {
             ids.push(install.game_id);
@@ -829,6 +830,15 @@ mod tests {
         }
         .save(&env.db)
         .unwrap();
+        // A record that cannot be read leaves that game out, not every game.
+        Install {
+            game_id: "3".into(),
+            title: "[FAKE] Damaged record".into(),
+            ..Install::get(&env.db, "1").unwrap().unwrap()
+        }
+        .save(&env.db)
+        .unwrap();
+        std::fs::write(InstallRecord::file(&env.dirs, "3"), b"{").unwrap();
         assert_eq!(auto_update_candidates(&env.db, &env.dirs).unwrap(), ["1"]);
         crate::settings::set_held_back(&env.db, "1", true).unwrap();
         assert!(

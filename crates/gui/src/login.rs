@@ -64,8 +64,10 @@ impl App {
         self.account_epoch += 1;
         self.account = Some(info);
         let avatar = self.fetch_avatar();
+        let updates = self.update_updates(crate::updates::UpdatesMsg::Check);
         Task::batch([
             avatar,
+            updates,
             match cache {
                 Some(c) => self.set_library(c),
                 None => Task::done(Message::SyncLibrary),
@@ -113,6 +115,9 @@ impl App {
         self.achievements.clear();
         self.pending_change = None;
         self.cloud.clear();
+        // Found with the account signed out; its check's answer is dropped with its other work.
+        self.updates.waiting.clear();
+        self.updates.checking = false;
     }
 
     pub fn fetch_avatar(&self) -> Task<Message> {

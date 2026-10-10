@@ -78,6 +78,110 @@ fn updates_wait_while_a_game_runs_and_start_once_it_ends() {
     assert_eq!(app.updates.current.as_deref(), Some("3"));
 }
 
+fn playing(app: &mut App) {
+    let (stop, _rx) = tokio::sync::mpsc::unbounded_channel();
+    app.play = Some(PlayState {
+        game_id: "4".into(),
+        log: Vec::new(),
+        stop,
+        running: true,
+    });
+}
+
+fn game_ends(app: &mut App) {
+    let _ = app.update(Message::Playing(PlayMsg::Done(Ok(()))));
+}
+
+#[test]
+fn a_waiting_game_the_user_changes_is_not_updated_after_all() {
+    use slatty_core::maintenance::Change;
+    let mut app = auto_app();
+    playing(&mut app);
+    let _ = app.update(found());
+    // Game 3 moved to an older version, game 5 uninstalled, while they waited.
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Apply(
+        "3".into(),
+        Change::Build("old".into()),
+    )));
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Updated(
+        "3".into(),
+        Ok("Now at 1.0.".into()),
+    )));
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Uninstalled(
+        "5".into(),
+        Ok(Vec::new()),
+    )));
+    assert!(app.updates.waiting.is_empty(), "{:?}", app.updates.waiting);
+    game_ends(&mut app);
+    assert!(app.updates.current.is_none());
+}
+
+#[test]
+fn a_game_held_back_or_paused_since_its_check_is_not_updated() {
+    let mut app = auto_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    playing(&mut app);
+    let _ = app.update(found());
+    // Chosen elsewhere (the command line, another window) once the check had answered.
+    slatty_core::settings::set_held_back(&db, "3", true).unwrap();
+    game_ends(&mut app);
+    assert_eq!(app.updates.current.as_deref(), Some("5"));
+    assert!(!app.maintenance["3"].busy);
+}
+
+#[test]
+fn pausing_the_update_running_starts_no_other() {
+    let mut app = auto_app();
+    let _ = app.update(found());
+    assert_eq!(app.updates.current.as_deref(), Some("3"));
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Updated(
+        "3".into(),
+        Err(None),
+    )));
+    assert!(app.updates.current.is_none());
+    assert!(
+        !app.maintenance["5"].busy,
+        "game 5 waits for the next check"
+    );
+}
+
+#[test]
+fn updates_wait_for_a_cloud_sync() {
+    let mut app = auto_app();
+    app.cloud.entry("4".into()).or_default().busy = true;
+    let _ = app.update(found());
+    assert!(app.updates.current.is_none());
+    app.cloud.get_mut("4").unwrap().busy = false;
+    let _ = app.update(Message::DismissNotice);
+    assert_eq!(app.updates.current.as_deref(), Some("3"));
+}
+
+#[test]
+fn updates_found_belong_to_the_account_and_the_switch_that_found_them() {
+    // Turned off while the check ran: its answer is not applied.
+    let mut app = auto_app();
+    app.updates.on = false;
+    let _ = app.update(found());
+    assert!(app.updates.waiting.is_empty() && app.updates.current.is_none());
+    // Signed out: nothing found for that account is left to update under the next one.
+    let mut app = auto_app();
+    playing(&mut app);
+    let _ = app.update(found());
+    app.updates.checking = true;
+    app.logged_out();
+    assert!(app.updates.waiting.is_empty());
+    assert!(!app.updates.checking, "the next sign-in checks again");
+    // Signing in checks at once, rather than six hours later.
+    let _ = app.logged_in(Ok((
+        slatty_core::account::AccountInfo {
+            user_id: "0".into(),
+            username: "testeur".into(),
+        },
+        None,
+    )));
+    assert!(app.updates.checking);
+}
+
 #[test]
 fn automatic_updates_are_turned_off_in_settings() {
     let mut app = auto_app();

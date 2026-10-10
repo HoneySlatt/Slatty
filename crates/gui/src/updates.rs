@@ -55,7 +55,7 @@ impl App {
                     return Task::none();
                 }
                 self.updates.checking = true;
-                return Task::perform(
+                return self.account_task(Task::perform(
                     async move {
                         let tokens = match tokens(&core).await {
                             Ok(t) => t,
@@ -85,10 +85,14 @@ impl App {
                         found
                     },
                     |found| Message::Updates(UpdatesMsg::Checked(found)),
-                );
+                ));
             }
             UpdatesMsg::Checked(found) => {
                 self.updates.checking = false;
+                // Turned off while the check ran: what it found is not applied.
+                if !self.updates.on {
+                    return Task::none();
+                }
                 for (id, check) in found {
                     // Up to date: nothing to say.
                     let Some(check) = check.transpose() else {
@@ -119,21 +123,34 @@ impl App {
         Task::none()
     }
 
-    /// Starts the next waiting update when nothing holds it: no update, install, game or other
-    /// work on a game running. Called after every message.
+    /// Starts the next waiting update when nothing holds it: no update, install, game, cloud sync
+    /// or other work on a game running. Called after every message.
     pub fn next_update(&mut self) -> Task<Message> {
         let busy = self.updates.current.is_some()
             || self.updates.waiting.is_empty()
             || self.play.as_ref().is_some_and(|p| p.running)
             || self.installing().is_some()
             || self.auto_resume.is_some()
-            || self.maintenance.values().any(|m| m.busy);
+            || self.maintenance.values().any(|m| m.busy)
+            || self.cloud.values().any(|c| c.busy);
         if busy || !self.updates.on || self.account.is_none() {
             return Task::none();
         }
-        let id = self.updates.waiting.remove(0);
-        self.updates.current = Some(id.clone());
-        self.update_maintenance(MaintenanceMsg::Apply(id, Change::Update))
+        let Some(core) = self.core.clone() else {
+            return Task::none();
+        };
+        // Since its check, a game may have been moved to an older version or had an update paused,
+        // here or from the command line: those choices stand.
+        while !self.updates.waiting.is_empty() {
+            let id = self.updates.waiting.remove(0);
+            let held = slatty_core::settings::held_back(&core.db, &id).unwrap_or(true);
+            let pending = maintenance::update_pending(&core.db, &id).map_or(true, |p| p.is_some());
+            if !held && !pending {
+                self.updates.current = Some(id.clone());
+                return self.update_maintenance(MaintenanceMsg::Apply(id, Change::Update));
+            }
+        }
+        Task::none()
     }
 
     /// An update ended, applied or not: the next one may start.
@@ -151,8 +168,9 @@ impl App {
                 });
             }
             Err(Some(e)) => self.notify_error(format!("{title} could not be updated: {e}")),
-            // Paused: it waits until asked, like any paused update.
-            Err(None) => {}
+            // Paused: it waits until asked, like any paused update, and the others wait for the
+            // next check rather than start in its place.
+            Err(None) => self.updates.waiting.clear(),
         }
     }
 }

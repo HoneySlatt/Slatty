@@ -361,12 +361,14 @@ or as its game version) stays on it and is updated only when you ask; updating i
 newest build, makes it follow updates again. A language or DLC change does not change this.
 Checking a Windows game takes one request to GOG (the list of builds).
 
-The interface checks these games at start and every six hours while it stays open, and applies
-the updates it finds one after the other, never while a game runs or an install downloads; they
-wait in the **Updates** part of the Downloads tab, where the one being applied shows its progress
-and **Pause**. While a game updates, its page shows **Updating** instead of Play. A paused update
-waits until you apply it again from Manage; one stopped by a closed window is finished at the next
-start, as any update. The switch is in Settings → Installs.
+The interface checks these games at start, at sign-in and every six hours while it stays open, and
+applies the updates it finds one after the other, never while a game runs, an install downloads or
+cloud saves sync; they wait in the **Updates** part of the Downloads tab, where the one being
+applied shows its progress and **Pause**. While a game updates, its page shows **Updating** instead
+of Play. A paused update waits until you apply it again from Manage, and the games waiting after it
+wait for the next check; one stopped by a closed window is finished at the next start, as any
+update. A game you change while it waits (another version, an update, an uninstall) is not
+updated by itself afterwards. The switch is in Settings → Installs.
 
 An update compares each file of the new build with the one on disk:
 
