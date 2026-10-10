@@ -169,7 +169,12 @@ cover grid and the Achievements grid build only the rows in view (`library::Grid
 one child per row of the whole grid (`ui::widgets::grid_rows`) so that a row keeps its place, and
 Iced its laid-out text, while it stays in view; keep any new grid or long list virtualized the
 same way. The simulator rebuilds every widget each time, so it cannot show what Iced keeps between
-frames: check scrolling in the real application too.
+frames: check scrolling in the real application too (docs/testing.md says how).
+
+`view` runs after every message, scroll steps included: keep per-game work out of it, or make it
+once (sort keys are kept by title in `library::SortKeys`). Images are shown from their cached
+files (`image::Handle::from_path`, files named after their format): never keep image bytes in
+`App`, which held about 880 MB of covers at 10,000 games.
 
 ## Tests
 

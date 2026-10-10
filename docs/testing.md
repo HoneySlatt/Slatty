@@ -47,6 +47,33 @@ something. They are those of a first display: the test lays out every widget ane
 application keeps what it laid out for a row as long as the row stays in view. Scrolling is
 checked in the application itself.
 
+### The application at 10,000 games
+
+Startup, memory and scrolling are measured in the release build itself, never with a real
+profile:
+
+- an isolated profile (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_STATE_HOME` in a
+  throwaway folder) holding a fake account in `state.db`, a `library.json` of 10,000 `[FAKE]`
+  games, and a cached JPEG cover for each (342×482, about 86 KB, like GOG's);
+- no keyring and no network: `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent` and
+  `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY` pointing at a closed port;
+- a temporary probe, not committed, that logs when the library and its covers are in, the resident
+  memory, how long each `view` takes, and the time between frames while it scrolls the grid by
+  itself; `dd if=<file> iflag=nocache count=0` drops the covers from the disk cache for a cold
+  start.
+
+Reference, 2026-10-10 (Ryzen 7 5800X, Radeon RX 6800, niri at 3840×2160, 240 Hz, scale 1.5):
+
+| | Result |
+|---|---|
+| Library shown | about 105 ms after start |
+| Every cover ready | 446–498 ms, cold or warm (698–773 ms when covers were read into memory) |
+| Resident memory, covers in | 152 MB (997 MB when covers were kept in memory) |
+| 200 game pages with 2560×1440 key art opened in a row | 191 MB, flat after the first 50 (254 MB and growing before) |
+| Scrolling, 1,200 frames | p50 4.7 ms, p99 7.1 ms, max 9.6 ms; none above 16.7 ms |
+| `view` while scrolling | p50 1.7 ms, p99 2.3 ms (5.5 ms before the sort keys were kept) |
+| Idle CPU, nothing happening | 0 ticks in 15 s |
+
 ### Tests that need real tools
 
 These are ignored by default:
