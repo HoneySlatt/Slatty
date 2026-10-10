@@ -209,11 +209,7 @@ impl App {
             .spacing(14)
             .align_y(Alignment::Center),
             row![
-                stat(format!(
-                    "{} / {}",
-                    human_size(p.bytes_done),
-                    human_size(p.bytes_total)
-                )),
+                stat(amount(p)),
                 vertical_rule(18.0),
                 stat(speed.map_or_else(|| "—".into(), |s| format!("{}/s", human_size(s as u64)))),
                 vertical_rule(18.0),

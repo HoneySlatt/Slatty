@@ -614,11 +614,7 @@ pub(super) fn download_controls<'a>(
     pause: bool,
 ) -> Element<'a, Message> {
     let msg = |m: fn(String) -> InstallMsg| Message::Install(m(g.id.clone()));
-    let mut status = format!(
-        "{} / {}",
-        human_size(progress.bytes_done),
-        human_size(progress.bytes_total)
-    );
+    let mut status = amount(progress);
     if let Some(speed) = speed {
         status += &format!(" · {}/s", human_size(speed as u64));
     }

@@ -12,6 +12,19 @@ pub fn fraction(p: Progress) -> f32 {
     }
 }
 
+/// "1.2 GiB / 3.00 GiB"; before the files are listed, when the total is not known yet, what is
+/// being done instead of "0 KiB / 0 KiB".
+pub fn amount(p: Progress) -> String {
+    if p.bytes_total == 0 {
+        return "Listing files…".into();
+    }
+    format!(
+        "{} / {}",
+        human_size(p.bytes_done),
+        human_size(p.bytes_total)
+    )
+}
+
 pub fn human_size(bytes: u64) -> String {
     match bytes {
         b if b >= 1 << 30 => format!("{:.2} GiB", b as f64 / (1u64 << 30) as f64),

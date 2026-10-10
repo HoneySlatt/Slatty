@@ -96,6 +96,10 @@ fn installs_started_during_a_download_wait_in_a_queue_that_can_be_reordered() {
         assert!(ui.find("Queue · 2").is_ok());
         assert!(ui.find("[FAKE] Game 7").is_ok());
         assert!(ui.find("/games/Game 5").is_ok(), "where the download goes");
+        assert!(
+            ui.find("Listing files…").is_ok(),
+            "no size before the files are listed"
+        );
         snapshot(&mut ui, "downloads");
     }
 

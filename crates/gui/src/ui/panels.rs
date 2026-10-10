@@ -51,13 +51,11 @@ impl App {
                     .girth(10)
                     .style(theme::progress),
                 row![
-                    note(format!(
-                        "{} / {} · files {}/{}",
-                        human_size(p.bytes_done),
-                        human_size(p.bytes_total),
-                        p.files_done,
-                        p.files_total
-                    )),
+                    note(if p.files_total == 0 {
+                        amount(p)
+                    } else {
+                        format!("{} · files {}/{}", amount(p), p.files_done, p.files_total)
+                    }),
                     space().width(Length::Fill),
                     button(text("Pause").size(14))
                         .padding([8, 16])
