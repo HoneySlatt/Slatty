@@ -288,6 +288,25 @@ async fn a_full_disk_stops_the_other_files() {
     assert!(temporary.is_empty(), "{temporary:?}");
 }
 
+/// A download GOG cannot serve for now (offline, rate limited, failing) is left cut off, to resume
+/// by itself once GOG answers; one that would fail again (a full disk, a refusal) is failed.
+#[test]
+fn a_download_gog_cannot_serve_for_now_is_left_to_resume() {
+    let http = |status| Error::Http {
+        context: "test",
+        status,
+    };
+    assert_eq!(super::state_after(&http(503)), DOWNLOADING);
+    assert_eq!(super::state_after(&http(429)), DOWNLOADING);
+    assert_eq!(super::state_after(&http(404)), FAILED);
+    assert_eq!(
+        super::state_after(&Error::io("test", std::io::ErrorKind::StorageFull.into())),
+        FAILED
+    );
+    assert_eq!(super::state_after(&Error::Refused("[FAKE]".into())), FAILED);
+    assert_eq!(super::state_after(&Error::Cancelled), PAUSED);
+}
+
 fn walkdir(dir: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {

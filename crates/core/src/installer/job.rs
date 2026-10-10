@@ -126,6 +126,9 @@ impl InstallJob {
     }
 }
 
+/// State of an install downloading, or cut off (a closed window, a crash, GOG out of reach):
+/// resumed by itself.
+pub const DOWNLOADING: &str = "downloading";
 /// State of a job stopped on request.
 pub const PAUSED: &str = "paused";
 /// State of an install waiting in the download queue: chosen, not started.

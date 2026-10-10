@@ -48,7 +48,7 @@ pub async fn bytes(req: RequestBuilder, context: &'static str) -> Result<Vec<u8>
             break;
         };
         match bytes_once(attempt, context).await {
-            Err(e) if transient(&e) => {
+            Err(e) if e.is_temporary() => {
                 tokio::time::sleep(wait).await;
                 wait *= 2;
             }
@@ -64,15 +64,6 @@ const FIRST_WAIT: Duration = if cfg!(test) {
 } else {
     Duration::from_secs(1)
 };
-
-/// A dropped connection, a timeout, a rate limit or a server error, worth another try.
-fn transient(e: &Error) -> bool {
-    match e {
-        Error::Network { .. } => true,
-        Error::Http { status, .. } => *status == 429 || *status >= 500,
-        _ => false,
-    }
-}
 
 async fn bytes_once(req: RequestBuilder, context: &'static str) -> Result<Vec<u8>> {
     let resp = send(req, context).await?;

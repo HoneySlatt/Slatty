@@ -145,7 +145,7 @@ pub async fn install(
         language: plan.language.clone(),
         root: root.clone(),
         directory: directory.clone(),
-        state: "downloading".into(),
+        state: DOWNLOADING.into(),
         dlcs: plan.selected_dlcs(),
     };
     job.save(db)?;
@@ -202,11 +202,7 @@ pub async fn install(
     let (files, support_files, skipped_links) = match result {
         Ok(written) => written,
         Err(e) => {
-            job.state = if matches!(e, Error::Cancelled) {
-                PAUSED.into()
-            } else {
-                FAILED.into()
-            };
+            job.state = state_after(&e).into();
             job.save(db)?;
             return Err(e);
         }
@@ -262,6 +258,17 @@ fn published_unregistered(resumed: bool, partial: &Path, target: &Path) -> bool 
 /// when the job was made: GOG may have published a newer build since, which the user never saw.
 fn held_on_start(job: Option<&InstallJob>, plan: &InstallPlan) -> Option<bool> {
     job.is_none().then(|| !plan.is_newest())
+}
+
+/// The state a download that stopped on `e` is left in: paused when asked; cut off, to resume by
+/// itself, when GOG could not be reached for now; failed otherwise (a full disk, a refusal), for
+/// it would fail the same way again.
+fn state_after(e: &Error) -> &'static str {
+    match e {
+        Error::Cancelled => PAUSED,
+        e if e.is_temporary() => DOWNLOADING,
+        _ => FAILED,
+    }
 }
 
 #[cfg(test)]

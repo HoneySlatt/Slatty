@@ -19,6 +19,91 @@ fn a_queue_change_cancels_the_drag_before_the_next_render() {
     assert!(app.queue.is_empty());
 }
 
+/// Offline at start, the queue waits for GOG, every game in its place, rather than each failing in
+/// turn; it is tried again by itself, or at once with Try now.
+#[test]
+fn the_queue_waits_for_gog_rather_than_fail_game_after_game() {
+    let mut app = library_app();
+    app.queue = vec!["5".into(), "6".into(), "7".into()];
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("5"));
+    let _ = app.update(Message::Install(InstallMsg::Unreachable(
+        "5".into(),
+        "[FAKE] network error".into(),
+    )));
+    assert_eq!(app.queue, ["5", "6", "7"], "each in its place");
+    assert!(app.auto_resume.is_none());
+    assert!(app.install_views.is_empty(), "none failed");
+    let _ = app.start_next();
+    assert!(app.auto_resume.is_none(), "the queue waits");
+
+    app.page = Page::Downloads;
+    let messages: Vec<Message> = {
+        let mut ui = render(&app);
+        assert!(
+            ui.find(
+                "GOG cannot be reached ([FAKE] network error). Downloads go on by themselves once \
+                 it answers."
+            )
+            .is_ok()
+        );
+        snapshot(&mut ui, "downloads-waiting");
+        ui.click("Try now").unwrap();
+        ui.into_messages().collect()
+    };
+    for m in messages {
+        let _ = app.update(m);
+    }
+    assert_eq!(app.auto_resume.as_deref(), Some("5"), "tried again");
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(fake_plan()),
+    )));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Running { .. })
+    ));
+    assert_eq!(app.queue, ["6", "7"]);
+}
+
+/// A download cut off because GOG stopped answering is left to resume, and holds the queue until
+/// GOG answers again, rather than the next install failing the same way at once.
+#[test]
+fn a_download_cut_off_by_the_network_waits_and_resumes_first() {
+    use slatty_core::installer::{DOWNLOADING, InstallJob};
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    for id in ["5", "6"] {
+        ready_to_install(&mut app, id);
+        let _ = app.update(Message::Install(InstallMsg::Start(id.into())));
+    }
+    // What the core leaves behind when GOG cannot be reached.
+    InstallJob {
+        game_id: "5".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 5".into(),
+        state: DOWNLOADING.into(),
+        dlcs: Vec::new(),
+    }
+    .save(&db)
+    .unwrap();
+    let _ = app.update(Message::Install(InstallMsg::Done(
+        "5".into(),
+        Err(Some("[FAKE] network error".into())),
+    )));
+    assert!(
+        matches!(app.install_views.get("6"), Some(InstallView::Queued(_))),
+        "the next install waits"
+    );
+    assert_eq!(app.queue, ["6"]);
+    assert!(app.auto_resume.is_none(), "not tried again at once");
+    assert!(app.downloads_waiting.is_some());
+    let _ = app.update(Message::Install(InstallMsg::Retry));
+    assert_eq!(app.auto_resume.as_deref(), Some("5"), "resumed first");
+}
+
 /// Each message rebuilds the page: moving the pointer over the queue sends none, unless a row is
 /// being moved.
 #[test]

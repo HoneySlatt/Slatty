@@ -128,8 +128,12 @@ impl App {
     /// crash) first, then the first install of the queue. A download paused on request holds the
     /// queue until it is resumed or discarded.
     pub fn start_next(&mut self) -> Task<Message> {
-        // One being planned to start is as good as downloading.
-        if self.installing().is_some() || self.auto_resume.is_some() {
+        // One being planned to start is as good as downloading. Waiting for GOG, the queue is
+        // tried again by itself (`InstallMsg::Retry`).
+        if self.installing().is_some()
+            || self.auto_resume.is_some()
+            || self.downloads_waiting.is_some()
+        {
             return Task::none();
         }
         let waiting = |kind| {
@@ -162,7 +166,7 @@ impl App {
         }
     }
 
-    fn save_queue(&mut self) {
+    pub(crate) fn save_queue(&mut self) {
         if let Some(core) = &self.core
             && let Err(e) = slatty_core::settings::set_download_queue(&core.db, &self.queue)
         {

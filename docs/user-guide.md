@@ -125,7 +125,10 @@ tab leads back to the game.
 Escape closes the panel, then the game page.
 
 A download or an update cut off by a closed window, a crash or a power cut resumes by itself when
-SlattyLauncher starts again (one download at a time). Those paused on request, and downloads stopped
+SlattyLauncher starts again (one download at a time). When GOG cannot be reached (offline, GOG
+failing or limiting requests), the download stopped and the queue wait for it, each in its place,
+rather than fail one after the other: the Downloads tab says so, GOG is asked again every minute,
+and **Try now** asks at once. Those paused on request, and downloads stopped
 by an error (tried again only when you ask, since they would most likely fail the same way), are
 listed at the top of the Library tab instead: **Resume** or **Discard** a download, **Finish update** for an update,
 which the game needs before it can start again, paused or not.

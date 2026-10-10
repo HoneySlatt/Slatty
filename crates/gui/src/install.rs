@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use iced::Task;
 use iced::futures::Stream;
+use slatty_core::account::Account;
 use slatty_core::install::{Install, Platform};
 use slatty_core::installer::{
     self, DlcChoice, DlcSelection, InstallEvent, InstallJob, InstallRequest, Progress,
@@ -109,6 +110,10 @@ pub enum InstallMsg {
     /// Another build to install.
     Version(String, String),
     Planned(String, Result<PlanInfo, String>),
+    /// Not planned: GOG could not be reached for now.
+    Unreachable(String, String),
+    /// GOG is asked again for the downloads waiting for it.
+    Retry,
     Start(String),
     Progress(String, Progress),
     /// `Err(None)` means paused by the user.
@@ -165,6 +170,10 @@ impl App {
             }
             InstallMsg::Planned(game_id, result) => {
                 let auto = self.auto_resume.take_if(|id| *id == game_id).is_some();
+                // GOG answered: nothing waits for it any longer.
+                if result.is_ok() {
+                    self.downloads_waiting = None;
+                }
                 let view = match result {
                     // Planned again after a restart: it keeps its place in the queue.
                     Ok(info) if !auto && self.queue.contains(&game_id) => InstallView::Queued(info),
@@ -195,6 +204,32 @@ impl App {
                 if auto {
                     return self.start_next();
                 }
+            }
+            InstallMsg::Unreachable(game_id, e) => {
+                if self.auto_resume.take_if(|id| *id == game_id).is_none() {
+                    // A queued install planned for its size keeps its place, without one.
+                    if self.queue.contains(&game_id) {
+                        self.install_views.remove(&game_id);
+                        return Task::none();
+                    }
+                    return self.update_install(InstallMsg::Planned(game_id, Err(e)));
+                }
+                // Starting it, from the queue or cut off: the others would fail the same way. It
+                // keeps its place, and the queue waits for GOG.
+                self.install_views.remove(&game_id);
+                let cut_off = self
+                    .interrupted
+                    .iter()
+                    .any(|(id, k)| *id == game_id && *k == crate::Interrupted::Download);
+                if !cut_off {
+                    self.queue.insert(0, game_id);
+                    self.save_queue();
+                }
+                self.downloads_waiting = Some(e);
+            }
+            InstallMsg::Retry => {
+                self.downloads_waiting = None;
+                return self.start_next();
             }
             InstallMsg::Start(game_id) => {
                 let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
@@ -385,6 +420,7 @@ impl App {
                 return Task::batch([discard, self.start_next()]);
             }
             InstallMsg::Done(game_id, Ok(install)) => {
+                self.downloads_waiting = None;
                 if let Some(InstallView::Running { progress, .. }) =
                     self.install_views.remove(&game_id)
                 {
@@ -405,6 +441,17 @@ impl App {
             }
             InstallMsg::Done(game_id, Err(Some(e))) => {
                 self.sync_interrupted(&game_id);
+                // Left cut off: GOG could not be reached. It resumes first once GOG answers, and
+                // the queue waits for it rather than fail the same way.
+                if self
+                    .interrupted
+                    .iter()
+                    .any(|(id, k)| *id == game_id && *k == crate::Interrupted::Download)
+                {
+                    self.install_views.remove(&game_id);
+                    self.downloads_waiting = Some(e);
+                    return Task::none();
+                }
                 self.install_views.insert(game_id, InstallView::Failed(e));
                 return self.start_next();
             }
@@ -451,7 +498,10 @@ impl App {
             proton,
         };
         Task::perform(plan(core, id, choice), move |r| {
-            Message::Install(InstallMsg::Planned(game_id, r))
+            Message::Install(match r {
+                Err(PlanFailure(e, true)) => InstallMsg::Unreachable(game_id, e),
+                r => InstallMsg::Planned(game_id, r.map_err(|f| f.0)),
+            })
         })
     }
 
@@ -528,9 +578,19 @@ pub fn versions(builds: &[slatty_core::galaxy::Build]) -> Vec<Version> {
         .collect()
 }
 
-async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, String> {
-    let tokens = tokens(&core).await?;
-    let job = InstallJob::load(&core.db, &game_id).map_err(err)?;
+/// Why a plan could not be made, and whether only because GOG could not be reached for now.
+struct PlanFailure(String, bool);
+
+impl From<slatty_core::Error> for PlanFailure {
+    fn from(e: slatty_core::Error) -> Self {
+        PlanFailure(e.to_string(), e.is_temporary())
+    }
+}
+
+async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, PlanFailure> {
+    let mut account = Account::load(&core.db, &core.dirs).await?;
+    let tokens = account.tokens(&core.http).await?.clone();
+    let job = InstallJob::load(&core.db, &game_id)?;
     // An interrupted install resumes as it started.
     let (platform, language, build, root, dlcs) = match &job {
         Some(j) => (
@@ -561,8 +621,7 @@ async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, S
         build.as_deref(),
         &dlcs,
     )
-    .await
-    .map_err(err)?;
+    .await?;
     let free = free_space(root.display().to_string()).await;
     Ok(PlanInfo {
         newest: plan.is_newest(),
@@ -571,7 +630,7 @@ async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, S
         proton: choice.proton,
         root: root.display().to_string(),
         free,
-        directory: plan.directory_name().map_err(err)?,
+        directory: plan.directory_name()?,
         title: plan.title,
         versions: versions(&plan.builds),
         build_id: plan.build.build_id,

@@ -95,6 +95,9 @@ fn main() -> iced::Result {
 /// Narrowest and widest covers of the library grid.
 pub const COVER_WIDTHS: (f32, f32) = (110.0, 240.0);
 
+/// How often downloads waiting for GOG ask it again.
+const DOWNLOADS_RETRY: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Why the theme file could not be used at start, shown once the window is up.
 static THEME_ERROR: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
@@ -273,6 +276,8 @@ pub struct App {
     pub context_menu: Option<edit::ContextMenu>,
     /// A download being planned again to resume on its own at start-up.
     pub auto_resume: Option<String>,
+    /// Why GOG could not be reached, while the downloads wait for it.
+    pub downloads_waiting: Option<String>,
     /// A game's install or settings, open over the library.
     pub dialog: Option<(String, Panel)>,
     /// Font families of the system, listed when Settings first opens.
@@ -361,6 +366,7 @@ impl Default for App {
             menu_for: None,
             context_menu: None,
             auto_resume: None,
+            downloads_waiting: None,
             font_families: Vec::new(),
             dialog: None,
             window: Size::new(1440.0, 900.0),
@@ -518,9 +524,15 @@ impl App {
         } else {
             Subscription::none()
         };
+        let downloads = if self.downloads_waiting.is_some() {
+            iced::time::every(DOWNLOADS_RETRY).map(|_| Message::Install(InstallMsg::Retry))
+        } else {
+            Subscription::none()
+        };
         Subscription::batch([
             frames,
             update_checks,
+            downloads,
             keyboard::listen().filter_map(key_message),
             iced::window::close_requests().map(|_| Message::CloseRequested),
             iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),

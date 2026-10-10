@@ -56,6 +56,15 @@ impl Error {
         }
     }
 
+    /// A dropped connection, a timeout, a rate limit or a server error: worth another try later.
+    pub fn is_temporary(&self) -> bool {
+        match self {
+            Self::Network { .. } => true,
+            Self::Http { status, .. } => *status == 429 || *status >= 500,
+            _ => false,
+        }
+    }
+
     /// No room left on the disk, or in the user's quota.
     pub fn is_disk_full(&self) -> bool {
         matches!(self, Self::Io { source, .. } if matches!(

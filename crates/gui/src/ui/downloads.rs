@@ -55,7 +55,23 @@ impl App {
         for (id, kind) in &stopped {
             downloading = downloading.push(self.stopped_card(id, *kind));
         }
-        if active == 0 && self.updates.current.is_none() {
+        if let Some(e) = &self.downloads_waiting {
+            downloading = downloading.push(
+                row![
+                    container(note(format!(
+                        "GOG cannot be reached ({e}). Downloads go on by themselves once it \
+                         answers."
+                    )))
+                    .width(Length::Fill),
+                    button(text("Try now").size(14))
+                        .padding([10, 18])
+                        .on_press(Message::Install(InstallMsg::Retry))
+                        .style(theme::tonal),
+                ]
+                .spacing(16)
+                .align_y(Alignment::Center),
+            );
+        } else if active == 0 && self.updates.current.is_none() {
             downloading = downloading.push(note(if self.queue.is_empty() {
                 "Nothing is downloading. Installs started while another one downloads wait here."
             } else {
