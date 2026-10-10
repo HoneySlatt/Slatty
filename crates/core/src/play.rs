@@ -148,7 +148,8 @@ pub async fn play(
     if let Some(init) = runner::prefix_init_spec(&install)? {
         emit(PlayEvent::PreparingPrefix);
         let log = dirs.logs().join(format!("prefix-{}.log", install.game_id));
-        let outcome = SessionHandle::start(&req.supervisor, &init, &log)
+        let busy = crate::lock::session(dirs, &install.game_id);
+        let outcome = SessionHandle::start(&req.supervisor, &init, &log, Some(&busy))
             .await?
             .wait()
             .await?;
@@ -250,9 +251,8 @@ pub async fn play(
         None
     };
 
-    let log = dirs.logs().join(format!("game-{}.log", install.game_id));
     let started = Instant::now();
-    let outcome = run_session(db, &req, &spec, &log, user_id.as_deref(), &emit, &mut stop).await;
+    let outcome = run_session(db, dirs, &req, &spec, user_id.as_deref(), &emit, &mut stop).await;
     let outcome = match outcome {
         Ok(o) => o,
         Err(e) => {
@@ -324,14 +324,16 @@ pub async fn play(
 
 async fn run_session(
     db: &Db,
+    dirs: &Dirs,
     req: &PlayRequest,
     spec: &runner::LaunchSpec,
-    log: &std::path::Path,
     user_id: Option<&str>,
     emit: &(impl Fn(PlayEvent) + Send + Sync),
     stop: &mut UnboundedReceiver<()>,
 ) -> Result<SessionOutcome> {
-    let mut handle = SessionHandle::start(&req.supervisor, spec, log).await?;
+    let log = dirs.logs().join(format!("game-{}.log", req.game_id));
+    let busy = crate::lock::session(dirs, &req.game_id);
+    let mut handle = SessionHandle::start(&req.supervisor, spec, &log, Some(&busy)).await?;
     match handle.next_event().await? {
         Some(SupervisorEvent::Started { pid }) => emit(PlayEvent::Started { pid }),
         Some(SupervisorEvent::Failed { message }) => return Err(Error::Refused(message)),

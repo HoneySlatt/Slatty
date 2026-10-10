@@ -28,12 +28,24 @@ pub fn try_acquire(path: &Path) -> Result<Option<FileLock>> {
 /// Held while a game is installed, changed, repaired, uninstalled, synced or played, so that two of
 /// these never touch the same game at once, even from different processes.
 pub fn game(dirs: &crate::paths::Dirs, game_id: &str) -> Result<FileLock> {
-    try_acquire(&dirs.locks().join(format!("game-{game_id}.lock")))?.ok_or_else(|| {
+    let busy = || {
         Error::Refused(
             "another operation on this game is running (install, update, repair, sync or play)"
                 .into(),
         )
-    })
+    };
+    let lock = try_acquire(&dirs.locks().join(format!("game-{game_id}.lock")))?.ok_or_else(busy)?;
+    // A game whose launcher closed or crashed still runs under its session supervisor.
+    if try_acquire(&session(dirs, game_id))?.is_none() {
+        return Err(busy());
+    }
+    Ok(lock)
+}
+
+/// Held by the session supervisor for as long as a game (or its setup) runs, even once the
+/// launcher that started it is gone.
+pub fn session(dirs: &crate::paths::Dirs, game_id: &str) -> std::path::PathBuf {
+    dirs.locks().join(format!("session-{game_id}.lock"))
 }
 
 pub async fn acquire(path: &Path, timeout: Duration) -> Result<FileLock> {

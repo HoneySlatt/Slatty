@@ -99,8 +99,11 @@ same way before asking for new links.
 Installing, discarding an unfinished install, verifying or repairing, updating or changing content,
 uninstalling, syncing cloud saves (checking them does not) and playing each hold
 `~/.local/state/slatty/locks/game-<id>.lock` while they run. A second one on the same game, from
-the same process or another one (CLI and interface), is refused instead of touching files in use. A
-session left without an end (crash) still blocks changes until the next launch records it.
+the same process or another one (CLI and interface), is refused instead of touching files in use.
+A game started from SlattyLauncher keeps it busy until its last process ends, even once the launcher
+was closed or crashed: the session supervisor holds `session-<id>.lock` for as long as it runs (as
+do the prefix creation and setup steps it runs), and every operation on the game is refused while it
+is held.
 
 ### Install
 

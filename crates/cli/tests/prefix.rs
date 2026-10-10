@@ -30,6 +30,7 @@ async fn fresh_prefix_is_initialised_with_user_folders() {
         Path::new(env!("CARGO_BIN_EXE_slatty")),
         &spec,
         &root.join("init.log"),
+        None,
     )
     .await
     .unwrap()
@@ -84,7 +85,7 @@ async fn galaxy_service_is_registered_and_stops_with_the_session() {
         .unwrap();
         let log = root.join(log);
         async move {
-            SessionHandle::start(supervisor, &spec, &log)
+            SessionHandle::start(supervisor, &spec, &log, None)
                 .await
                 .unwrap()
                 .wait()

@@ -67,7 +67,8 @@ pub async fn ensure(dirs: &Dirs, install: &Install, exe: &Path, supervisor: &Pat
     for args in commands() {
         let label = args[..2].join(" ");
         let spec = runner::windows_command(install, args, install.path.clone())?;
-        let outcome = SessionHandle::start(supervisor, &spec, &log)
+        let busy = crate::lock::session(dirs, &install.game_id);
+        let outcome = SessionHandle::start(supervisor, &spec, &log, Some(&busy))
             .await?
             .wait()
             .await?;

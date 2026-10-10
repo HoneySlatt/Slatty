@@ -26,6 +26,7 @@ async fn run_session(spec: &LaunchSpec, dir: &Path) -> (Vec<SupervisorEvent>, Du
         Path::new(env!("CARGO_BIN_EXE_slatty")),
         spec,
         &dir.join("game.log"),
+        None,
     )
     .await
     .unwrap();
@@ -96,6 +97,7 @@ async fn stop_request_terminates_the_game() {
         Path::new(env!("CARGO_BIN_EXE_slatty")),
         &spec,
         &dir.join("game.log"),
+        None,
     )
     .await
     .unwrap();
@@ -153,6 +155,7 @@ async fn proton_session_waits_for_detached_windows_process() {
         Path::new(env!("CARGO_BIN_EXE_slatty")),
         &spec,
         &dir.join("game.log"),
+        None,
     )
     .await
     .unwrap();

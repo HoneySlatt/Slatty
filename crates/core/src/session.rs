@@ -32,6 +32,8 @@ pub fn supervisor_exe() -> PathBuf {
 pub struct SuperviseRequest {
     pub spec: LaunchSpec,
     pub log: PathBuf,
+    /// Lock held until no process of the session is left (`lock::session`).
+    pub busy: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,6 +72,23 @@ pub fn supervise_main() -> i32 {
         Ok(r) => r,
         Err(message) => {
             emit(&SupervisorEvent::Failed { message });
+            return 2;
+        }
+    };
+    // Opened close-on-exec: the game does not inherit it, and it is released when this ends.
+    let _busy = match request.busy.as_deref().map(crate::lock::try_acquire) {
+        None => None,
+        Some(Ok(Some(lock))) => Some(lock),
+        Some(Ok(None)) => {
+            emit(&SupervisorEvent::Failed {
+                message: "this game is already running".into(),
+            });
+            return 1;
+        }
+        Some(Err(e)) => {
+            emit(&SupervisorEvent::Failed {
+                message: e.to_string(),
+            });
             return 2;
         }
     };
@@ -191,8 +210,14 @@ pub struct SessionOutcome {
 }
 
 impl SessionHandle {
-    /// Spawns `supervisor SUPERVISE_ARG` and hands it the launch request.
-    pub async fn start(supervisor: &Path, spec: &LaunchSpec, log: &Path) -> Result<SessionHandle> {
+    /// Spawns `supervisor SUPERVISE_ARG` and hands it the launch request. With `busy`
+    /// (`lock::session`), the supervisor holds that lock until the session ends.
+    pub async fn start(
+        supervisor: &Path,
+        spec: &LaunchSpec,
+        log: &Path,
+        busy: Option<&Path>,
+    ) -> Result<SessionHandle> {
         if let Some(parent) = log.parent() {
             crate::paths::ensure_dir(parent)?;
         }
@@ -206,6 +231,7 @@ impl SessionHandle {
         let request = serde_json::to_vec(&SuperviseRequest {
             spec: spec.clone(),
             log: log.to_path_buf(),
+            busy: busy.map(Path::to_path_buf),
         })
         .map_err(|e| Error::parse("supervise request", e))?;
         let mut stdin = child.stdin.take().expect("stdin is piped");

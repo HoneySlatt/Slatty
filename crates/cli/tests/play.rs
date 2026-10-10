@@ -113,3 +113,44 @@ async fn play_can_stop_the_game() {
     ));
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// Closing the launcher (or a crash) during a game leaves the game running: nothing else may
+/// update, repair, uninstall, sync or start it until it ends.
+#[tokio::test]
+async fn a_game_left_running_keeps_the_game_busy() {
+    let (root, dirs, db) = fake_native_game("left", "sleep 2; touch \"$PWD/done\"");
+    let (_stop_tx, stop_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
+    let http = slatty_core::http::client().unwrap();
+    let run = play::play(
+        &db,
+        &dirs,
+        &http,
+        request(),
+        move |e| {
+            let _ = events.send(e);
+        },
+        stop_rx,
+    );
+    let started =
+        async { while !matches!(received.recv().await, Some(PlayEvent::Started { .. })) {} };
+    tokio::select! {
+        _ = run => panic!("the session ended before the game"),
+        () = started => {}
+    }
+    // The launcher is gone; its game runs on.
+    assert!(
+        slatty_core::lock::game(&dirs, "7").is_err(),
+        "another operation could take a running game"
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while slatty_core::lock::game(&dirs, "7").is_err() {
+        assert!(std::time::Instant::now() < deadline, "the game stays busy");
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(
+        root.join("game/done").exists(),
+        "free only once the game ended"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
