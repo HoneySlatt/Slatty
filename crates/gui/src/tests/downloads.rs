@@ -174,3 +174,23 @@ fn a_cut_off_download_that_cannot_resume_waits_instead_of_being_retried() {
     assert_eq!(app.queue, ["6"], "held by the download waiting");
     assert!(app.auto_resume.is_none());
 }
+
+/// After a restart the queue is planned again before it starts: the queue going on meanwhile (a
+/// download discarded) does not take a second install out of it, which would never start.
+#[test]
+fn an_install_being_planned_to_start_holds_the_queue() {
+    let mut app = library_app();
+    app.queue = vec!["5".into(), "6".into()];
+    let _ = app.start_next();
+    let _ = app.start_next();
+    assert_eq!(app.queue, ["6"], "one install starts at a time");
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(fake_plan()),
+    )));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Running { .. })
+    ));
+    assert_eq!(app.queue, ["6"]);
+}

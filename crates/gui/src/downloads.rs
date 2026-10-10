@@ -120,7 +120,8 @@ impl App {
     /// crash) first, then the first install of the queue. A download paused on request holds the
     /// queue until it is resumed or discarded.
     pub fn start_next(&mut self) -> Task<Message> {
-        if self.installing().is_some() {
+        // One being planned to start is as good as downloading.
+        if self.installing().is_some() || self.auto_resume.is_some() {
             return Task::none();
         }
         let waiting = |kind| {
