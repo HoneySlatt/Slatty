@@ -150,13 +150,24 @@ fn followed_builds_are_kept_up_to_date_once_turned_on() {
         assert!(ui.find("GE-Proton11-7-x86_64: Downloading 30 %").is_ok());
         assert!(ui.find("Stop").is_ok());
     }
-    let _ = app.update(Message::Runners(RunnersMsg::Updated(Ok(vec![release]))));
+    let _ = app.update(Message::Runners(RunnersMsg::Updated(Ok((
+        vec![release.clone()],
+        Vec::new(),
+    )))));
     assert!(!app.runners.updating && app.runners.installing.is_none());
     assert!(
         app.notice
             .as_ref()
             .is_some_and(|n| !n.error && n.text == "Proton updated: GE-Proton11-7-x86_64.")
     );
+    // A project that failed is said, beside those updated.
+    let _ = app.update(Message::Runners(RunnersMsg::Update));
+    let _ = app.update(Message::Runners(RunnersMsg::Updated(Ok((
+        vec![release],
+        vec!["Proton-CachyOS: no sum published".into()],
+    )))));
+    assert!(app.notice.as_ref().is_some_and(|n| n.error
+        && n.text == "Proton update: Proton-CachyOS: no sum published"));
 
     let _ = app.update(Message::Runners(RunnersMsg::Update));
     let _ = app.update(Message::Runners(RunnersMsg::Updated(Err(Some(

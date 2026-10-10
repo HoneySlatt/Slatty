@@ -144,11 +144,17 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
                 &stop_on_ctrl_c(),
             )
             .await?;
-            if updated.is_empty() {
+            if updated.installed.is_empty() && updated.failed.is_empty() {
                 println!("Up to date");
             }
-            for release in updated {
+            for release in &updated.installed {
                 println!("Updated to {}", release.name);
+            }
+            for (source, e) in &updated.failed {
+                eprintln!("{}: {e}", source.name());
+            }
+            if !updated.failed.is_empty() {
+                anyhow::bail!("{} project(s) could not be updated", updated.failed.len());
             }
         }
     }

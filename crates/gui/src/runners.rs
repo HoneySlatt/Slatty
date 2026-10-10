@@ -39,7 +39,8 @@ pub enum RunnersMsg {
     /// Downloads the newest build of each project games follow as `-latest`.
     Update,
     /// The builds an update installed; `Err(None)` when it was stopped.
-    Updated(Result<Vec<Release>, Option<String>>),
+    /// The builds installed and, for each project that could not be updated, why.
+    Updated(Result<(Vec<Release>, Vec<String>), Option<String>>),
     Cancel,
     Remove(PathBuf),
     Removed(Result<(), String>),
@@ -151,6 +152,14 @@ impl App {
                                 &cancel,
                             )
                             .await
+                            .map(|u| {
+                                let failed = u
+                                    .failed
+                                    .iter()
+                                    .map(|(source, e)| format!("{}: {e}", source.name()))
+                                    .collect();
+                                (u.installed, failed)
+                            })
                             .map_err(paused_or);
                             Message::Runners(RunnersMsg::Updated(result))
                         },
@@ -163,8 +172,14 @@ impl App {
                 view.updating = false;
                 view.installing = None;
                 match result {
-                    Ok(updated) if updated.is_empty() => {}
-                    Ok(updated) => {
+                    Ok((updated, failed)) if !failed.is_empty() => {
+                        self.notify_error(format!("Proton update: {}", failed.join("; ")));
+                        if !updated.is_empty() {
+                            return list(&core);
+                        }
+                    }
+                    Ok((updated, _)) if updated.is_empty() => {}
+                    Ok((updated, _)) => {
                         let names: Vec<&str> = updated.iter().map(|r| r.name.as_str()).collect();
                         self.notice = Some(crate::Notice {
                             error: false,

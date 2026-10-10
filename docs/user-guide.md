@@ -478,8 +478,10 @@ slatty proton update                   # or now
   `10.0-sunset` came out between two 11.0 builds). A link whose build was deleted by hand leads
   to the newest build left at the next start. A game already
   running keeps the build it started with. The build before stays, to choose it by its number for a
-  game a new build breaks; older builds no game uses are deleted. **Update now** and
-  `slatty proton update` do the same at once.
+  game a new build breaks; older builds no game uses are deleted. A project that cannot be updated
+  (GitHub refusing, a release without its sum) is reported and leaves the others to be updated;
+  when GitHub cannot be reached at all, the check is made again at the next start. **Update now**
+  and `slatty proton update` do the same at once.
 - Proton upgrades a game's Wine prefix when its build changes, as under Steam; going back to an
   older build afterwards usually works but is less tested.
 - A build is kept until you delete it, even once a newer one is out, unless an update deletes it as

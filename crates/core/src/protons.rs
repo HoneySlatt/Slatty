@@ -221,12 +221,22 @@ pub fn followed(db: &Db, dirs: &Dirs) -> Result<Vec<Source>> {
 pub fn update_due(db: &Db, now: i64) -> Result<bool> {
     Ok(crate::settings::proton_downloads(db)?
         && crate::settings::proton_updates(db)?
-        && crate::settings::proton_checked_at(db)?.is_none_or(|t| now - t >= 24 * 60 * 60))
+        // A check dated in the future (a clock set back since) is due: waiting for that date
+        // could take years.
+        && crate::settings::proton_checked_at(db)?
+            .is_none_or(|t| now < t || now - t >= 24 * 60 * 60))
+}
+
+/// What an update did: the builds installed, and the projects it could not update, with why.
+#[derive(Debug, Default)]
+pub struct Updated {
+    pub installed: Vec<Release>,
+    pub failed: Vec<(Source, Error)>,
 }
 
 /// Downloads the newest build of every followed project and points its `-latest` link at it. The
-/// build it led to before is kept, to go back to; older ones no game uses are deleted. Returns the
-/// builds installed.
+/// build it led to before is kept, to go back to; older ones no game uses are deleted. A project
+/// that fails leaves the others to be updated.
 pub async fn update(
     db: &Db,
     http: &Client,
@@ -234,26 +244,53 @@ pub async fn update(
     api: &str,
     progress: impl Fn(&str, Stage) + Send + Sync + 'static,
     cancel: &CancellationToken,
-) -> Result<Vec<Release>> {
+) -> Result<Updated> {
     check_allowed(db)?;
     let progress = std::sync::Arc::new(progress);
-    let mut updated = Vec::new();
+    let mut updated = Updated::default();
     for source in followed(db, dirs)? {
-        let release = latest(http, api, source).await?;
-        let previous = current_newest(dirs, source);
-        // Never back: a project can publish an older line after a newer one (CachyOS's
-        // `10.0-sunset` came out between two 11.0 builds). Compared with every build of the
-        // project, not only the link's: a link may lead to a build deleted by hand.
-        if newest_build(dirs, source).is_some_and(|b| !newer(&release.name, &b)) {
-            continue;
+        match update_one(db, http, dirs, api, source, &progress, cancel).await {
+            Ok(Some(release)) => updated.installed.push(release),
+            Ok(None) => {}
+            Err(Error::Cancelled) => return Err(Error::Cancelled),
+            Err(e) => updated.failed.push((source, e)),
         }
-        let (report, name) = (progress.clone(), release.name.clone());
-        install(http, dirs, &release, move |s| report(&name, s), cancel).await?;
-        prune(db, dirs, source, &release.path(dirs), previous.as_deref())?;
-        updated.push(release);
     }
-    crate::settings::set_proton_checked_at(db, chrono::Utc::now().timestamp())?;
+    // Checked again at the next start only when nothing could be reached (offline): a project
+    // that keeps failing otherwise would contact GitHub, and say so, at every start.
+    let unreachable = updated.installed.is_empty()
+        && !updated.failed.is_empty()
+        && updated
+            .failed
+            .iter()
+            .all(|(_, e)| matches!(e, Error::Network { .. }));
+    if !unreachable {
+        crate::settings::set_proton_checked_at(db, chrono::Utc::now().timestamp())?;
+    }
     Ok(updated)
+}
+
+async fn update_one(
+    db: &Db,
+    http: &Client,
+    dirs: &Dirs,
+    api: &str,
+    source: Source,
+    progress: &std::sync::Arc<impl Fn(&str, Stage) + Send + Sync + 'static>,
+    cancel: &CancellationToken,
+) -> Result<Option<Release>> {
+    let release = latest(http, api, source).await?;
+    let previous = current_newest(dirs, source);
+    // Never back: a project can publish an older line after a newer one (CachyOS's
+    // `10.0-sunset` came out between two 11.0 builds). Compared with every build of the
+    // project, not only the link's: a link may lead to a build deleted by hand.
+    if newest_build(dirs, source).is_some_and(|b| !newer(&release.name, &b)) {
+        return Ok(None);
+    }
+    let (report, name) = (progress.clone(), release.name.clone());
+    install(http, dirs, &release, move |s| report(&name, s), cancel).await?;
+    prune(db, dirs, source, &release.path(dirs), previous.as_deref())?;
+    Ok(Some(release))
 }
 
 /// Deletes the builds of `source` other than `newest` and `previous` that no game uses.

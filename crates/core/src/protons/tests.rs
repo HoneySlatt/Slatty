@@ -496,7 +496,7 @@ async fn a_followed_build_is_updated_and_the_one_before_kept_to_go_back_to() {
     )
     .await
     .unwrap();
-    assert_eq!(updated.len(), 1);
+    assert_eq!(updated.installed.len(), 1);
     let newest = dir(&dirs).join("GE-Proton11-7-x86_64");
     assert!(
         names
@@ -529,7 +529,7 @@ async fn a_followed_build_is_updated_and_the_one_before_kept_to_go_back_to() {
     )
     .await
     .unwrap();
-    assert!(updated.is_empty());
+    assert!(updated.installed.is_empty() && updated.failed.is_empty());
     let seen = seen.lock().unwrap();
     assert_eq!(seen.len(), asked + 1);
     assert!(seen.last().unwrap().starts_with(LATEST));
@@ -556,7 +556,7 @@ async fn nothing_followed_asks_github_nothing() {
     )
     .await
     .unwrap();
-    assert!(updated.is_empty());
+    assert!(updated.installed.is_empty() && updated.failed.is_empty());
     assert!(seen.lock().unwrap().is_empty());
     // Downloads off: refused before anything.
     crate::settings::set_proton_downloads(&db, false).unwrap();
@@ -586,6 +586,83 @@ fn builds_are_checked_at_most_once_a_day_and_only_once_both_switches_are_on() {
     assert!(!update_due(&db, now).unwrap());
     crate::settings::set_proton_checked_at(&db, now - 24 * 3600).unwrap();
     assert!(update_due(&db, now).unwrap());
+    // Checked while the clock was ahead: due now, not once the clock gets there.
+    crate::settings::set_proton_checked_at(&db, now + 30 * 24 * 3600).unwrap();
+    assert!(update_due(&db, now).unwrap());
+}
+
+#[tokio::test]
+async fn a_project_that_fails_leaves_the_others_updated() {
+    let root = root("one-fails");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    crate::settings::set_proton_downloads(&db, true).unwrap();
+    game_on(&db, &root, "1", &latest_link(&dirs, Source::UmuProton));
+    game_on(&db, &root, "2", &latest_link(&dirs, Source::GeProton));
+    // GE-Proton, checked first, publishes no sum this time; UMU-Proton does.
+    let archive = gz(&build_tar(|_| {}));
+    let sum = sha512_hex(&archive);
+    let (api, _) = serve(move |base| {
+        let ge = format!(
+            r#"{{"tag_name":"GE-Proton11-7","assets":[
+              {{"name":"{ARCHIVE}","size":1,"browser_download_url":"{base}/dl/{ARCHIVE}"}}]}}"#
+        );
+        let umu = format!(
+            r#"{{"tag_name":"UMU-Proton-10.0-5","assets":[
+              {{"name":"UMU-Proton-10.0-5.tar.gz","size":{},"browser_download_url":"{base}/umu"}},
+              {{"name":"UMU-Proton-10.0-5.sha512sum","size":1,"browser_download_url":"{base}/umu-sum"}}]}}"#,
+            archive.len()
+        );
+        HashMap::from([
+            (LATEST.to_string(), (200, ge.into_bytes())),
+            (
+                "/repos/Open-Wine-Components/umu-proton/releases/latest".to_string(),
+                (200, umu.into_bytes()),
+            ),
+            ("/umu".to_string(), (200, archive)),
+            (
+                "/umu-sum".to_string(),
+                (200, format!("{sum}  UMU-Proton-10.0-5.tar.gz\n").into_bytes()),
+            ),
+        ])
+    })
+    .await;
+    let http = crate::http::client().unwrap();
+    let updated = update(
+        &db,
+        &http,
+        &dirs,
+        &api,
+        |_, _| {},
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.installed.len(), 1);
+    assert!(matches!(
+        updated.failed[..],
+        [(Source::GeProton, Error::Refused(_))]
+    ));
+    assert!(dir(&dirs).join("UMU-Proton-10.0-5/proton").is_file());
+    assert!(crate::settings::proton_checked_at(&db).unwrap().is_some());
+
+    // Offline: nothing answers, so the next start checks again.
+    db.conn()
+        .execute("DELETE FROM settings WHERE key = 'proton_checked_at'", [])
+        .unwrap();
+    let updated = update(
+        &db,
+        &http,
+        &dirs,
+        "http://127.0.0.1:9",
+        |_, _| {},
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.failed.len(), 2);
+    assert!(crate::settings::proton_checked_at(&db).unwrap().is_none());
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -678,7 +755,7 @@ async fn a_link_to_a_deleted_build_is_repaired_and_never_moves_back() {
     )
     .await
     .unwrap();
-    assert!(updated.is_empty());
+    assert!(updated.installed.is_empty() && updated.failed.is_empty());
     assert!(
         seen.lock().unwrap().iter().all(|r| r.starts_with(LATEST)),
         "nothing downloaded"
@@ -740,7 +817,7 @@ async fn an_older_release_never_takes_the_place_of_a_newer_build() {
     )
     .await
     .unwrap();
-    assert!(updated.is_empty());
+    assert!(updated.installed.is_empty() && updated.failed.is_empty());
     assert!(
         seen.lock().unwrap().iter().all(|r| r.starts_with(LATEST)),
         "nothing downloaded"
