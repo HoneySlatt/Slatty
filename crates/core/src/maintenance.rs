@@ -74,8 +74,13 @@ pub fn uninstall(
 
     let mut report = UninstallReport::default();
     let root = &install.path;
+    // Validate the whole list before deleting anything: a refused uninstall stays intact.
+    for rel in &files {
+        installer::refuse_outside(root, &root.join(rel))?;
+    }
     for rel in files {
         let path = root.join(rel);
+        installer::refuse_outside(root, &path)?;
         if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file() || m.is_symlink()) {
             std::fs::remove_file(&path)
                 .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
@@ -543,13 +548,19 @@ fn remove_obsolete(
     dir: &Path,
     kept: impl Fn(&Path) -> bool,
 ) -> Result<Vec<PathBuf>> {
+    let files = old
+        .files
+        .iter()
+        .map(|f| installer::safe_relative(&f.path))
+        .collect::<Result<Vec<_>>>()?;
+    let files: Vec<_> = files.into_iter().filter(|rel| !kept(rel)).collect();
+    for rel in &files {
+        installer::refuse_outside(dir, &dir.join(rel))?;
+    }
     let mut removed = Vec::new();
-    for f in &old.files {
-        let rel = installer::safe_relative(&f.path)?;
-        if kept(&rel) {
-            continue;
-        }
+    for rel in files {
         let path = dir.join(&rel);
+        installer::refuse_outside(dir, &path)?;
         if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file() || m.is_symlink()) {
             std::fs::remove_file(&path)
                 .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
@@ -687,6 +698,31 @@ mod tests {
         fn game(&self) -> PathBuf {
             self.root.join("games/Game")
         }
+    }
+
+    #[test]
+    fn uninstall_refuses_an_escaping_parent_before_deleting_any_file() {
+        let env = Env::new("escaping-uninstall", true);
+        let outside = env.root.join("outside");
+        std::fs::rename(env.game().join("data"), &outside).unwrap();
+        std::os::unix::fs::symlink(&outside, env.game().join("data")).unwrap();
+        let result = uninstall(&env.db, &env.dirs, "1", false);
+        assert!(matches!(result, Err(Error::Refused(_))));
+        assert!(env.game().join("Game.exe").exists());
+        assert_eq!(std::fs::read(outside.join("a.pak")).unwrap(), b"pak");
+        assert!(Install::get(&env.db, "1").unwrap().is_some());
+    }
+
+    #[test]
+    fn obsolete_files_cannot_be_deleted_through_an_escaping_parent() {
+        let env = Env::new("escaping-obsolete", true);
+        let outside = env.root.join("outside");
+        std::fs::rename(env.game().join("data"), &outside).unwrap();
+        std::os::unix::fs::symlink(&outside, env.game().join("data")).unwrap();
+        let record = InstallRecord::load(&env.dirs, "1").unwrap().unwrap();
+        assert!(remove_obsolete(&record, &env.game(), |_| false).is_err());
+        assert!(env.game().join("Game.exe").exists());
+        assert_eq!(std::fs::read(outside.join("a.pak")).unwrap(), b"pak");
     }
 
     impl Drop for Env {

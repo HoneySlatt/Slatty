@@ -29,7 +29,10 @@ Include the steps to reproduce and the version or commit you tested.
 - **Game files stay in the game folder.** Paths from GOG's manifests, installers and cloud
   listings are checked before anything is written. Symbolic links from Linux installers are
   resolved on disk once all are made, and one that leads out of the game folder, even through
-  another link, is removed. No file is written through a link that leads out of the game folder.
+  another link, is removed. No file is written through a link that leads out of the game folder,
+  and an uninstall or update that would delete through one deletes nothing. Temporary files get
+  names never used before and never follow a link already there. These checks do not guard
+  against another program changing the folders at the same moment.
 
 ## What leaves your computer
 

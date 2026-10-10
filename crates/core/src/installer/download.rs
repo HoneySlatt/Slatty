@@ -294,8 +294,7 @@ impl<S: ContentSource> Download<'_, S> {
         })
         .await
         .expect("scan task panicked")?;
-        let out = std::fs::File::create(&tmp)
-            .map_err(|e| Error::io(format!("create {}", tmp.display()), e))?;
+        let out = fsutil::restart_staging(&tmp)?;
         // Chunks are written at their offset as they arrive, so one slow chunk does not hold back
         // the ones after it.
         let offsets: Vec<u64> = file
@@ -447,13 +446,13 @@ fn resolve(path: &Path) -> Option<PathBuf> {
     Some(real)
 }
 
-/// Refuses to write `dest` when its folder leads out of `root` through a link (one a game or
-/// someone else made, or one an installer chained to another).
+/// Refuses to write or delete `dest` when its folder leads out of `root` through a link (one a
+/// game or someone else made, or one an installer chained to another).
 pub fn refuse_outside(root: &Path, dest: &Path) -> Result<()> {
     match dest.parent() {
         Some(parent) if leads_inside(root, parent) => Ok(()),
         _ => Err(Error::Refused(format!(
-            "{} leads out of the game folder through a link; nothing was written there",
+            "{} leads out of the game folder through a link; it was left alone",
             dest.display()
         ))),
     }

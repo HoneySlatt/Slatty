@@ -161,6 +161,29 @@ fn plenty(_: &Path) -> Result<u64> {
 }
 
 #[tokio::test]
+async fn a_linux_download_does_not_truncate_a_staging_link_target() {
+    let source = Fake::new(vec![game(&big()), dlc()]);
+    let set = LinuxSet::new(&parts(&source).await).unwrap();
+    let root = temp("staging-link");
+    let partial = root.join("partial");
+    std::fs::create_dir_all(&partial).unwrap();
+    let outside = root.join("unrelated");
+    std::fs::write(&outside, b"keep").unwrap();
+    std::os::unix::fs::symlink(&outside, partial.join("start.sh.slatty-dl")).unwrap();
+    LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &plenty,
+    }
+    .run(&set, &partial, &root.join("game"))
+    .await
+    .unwrap();
+    assert_eq!(std::fs::read(outside).unwrap(), b"keep");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
 async fn installs_the_game_files_and_the_dlc_over_them() {
     let big = big();
     let source = Fake::new(vec![game(&big), dlc()]);

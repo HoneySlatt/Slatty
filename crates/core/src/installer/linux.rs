@@ -679,8 +679,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         count: &(dyn Fn(u64) + Sync),
     ) -> Result<()> {
         let e = &file.entry;
-        let out = std::fs::File::create(tmp)
-            .map_err(|err| Error::io(format!("create {}", tmp.display()), err))?;
+        let out = fsutil::restart_staging(tmp)?;
         let sink = Sink {
             out: std::io::BufWriter::with_capacity(BATCH, out),
             crc: flate2::Crc::new(),

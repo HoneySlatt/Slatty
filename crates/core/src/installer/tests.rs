@@ -165,6 +165,17 @@ impl Drop for Env {
 const PLENTY: u64 = 1 << 40;
 
 #[tokio::test]
+async fn downloading_cannot_truncate_a_temporary_symlink_target() {
+    let env = Env::new("temporary-link");
+    std::fs::create_dir_all(env.partial()).unwrap();
+    let outside = env.root.join("unrelated");
+    std::fs::write(&outside, b"keep").unwrap();
+    std::os::unix::fs::symlink(&outside, env.partial().join("Game.exe.slatty-dl")).unwrap();
+    let _ = env.run(&CancellationToken::new(), PLENTY).await;
+    assert_eq!(std::fs::read(outside).unwrap(), b"keep");
+}
+
+#[tokio::test]
 async fn installs_verified_files_and_publishes_atomically() {
     let env = Env::new("ok");
     env.run(&CancellationToken::new(), PLENTY).await.unwrap();
