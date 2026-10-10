@@ -26,6 +26,7 @@ against real GOG services; details are in [docs/compatibility.md](docs/compatibi
 | Install Windows builds (Galaxy depots), pause and resume, integrity checks | install yes, pause/resume not yet |
 | Install native Linux builds from GOG's offline installers, file by file | yes (Hollow Knight: Silksong installed and played) |
 | Launch through umu + Proton, follow the session until the last process exits | yes |
+| Launch options: pick the game or one of its tools at the first Play, change it later | yes (Trails in the Sky) |
 | Cloud saves: three-way sync, conflict handling, backups | download and upload yes |
 | Achievements: list, report unlocks made in game through Comet | listing yes, in-game unlock not yet |
 | Achievements: unlock or clear manually | yes |

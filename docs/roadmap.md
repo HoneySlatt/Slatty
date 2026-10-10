@@ -13,9 +13,13 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   - Three-way cloud sync.
   - Comet integration.
   - Manual achievement management.
-- **Interface redesign.** Library, Achievements and Settings tabs; cover grid with shelves, sort,
-  size and filters; game page with key art, play time, cloud and achievement summaries, tools in
-  panels; favorites.
+- **Interface redesign.** Library, Achievements, Downloads and Settings tabs; cover grid with
+  shelves, sort, size and filters; game page with key art, play time, cloud and achievement
+  summaries, tools in drawers; favorites; Settings with a side list that follows the scroll.
+- **Customisation.** Built-in themes, a theme file for colours, corners and motion, the interface
+  font, the cover size. Each game's title, sorting title, cover and background can be changed.
+- **Large libraries.** The library and Achievements grids build only the rows in view, so a
+  library of 10,000 games stays fluid.
 - **Interface.** Iced front end covering:
   - library;
   - game detail;
@@ -32,6 +36,11 @@ There are no dates. Each milestone ends with results checked against GOG and rec
     Settings and a choice per install.
   - Staged and verified downloads, pause and resume.
   - Wine prefix created at first launch.
+- **Launching.** A Proton build per game; native Linux games through `steam-run` or umu on NixOS;
+  games with several launch options ask which one at the first Play.
+- **Privacy and security.** Switches for umu's game database, play time reporting and Comet;
+  Comet started only for games that ship the Galaxy SDK; private data folders; no write through
+  a link leading out of a game folder; dependency audit.
 - **Maintenance.** Verify, repair, uninstall.
 - **Updates.** Detect a newer build; update in place, file by file, resumable. Unchanged chunks
   of changed files are copied locally instead of downloaded. GOG's binary patches (xdelta3) are applied
@@ -48,8 +57,11 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   rendered through Iced's Markdown support.
 - **Gamepad navigation.** A couch mode.
 - **Translations of the interface.** It is in English for now.
-- **More runners.** System Wine, per-game Proton choice, managed Proton downloads.
-- **Packaging.** A Nix package, then other distributions.
+- **More runners.** System Wine, managed Proton downloads.
+- **Game isolation.** Run games without access to the whole home folder (today a Windows game
+  sees every file through Wine's `z:` drive, and a Linux game runs as the user).
+- **Packaging.** A Nix package (bringing `steam-run-free` for native games), then other
+  distributions.
 - **Windows host support.** The core avoids Linux-only assumptions outside the session supervisor
   and the runners.
 
