@@ -61,6 +61,9 @@ pub struct Directory {
 }
 
 pub fn directory(tail: &[u8], size: u64) -> Result<Directory> {
+    if tail.len() < 22 || tail.len() as u64 > size {
+        return Err(bad("truncated end of central directory"));
+    }
     let tail_start = size - tail.len() as u64;
     let at = (0..=tail.len().saturating_sub(22))
         .rev()
@@ -342,6 +345,16 @@ mod tests {
     #[test]
     fn a_file_without_a_zip_is_refused() {
         assert!(directory(&[0u8; 100], 100).is_err());
+    }
+
+    #[test]
+    fn truncated_end_records_are_errors_not_panics() {
+        for len in 4..22 {
+            let mut raw = vec![0; len];
+            raw[..4].copy_from_slice(&EOCD.to_le_bytes());
+            assert!(directory(&raw, len as u64).is_err());
+        }
+        assert!(directory(&[0; 22], 1).is_err());
     }
 
     #[test]
