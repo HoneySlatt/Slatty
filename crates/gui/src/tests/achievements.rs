@@ -263,3 +263,25 @@ fn manual_changes_are_offered_only_once_turned_on_in_advanced_settings() {
     assert!(ui.find("Unlock").is_ok() && ui.find("Clear").is_ok());
     assert!(ui.find("Unlock all").is_ok());
 }
+
+#[test]
+fn clearing_warns_that_the_game_may_unlock_it_again() {
+    let mut app = app_with_achievements();
+    app.manual_achievements = true;
+    let warning = "A game that keeps its own record of its achievements can unlock a cleared one \
+                   again the next time it runs.";
+    let ask = |app: &mut App, unlock| {
+        let _ = app.update(Message::AskAchievementChange(
+            "5".into(),
+            vec![crate::AchievementChange {
+                achievement_id: "id-Beta".into(),
+                name: "[FAKE] Beta".into(),
+                unlock,
+            }],
+        ));
+    };
+    ask(&mut app, false);
+    assert!(render(&app).find(warning).is_ok());
+    ask(&mut app, true);
+    assert!(render(&app).find(warning).is_err(), "not for an unlock");
+}

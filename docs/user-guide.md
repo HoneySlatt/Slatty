@@ -304,7 +304,8 @@ slatty achievements <game-id> --clear NEGLECT
 
 Achievements are matched by key, id or exact name. You are asked to confirm before anything is
 written. Manual changes appear on your public GOG profile, dated today, and are probably against
-GOG's terms of use.
+GOG's terms of use. A game that keeps its own record of its achievements (Hollow Knight most
+likely does) can unlock a cleared one again the next time it runs.
 
 ## Updates
 
