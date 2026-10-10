@@ -418,6 +418,96 @@ async fn remote_paths_cannot_escape_the_save_folder() {
 }
 
 #[tokio::test]
+async fn a_download_cannot_follow_a_directory_symlink_outside_saves() {
+    let env = Env::new("symlink-download");
+    let outside = env.tmp.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::create_dir_all(env.root()).unwrap();
+    std::fs::write(outside.join("a.sav"), "keep me").unwrap();
+    std::os::unix::fs::symlink(&outside, env.root().join("linked")).unwrap();
+    env.put_remote("linked/a.sav", "remote");
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(!r.is_clean());
+    assert!(r.downloaded.is_empty());
+    assert_eq!(
+        std::fs::read_to_string(outside.join("a.sav")).unwrap(),
+        "keep me"
+    );
+}
+
+#[tokio::test]
+async fn a_download_refuses_a_local_change_after_the_scan() {
+    let env = Env::new("local-download-race");
+    env.write("a.sav", "base");
+    env.sync(SyncOptions::default()).await;
+    env.put_remote("a.sav", "remote");
+    let path = env.root().join("a.sav");
+    env.cloud.after_list(env.cloud.list_count() + 1, move |_| {
+        std::fs::write(path, "new local save").unwrap();
+    });
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(!r.is_clean());
+    assert!(r.downloaded.is_empty());
+    assert_eq!(env.read("a.sav").as_deref(), Some("new local save"));
+    assert_eq!(env.sync(SyncOptions::default()).await.conflicts.len(), 1);
+}
+
+#[tokio::test]
+async fn cloud_deletion_refuses_a_local_file_recreated_after_the_scan() {
+    let env = Env::new("recreated-save");
+    env.write("a.sav", "base");
+    env.write("b.sav", "keep root nonempty");
+    env.sync(SyncOptions::default()).await;
+    std::fs::remove_file(env.root().join("a.sav")).unwrap();
+    let path = env.root().join("a.sav");
+    env.cloud.after_list(env.cloud.list_count() + 1, move |_| {
+        std::fs::write(path, "recreated").unwrap();
+    });
+    let r = env.sync(ALLOW_DELETIONS).await;
+    assert!(!r.is_clean() && r.deleted_remote.is_empty());
+    assert_eq!(env.remote("a.sav").as_deref(), Some("base"));
+}
+
+#[tokio::test]
+async fn consecutive_syncs_preserve_each_previous_version() {
+    let env = Env::new("backup-versions");
+    env.write("a.sav", "first");
+    env.sync(SyncOptions::default()).await;
+    env.put_remote("a.sav", "second");
+    let first = env.sync(SyncOptions::default()).await;
+    env.put_remote("a.sav", "third");
+    let second = env.sync(SyncOptions::default()).await;
+    assert_ne!(first.backup_dir, second.backup_dir);
+    assert_eq!(
+        env.backups(),
+        vec!["saves/local/a.sav=first", "saves/local/a.sav=second"]
+    );
+}
+
+#[tokio::test]
+async fn keeping_the_cloud_side_of_a_cloud_deletion_backs_up_then_deletes() {
+    // The interface's "Keep the cloud version" never sets allow_deletions: the choice itself
+    // must resolve the conflict, or the game stays blocked.
+    let env = Env::new("prefer-remote-deletion");
+    env.write("a.sav", "base");
+    env.write("b.sav", "keep cloud nonempty");
+    env.sync(SyncOptions::default()).await;
+    env.write("a.sav", "local edit");
+    env.cloud.files.lock().unwrap().remove("saves/a.sav");
+    assert_eq!(env.sync(SyncOptions::default()).await.conflicts.len(), 1);
+    let r = env
+        .sync(SyncOptions {
+            prefer: Some(Prefer::Remote),
+            ..Default::default()
+        })
+        .await;
+    assert_eq!(r.deleted_local, vec!["a.sav"]);
+    assert!(env.read("a.sav").is_none());
+    assert_eq!(env.backups(), vec!["saves/local/a.sav=local edit"]);
+    assert!(env.sync(SyncOptions::default()).await.is_clean());
+}
+
+#[tokio::test]
 async fn concurrent_sync_of_the_same_game_is_refused() {
     let env = Env::new("lock");
     let _held = crate::lock::try_acquire(&env.dirs.locks().join("cloud-u-g.lock"))

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use chrono::{DateTime, Utc};
 use rusqlite::{OptionalExtension, params};
@@ -136,7 +137,13 @@ pub async fn sync<T: CloudTransport>(
         root_changed,
     });
 
-    let stamp = Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    static NEXT_BACKUP: AtomicU64 = AtomicU64::new(0);
+    let stamp = format!(
+        "{}-{}-{}",
+        Utc::now().format("%Y%m%d-%H%M%S-%f"),
+        std::process::id(),
+        NEXT_BACKUP.fetch_add(1, Ordering::Relaxed)
+    );
     let mut run = Run {
         cloud,
         target,
@@ -220,6 +227,8 @@ impl<T: CloudTransport> Run<'_, T> {
                 if plan.local_deletions_blocked() {
                     self.report.conflicts.push((self.display(key), kind));
                 } else {
+                    // Choosing the cloud's side of this conflict is the permission; the local
+                    // copy is backed up first.
                     self.delete_local(key)?;
                 }
             }
@@ -244,15 +253,10 @@ impl<T: CloudTransport> Run<'_, T> {
     }
 
     async fn download_replace(&mut self, key: &str) -> Result<()> {
-        let RemoteRef {
-            name, rel, hash, ..
-        } = &self.remote[key];
-        let (name, rel, hash) = (name.clone(), rel.clone(), hash.clone());
+        let RemoteRef { name, hash, .. } = &self.remote[key];
+        let (name, hash) = (name.clone(), hash.clone());
         let bytes = self.cloud.download(&name).await?;
-        let dest = match self.local.files.get(key) {
-            Some(f) => f.abs.clone(),
-            None => resolve_relative(self.target.root, &rel)?,
-        };
+        let dest = self.unchanged_local(key)?;
         if dest.exists() {
             self.backup(&dest, "local", key)?;
         }
@@ -272,13 +276,51 @@ impl<T: CloudTransport> Run<'_, T> {
     }
 
     fn delete_local(&mut self, key: &str) -> Result<()> {
-        let abs = self.local.files[key].abs.clone();
+        let abs = self.unchanged_local(key)?;
         self.backup(&abs, "local", key)?;
         std::fs::remove_file(&abs)
             .map_err(|e| Error::io(format!("delete {}", abs.display()), e))?;
         delete_base(self.target, key)?;
         self.report.deleted_local.push(self.display(key));
         Ok(())
+    }
+
+    /// Links below the save root were skipped by the scan, not treated as absent files.
+    fn local_path(&self, key: &str) -> Result<PathBuf> {
+        let path = resolve_relative(self.target.root, &self.display(key))?;
+        let mut current = self.target.root.to_path_buf();
+        for component in path
+            .strip_prefix(self.target.root)
+            .expect("relative save path")
+            .components()
+        {
+            current.push(component);
+            match std::fs::symlink_metadata(&current) {
+                Ok(meta) if meta.is_symlink() => {
+                    return Err(Error::Refused(
+                        "a save path contains a symbolic link".into(),
+                    ));
+                }
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(Error::io(format!("stat {}", current.display()), e)),
+            }
+        }
+        Ok(path)
+    }
+
+    /// Rechecks after network waits, before replacing or deleting a save.
+    fn unchanged_local(&self, key: &str) -> Result<PathBuf> {
+        let path = self.local_path(key)?;
+        let actual = match scan::hash_file(&path) {
+            Ok((sha, _)) => Some(sha),
+            Err(Error::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e),
+        };
+        if actual.as_ref() != self.local.files.get(key).map(|f| &f.sha256) {
+            return Err(Error::Refused("the file changed during the sync".into()));
+        }
+        Ok(path)
     }
 
     fn backup(&mut self, file: &Path, side: &str, key: &str) -> Result<()> {
@@ -343,14 +385,15 @@ impl<T: CloudTransport> Run<'_, T> {
     }
 
     async fn upload(&mut self, key: &str) -> Result<String> {
+        let path = self.local_path(key)?;
         let file = &self.local.files[key];
-        let data = std::fs::read(&file.abs)
-            .map_err(|e| Error::io(format!("read {}", file.abs.display()), e))?;
+        let data =
+            std::fs::read(&path).map_err(|e| Error::io(format!("read {}", path.display()), e))?;
         let sha = fsutil::sha256_hex(&data);
         if sha != file.sha256 {
             return Err(Error::Refused("the file changed during the sync".into()));
         }
-        let modified: DateTime<Utc> = std::fs::metadata(&file.abs)
+        let modified: DateTime<Utc> = std::fs::metadata(&path)
             .and_then(|m| m.modified())
             .map(DateTime::from)
             .unwrap_or_else(|_| Utc::now());
@@ -367,6 +410,7 @@ impl<T: CloudTransport> Run<'_, T> {
             self.report.pending_deletions.push(self.display(key));
             return Ok(());
         }
+        self.unchanged_local(key)?;
         self.cloud.delete(&self.remote[key].name).await?;
         delete_base(self.target, key)?;
         self.report.deleted_remote.push(self.display(key));

@@ -59,6 +59,12 @@ Modification dates are never used to decide.
   `~/.local/share/slatty/backups/<user>/<game>/<time>/<location>/local/`. The new content is
   written to a temporary file, then renamed into place.
 - **Deletions need permission.** They are applied only with `--allow-deletions`, file by file.
+  One conflict is the exception: the cloud deleted a file you changed, and you keep the cloud's
+  side. That choice is the permission; your copy is backed up first.
+- **A save is checked again just before it is replaced or deleted.** If the game, or anything
+  else, changed or created it while the sync waited on the network, it is left alone and the sync
+  reports it. Nothing is written or deleted through a symbolic link below the save folder. Each
+  sync that backs up files gets its own backup folder, even two syncs in the same second.
 - **A suspicious folder blocks deletions.** In these cases deletions are refused, even with
   permission:
   - the local folder is missing or empty while history says it had saves (a new prefix after a

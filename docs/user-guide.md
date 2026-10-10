@@ -273,7 +273,9 @@ slatty cloud sync <game-id> --prefer remote   # keep the cloud one, yours is bac
 Deleting a file in the cloud, or locally, needs `--allow-deletions`. It is refused whenever a folder
 looks empty or moved. Every replaced file is backed up first; the backup folder is printed.
 
-[docs/cloud-saves.md](cloud-saves.md) explains the rules in detail.
+A save that changes during the sync, because the game or anything else writes it, is left as it
+is and reported; sync again once it has stopped changing. [docs/cloud-saves.md](cloud-saves.md)
+explains the rules in detail.
 
 ## Achievements
 
