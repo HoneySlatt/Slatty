@@ -220,6 +220,19 @@ pub async fn check_update(
     game_id: &str,
 ) -> Result<Option<UpdateCheck>> {
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
+    // A Linux build's version is in GOG's list of installers: no need to read their files.
+    if install.platform == Platform::Linux {
+        let offer = linux::offer(http, tokens, game_id).await?;
+        let version = linux::pick(&offer.installers, &record.language)
+            .map(|i| i.version.clone())
+            .ok_or_else(|| Error::Unsupported("GOG no longer offers a Linux build".into()))?;
+        let build_id = format!("{}{version}", linux::BUILD_PREFIX);
+        return Ok((build_id != record.build_id).then(|| UpdateCheck {
+            installed_version: record.version.clone(),
+            available_version: version,
+            available_build: build_id,
+        }));
+    }
     let dlcs = DlcSelection::Only(record.dlcs.clone());
     let plan = installer::plan_for(
         http,
