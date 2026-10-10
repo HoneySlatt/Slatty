@@ -38,6 +38,12 @@ pub fn isolated_by_default(platform: Platform, runner: &Runner) -> bool {
     platform == Platform::Windows && matches!(runner, Runner::Umu { .. })
 }
 
+/// Whether a game installed now starts isolated: as by default, unless isolation of new games is
+/// turned off in Settings.
+pub fn isolated_when_installed(db: &Db, platform: Platform, runner: &Runner) -> Result<bool> {
+    Ok(isolated_by_default(platform, runner) && crate::settings::isolate_new_games(db)?)
+}
+
 impl Install {
     pub fn save(&self, db: &Db) -> Result<()> {
         crate::paths::check_game_id(&self.game_id)?;
@@ -295,6 +301,21 @@ mod tests {
             Err(Error::Refused(_))
         ));
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn new_installs_follow_the_isolation_setting() {
+        let db = Db::in_memory().unwrap();
+        let proton = Runner::Umu {
+            proton: "/p".into(),
+            prefix: "/x".into(),
+        };
+        let isolated =
+            |platform, runner: &Runner| isolated_when_installed(&db, platform, runner).unwrap();
+        assert!(isolated(Platform::Windows, &proton));
+        assert!(!isolated(Platform::Linux, &Runner::Native));
+        crate::settings::set_isolate_new_games(&db, false).unwrap();
+        assert!(!isolated(Platform::Windows, &proton));
     }
 
     #[test]

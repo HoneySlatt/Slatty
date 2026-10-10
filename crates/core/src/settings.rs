@@ -18,6 +18,7 @@ const REPORT_PLAYTIME: &str = "report_playtime";
 const GAME_ACHIEVEMENTS: &str = "game_achievements";
 const MANUAL_ACHIEVEMENTS: &str = "manual_achievements";
 const STEAMGRIDDB: &str = "steamgriddb";
+const ISOLATE_NEW_GAMES: &str = "isolate_new_games";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -73,6 +74,16 @@ pub fn report_playtime(db: &Db) -> Result<bool> {
 
 pub fn set_report_playtime(db: &Db, on: bool) -> Result<()> {
     db.set_setting(REPORT_PLAYTIME, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether Windows games installed from now on run isolated from the user's files (each game's
+/// own setting changes it later). On until turned off.
+pub fn isolate_new_games(db: &Db) -> Result<bool> {
+    Ok(db.setting(ISOLATE_NEW_GAMES)?.as_deref() != Some("off"))
+}
+
+pub fn set_isolate_new_games(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(ISOLATE_NEW_GAMES, Some(if on { "on" } else { "off" }))
 }
 
 /// Whether Comet is started while a game that uses GOG's Galaxy runs, so achievements unlocked in

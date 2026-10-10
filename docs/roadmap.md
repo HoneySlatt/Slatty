@@ -57,8 +57,10 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 - **Gamepad navigation.** A couch mode.
 - **Translations of the interface.** It is in English for now.
 - **More runners.** System Wine, managed Proton downloads.
-- **Game isolation.** Run games without access to the whole home folder (today a Windows game
-  sees every file through Wine's `z:` drive, and a Linux game runs as the user).
+- **Game isolation.** Games run in umu's container with a home folder of their own, Windows games
+  by default; the switches are in Game settings and Settings → Privacy, and the container itself
+  was checked (see [compatibility](compatibility.md)). Left: checks with real games (graphics,
+  Comet, gamepads, umu's fixes), then keeping games off the D-Bus session bus.
 - **Packaging.** A Nix package (bringing `steam-run-free` for native games), then other
   distributions.
 - **Windows host support.** The core avoids Linux-only assumptions outside the session supervisor

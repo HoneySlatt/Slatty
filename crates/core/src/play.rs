@@ -82,6 +82,8 @@ pub enum PlayEvent {
     Blocked(CloudSummary),
     CometReady,
     CometUnavailable(String),
+    /// The game runs without access to the user's files (see `runner`).
+    Isolated,
     Started {
         pid: u32,
     },
@@ -251,6 +253,9 @@ pub async fn play(
         None
     };
 
+    if install.isolated {
+        emit(PlayEvent::Isolated);
+    }
     let started = Instant::now();
     let outcome = run_session(db, dirs, &req, &spec, user_id.as_deref(), &emit, &mut stop).await;
     let outcome = match outcome {

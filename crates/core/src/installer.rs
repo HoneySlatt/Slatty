@@ -234,7 +234,7 @@ pub async fn install(
         platform: plan.platform,
         path: target.clone(),
         client_id: plan.meta.client_id.clone(),
-        isolated: crate::install::isolated_by_default(plan.platform, &runner),
+        isolated: crate::install::isolated_when_installed(db, plan.platform, &runner)?,
         runner,
     };
     install.save(db)?;

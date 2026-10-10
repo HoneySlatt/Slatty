@@ -230,6 +230,24 @@ fn what_leaves_the_computer_can_be_turned_off() {
 }
 
 #[test]
+fn new_windows_games_are_isolated_until_turned_off() {
+    use crate::settings::SettingsMsg;
+    let mut app = library_app();
+    app.page = Page::Settings;
+    let db = app.core.as_ref().unwrap().db.clone();
+    assert!(app.isolate_new_games);
+    app.window = Size::new(1440.0, 1900.0);
+    assert!(
+        Simulator::with_size(settings(), app.window, app.view())
+            .find("Isolate new Windows games")
+            .is_ok()
+    );
+    let _ = app.update(Message::Settings(SettingsMsg::IsolateNewGames(false)));
+    assert!(!app.isolate_new_games);
+    assert!(!slatty_core::settings::isolate_new_games(&db).unwrap());
+}
+
+#[test]
 fn steamgriddb_is_off_until_turned_on_and_its_key_is_never_shown() {
     use crate::settings::SettingsMsg;
     let mut app = library_app();

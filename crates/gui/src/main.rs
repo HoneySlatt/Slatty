@@ -228,6 +228,8 @@ pub struct App {
     pub umu_lookup: bool,
     pub report_playtime: bool,
     pub game_achievements: bool,
+    /// Whether Windows games installed from now on run isolated from the user's files.
+    pub isolate_new_games: bool,
     /// Whether achievements can be unlocked and cleared by hand (Settings → Advanced).
     pub manual_achievements: bool,
     /// Covers and backgrounds from SteamGridDB in Edit game (Settings → Advanced), and whether its
@@ -322,6 +324,7 @@ impl Default for App {
             umu_lookup: true,
             report_playtime: true,
             game_achievements: true,
+            isolate_new_games: true,
             manual_achievements: false,
             steamgriddb: false,
             steamgriddb_key: None,
@@ -531,6 +534,7 @@ impl App {
                 self.umu_lookup = boot.umu_lookup;
                 self.report_playtime = boot.report_playtime;
                 self.game_achievements = boot.game_achievements;
+                self.isolate_new_games = boot.isolate_new_games;
                 self.manual_achievements = boot.manual_achievements;
                 self.steamgriddb = boot.steamgriddb;
                 self.steamgriddb_key = boot.steamgriddb_key;

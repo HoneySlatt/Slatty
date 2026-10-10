@@ -74,6 +74,9 @@ fn print_event(game_id: &str, event: PlayEvent) {
         PlayEvent::CometUnavailable(why) => {
             println!("Achievements unavailable for this session: {why}")
         }
+        PlayEvent::Isolated => {
+            println!("Isolated from your files: the game sees its own folder and its own home.")
+        }
         PlayEvent::Started { pid } => println!("Game started (pid {pid})."),
         PlayEvent::LauncherExited { code } => {
             println!("Launch process exited ({code:?}); waiting for remaining game processes…")

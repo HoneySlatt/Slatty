@@ -221,6 +221,73 @@ fn an_installed_game_can_change_its_proton() {
 }
 
 #[test]
+fn game_settings_isolate_a_game_from_the_users_files_or_not() {
+    let mut app = library_app();
+    let core = app.core.clone().unwrap();
+    app.installs["3"].save(&core.db).unwrap();
+    open(&mut app, "3", Some(Panel::GameSettings));
+    // The simulator cannot read a toggler's label: its note says what it is set to.
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Isolation").is_ok());
+        assert!(
+            ui.find("The game sees its own folder and a home folder of its own, not your files. Used from the next launch.")
+                .is_ok()
+        );
+        snapshot(&mut ui, "game-settings-isolation");
+    }
+    let _ = app.update(Message::Settings(
+        crate::settings::SettingsMsg::GameIsolated("3".into(), false),
+    ));
+    let saved = slatty_core::install::Install::get(&core.db, "3")
+        .unwrap()
+        .unwrap();
+    assert!(!app.installs["3"].isolated && !saved.isolated);
+    assert!(
+        render(&app)
+            .find("The game sees your files, through Wine's z: drive.")
+            .is_ok()
+    );
+
+    // Wine alone cannot isolate: the reason instead of the switch.
+    app.installs.get_mut("3").unwrap().runner = Runner::Wine {
+        wine: "/wine".into(),
+        prefix: "/prefixes/jeu3".into(),
+    };
+    let mut ui = render(&app);
+    assert!(
+        ui.find("This game runs through Wine alone, which cannot isolate it.")
+            .is_ok()
+    );
+    assert!(
+        ui.find("The game sees your files, through Wine's z: drive.")
+            .is_err()
+    );
+}
+
+#[test]
+fn the_session_says_when_a_game_runs_isolated() {
+    use crate::play::{PlayMsg, PlayState};
+    let mut app = library_app();
+    let (stop, _rx) = tokio::sync::mpsc::unbounded_channel();
+    app.play = Some(PlayState {
+        game_id: "3".into(),
+        log: Vec::new(),
+        stop,
+        running: true,
+    });
+    let _ = app.update(Message::Playing(PlayMsg::Event(
+        slatty_core::play::PlayEvent::Isolated,
+    )));
+    open(&mut app, "3", Some(Panel::Session));
+    assert!(
+        render(&app)
+            .find("Isolated from your files: the game sees its own folder and its own home.")
+            .is_ok()
+    );
+}
+
+#[test]
 fn game_settings_show_the_language_and_switch_it_when_gog_offers_others() {
     use crate::maintenance::ContentInfo;
     use slatty_core::maintenance::Change;

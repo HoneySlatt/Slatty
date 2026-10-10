@@ -31,6 +31,7 @@ pub struct Boot {
     pub umu_lookup: bool,
     pub report_playtime: bool,
     pub game_achievements: bool,
+    pub isolate_new_games: bool,
     pub manual_achievements: bool,
     pub steamgriddb: bool,
     /// Whether a SteamGridDB API key is in the keyring; only asked once the integration is on.
@@ -101,6 +102,7 @@ pub async fn boot() -> Result<Boot, String> {
     let umu_lookup = slatty_core::settings::umu_lookup(&db).map_err(err)?;
     let report_playtime = slatty_core::settings::report_playtime(&db).map_err(err)?;
     let game_achievements = slatty_core::settings::game_achievements(&db).map_err(err)?;
+    let isolate_new_games = slatty_core::settings::isolate_new_games(&db).map_err(err)?;
     let manual_achievements = slatty_core::settings::manual_achievements(&db).map_err(err)?;
     let steamgriddb = slatty_core::settings::steamgriddb(&db).map_err(err)?;
     let steamgriddb_key = if steamgriddb {
@@ -159,6 +161,7 @@ pub async fn boot() -> Result<Boot, String> {
         umu_lookup,
         report_playtime,
         game_achievements,
+        isolate_new_games,
         manual_achievements,
         steamgriddb,
         steamgriddb_key,

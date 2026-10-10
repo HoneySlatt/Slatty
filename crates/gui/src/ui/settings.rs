@@ -187,6 +187,18 @@ impl App {
             ),
             setting(
                 wide,
+                "Isolate new Windows games",
+                switch(
+                    self.isolate_new_games,
+                    SettingsMsg::IsolateNewGames,
+                    "Windows games installed from now on run without access to your files: they \
+                     see their own folder and a home folder of their own. Each game's Game \
+                     settings changes it.",
+                ),
+                None,
+            ),
+            setting(
+                wide,
                 "Play time on GOG",
                 switch(
                     self.report_playtime,

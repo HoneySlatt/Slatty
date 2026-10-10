@@ -228,6 +228,10 @@ pub enum SettingsMsg {
     ReportPlaytime(bool),
     /// Whether Comet runs while a game that uses GOG's Galaxy runs.
     GameAchievements(bool),
+    /// Whether Windows games installed from now on run isolated from the user's files.
+    IsolateNewGames(bool),
+    /// Whether an installed game runs isolated from the user's files.
+    GameIsolated(String, bool),
     /// Whether achievements can be unlocked and cleared by hand.
     ManualAchievements(bool),
     /// Whether Edit game offers art from SteamGridDB.
@@ -441,6 +445,20 @@ impl App {
                 self.report_playtime = on;
                 if let Err(e) = settings::set_report_playtime(&core.db, on) {
                     self.notify_error(e.to_string());
+                }
+            }
+            SettingsMsg::IsolateNewGames(on) => {
+                self.isolate_new_games = on;
+                if let Err(e) = settings::set_isolate_new_games(&core.db, on) {
+                    self.notify_error(e.to_string());
+                }
+            }
+            SettingsMsg::GameIsolated(game_id, on) => {
+                match slatty_core::install::set_isolated(&core.db, &game_id, on) {
+                    Ok(install) => {
+                        self.installs.insert(game_id, install);
+                    }
+                    Err(e) => self.notify_error(e.to_string()),
                 }
             }
             SettingsMsg::LaunchTask(game_id, choice) => self.choose_launch(&game_id, choice),

@@ -1,8 +1,9 @@
 //! The Game settings drawer: folder, Proton, language and DLC of an installed game.
 
 use crate::theme::text;
-use iced::widget::{Column, Space, button, column, container, pick_list, row, scrollable};
+use iced::widget::{Column, Space, button, column, container, pick_list, row, scrollable, toggler};
 use iced::{Alignment, Element, Length, Padding};
+use slatty_core::install::{Install, Platform};
 use slatty_core::library::LibraryGame;
 use slatty_core::maintenance::Change;
 use slatty_core::runner::Runner;
@@ -102,6 +103,7 @@ impl App {
                 _ => note(runner_label(install)),
             },
         ));
+        sections.push(section(Icon::Shield, "Isolation", isolation(install)));
         let view = self.maintenance.get(&g.id);
         let busy = self.maintenance_busy(&g.id);
         match view.and_then(|v| v.content.as_ref()) {
@@ -141,6 +143,36 @@ impl App {
         }
         col.into()
     }
+}
+
+/// Whether the game sees the user's files, and the switch that changes it.
+fn isolation(install: &Install) -> Element<'_, Message> {
+    if matches!(install.runner, Runner::Wine { .. }) {
+        return note("This game runs through Wine alone, which cannot isolate it.");
+    }
+    let id = install.game_id.clone();
+    let what = match (install.isolated, install.platform) {
+        (true, _) => {
+            "The game sees its own folder and a home folder of its own, not your files. Used \
+             from the next launch."
+        }
+        (false, Platform::Linux) => {
+            "The game sees your files. Isolated, it would not find the saves it made in your \
+             home folder: it would start from its own."
+        }
+        (false, Platform::Windows) => "The game sees your files, through Wine's z: drive.",
+    };
+    column![
+        toggler(install.isolated)
+            .label("Isolate from your files")
+            .text_size(15)
+            .font(theme::font())
+            .on_toggle(move |on| Message::Settings(SettingsMsg::GameIsolated(id.clone(), on)))
+            .size(22),
+        note(what),
+    ]
+    .spacing(10)
+    .into()
 }
 
 /// A titled part of the drawer, with its icon.

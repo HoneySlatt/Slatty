@@ -94,7 +94,7 @@ panels:
 
 | Where | Panel |
 |---|---|
-| Sliders button (top right) | Game settings, in a drawer beside the page: folder, launch option (for a game that has several), Proton build (used from the next launch; the platform for a Linux build), game version (switch to an older or newer build), language and DLC |
+| Sliders button (top right) | Game settings, in a drawer beside the page: folder, launch option (for a game that has several), Proton build (used from the next launch; the platform for a Linux build), isolation from your files, game version (switch to an older or newer build), language and DLC |
 | ⋮ button (top right) | Manage, in a drawer beside the page: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
 | Cloud saves card | A drawer beside the page: status, save folder, what a sync would do (upload, download, compare, unchanged, deleted on one side), Check, Sync now, conflict choices |
 | Achievements card | Full list from the most common to the rarest (with unlock or clear, once turned on in Settings → Advanced), in a drawer beside the page (over it in a narrow window) |
@@ -263,8 +263,12 @@ Game output goes to `~/.local/state/slatty/logs/game-<id>.log`.
 
 An isolated game sees its own folder, its Wine prefix and a home folder of its own,
 `~/.local/share/slatty/homes/<id>/`, instead of yours. Wine's `z:` drive then shows nothing of your
-files. Windows games installed with Proton start isolated; Linux games do not, since their saves
-may be in your home folder.
+files. Windows games installed with Proton start isolated, unless **Isolate new Windows games** is
+off in Settings → Privacy; Linux games do not, since their saves may be in your home folder. The
+session says when a game runs isolated.
+
+**Isolation** in a game's Game settings turns it on or off from its next launch; so does the
+command line:
 
 ```sh
 slatty isolation <game-id>          # show
@@ -438,11 +442,18 @@ library, and the size of the covers. **Installs** holds:
 
 `slatty install --dir` and `--proton` set the same values.
 
-**Privacy** has three switches, all on until turned off: **Proton fixes** (a game's GOG id goes to
-umu's public database at its first launch, to pick its community fixes; off, the game runs without
-them), **Achievements in game** (Comet runs while a game that uses GOG's Galaxy runs; off,
-unlocks made in games are not reported; unlocking by hand does not need it) and **Play time on GOG** (each session goes to GOG so it counts on your profile, as Galaxy
-does; sessions played while it is off are never sent). SlattyLauncher has no telemetry.
+**Privacy** has four switches, all on until turned off:
+
+- **Proton fixes**: a game's GOG id goes to umu's public database at its first launch, to pick its
+  community fixes; off, the game runs without them.
+- **Achievements in game**: Comet runs while a game that uses GOG's Galaxy runs; off, unlocks made
+  in games are not reported; unlocking by hand does not need it.
+- **Isolate new Windows games**: Windows games installed from then on run
+  [isolated from your files](#isolation-from-your-files); each game's Game settings changes it.
+- **Play time on GOG**: each session goes to GOG so it counts on your profile, as Galaxy does;
+  sessions played while it is off are never sent.
+
+SlattyLauncher has no telemetry.
 
 **Advanced** holds **Manual achievements**, off until turned on: it adds Unlock, Clear and Unlock
 all beside a game's achievements (see [Achievements](#achievements)). **SteamGridDB**, off until turned

@@ -153,6 +153,9 @@ pub fn describe_play_event(e: &PlayEvent) -> String {
         PlayEvent::CometUnavailable(why) => {
             format!("Achievements unavailable for this session: {why}")
         }
+        PlayEvent::Isolated => {
+            "Isolated from your files: the game sees its own folder and its own home.".into()
+        }
         PlayEvent::Started { pid } => format!("Game started (pid {pid})."),
         PlayEvent::LauncherExited { code } => {
             format!("Launcher exited ({code:?}); following remaining game processes…")
