@@ -12,15 +12,17 @@ use crate::theme::{self, bold, semibold, tokens};
 
 /// SlattyLauncher's emblem, in the accent colour.
 pub fn logo<'a>(height: f32) -> Element<'a, Message> {
-    svg(svg::Handle::from_memory(
-        include_bytes!("../../assets/logo.svg").as_slice(),
-    ))
-    .height(height)
-    .width(Length::Shrink)
-    .style(|_, _| svg::Style {
-        color: Some(tokens().accent),
-    })
-    .into()
+    // Made once: a handle hashes the whole file (159 KB), and the top bar is in every view.
+    static LOGO: std::sync::LazyLock<svg::Handle> = std::sync::LazyLock::new(|| {
+        svg::Handle::from_memory(include_bytes!("../../assets/logo.svg").as_slice())
+    });
+    svg(LOGO.clone())
+        .height(height)
+        .width(Length::Shrink)
+        .style(|_, _| svg::Style {
+            color: Some(tokens().accent),
+        })
+        .into()
 }
 
 /// A tab of the top bar: icon and label, filled when its page is open.
