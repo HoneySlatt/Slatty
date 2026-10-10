@@ -40,6 +40,8 @@ pub enum ImageChange {
     Keep,
     /// Use a copy of this image file.
     Set(PathBuf),
+    /// Use this downloaded image.
+    Downloaded(Vec<u8>),
     /// Back to GOG's image.
     Reset,
 }
@@ -158,22 +160,25 @@ fn apply(
         ImageChange::Set(source) => {
             let bytes = std::fs::read(&source)
                 .map_err(|e| Error::io(format!("read {}", source.display()), e))?;
-            let ext = image_extension(&bytes).ok_or_else(|| {
-                Error::Refused(format!(
-                    "{} is not a PNG, JPEG, WebP, GIF or BMP image",
-                    source.display()
-                ))
-            })?;
-            let stamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos();
-            let dest = folder.join(format!("{art}-{stamp}.{ext}"));
-            fsutil::write_atomic(&dest, &bytes)?;
-            Some(dest)
+            Some(store(folder, art, &bytes, &source.display().to_string())?)
         }
+        ImageChange::Downloaded(bytes) => Some(store(folder, art, &bytes, "the downloaded file")?),
     };
     Ok(new)
+}
+
+/// Copies `bytes`, an image, into `folder` under a name never used before.
+fn store(folder: &Path, art: &str, bytes: &[u8], what: &str) -> Result<PathBuf> {
+    let ext = image_extension(bytes).ok_or_else(|| {
+        Error::Refused(format!("{what} is not a PNG, JPEG, WebP, GIF or BMP image"))
+    })?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let dest = folder.join(format!("{art}-{stamp}.{ext}"));
+    fsutil::write_atomic(&dest, bytes)?;
+    Ok(dest)
 }
 
 fn remove_replaced(folder: &Path, old: Option<&Path>, kept: Option<&Path>) {
@@ -212,7 +217,12 @@ pub fn is_image(path: &Path) -> bool {
     let mut head = [0u8; 16];
     std::fs::File::open(path)
         .and_then(|mut f| f.read(&mut head))
-        .is_ok_and(|n| image_extension(&head[..n]).is_some())
+        .is_ok_and(|n| is_image_data(&head[..n]))
+}
+
+/// The same for bytes already read.
+pub fn is_image_data(bytes: &[u8]) -> bool {
+    image_extension(bytes).is_some()
 }
 
 #[cfg(test)]
@@ -388,5 +398,29 @@ mod tests {
         assert!(save(&env.db, &env.dirs, "42", cover(ImageChange::Reset)).is_err());
         assert_eq!(all(&env.db).unwrap()["42"], first);
         assert!(first.cover.unwrap().exists());
+    }
+
+    #[test]
+    fn a_downloaded_image_is_kept_like_a_chosen_file() {
+        let env = Env::new("downloaded");
+        let custom = save(
+            &env.db,
+            &env.dirs,
+            "42",
+            cover(ImageChange::Downloaded(PNG.to_vec())),
+        )
+        .unwrap();
+        let path = custom.cover.unwrap();
+        assert!(path.starts_with(env.dirs.data.join("custom/42")));
+        assert_eq!(std::fs::read(path).unwrap(), PNG);
+        assert!(matches!(
+            save(
+                &env.db,
+                &env.dirs,
+                "42",
+                cover(ImageChange::Downloaded(b"<html>[FAKE]</html>".to_vec()))
+            ),
+            Err(Error::Refused(_))
+        ));
     }
 }

@@ -11,16 +11,18 @@ use slatty_core::custom::ImageChange;
 
 use super::note;
 use super::panels::DRAWER_WIDTH;
-use crate::edit::{Art, ContextMenu, EditDraft, EditMsg, MENU_WIDTH};
+use crate::edit::{Art, ArtPicker, ContextMenu, EditDraft, EditMsg, FORM, MENU_WIDTH};
 use crate::icons::{Icon, icon};
 use crate::theme::{self, bold, tokens};
-use crate::{App, Message};
+use crate::{App, Loadable, Message};
 
 /// The parts of the edit form, laid out differently by the dialog and the drawer.
 struct Form<'a> {
     fields: Element<'a, Message>,
     cover: Element<'a, Message>,
     background: Element<'a, Message>,
+    /// What SteamGridDB offers for one of the pictures, once asked.
+    picker: Option<Element<'a, Message>>,
     actions: Element<'a, Message>,
 }
 
@@ -50,19 +52,25 @@ impl App {
             (PICTURE_HEIGHT * 3.0 / 4.0, PICTURE_HEIGHT),
             (PICTURE_HEIGHT * 16.0 / 9.0, PICTURE_HEIGHT),
         );
-        let dialog = container(
-            column![
-                header,
-                form.fields,
-                row![form.cover, form.background].spacing(24),
-                note("Click a picture to choose a file."),
-                form.actions
-            ]
-            .spacing(20),
+        // The form scrolls between its title and its buttons once SteamGridDB's choices make it
+        // taller than the window: it has the room the margins, padding, title and buttons leave.
+        const AROUND: f32 = 48.0 + 52.0 + 80.0 + 52.0 + 40.0;
+        let body = container(
+            scrollable(
+                column![form.fields, row![form.cover, form.background].spacing(24)]
+                    .push(form.picker)
+                    .push(note("Click a picture to choose a file."))
+                    .spacing(20)
+                    .padding(Padding::ZERO.right(14)),
+            )
+            .id(FORM)
+            .style(theme::scroller),
         )
-        .padding(26)
-        .max_width(720)
-        .style(theme::card);
+        .max_height((self.window.height - AROUND).max(160.0));
+        let dialog = container(column![header, body, form.actions].spacing(20))
+            .padding(Padding::new(26.0).right(12.0))
+            .max_width(720)
+            .style(theme::card);
         stack![
             page,
             mouse_area(
@@ -91,15 +99,13 @@ impl App {
             (DRAWER_PICTURE, DRAWER_PICTURE * 9.0 / 16.0),
         );
         let body = scrollable(
-            column![
-                form.fields,
-                form.cover,
-                form.background,
-                note("Click a picture to choose a file."),
-            ]
-            .spacing(20)
-            .padding(Padding::ZERO.right(14)),
+            column![form.fields, form.cover, form.background]
+                .push(form.picker)
+                .push(note("Click a picture to choose a file."))
+                .spacing(20)
+                .padding(Padding::ZERO.right(14)),
         )
+        .id(FORM)
         .style(theme::scroller)
         .height(Length::Fill);
         self.drawer(
@@ -166,6 +172,12 @@ impl App {
                     .on_press(msg(EditMsg::Pick(art)))
                     .style(theme::plain)
             ]
+            .push(self.steamgriddb.then(|| {
+                button(text("From SteamGridDB").size(14))
+                    .padding(0)
+                    .on_press(msg(EditMsg::Browse(art)))
+                    .style(theme::link)
+            }))
             .spacing(8)
             .into()
         };
@@ -190,6 +202,7 @@ impl App {
             fields: fields.into(),
             cover: picture(Art::Cover, "Cover", cover),
             background: picture(Art::Background, "Background", background),
+            picker: d.picker.as_ref().map(|p| self.art_picker(p)),
             actions: actions.into(),
         }
     }
@@ -203,6 +216,7 @@ impl App {
         };
         match (change, art) {
             (ImageChange::Set(path), _) => Some(image::Handle::from_path(path)),
+            (ImageChange::Downloaded(_), _) => d.previews.get(&art).cloned(),
             (ImageChange::Keep, Art::Cover) => self.cover(&game.id),
             (ImageChange::Keep, Art::Background) => self.background(game),
             (ImageChange::Reset, Art::Cover) => self.covers.get(&game.id).cloned(),
@@ -252,4 +266,120 @@ pub(super) fn context_menu<'a>(
         .y(menu.at.y),
     ]
     .into()
+}
+
+impl App {
+    /// The SteamGridDB search for one picture: a name to search, the games found, then that
+    /// game's pictures in a row to scroll; a picture clicked is downloaded into the draft.
+    fn art_picker<'a>(&'a self, p: &'a ArtPicker) -> Element<'a, Message> {
+        let msg = |m| Message::Edit(m);
+        let (title, empty, (width, height)) = match p.art {
+            Art::Cover => (
+                "Cover from SteamGridDB",
+                "SteamGridDB has no cover for this game.",
+                (96.0, 144.0),
+            ),
+            Art::Background => (
+                "Background from SteamGridDB",
+                "SteamGridDB has no background for this game.",
+                (248.0, 80.0),
+            ),
+        };
+        let close = button(icon(Icon::X, 16.0, tokens().text))
+            .padding(6)
+            .on_press(msg(EditMsg::ClosePicker))
+            .style(theme::icon_button);
+        let search = row![
+            text_input("Name of the game", &p.query)
+                .on_input(|v| Message::Edit(EditMsg::PickerQuery(v)))
+                .on_submit(msg(EditMsg::Search))
+                .style(theme::field)
+                .font(theme::font())
+                .padding([8, 12]),
+            button(text("Search").size(14))
+                .padding([8, 14])
+                .on_press_maybe((!p.query.trim().is_empty()).then(|| msg(EditMsg::Search)))
+                .style(theme::tonal),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center);
+        let games: Element<'_, Message> = match &p.games {
+            Loadable::Loading => note("Searching SteamGridDB…"),
+            Loadable::Failed(e) => note(e.as_str()),
+            Loadable::Ready(list) if list.is_empty() => {
+                note("No game of that name on SteamGridDB.")
+            }
+            Loadable::Ready(list) => row(list.iter().map(|g| {
+                let name = match g
+                    .release_date
+                    .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
+                {
+                    Some(d) => format!("{} ({})", g.name, chrono::Datelike::year(&d)),
+                    None => g.name.clone(),
+                };
+                button(text(name).size(13))
+                    .padding([6, 12])
+                    .on_press(msg(EditMsg::ChooseGame(g.id)))
+                    .style(if p.game == Some(g.id) {
+                        theme::accent_outline
+                    } else {
+                        theme::tonal
+                    })
+                    .into()
+            }))
+            .spacing(8)
+            .wrap()
+            .vertical_spacing(8)
+            .into(),
+        };
+        let pictures: Option<Element<'_, Message>> = p.choices.as_ref().map(|c| match c {
+            Loadable::Loading => note("Loading its pictures…"),
+            Loadable::Failed(e) => note(e.as_str()),
+            Loadable::Ready(list) if list.is_empty() => note(empty),
+            Loadable::Ready(list) => {
+                let previews = list.iter().enumerate().map(|(i, a)| {
+                    let picture: Element<'_, Message> = match self.images.get(&a.thumb) {
+                        Some(h) => image(h.clone())
+                            .content_fit(ContentFit::Cover)
+                            .width(width)
+                            .height(height)
+                            .border_radius(tokens().cover_radius)
+                            .into(),
+                        None => container(Space::new())
+                            .width(width)
+                            .height(height)
+                            .style(theme::placeholder)
+                            .into(),
+                    };
+                    button(picture)
+                        .padding(0)
+                        .on_press_maybe(p.fetching.is_none().then_some(msg(EditMsg::Choose(i))))
+                        .style(theme::plain)
+                        .into()
+                });
+                scrollable(row(previews).spacing(10).padding(Padding::ZERO.bottom(12)))
+                    .direction(scrollable::Direction::Horizontal(
+                        scrollable::Scrollbar::default(),
+                    ))
+                    .style(theme::scroller)
+                    .into()
+            }
+        });
+        column![
+            row![
+                text(title)
+                    .size(14)
+                    .color(tokens().muted)
+                    .width(Length::Fill),
+                close
+            ]
+            .align_y(Alignment::Center),
+            search,
+            games,
+        ]
+        .push(pictures)
+        .push(p.fetching.map(|_| note("Downloading…")))
+        .spacing(10)
+        .into()
+    }
 }

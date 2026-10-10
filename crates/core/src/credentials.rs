@@ -1,5 +1,6 @@
 use crate::auth::Tokens;
 use crate::error::{Error, Result};
+use crate::secret::Secret;
 
 const SERVICE: &str = "slatty-launcher";
 
@@ -36,6 +37,32 @@ pub fn load(user_id: &str) -> Result<Option<Tokens>> {
 
 pub fn delete(user_id: &str) -> Result<()> {
     match entry(user_id)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(describe(e)),
+    }
+}
+
+/// Another secret of slatty's, kept under its own name (an API key).
+fn key_entry(name: &str) -> Result<keyring::Entry> {
+    keyring::Entry::new(SERVICE, &format!("key:{name}")).map_err(describe)
+}
+
+pub fn save_key(name: &str, key: &Secret) -> Result<()> {
+    key_entry(name)?
+        .set_password(key.expose())
+        .map_err(describe)
+}
+
+pub fn load_key(name: &str) -> Result<Option<Secret>> {
+    match key_entry(name)?.get_password() {
+        Ok(key) => Ok(Some(Secret::new(key))),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(describe(e)),
+    }
+}
+
+pub fn delete_key(name: &str) -> Result<()> {
+    match key_entry(name)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(describe(e)),
     }

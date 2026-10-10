@@ -19,7 +19,7 @@ core functions. Long operations report progress through callbacks or typed event
 |---|---|
 | `auth` | Sign-in URL, code exchange, token refresh, game-scoped tokens |
 | `account` | Active account, cross-process locked refresh, keyring storage via `credentials` |
-| `credentials` | System keyring (Secret Service through the `keyring` crate) |
+| `credentials` | System keyring (Secret Service through the `keyring` crate): GOG tokens, and API keys such as SteamGridDB's |
 | `http` | Shared HTTP client; reads that fail on the way (dropped connection, timeout, rate limit, server error) are sent again twice; errors are stripped of URLs so query-string secrets never reach logs |
 | `db` | SQLite state database with versioned migrations |
 | `library` | Galaxy library and gamesdb metadata, per-account cache, covers, key art and images, whether GOG offers anything to install |
@@ -40,7 +40,8 @@ core functions. Long operations report progress through callbacks or typed event
 | `overview` | Per-game achievement counts and cloud save support, cached per account |
 | `playtime` | Play time read from GOG, finished sessions reported to GOG |
 | `settings` | Default installation path, default Proton and platform, favorites, the download queue, privacy switches, manual achievement changes, launch options |
-| `custom` | Titles, sorting titles, covers and backgrounds the user chose, and the games they hid, apart from GOG's data; chosen images are copied into the data folder |
+| `custom` | Titles, sorting titles, covers and backgrounds the user chose, and the games they hid, apart from GOG's data; chosen or downloaded images are copied into the data folder |
+| `steamgriddb` | SteamGridDB, once turned on: games searched by name, their grids (covers) and heroes (backgrounds), images downloaded from its servers only; the user's API key in a header |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
 
 ## Interface modules
@@ -68,7 +69,7 @@ another account is now signed in.
 | `downloads` | The download queue: installs waiting as `queued` jobs, started one after the other, reordered by dragging (`ui/downloads.rs` for the tab) |
 | `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
 | `settings` | The Settings page (its side list follows the scroll), defaults for installs, privacy switches, manual achievement changes (Advanced, off until turned on), the Proton build and launch option of each installed game |
-| `edit` | The menu a right click on a cover or on the key art of a game page opens, and the edit form, a dialog over the library and a drawer on the game page: draft, file picker, saving. `ui/pointer.rs` reports where a right click happened, without a message per mouse move |
+| `edit` | The menu a right click on a cover or on the key art of a game page opens, and the edit form, a dialog over the library and a drawer on the game page: draft, file picker, SteamGridDB search (name, game, picture), saving. `ui/pointer.rs` reports where a right click happened, without a message per mouse move |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
 | `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages, `install` for the Install drawer and dialog, `game_settings` for the Game settings drawer and dialog (library dialogs share `panels::library_dialog`), `manage` and `cloud` for their drawers (drawers share `panels::drawer`); `format` for text shown to the user |
 | `theme`, `presets`, `icons` | Design tokens (`Tokens`: every colour, the corner radii of the redesigned pages, and the page transition: a short fade with a slight rise, played when the page changes and set to zero to turn it off) and the widget styles built from them; Lucide icons. Views never name a colour; the tokens come from a built-in theme (`presets`), with `~/.config/slatty/theme.toml` on top when it exists, read at start, on Reload and when the theme changes (see [theming](theming.md)) |
@@ -276,7 +277,8 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
 - SlattyLauncher's folders are 0700 and its database 0600, set again at every start.
 - Nothing is written through a symbolic link that leads out of the game folder; links from Linux
   installers are resolved on disk once all are made, and those leading out are removed.
-- Besides GOG, only umu's game database is contacted, and both it and play time reporting can be
-  turned off (Settings → Privacy).
+- Besides GOG, only umu's game database is contacted, and SteamGridDB once turned on; umu's
+  database and play time reporting can be turned off (Settings → Privacy), SteamGridDB is off
+  until turned on (Settings → Advanced).
 - Writes to installed games, saves and prefixes are staged and renamed. Every destructive action
   either refuses when the situation looks wrong, or keeps a copy.

@@ -5,9 +5,10 @@ use std::path::PathBuf;
 
 use iced::Task;
 use slatty_core::install::Platform;
-use slatty_core::settings;
+use slatty_core::secret::Secret;
+use slatty_core::{credentials, settings, steamgriddb};
 
-use crate::{App, Message, theme};
+use crate::{App, Message, err, theme};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtonChoice(pub PathBuf);
@@ -229,6 +230,14 @@ pub enum SettingsMsg {
     GameAchievements(bool),
     /// Whether achievements can be unlocked and cleared by hand.
     ManualAchievements(bool),
+    /// Whether Edit game offers art from SteamGridDB.
+    SteamGridDb(bool),
+    SteamGridDbKeyInput(String),
+    SaveSteamGridDbKey,
+    RemoveSteamGridDbKey,
+    /// Whether a SteamGridDB key is in the keyring, after reading, saving or removing it.
+    SteamGridDbKey(Result<bool, String>),
+    OpenSteamGridDbKeyPage,
     /// How one installed game is started, among its launch options.
     LaunchTask(String, String),
     /// Proton build of one installed game, used from its next launch.
@@ -377,6 +386,57 @@ impl App {
                     self.notify_error(e.to_string());
                 }
             }
+            SettingsMsg::SteamGridDb(on) => {
+                self.steamgriddb = on;
+                if let Err(e) = settings::set_steamgriddb(&core.db, on) {
+                    self.notify_error(e.to_string());
+                }
+                if on && self.steamgriddb_key.is_none() {
+                    return Task::perform(steamgriddb_key_saved(), |r| {
+                        Message::Settings(SettingsMsg::SteamGridDbKey(r))
+                    });
+                }
+            }
+            SettingsMsg::SteamGridDbKeyInput(v) => self.steamgriddb_key_input = v,
+            SettingsMsg::SaveSteamGridDbKey => {
+                let key = std::mem::take(&mut self.steamgriddb_key_input);
+                let key = key.trim();
+                if key.is_empty() {
+                    return Task::none();
+                }
+                let key = Secret::new(key);
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            credentials::save_key(steamgriddb::KEY, &key)
+                        })
+                        .await
+                        .map_err(err)?
+                        .map(|()| true)
+                        .map_err(err)
+                    },
+                    |r| Message::Settings(SettingsMsg::SteamGridDbKey(r)),
+                );
+            }
+            SettingsMsg::RemoveSteamGridDbKey => {
+                return Task::perform(
+                    async {
+                        tokio::task::spawn_blocking(|| credentials::delete_key(steamgriddb::KEY))
+                            .await
+                            .map_err(err)?
+                            .map(|()| false)
+                            .map_err(err)
+                    },
+                    |r| Message::Settings(SettingsMsg::SteamGridDbKey(r)),
+                );
+            }
+            SettingsMsg::SteamGridDbKey(Ok(saved)) => self.steamgriddb_key = Some(saved),
+            SettingsMsg::SteamGridDbKey(Err(e)) => self.notify_error(e),
+            SettingsMsg::OpenSteamGridDbKeyPage => {
+                if slatty_core::auth::open_in_browser(&steamgriddb::key_page()).is_err() {
+                    self.notify_error(format!("Open {} in your browser.", steamgriddb::KEY_PAGE));
+                }
+            }
             SettingsMsg::ReportPlaytime(on) => {
                 self.report_playtime = on;
                 if let Err(e) = settings::set_report_playtime(&core.db, on) {
@@ -429,4 +489,13 @@ impl App {
         }
         Task::none()
     }
+}
+
+/// Whether a SteamGridDB API key is in the keyring, read off the interface thread.
+pub async fn steamgriddb_key_saved() -> Result<bool, String> {
+    tokio::task::spawn_blocking(|| credentials::load_key(steamgriddb::KEY))
+        .await
+        .map_err(err)?
+        .map(|key| key.is_some())
+        .map_err(err)
 }

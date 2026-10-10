@@ -17,6 +17,7 @@ const UMU_LOOKUP: &str = "umu_lookup";
 const REPORT_PLAYTIME: &str = "report_playtime";
 const GAME_ACHIEVEMENTS: &str = "game_achievements";
 const MANUAL_ACHIEVEMENTS: &str = "manual_achievements";
+const STEAMGRIDDB: &str = "steamgriddb";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -91,6 +92,15 @@ pub fn manual_achievements(db: &Db) -> Result<bool> {
 
 pub fn set_manual_achievements(db: &Db, on: bool) -> Result<()> {
     db.set_setting(MANUAL_ACHIEVEMENTS, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether Edit game offers covers and backgrounds from SteamGridDB. Off until turned on.
+pub fn steamgriddb(db: &Db) -> Result<bool> {
+    Ok(db.setting(STEAMGRIDDB)?.as_deref() == Some("on"))
+}
+
+pub fn set_steamgriddb(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(STEAMGRIDDB, Some(if on { "on" } else { "off" }))
 }
 
 /// The way a game is started, among its launch options, once chosen.

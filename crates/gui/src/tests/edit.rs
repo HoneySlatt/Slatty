@@ -211,3 +211,142 @@ fn a_hidden_game_shows_only_under_hidden_games() {
     assert_eq!(app.shelves(), Shelf::ALL);
     assert_eq!(titles(&app).len(), 14);
 }
+
+#[test]
+fn steamgriddb_art_is_searched_by_name_once_turned_on() {
+    use crate::edit::{Art, EditMsg};
+    use slatty_core::steamgriddb::{self, Game};
+    let mut app = library_app();
+    let edit = |app: &mut App, m: EditMsg| drop(app.update(Message::Edit(m)));
+    edit(&mut app, EditMsg::Open("4".into()));
+    assert!(
+        render(&app).find("From SteamGridDB").is_err(),
+        "off until turned on"
+    );
+
+    // The search starts from the title the library shows, which can be changed.
+    app.steamgriddb = true;
+    edit(&mut app, EditMsg::Browse(Art::Cover));
+    let picker = app.edit.as_ref().unwrap().picker.as_ref().unwrap();
+    assert_eq!(picker.query, "[FAKE] Game 4");
+    assert_eq!(picker.searched, "[FAKE] Game 4", "searched at once");
+    assert!(render(&app).find("Searching SteamGridDB…").is_ok());
+    edit(&mut app, EditMsg::PickerQuery("Hollow Knight".into()));
+    edit(&mut app, EditMsg::Search);
+    let game = |id, name: &str| Game {
+        id,
+        name: name.into(),
+        release_date: Some(1_488_326_400),
+    };
+    // The answer to the first search arrives late: it is dropped.
+    edit(
+        &mut app,
+        EditMsg::Found("[FAKE] Game 4".into(), Ok(vec![game(9, "[FAKE] Other")])),
+    );
+    assert!(render(&app).find("[FAKE] Other (2017)").is_err());
+    edit(
+        &mut app,
+        EditMsg::Found(
+            "Hollow Knight".into(),
+            Ok(vec![
+                game(5254, "[FAKE] Hollow Knight"),
+                game(77, "[FAKE] Silksong"),
+            ]),
+        ),
+    );
+    let picker = app.edit.as_ref().unwrap().picker.as_ref().unwrap();
+    assert_eq!(picker.game, Some(5254), "the closest game is shown first");
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("[FAKE] Hollow Knight (2017)").is_ok());
+        assert!(ui.find("Loading its pictures…").is_ok());
+    }
+    let offer = |n: u32| steamgriddb::Art {
+        url: format!("https://cdn2.steamgriddb.com/grid/{n}.png"),
+        thumb: format!("https://cdn2.steamgriddb.com/thumb/{n}.jpg"),
+        width: 600,
+        height: 900,
+    };
+    // Another game is chosen; the pictures of the first one, arriving late, are dropped.
+    edit(&mut app, EditMsg::ChooseGame(77));
+    edit(&mut app, EditMsg::Offered(5254, Ok(vec![offer(1)])));
+    assert!(matches!(
+        app.edit.as_ref().unwrap().picker.as_ref().unwrap().choices,
+        Some(crate::Loadable::Loading)
+    ));
+    edit(&mut app, EditMsg::Offered(77, Ok(vec![offer(1), offer(2)])));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Cover from SteamGridDB").is_ok());
+        assert!(ui.find("Save").is_ok(), "the buttons stay in view");
+        snapshot(&mut ui, "edit-steamgriddb");
+    }
+    edit(&mut app, EditMsg::Choose(1));
+    assert!(render(&app).find("Downloading…").is_ok());
+
+    // Something else than an image is refused; an image goes into the draft, then is saved.
+    edit(
+        &mut app,
+        EditMsg::Fetched(Art::Cover, Ok(b"<html>[FAKE]</html>".to_vec())),
+    );
+    assert!(app.notice.as_ref().is_some_and(|n| n.error));
+    assert!(app.edit.as_ref().unwrap().picker.is_none());
+    edit(&mut app, EditMsg::Browse(Art::Cover));
+    edit(
+        &mut app,
+        EditMsg::Found("[FAKE] Game 4".into(), Ok(vec![game(5254, "[FAKE] HK")])),
+    );
+    edit(&mut app, EditMsg::Offered(5254, Ok(vec![offer(1)])));
+    edit(&mut app, EditMsg::Choose(0));
+    let png = b"\x89PNG\r\n\x1a\n[FAKE]".to_vec();
+    edit(&mut app, EditMsg::Fetched(Art::Cover, Ok(png.clone())));
+    let draft = app.edit.as_ref().unwrap();
+    assert!(draft.picker.is_none());
+    assert!(draft.previews.contains_key(&Art::Cover), "shown at once");
+    edit(&mut app, EditMsg::Save);
+    let saved = app.customs["4"].cover.clone().unwrap();
+    assert!(saved.starts_with(&app.core.as_ref().unwrap().dirs.data));
+    assert_eq!(std::fs::read(&saved).unwrap(), png);
+    let _ = std::fs::remove_file(saved);
+}
+
+#[test]
+fn a_steamgriddb_failure_is_said_in_the_picker() {
+    use crate::edit::{Art, EditMsg};
+    let mut app = library_app();
+    app.steamgriddb = true;
+    let edit = |app: &mut App, m: EditMsg| drop(app.update(Message::Edit(m)));
+    edit(&mut app, EditMsg::Open("4".into()));
+    edit(&mut app, EditMsg::Browse(Art::Background));
+    edit(
+        &mut app,
+        EditMsg::Found(
+            String::new(),
+            Err("Add your SteamGridDB API key in Settings → Advanced.".into()),
+        ),
+    );
+    assert!(
+        render(&app)
+            .find("Add your SteamGridDB API key in Settings → Advanced.")
+            .is_ok()
+    );
+    edit(&mut app, EditMsg::Search);
+    edit(
+        &mut app,
+        EditMsg::Found("[FAKE] Game 4".into(), Ok(Vec::new())),
+    );
+    assert!(
+        render(&app)
+            .find("No game of that name on SteamGridDB.")
+            .is_ok()
+    );
+    edit(&mut app, EditMsg::ChooseGame(5254));
+    edit(&mut app, EditMsg::Offered(5254, Ok(Vec::new())));
+    assert!(
+        render(&app)
+            .find("SteamGridDB has no background for this game.")
+            .is_ok()
+    );
+    edit(&mut app, EditMsg::ClosePicker);
+    assert!(app.edit.as_ref().unwrap().picker.is_none());
+}

@@ -223,6 +223,12 @@ pub struct App {
     pub game_achievements: bool,
     /// Whether achievements can be unlocked and cleared by hand (Settings → Advanced).
     pub manual_achievements: bool,
+    /// Covers and backgrounds from SteamGridDB in Edit game (Settings → Advanced), and whether its
+    /// API key is in the keyring, once known.
+    pub steamgriddb: bool,
+    pub steamgriddb_key: Option<bool>,
+    /// The key being typed, until it goes to the keyring.
+    pub steamgriddb_key_input: String,
     /// The ways each installed game can be started, its main one first, and the one chosen.
     pub launch_options: HashMap<String, Vec<String>>,
     pub launch_choices: HashMap<String, String>,
@@ -308,6 +314,9 @@ impl Default for App {
             report_playtime: true,
             game_achievements: true,
             manual_achievements: false,
+            steamgriddb: false,
+            steamgriddb_key: None,
+            steamgriddb_key_input: String::new(),
             launch_options: HashMap::new(),
             launch_choices: HashMap::new(),
             launch_prompt: None,
@@ -495,6 +504,8 @@ impl App {
                 self.report_playtime = boot.report_playtime;
                 self.game_achievements = boot.game_achievements;
                 self.manual_achievements = boot.manual_achievements;
+                self.steamgriddb = boot.steamgriddb;
+                self.steamgriddb_key = boot.steamgriddb_key;
                 self.launch_options = boot.launch_options;
                 self.launch_choices = boot.launch_choices;
                 self.installs = boot

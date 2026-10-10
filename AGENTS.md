@@ -85,9 +85,10 @@ These act on a real person's account, disk or system. Ask the human first, every
 - Wrap sensitive values in `secret::Secret`; its `Debug` hides the value.
 - Turn `reqwest` errors into `Error::network(context, e)`, which strips the URL: some GOG
   endpoints carry tokens in the query string.
-- Besides GOG and the download servers it names, the only service contacted is umu's game
-  database, and it can be turned off. A new outgoing request to another host needs a privacy
-  switch in Settings → Privacy and an entry in SECURITY.md ("What leaves your computer").
+- Besides GOG and the download servers it names, the only services contacted are umu's game
+  database (can be turned off) and SteamGridDB (off until turned on). A new outgoing request to
+  another host needs a switch in Settings and an entry in SECURITY.md ("What leaves your
+  computer").
 - No telemetry, ever.
 
 ### Files and data safety

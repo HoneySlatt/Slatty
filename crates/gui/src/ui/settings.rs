@@ -198,14 +198,82 @@ impl App {
             ),
             note(
                 "No telemetry: SlattyLauncher talks to GOG, to the download servers GOG names, \
-                 and to umu's database when allowed above.",
+                 to umu's database when allowed above, and to SteamGridDB once turned on in \
+                 Advanced.",
             ),
         ]
     }
 
     /// What most people never need, off until turned on.
     fn advanced_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
-        vec![setting(
+        let mut rows = vec![
+            self.manual_achievements_row(wide),
+            self.steamgriddb_row(wide),
+        ];
+        if self.steamgriddb {
+            rows.push(self.steamgriddb_key_row(wide));
+        }
+        rows
+    }
+
+    fn steamgriddb_row(&self, wide: bool) -> Element<'_, Message> {
+        setting(
+            wide,
+            "SteamGridDB",
+            switch(
+                self.steamgriddb,
+                SettingsMsg::SteamGridDb,
+                "Offers covers and backgrounds from SteamGridDB, a community database of game \
+                 art, in Edit game. Searching sends the name you type and your API key to \
+                 steamgriddb.com.",
+            ),
+            None,
+        )
+    }
+
+    /// The key to SteamGridDB's API: typed once, then kept in the keyring and never shown.
+    fn steamgriddb_key_row(&self, wide: bool) -> Element<'_, Message> {
+        let msg = |m| Message::Settings(m);
+        let (control, after): (Element<'_, Message>, Element<'_, Message>) =
+            if self.steamgriddb_key == Some(true) {
+                (
+                    text("Saved in the system keyring").size(14).into(),
+                    button(text("Remove").size(14))
+                        .padding([8, 14])
+                        .on_press(msg(SettingsMsg::RemoveSteamGridDbKey))
+                        .style(theme::tonal)
+                        .into(),
+                )
+            } else {
+                let typed = !self.steamgriddb_key_input.trim().is_empty();
+                (
+                    column![
+                        text_input("Paste your API key", &self.steamgriddb_key_input)
+                            .secure(true)
+                            .on_input(|v| Message::Settings(SettingsMsg::SteamGridDbKeyInput(v)))
+                            .on_submit(msg(SettingsMsg::SaveSteamGridDbKey))
+                            .style(theme::field)
+                            .font(theme::font())
+                            .padding([8, 12]),
+                        button(text("Create a key on steamgriddb.com").size(14))
+                            .padding(0)
+                            .on_press(msg(SettingsMsg::OpenSteamGridDbKeyPage))
+                            .style(theme::link),
+                    ]
+                    .spacing(8)
+                    .into(),
+                    button(text("Save").size(14))
+                        .padding([8, 14])
+                        .on_press_maybe(typed.then(|| msg(SettingsMsg::SaveSteamGridDbKey)))
+                        .style(theme::tonal)
+                        .into(),
+                )
+            };
+        setting(wide, "API key", control, Some(after))
+    }
+
+    fn manual_achievements_row(&self, wide: bool) -> Element<'_, Message> {
+        setting(
             wide,
             "Manual achievements",
             switch(
@@ -216,7 +284,7 @@ impl App {
                  terms.",
             ),
             None,
-        )]
+        )
     }
 }
 

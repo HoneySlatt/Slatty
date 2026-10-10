@@ -228,3 +228,39 @@ fn what_leaves_the_computer_can_be_turned_off() {
     assert!(ui.find("Play time on GOG").is_ok());
     snapshot(&mut ui, "settings-privacy");
 }
+
+#[test]
+fn steamgriddb_is_off_until_turned_on_and_its_key_is_never_shown() {
+    use crate::settings::SettingsMsg;
+    let mut app = library_app();
+    app.page = Page::Settings;
+    assert!(!app.steamgriddb);
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("SteamGridDB").is_ok());
+        assert!(ui.find("API key").is_err(), "no key asked while off");
+    }
+    let _ = app.update(Message::Settings(SettingsMsg::SteamGridDb(true)));
+    let db = app.core.as_ref().unwrap().db.clone();
+    assert!(slatty_core::settings::steamgriddb(&db).unwrap(), "kept");
+    let _ = app.update(Message::Settings(SettingsMsg::SteamGridDbKey(Ok(false))));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("API key").is_ok());
+        assert!(ui.find("Create a key on steamgriddb.com").is_ok());
+    }
+    let _ = app.update(Message::Settings(SettingsMsg::SteamGridDbKeyInput(
+        "[FAKE]-key".into(),
+    )));
+    assert!(
+        render(&app).find("[FAKE]-key").is_err(),
+        "typed into a secure field"
+    );
+    // Saving hands the key to the keyring and clears the field.
+    let _ = app.update(Message::Settings(SettingsMsg::SaveSteamGridDbKey));
+    assert!(app.steamgriddb_key_input.is_empty());
+    let _ = app.update(Message::Settings(SettingsMsg::SteamGridDbKey(Ok(true))));
+    let mut ui = render(&app);
+    assert!(ui.find("Saved in the system keyring").is_ok());
+    assert!(ui.find("Remove").is_ok());
+}

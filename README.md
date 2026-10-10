@@ -30,6 +30,7 @@ against real GOG services; details are in [docs/compatibility.md](docs/compatibi
 | Cloud saves: three-way sync, conflict handling, backups | download and upload yes |
 | Achievements: list, report unlocks made in game through Comet | listing yes, in-game unlock not yet |
 | Achievements: unlock or clear manually (off until turned on in Settings → Advanced) | yes |
+| Edit a game: title, sorting title, cover and background (from a file, or from SteamGridDB once turned on), hide it | yes (SteamGridDB not yet) |
 | Verify, repair and uninstall installed games | verify and repair yes, uninstall not yet |
 | Updates: detect a newer build, update in place | detection yes, applying not yet |
 | DLC and language: choose at install, add, remove or switch later | ownership detection yes, changes not yet |
@@ -106,6 +107,8 @@ SlattyLauncher stands on the work of others:
   binary from `crates/gui/assets/fonts`, where its licence is.
 - [oxidelta](https://github.com/sockudo/oxidelta) (MIT) decodes GOG's xdelta3 patches.
 - [rfd](https://github.com/PolyMeilex/rfd) (MIT) opens the desktop's folder chooser.
+- [SteamGridDB](https://www.steamgriddb.com) and its community provide covers and backgrounds in Edit game,
+  when turned on, with your own API key.
 - [Heroic Games Launcher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) showed how
   save locations, Proton and Comet fit together.
 - [gogapidocs](https://gogapidocs.readthedocs.io) documents many GOG endpoints.

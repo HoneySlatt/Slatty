@@ -46,6 +46,9 @@ Include the steps to reproduce and the version or commit you tested.
 - umu's public game database (`umu.openwinecomponents.org`): a game's GOG product id, once, at its
   first launch, to pick its Proton fixes. It can be turned off in Settings → Privacy; the game then
   runs without fixes.
+- SteamGridDB (`steamgriddb.com`), only once turned on in Settings → Advanced and only when you
+  search it in Edit game: the name you search and your own SteamGridDB API key, kept in the system
+  keyring and sent in a header. Pictures you look at come from its servers.
 
 ## Scope
 

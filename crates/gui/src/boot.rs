@@ -32,6 +32,9 @@ pub struct Boot {
     pub report_playtime: bool,
     pub game_achievements: bool,
     pub manual_achievements: bool,
+    pub steamgriddb: bool,
+    /// Whether a SteamGridDB API key is in the keyring; only asked once the integration is on.
+    pub steamgriddb_key: Option<bool>,
     pub proton: Option<PathBuf>,
     pub proton_choices: Vec<PathBuf>,
     pub favorites: Vec<String>,
@@ -99,6 +102,12 @@ pub async fn boot() -> Result<Boot, String> {
     let report_playtime = slatty_core::settings::report_playtime(&db).map_err(err)?;
     let game_achievements = slatty_core::settings::game_achievements(&db).map_err(err)?;
     let manual_achievements = slatty_core::settings::manual_achievements(&db).map_err(err)?;
+    let steamgriddb = slatty_core::settings::steamgriddb(&db).map_err(err)?;
+    let steamgriddb_key = if steamgriddb {
+        crate::settings::steamgriddb_key_saved().await.ok()
+    } else {
+        None
+    };
     // Steam libraries can sit on slow or network drives: listed here, off the interface thread.
     let proton_choices = slatty_core::settings::proton_candidates();
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
@@ -151,6 +160,8 @@ pub async fn boot() -> Result<Boot, String> {
         report_playtime,
         game_achievements,
         manual_achievements,
+        steamgriddb,
+        steamgriddb_key,
         favorites,
         playtime,
         overview,

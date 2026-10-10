@@ -74,7 +74,10 @@ Right-click a cover and choose **Edit game** to change its **Title**, its **Sort
 when the library is sorted by name, for example "Witcher 3" for "The Witcher 3"), its **Cover**
 and its **Background** (the key art of the game page). Click a picture to choose an image file (PNG, JPEG,
 WebP, GIF or BMP); it is copied into SlattyLauncher's data, so the original can be moved or
-deleted. **Hide game** takes the game out of All, Installed, Favorites and search; it is then
+deleted. With SteamGridDB turned on (Settings → Advanced), **From SteamGridDB** under a picture searches
+SteamGridDB by name, starting from the title the library shows: pick the right game among those
+found, then one of its covers (grids) or backgrounds (heroes); it is downloaded and shown, and kept
+on **Save** like a chosen file. **Hide game** takes the game out of All, Installed, Favorites and search; it is then
 listed only under Hidden games, where the same switch brings it back. Nothing changes until
 **Save**; **Reset to default** goes back to GOG's title and images, and shows the game again.
 On a game page, right-click the key art (not the title or the buttons over it) for the same menu;
@@ -420,7 +423,11 @@ unlocks made in games are not reported; unlocking by hand does not need it) and 
 does; sessions played while it is off are never sent). SlattyLauncher has no telemetry.
 
 **Advanced** holds **Manual achievements**, off until turned on: it adds Unlock, Clear and Unlock
-all beside a game's achievements (see [Achievements](#achievements)).
+all beside a game's achievements (see [Achievements](#achievements)). **SteamGridDB**, off until turned
+on, offers covers and backgrounds from [SteamGridDB](https://www.steamgriddb.com) in Edit game. It
+needs your own SteamGridDB API key (free, created on its site under Preferences → API): paste it in
+**API key**; it goes to the system keyring and is never shown again. Searching sends the name you
+type and the key to steamgriddb.com.
 
 **Appearance** picks a built-in theme (Carbonfox, Everforest, Pastel Glow, Gruvbox Dark
 or Light) and the interface font, applied at once and kept, and shows the theme file, `~/.config/slatty/theme.toml`: create it, edit it, and reload it to change colours,
@@ -431,6 +438,7 @@ corners and the page transition. See [theming](theming.md).
 | Path | Content |
 |---|---|
 | System keyring, entry `slatty-launcher` / `gog:<user id>` | Session tokens |
+| System keyring, entry `slatty-launcher` / `key:steamgriddb` | Your SteamGridDB API key, once saved |
 | `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings, the titles you gave games and the games you hid |
 | `~/.local/share/slatty/prefixes/<id>/` | Wine prefixes of installed games (most saves live here) |
 | `~/.local/share/slatty/manifests/<id>.json` | Files installed for each game |
