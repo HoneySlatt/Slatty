@@ -576,10 +576,41 @@ fn read_only_tools(
     Ok((bwrap, out))
 }
 
+/// Steam's app ids of the runtimes umu keeps, by folder (umu 1.4's `RUNTIME_VERSIONS`).
+const RUNTIME_APPIDS: [(&str, &str); 4] = [
+    ("steamrt2", "1391110"),
+    ("steamrt3", "1628350"),
+    ("steamrt4", "4183110"),
+    ("steamrt4-arm64", "4185400"),
+];
+
+/// A compatibility tool that runs its command as it is in the runtime of folder `name`, made as
+/// umu makes its own `umu-sniper`: umu brings the runtime up to date before using it. umu's own
+/// tool is reached through `UMU_NO_PROTON`, with which umu first asks GitHub for its Proton
+/// releases. `None` for a runtime umu 1.4 does not know.
+fn runtime_tool(dirs: &Dirs, name: &str) -> Option<Result<PathBuf>> {
+    use std::os::unix::fs::PermissionsExt;
+    let (_, appid) = RUNTIME_APPIDS.iter().find(|(n, _)| *n == name)?;
+    let tool = dirs.data.join("umu-runtimes/tools").join(name);
+    let manifest = format!(
+        "\"manifest\"\n{{\n\t\"version\"\t\"2\"\n\t\"commandline\"\t\"/entry-point\"\n\t\
+         \"use_sessions\"\t\"1\"\n\t\"compatmanager_layer_name\"\t\"umu-passthrough\"\n\t\
+         \"require_tool_appid\"\t\"{appid}\"\n}}\n"
+    );
+    let entry = tool.join("entry-point");
+    let made = crate::fsutil::write_atomic(&tool.join("toolmanifest.vdf"), manifest.as_bytes())
+        .and_then(|()| crate::fsutil::write_atomic(&entry, b"#!/bin/sh\nexec \"$@\"\n"))
+        .and_then(|()| {
+            std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o700))
+                .map_err(|e| Error::io(format!("make {} executable", entry.display()), e))
+        });
+    Some(made.map(|()| tool))
+}
+
 /// Brings umu's runtimes up to date, at most once a day, before an isolated launch: such
 /// launches use them read-only and leave them as they are (`read_only_tools`). umu runs nothing of
-/// a game's for it (`true` in each runtime), not isolated. A failure leaves the runtimes as they
-/// are, and the game starts with them.
+/// a game's for it (`true` in each runtime, through `runtime_tool`), not isolated. A failure
+/// leaves the runtimes as they are, and the game starts with them.
 pub async fn refresh_runtimes(db: &crate::db::Db, dirs: &Dirs) {
     const DAY: i64 = 24 * 60 * 60;
     let now = chrono::Utc::now().timestamp();
@@ -601,12 +632,14 @@ pub async fn refresh_runtimes(db: &crate::db::Db, dirs: &Dirs) {
         if name.ends_with("-arm64") != cfg!(target_arch = "aarch64") {
             continue;
         }
+        let Some(Ok(tool)) = runtime_tool(dirs, name) else {
+            continue;
+        };
         let output =
             |log: &std::fs::File| log.try_clone().map_or_else(|_| Stdio::null(), Into::into);
         let _ = tokio::process::Command::new(&umu)
             .arg("true")
-            .env("UMU_NO_PROTON", "1")
-            .env("RUNTIMEPATH", name)
+            .env("PROTONPATH", &tool)
             .env("GAMEID", "umu-0")
             // Else umu makes `~/Games/umu/umu-0` for a prefix.
             .env("WINEPREFIX", dirs.data.join("umu-runtimes"))
@@ -777,6 +810,33 @@ mod tests {
         );
         assert!(env.iter().all(|(k, _)| !k.starts_with("PRESSURE_VESSEL")));
         assert!(env.iter().all(|(k, _)| k != "HOME"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The daily refresh hands umu a runtime tool of its own, which needs nothing from GitHub:
+    /// umu reached through `UMU_NO_PROTON` asks GitHub for its Proton releases first.
+    #[test]
+    fn runtimes_are_refreshed_through_a_tool_naming_them() {
+        let root = std::env::temp_dir().join(format!("slatty-rt-tool-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dirs = Dirs::under(&root);
+        assert!(runtime_tool(&dirs, "steamrt9").is_none(), "unknown to umu");
+        let tool = runtime_tool(&dirs, "steamrt3").unwrap().unwrap();
+        let manifest = std::fs::read_to_string(tool.join("toolmanifest.vdf")).unwrap();
+        assert!(manifest.contains("\"require_tool_appid\"\t\"1628350\""));
+        assert!(manifest.contains("\"compatmanager_layer_name\"\t\"umu-passthrough\""));
+        let entry = tool.join("entry-point");
+        assert_eq!(
+            std::fs::read_to_string(&entry).unwrap(),
+            "#!/bin/sh\nexec \"$@\"\n"
+        );
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            entry.metadata().unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        // Made again, as found.
+        assert_eq!(runtime_tool(&dirs, "steamrt3").unwrap().unwrap(), tool);
         std::fs::remove_dir_all(root).unwrap();
     }
 
