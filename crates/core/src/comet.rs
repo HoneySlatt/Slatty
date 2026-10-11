@@ -58,7 +58,9 @@ impl Comet {
             .env("XDG_CACHE_HOME", private_dir.join("cache"))
             .env("XDG_CONFIG_HOME", dirs.config.join("comet"))
             .env("XDG_DATA_HOME", dirs.data.join("comet"))
-            .env("COMET_LOG", "info")
+            // Comet 0.3.2's handlers log a failed token request with its address, whose query
+            // holds the account's refresh token, and each game's client secret.
+            .env("COMET_LOG", "info,comet::api::handlers=error")
             .stdin(Stdio::null())
             .stdout(log)
             .stderr(log_err)

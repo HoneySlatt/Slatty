@@ -120,8 +120,10 @@ These are ignored by default:
 # the Galaxy dummy service (needs SLATTY_GALAXY_COMMUNICATION, set by the dev shell)
 TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored proton prefix galaxy_service
 
-# Real Comet with fake tokens: tokens never in argv, handoff file removed, clean shutdown
-cargo test -- --ignored comet
+# Real Comet with fake tokens: tokens never in argv nor in its log, handoff file removed, clean
+# shutdown. Without a network (a namespace of its own), so that Comet's requests fail at once
+# and nothing reaches GOG
+unshare -rn sh -c 'ip link set lo up && cargo test -- --ignored comet'
 
 # Isolation: a marker in the home folder stays hidden from a Linux script in umu's runtime and from
 # Wine's z: drive under Proton, and shows when the same launch is not isolated

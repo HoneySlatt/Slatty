@@ -46,7 +46,7 @@ cargo test --release -p slatty-gui library_at_10000_games -- --ignored --nocaptu
 
 # Real Proton and real Comet (ignored by default; see docs/testing.md)
 TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored proton prefix galaxy_service
-cargo test -- --ignored comet
+unshare -rn sh -c 'ip link set lo up && cargo test -- --ignored comet'   # offline
 
 # Isolation: a marker in the home folder stays hidden from a game run in umu's container
 TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored isolated
