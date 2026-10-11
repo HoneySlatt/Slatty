@@ -36,6 +36,7 @@ against real GOG services; details are in [docs/compatibility.md](docs/compatibi
 | Updates: detect a newer build, update in place, automatically for games on their newest build | detection yes, applying not yet |
 | DLC and language: choose at install, add, remove or switch later | ownership detection yes, changes not yet |
 | Steam games in the same library (off until turned on), read from the Steam client's files (play time, last played, achievements) and played, installed, verified and uninstalled through the client; GOG recommended where you have the choice | reading a real installation yes, play through the client yes; install, verify, uninstall not yet |
+| Games from no store, added by the program that starts them (Windows through Proton, Linux natively); their files are never deleted, GOG never told of them | not yet |
 | Post-install setup: GOG scripts, game-folder dependencies, redistributables | GOG script yes (Undertale), redistributables not yet |
 
 Not supported yet: macOS and Windows hosts.

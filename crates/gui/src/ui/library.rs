@@ -3,7 +3,7 @@
 use crate::theme::text;
 use iced::widget::{
     Column, button, checkbox, column, container, hover, image, mouse_area, pick_list, progress_bar,
-    row, scrollable, space,
+    row, scrollable, space, tooltip,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::installer::Progress;
@@ -45,6 +45,16 @@ impl App {
         .padding(8)
         .on_press(Message::ToggleFilters)
         .style(theme::ghost);
+        let add_button = tooltip(
+            button(icon(Icon::Plus, 20.0, tokens().text))
+                .padding(8)
+                .on_press(Message::Add(crate::add::AddMsg::Open))
+                .style(theme::ghost),
+            container(text("Add a game from no store").size(13))
+                .padding([4, 10])
+                .style(theme::block),
+            tooltip::Position::Bottom,
+        );
         let toolbar = row![
             pick_list(self.shelves(), Some(self.shelf), Message::ShowShelf)
                 .style(theme::dropdown)
@@ -64,6 +74,7 @@ impl App {
                 .text_size(14)
                 .width(170),
             filter_button,
+            add_button,
         ]
         .spacing(14)
         .align_y(Alignment::Center);

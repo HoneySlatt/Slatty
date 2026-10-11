@@ -31,6 +31,10 @@ The first public version.
   both shows both play times added up, or one store's once preferred in Settings. Images the client
   has not saved come from Steam's image servers once turned on, and Steam's Web API, with your own
   key, fills in games and achievements the client has not saved once turned on.
+- Games from no store, added by the program that starts them (`+` above the library, or
+  `slatty add`): a Windows program through Proton in a prefix of its own, a Linux program, script
+  or AppImage natively, isolated like the others. Removing one never deletes its files, and GOG is
+  never told of it.
 - Command line (`slatty`) and interface (`slatty-gui`) on the same core.
 
 ### Security and privacy

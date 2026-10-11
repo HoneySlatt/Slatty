@@ -121,3 +121,61 @@ fn removing_a_game_added_by_hand_asks_first() {
     assert!(app.library.iter().all(|g| g.id != "local-1"));
     assert_eq!(app.selected, None);
 }
+
+/// The dialog takes a program, names the game after it until given a title, offers Proton for a
+/// Windows program, says why a game was not added, and opens the page of the one added.
+#[test]
+fn a_game_is_added_from_the_library() {
+    use crate::add::AddMsg;
+    let mut app = library_app();
+    app.proton = Some("/proton/GE-Proton".into());
+    let _ = app.update(Message::Add(AddMsg::Open));
+    assert!(render(&app).find("Add a game").is_ok());
+    assert!(render(&app).find("Proton").is_err(), "no program yet");
+    let _ = app.update(Message::Add(AddMsg::PickedProgram(Some(
+        "/games/[FAKE] Quest/Quest.exe".into(),
+    ))));
+    let d = app.add_game.as_ref().unwrap();
+    assert_eq!(
+        (d.title.as_str(), d.isolated),
+        ("Quest", app.isolate_new_games)
+    );
+    assert_eq!(
+        d.proton.as_deref(),
+        Some(std::path::Path::new("/proton/GE-Proton"))
+    );
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Proton").is_ok());
+        snapshot(&mut ui, "add-game");
+    }
+
+    let _ = app.update(Message::Add(AddMsg::Saved(Err("[FAKE] refused".into()))));
+    assert!(render(&app).find("[FAKE] refused").is_ok());
+
+    let install = Install {
+        umu_id: None,
+        game_id: "local-4".into(),
+        title: "[FAKE] Quest".into(),
+        platform: Platform::Windows,
+        path: PathBuf::from("/games/[FAKE] Quest"),
+        client_id: None,
+        runner: Runner::Umu {
+            proton: "/proton/GE-Proton".into(),
+            prefix: "/prefixes/local-4".into(),
+        },
+        isolated: true,
+    };
+    let _ = app.update(Message::Add(AddMsg::Saved(Ok((
+        install,
+        Some("1207658924".into()),
+    )))));
+    assert!(app.add_game.is_none());
+    assert!(app.library.iter().any(|g| g.id == "local-4"));
+    assert_eq!(app.selected.as_deref(), Some("local-4"));
+    assert!(
+        app.notice
+            .as_ref()
+            .is_some_and(|n| n.text.contains("GOG game (1207658924)"))
+    );
+}

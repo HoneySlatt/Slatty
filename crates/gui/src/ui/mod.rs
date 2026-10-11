@@ -1,6 +1,7 @@
 //! The interface: the window shell (top bar, notices, quit dialog) and widgets shared by pages.
 
 mod achievements;
+mod add;
 mod cloud;
 mod downloads;
 mod edit;
@@ -109,6 +110,12 @@ impl App {
                     .as_ref()
                     .filter(|_| self.selected.is_none())
                     .map(|d| self.edit_dialog(empty(), d)),
+            )
+            .push(
+                self.add_game
+                    .as_ref()
+                    .filter(|_| self.selected.is_none())
+                    .map(|d| self.add_dialog(empty(), d)),
             )
             .push(
                 self.launch_prompt

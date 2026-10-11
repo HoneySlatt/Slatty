@@ -72,7 +72,8 @@ dot says you are signed in.
   **Hidden games** once you have hidden one;
 - the sort menu orders by name, most recently played or most played, and is kept for the next
   start;
-- the filter button shows games for Windows or Linux, with achievements, or with cloud saves.
+- the filter button shows games for Windows or Linux, with achievements, or with cloud saves;
+- the **+** button adds a game from no store (see [Games from no store](#games-from-no-store)).
 
 The size of the covers is set in Settings → Appearance.
 
@@ -493,7 +494,11 @@ belong to them.
 ## Games from no store
 
 Games bought elsewhere, or made by yourself, can join the library by the program that starts
-them:
+them. In the interface, the **+** button above the library opens **Add a game**: the program
+(typed, or chosen with Browse), a title (the program's name until you give one), its arguments,
+the game's folder when the program sits deeper in it, the Proton build for a Windows `.exe`, and
+whether it runs isolated. The game's page then offers Play, Game settings and Edit game like any
+other; Manage → **Remove from library** takes it out, asking first. On the command line:
 
 ```sh
 slatty add <program> --title <title> [--folder <folder>] [--working-dir <folder>] [--proton <Proton dir>] [--isolated | --not-isolated] [-- <arguments>]

@@ -1,4 +1,5 @@
 mod achievements;
+mod add;
 mod boot;
 mod cloud;
 mod downloads;
@@ -299,6 +300,8 @@ pub struct App {
     pub sort_keys: library::SortKeys,
     pub lists: library::Lists,
     pub edit: Option<edit::EditDraft>,
+    /// The dialog adding a game from no store, while open.
+    pub add_game: Option<add::AddDraft>,
     pub menu_for: Option<String>,
     pub context_menu: Option<edit::ContextMenu>,
     /// A download being planned again to resume on its own at start-up.
@@ -398,6 +401,7 @@ impl Default for App {
             sort_keys: Default::default(),
             lists: Default::default(),
             edit: None,
+            add_game: None,
             menu_for: None,
             context_menu: None,
             auto_resume: None,
@@ -487,6 +491,7 @@ pub enum Message {
     ConfirmQuit,
     CancelQuit,
     Edit(edit::EditMsg),
+    Add(add::AddMsg),
     /// A game's install or settings, over the library.
     OpenDialog(String, Panel),
     CloseDialog,
@@ -926,6 +931,7 @@ impl App {
             Message::ShowLogin(open) => self.login_open = open,
             Message::Updates(msg) => return self.update_updates(msg),
             Message::Edit(msg) => return self.update_edit(msg),
+            Message::Add(msg) => return self.update_add(msg),
             Message::OpenDialog(id, panel) => {
                 self.dialog = Some((id.clone(), panel));
                 return self.load_panel(id, panel);
