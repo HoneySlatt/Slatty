@@ -93,6 +93,7 @@ No telemetry, no crash reports, no usage statistics.
 | Whatever the game's Proton fix downloads from: winetricks' sources (Microsoft and others), GitHub Pages, `download.amd.com`, Google Drive | Requests for the files that fix installs | When a game that has such a fix starts (fixes come with the Proton build) | — |
 | GitHub: `api.github.com`, `github.com`, `release-assets.githubusercontent.com` | Which project's releases are asked for, without any account | When you list or download Proton builds; at start, at most once a day, for the builds games follow as `<project>-latest` | Proton downloads, Settings → Runners (off); Keep up to date (off) |
 | SteamGridDB: `www.steamgriddb.com` and its image servers | The name you search, and your SteamGridDB API key in a header | When you search in Edit game | SteamGridDB, Settings → Advanced (off) |
+| Valve, `shared.steamstatic.com` (Steam's image servers) | The Steam app ids of the images asked for, without any account | When a Steam game's cover, background or logo is missing from the Steam client's own image cache; each image is downloaded once | Images from Steam, Settings → Steam (off) |
 
 Every request names SlattyLauncher and its version in its `User-Agent`, except those to GOG's
 cloud storage, which send Galaxy's, as heroic-gogdl does. Desktop notifications (Settings →
@@ -188,9 +189,10 @@ on one without (ext4), the runtime's files, about 750 MB, are written at each la
 - Anything able to reach 127.0.0.1:9977 while Comet runs (see [Comet](#comet)).
 - A game that is not isolated, and a program written to break out of the container.
 - Steam's games and the Steam client (once **Steam games** is on, Settings → Steam): SlattyLauncher
-  only reads Steam's files, never writes them and sends nothing to Steam, but the games are run by
-  the Steam client, with its own access to your files, network and account, and cannot be
-  isolated. Prefer a game's GOG build where you have the choice.
+  only reads Steam's files and never writes them, and asks Steam's servers nothing but images once
+  **Images from Steam** is on, but the games are run by the Steam client, with its own access to
+  your files, network and account, and cannot be isolated. Prefer a game's GOG build where you
+  have the choice.
 - GOG's servers, the GitHub account of a Proton project or umu's database turned malicious: their
   data is checked for shape, size and paths, not for intent.
 - Someone watching your network: connections use TLS, but which hosts you contact, and when, can

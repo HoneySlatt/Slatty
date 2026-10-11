@@ -26,7 +26,8 @@ The first public version.
 - Play time reported to GOG as Galaxy does (can be turned off).
 - Steam games in the same library (off until turned on), read from the Steam client's own files
   and played, installed, verified and uninstalled through the client; no GOG account needed for
-  them. GOG is recommended where you have the choice.
+  them. GOG is recommended where you have the choice. Images the client has not saved come from
+  Steam's image servers once turned on.
 - Command line (`slatty`) and interface (`slatty-gui`) on the same core.
 
 ### Security and privacy

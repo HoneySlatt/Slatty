@@ -1,14 +1,22 @@
 //! The account's Steam games as the library shows them, read from the Steam client's own files:
-//! their names and types from `appinfo.vdf`, their images from the client's image cache. Nothing
-//! is asked of the network.
+//! their names and types from `appinfo.vdf`, their images from the client's image cache. Images
+//! the client has not saved come from Steam's image servers once that is turned on
+//! (`settings::steam_images`); nothing else is asked of the network.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
+use reqwest::Client;
+
 use super::appinfo;
 use super::local::{self, Steam, SteamUser};
 use super::vdf::Vdf;
+use crate::error::{Error, Result};
 use crate::library::{LibraryGame, MetadataSource};
+use crate::paths::Dirs;
+
+/// Steam's image servers, which need no account.
+const IMAGE_SERVER: &str = "https://shared.steamstatic.com/";
 
 /// The Steam games of the account signed in to the client.
 #[derive(Debug, Clone)]
@@ -19,9 +27,11 @@ pub struct SteamLibrary {
     pub covers: HashMap<String, PathBuf>,
 }
 
-/// The library of the account signed in to Steam; none when no account ever signed in. Takes
-/// some tens of milliseconds (`appinfo.vdf` is a few MB): not for the interface thread.
-pub fn read(steam: &Steam) -> Option<SteamLibrary> {
+/// The library of the account signed in to Steam; none when no account ever signed in. With
+/// `from_servers`, an image the client has not saved here is given by its address on Steam's
+/// image servers instead, for `image` to download. Takes some tens of milliseconds
+/// (`appinfo.vdf` is a few MB): not for the interface thread.
+pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
     let user = local::signed_in_user(steam)?;
     let owned = local::owned(steam, &user);
     let wanted: HashSet<u32> = owned.iter().copied().collect();
@@ -50,25 +60,36 @@ pub fn read(steam: &Steam) -> Option<SteamLibrary> {
             continue;
         }
         let folder = images.join(app_id.to_string());
-        let image = |asset: &str, legacy: &str| {
+        let here = |asset: &str, legacy: &str| {
             cached_asset(&folder, common, asset).or_else(|| {
                 let path = folder.join(legacy);
                 path.is_file().then_some(path)
             })
         };
+        let server = |asset: &str, legacy: &str| {
+            from_servers.then(|| server_url(app_id, common, asset, legacy))
+        };
+        let image = |asset: &str, legacy: &str| {
+            here(asset, legacy)
+                .map(|p| p.display().to_string())
+                .or_else(|| server(asset, legacy))
+        };
         let id = crate::store::steam_id(app_id);
-        if let Some(cover) = image("library_capsule", "library_600x900.jpg") {
-            library.covers.insert(id.clone(), cover);
-        }
-        let text = |p: Option<PathBuf>| p.map(|p| p.display().to_string());
+        let cover = match here("library_capsule", "library_600x900.jpg") {
+            Some(path) => {
+                library.covers.insert(id.clone(), path);
+                None
+            }
+            None => server("library_capsule", "library_600x900.jpg"),
+        };
         let oslist = common.text("oslist").unwrap_or_default();
         library.games.push(LibraryGame {
             id,
             title: name.to_string(),
-            cover: None,
+            cover,
             icon: None,
-            background: text(image("library_hero", "library_hero.jpg")),
-            logo: text(image("library_logo", "logo.png")),
+            background: image("library_hero", "library_hero.jpg"),
+            logo: image("library_logo", "logo.png"),
             os: ["windows", "linux"]
                 .into_iter()
                 .filter(|os| oslist.split(',').any(|o| o.trim() == *os))
@@ -78,6 +99,55 @@ pub fn read(steam: &Steam) -> Option<SteamLibrary> {
         });
     }
     Some(library)
+}
+
+/// Where Steam's image servers keep `asset` of `app_id`: the file `library_assets_full` names, else
+/// the name every app's had before it. A name with anything but letters, digits and `._-` between
+/// its slashes is not used in an address.
+fn server_url(app_id: u32, common: &Vdf, asset: &str, legacy: &str) -> String {
+    let named = common
+        .get("library_assets_full")
+        .and_then(|a| a.get(asset))
+        .and_then(|a| a.get("image"))
+        .and_then(|i| i.text("english"))
+        .filter(|rel| {
+            rel.split('/').all(|part| {
+                !part.is_empty()
+                    && part != "."
+                    && part != ".."
+                    && part
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+            })
+        });
+    format!(
+        "{IMAGE_SERVER}store_item_assets/steam/apps/{app_id}/{}",
+        named.unwrap_or(legacy)
+    )
+}
+
+/// Whether `url` is an image of Steam's image servers, which `image` downloads.
+pub fn is_server_image(url: &str) -> bool {
+    url.starts_with(IMAGE_SERVER)
+}
+
+/// The file of an image of Steam's image servers in SlattyLauncher's cache, downloaded when
+/// missing. Shared by every account: it tells nothing of one. Any other address is refused.
+pub async fn image(http: &Client, dirs: &Dirs, url: &str) -> Result<PathBuf> {
+    if !is_server_image(url) {
+        return Err(Error::Refused(
+            "Steam images come from Steam's image servers only".into(),
+        ));
+    }
+    let name = crate::fsutil::sha256_hex(url.as_bytes());
+    crate::library::cached(
+        http,
+        dirs.cache.join("steam"),
+        name,
+        url,
+        "downloading an image from Steam",
+    )
+    .await
 }
 
 /// The file the client cached for `asset` (`library_capsule`, `library_hero`, `library_logo`), as
@@ -128,7 +198,7 @@ mod tests {
         std::fs::create_dir_all(&cache).unwrap();
         std::fs::write(cache.join("library_600x900.jpg"), b"jpg").unwrap();
 
-        let library = read(&fake.steam).unwrap();
+        let library = read(&fake.steam, false).unwrap();
         assert_eq!(library.user.name, "[FAKE] Player");
         let games: Vec<(&str, &str)> = library
             .games
@@ -146,6 +216,70 @@ mod tests {
             cache.join("library_600x900.jpg")
         );
         assert!(!library.covers.contains_key("steam-220"));
+        assert!(
+            library
+                .games
+                .iter()
+                .all(|g| g.cover.is_none() && g.background.is_none() && g.logo.is_none()),
+            "nothing to download while Steam's servers are not to be asked"
+        );
+
+        let library = read(&fake.steam, true).unwrap();
+        let (life, life2) = (&library.games[0], &library.games[1]);
+        assert_eq!(life.cover, None, "the client saved it");
+        assert_eq!(
+            life2.cover.as_deref(),
+            Some(
+                "https://shared.steamstatic.com/store_item_assets/steam/apps/220/library_600x900.jpg"
+            )
+        );
+        assert_eq!(
+            life2.background.as_deref(),
+            Some(
+                "https://shared.steamstatic.com/store_item_assets/steam/apps/220/library_hero.jpg"
+            )
+        );
+        assert!(library.games.iter().all(|g| {
+            [&g.cover, &g.background, &g.logo]
+                .into_iter()
+                .flatten()
+                .all(|url| is_server_image(url))
+        }));
+    }
+
+    #[test]
+    fn images_from_steams_servers_are_named_as_the_client_names_them() {
+        let common = crate::steam::vdf::parse(
+            r#""library_assets_full" {
+                "library_capsule" { "image" { "english" "6cddc26/library_capsule.jpg" } }
+                "library_hero" { "image" { "english" "../../../elsewhere/library_hero.jpg" } }
+                "library_logo" { "image" { "english" "abc/logo.png?x=1" } }
+            }"#,
+        )
+        .unwrap();
+        let url = |asset, legacy| server_url(570, &common, asset, legacy);
+        assert_eq!(
+            url("library_capsule", "library_600x900.jpg"),
+            "https://shared.steamstatic.com/store_item_assets/steam/apps/570/6cddc26/library_capsule.jpg"
+        );
+        assert!(url("library_hero", "library_hero.jpg").ends_with("/570/library_hero.jpg"));
+        assert!(url("library_logo", "logo.png").ends_with("/570/logo.png"));
+    }
+
+    #[tokio::test]
+    async fn only_steams_image_servers_are_asked() {
+        let dirs = Dirs::under(Path::new("/nonexistent/slatty"));
+        let http = Client::new();
+        for url in [
+            "https://example.com/store_item_assets/steam/apps/1/a.jpg",
+            "http://shared.steamstatic.com/a.jpg",
+            "https://shared.steamstatic.com.example.com/a.jpg",
+        ] {
+            assert!(
+                matches!(image(&http, &dirs, url).await, Err(Error::Refused(_))),
+                "{url}"
+            );
+        }
     }
 
     #[test]

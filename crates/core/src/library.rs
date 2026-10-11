@@ -259,7 +259,7 @@ pub async fn image(http: &Client, dirs: &Dirs, user_id: &str, url: &str) -> Resu
 
 /// `<folder>/<name>.<format>`, downloaded from `url` when missing. Named after its format, which
 /// image decoders go by, so the interface shows an image from its file rather than keep its bytes.
-async fn cached(
+pub(crate) async fn cached(
     http: &Client,
     folder: PathBuf,
     name: String,

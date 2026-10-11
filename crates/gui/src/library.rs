@@ -306,29 +306,52 @@ impl App {
                     .insert(path.clone(), iced::widget::image::Handle::from_path(&path));
             }
         }
-        let (Some(core), Some(account)) = (self.core.clone(), self.account.as_ref()) else {
+        let Some(core) = self.core.clone() else {
             return Task::none();
         };
-        let user_id = account.user_id.clone();
         let wanted: Vec<String> = urls
             .into_iter()
             .filter(|u| !u.is_empty() && self.images_requested.insert(u.clone()))
             .collect();
-        self.account_task(Task::batch(wanted.into_iter().map(|url| {
-            let (core, user_id, key) = (core.clone(), user_id.clone(), url.clone());
+        // Those the Steam client has not saved come from Steam's image servers (only named once
+        // turned on), whatever the GOG account; the others from GOG, for the account.
+        let (steam, gog): (Vec<String>, Vec<String>) = wanted
+            .into_iter()
+            .partition(|u| slatty_core::steam::library::is_server_image(u));
+        let fetch = |core: Core, url: String, user_id: Option<String>| {
+            let key = url.clone();
             Task::perform(
                 async move {
                     let _permit = core.downloads.acquire().await.ok()?;
-                    let path = library::image(&core.http, &core.dirs, &user_id, &url)
-                        .await
-                        .ok()?;
+                    let path = match user_id {
+                        Some(user_id) => {
+                            library::image(&core.http, &core.dirs, &user_id, &url).await
+                        }
+                        None => {
+                            slatty_core::steam::library::image(&core.http, &core.dirs, &url).await
+                        }
+                    };
+                    let path = path.ok()?;
                     tokio::task::spawn_blocking(move || fit_image(path))
                         .await
                         .ok()
                 },
                 move |path| Message::Image(key, path),
             )
-        })))
+        };
+        let steam = Task::batch(steam.into_iter().map(|url| fetch(core.clone(), url, None)));
+        let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
+            // Asked again once signed in.
+            for url in &gog {
+                self.images_requested.remove(url);
+            }
+            return steam;
+        };
+        let gog = Task::batch(
+            gog.into_iter()
+                .map(|url| fetch(core.clone(), url, Some(user_id.clone()))),
+        );
+        Task::batch([steam, self.account_task(gog)])
     }
 
     pub fn set_library(&mut self, cache: LibraryCache) -> Task<Message> {

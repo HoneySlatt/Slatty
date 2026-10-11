@@ -91,6 +91,66 @@ fn gog_and_steam_games_share_the_library() {
     assert!(app.library.is_empty());
 }
 
+/// Images the Steam client has not saved come from Steam's servers only once turned on; a cover
+/// downloaded stays through a refresh of GOG's library, and one arriving after Steam's games were
+/// turned off is dropped.
+#[test]
+fn images_from_steams_servers_once_turned_on() {
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    app.steam.found = Some("[FAKE] Player".into());
+    app.page = Page::Settings;
+    app.window = Size::new(1440.0, 2400.0);
+    assert!(render_window(&app).find("Images from Steam").is_err());
+    let _ = app.update(Message::Steam(SteamMsg::Switch(true)));
+    assert!(render_window(&app).find("Images from Steam").is_ok());
+    assert!(!slatty_core::settings::steam_images(&db).unwrap());
+    let _ = app.update(Message::Steam(SteamMsg::Images(true)));
+    assert!(app.steam.images && slatty_core::settings::steam_images(&db).unwrap());
+
+    let mut library = steam_library();
+    library.games[1].cover = Some(
+        "https://shared.steamstatic.com/store_item_assets/steam/apps/620/library_600x900.jpg"
+            .into(),
+    );
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(library))));
+    let cover = std::env::temp_dir().join("[FAKE]-steam-620.jpg");
+    let _ = app.update(Message::Steam(SteamMsg::Cover(
+        "steam-620".into(),
+        Some(cover.clone()),
+    )));
+    assert!(app.covers.contains_key("steam-620"));
+    let _ = app.set_library(LibraryCache {
+        user_id: "0".into(),
+        fetched_at: 0,
+        games: vec![fake_game("1", "Game 1")],
+    });
+    assert!(
+        app.covers.contains_key("steam-620"),
+        "kept through GOG's refresh"
+    );
+
+    // Asked for without a GOG account too.
+    app.account = None;
+    let url = "https://shared.steamstatic.com/store_item_assets/steam/apps/620/library_hero.jpg";
+    let _ = app.request_images(vec![url.into(), "https://images.gog.com/[FAKE].jpg".into()]);
+    assert!(app.images_requested.contains(url));
+    assert!(
+        !app.images_requested
+            .contains("https://images.gog.com/[FAKE].jpg")
+    );
+
+    let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
+    let _ = app.update(Message::Steam(SteamMsg::Cover(
+        "steam-620".into(),
+        Some(cover),
+    )));
+    assert!(
+        !app.covers.contains_key("steam-620"),
+        "Steam's games are off"
+    );
+}
+
 /// A Steam game's page plays, installs, verifies and uninstalls through Steam, and says it runs
 /// through Steam rather than offering GOG's cloud and achievements.
 #[test]

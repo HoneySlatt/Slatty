@@ -590,13 +590,13 @@ impl App {
         let found = match &self.steam.found {
             Some(name) => format!(
                 "Signed in to Steam as {name}. Its games are read from the Steam client's own files \
-                 on this computer: nothing is asked of Steam's servers."
+                 on this computer."
             ),
             None => "Steam was not found on this computer (installed natively or as a Flatpak), \
                      or no account ever signed in to it."
                 .into(),
         };
-        vec![setting(
+        let games = setting(
             wide,
             "Steam games",
             column![
@@ -619,7 +619,29 @@ impl App {
             .spacing(8)
             .into(),
             None,
-        )]
+        );
+        let images = setting(
+            wide,
+            "Images from Steam",
+            column![
+                toggler(self.steam.images)
+                    .on_toggle(|on| Message::Steam(SteamMsg::Images(on)))
+                    .size(22),
+                note(
+                    "Covers, backgrounds and logos the Steam client has not saved on this \
+                     computer are downloaded from Steam's image servers (steamstatic.com), which \
+                     then see which games you ask about. Off, those games show without them.",
+                ),
+            ]
+            .spacing(8)
+            .into(),
+            None,
+        );
+        if self.steam.on {
+            vec![games, images]
+        } else {
+            vec![games]
+        }
     }
 
     fn account_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {

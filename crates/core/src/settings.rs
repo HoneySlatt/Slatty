@@ -27,6 +27,7 @@ const SHARE_PROTONS: &str = "share_protons";
 const AUTO_UPDATE: &str = "auto_update";
 const VULKAN_ONLY: &str = "vulkan_only";
 const STEAM_GAMES: &str = "steam_games";
+const STEAM_IMAGES: &str = "steam_images";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -190,6 +191,16 @@ pub fn steam_games(db: &Db) -> Result<bool> {
 
 pub fn set_steam_games(db: &Db, on: bool) -> Result<()> {
     db.set_setting(STEAM_GAMES, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether the images of Steam's games the client has not saved here (covers, backgrounds, logos,
+/// achievement icons) are downloaded from Steam's image servers. Off until turned on.
+pub fn steam_images(db: &Db) -> Result<bool> {
+    Ok(db.setting(STEAM_IMAGES)?.as_deref() == Some("on"))
+}
+
+pub fn set_steam_images(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(STEAM_IMAGES, Some(if on { "on" } else { "off" }))
 }
 
 /// Whether the interface starts its graphics with Vulkan alone: found, at the last start, to be
@@ -444,6 +455,9 @@ mod tests {
         assert!(!steam_games(&db).unwrap());
         set_steam_games(&db, true).unwrap();
         assert!(steam_games(&db).unwrap());
+        assert!(!steam_images(&db).unwrap(), "Steam's servers stay unasked");
+        set_steam_images(&db, true).unwrap();
+        assert!(steam_images(&db).unwrap());
     }
 
     #[test]

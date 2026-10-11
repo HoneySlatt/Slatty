@@ -45,7 +45,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `steamgriddb` | SteamGridDB, once turned on: games searched by name, their grids (covers) and heroes (backgrounds), images downloaded from its servers only; the user's API key in a header |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
 | `store` | Which store a game comes from, read from its id: GOG's product id, or `steam-<app id>`; `store::of` accepts both and refuses an id unsafe in a file name. `paths::check_game_id` accepts GOG's alone and guards what installs, records or deletes a game's files, so nothing SlattyLauncher writes or deletes is a Steam game's |
-| `steam` | Steam games, read from the local Steam client and never written: `local` (where Steam is, native or Flatpak; the account last signed in, from `loginusers.vdf`; its games, from `userdata/<account>/config/librarycache`; those installed, from each library folder's `appmanifest_*.acf`), `vdf` (Steam's text KeyValues, bounded in size and depth), `appinfo` (`appcache/appinfo.vdf`, binary KeyValues of versions 40 and 41, only the apps asked for decoded), `library` (the account's games and demos as `LibraryGame`s, with the cover, key art and logo the client cached, as `library_assets_full` names them), `client` (`steam://` addresses asking the client to play, install, verify or uninstall, opened by the desktop). Nothing goes to Steam's servers |
+| `steam` | Steam games, read from the local Steam client and never written: `local` (where Steam is, native or Flatpak; the account last signed in, from `loginusers.vdf`; its games, from `userdata/<account>/config/librarycache`; those installed, from each library folder's `appmanifest_*.acf`), `vdf` (Steam's text KeyValues, bounded in size and depth), `appinfo` (`appcache/appinfo.vdf`, binary KeyValues of versions 40 and 41, only the apps asked for decoded), `library` (the account's games and demos as `LibraryGame`s, with the cover, key art and logo the client cached, as `library_assets_full` names them; once `settings::steam_images` is on, those it has not cached are named by their address on Steam's image servers, `shared.steamstatic.com`, and `library::image` downloads them into `~/.cache/slatty/steam`, refusing any other address), `client` (`steam://` addresses asking the client to play, install, verify or uninstall, opened by the desktop). Nothing else goes to Steam's servers |
 | `logs` | Logs of the programs the launcher starts: each run starts its own (`start_run`, before the first command of a launch, a prefix creation, a setup, a Galaxy service registration, a Comet), the two runs before kept as `.1` and `.2`; the session supervisor appends the commands of one run to it. A game's logs go with its uninstall: they hold what it printed |
 
 ## Interface modules
@@ -438,8 +438,9 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
   jobs and records, covers, customisations.
 - Nothing is written through a symbolic link that leads out of the game folder; links from Linux
   installers are resolved on disk once all are made, and those leading out are removed.
-- Besides GOG, only umu's game database is contacted, and SteamGridDB once turned on; umu's
-  database and play time reporting can be turned off (Settings → Privacy), SteamGridDB is off
-  until turned on (Settings → Advanced).
+- Besides GOG, SlattyLauncher itself contacts only umu's game database (Settings → Privacy),
+  GitHub for Proton builds (Settings → Runners), SteamGridDB (Settings → Advanced) and Steam's
+  image servers (Settings → Steam), each off until turned on; play time reporting to GOG can be
+  turned off (Settings → Privacy).
 - Writes to installed games, saves and prefixes are staged and renamed. Every destructive action
   either refuses when the situation looks wrong, or keeps a copy.

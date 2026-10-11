@@ -741,8 +741,9 @@ impl App {
                 let protons = runners::list(self.core.as_ref().expect("just set"));
                 self.steam.found = boot.steam_found;
                 self.steam.on = boot.steam_games;
+                self.steam.images = boot.steam_images;
                 let steam = if self.steam.on {
-                    steam::load()
+                    steam::load(self.steam.images)
                 } else {
                     Task::none()
                 };

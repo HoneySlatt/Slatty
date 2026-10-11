@@ -18,8 +18,10 @@ pub struct SteamView {
     pub found: Option<String>,
     /// Whether Steam's games show (Settings → Steam).
     pub on: bool,
+    /// Whether the images the client has not saved come from Steam's image servers.
+    pub images: bool,
     pub games: Vec<LibraryGame>,
-    /// Their covers, as the client cached them, by game id.
+    /// Their covers, as the client cached them or as downloaded, by game id.
     pub covers: HashMap<String, std::path::PathBuf>,
     /// The games Steam installed, by game id, once its library folders are read.
     pub installed: HashMap<String, Installed>,
@@ -28,7 +30,11 @@ pub struct SteamView {
 #[derive(Debug, Clone)]
 pub enum SteamMsg {
     Switch(bool),
+    /// Whether images the client has not saved come from Steam's image servers.
+    Images(bool),
     Loaded(Option<SteamLibrary>),
+    /// A cover downloaded from Steam's image servers.
+    Cover(String, Option<std::path::PathBuf>),
     /// The games installed in Steam's library folders.
     Installed(Vec<Installed>),
     /// Asks the Steam client to act on a game.
@@ -49,21 +55,39 @@ impl App {
                     self.notify_error(e.to_string());
                 }
                 if on {
-                    return load();
+                    return load(self.steam.images);
                 }
                 self.steam.games.clear();
                 self.steam.covers.clear();
                 self.steam.installed.clear();
                 self.merge_steam();
             }
+            SteamMsg::Images(on) => {
+                self.steam.images = on;
+                if let Some(core) = &self.core
+                    && let Err(e) = slatty_core::settings::set_steam_images(&core.db, on)
+                {
+                    self.notify_error(e.to_string());
+                }
+                // Read again: the images to download, or none.
+                if self.steam.on {
+                    return load(on);
+                }
+            }
             SteamMsg::Loaded(Some(library)) if self.steam.on => {
                 self.steam.found = Some(library.user.name.clone());
                 self.steam.games = library.games;
                 self.steam.covers = library.covers;
                 self.merge_steam();
-                return read_installed();
+                return Task::batch([read_installed(), self.download_covers()]);
             }
             SteamMsg::Loaded(_) => {}
+            SteamMsg::Cover(id, Some(path)) if self.steam.on => {
+                self.covers
+                    .insert(id.clone(), iced::widget::image::Handle::from_path(&path));
+                self.steam.covers.insert(id, path);
+            }
+            SteamMsg::Cover(..) => {}
             SteamMsg::Installed(games) => {
                 self.steam.installed = games
                     .into_iter()
@@ -102,6 +126,33 @@ impl App {
         self.apply_customs();
     }
 
+    /// Downloads from Steam's image servers the covers the client has not saved: only named once
+    /// that is turned on (`settings::steam_images`).
+    fn download_covers(&self) -> Task<Message> {
+        let Some(core) = self.core.clone() else {
+            return Task::none();
+        };
+        Task::batch(
+            self.steam
+                .games
+                .iter()
+                .filter(|g| !self.steam.covers.contains_key(&g.id))
+                .filter_map(|g| Some((g.id.clone(), g.cover.clone()?)))
+                .map(|(id, url)| {
+                    let core = core.clone();
+                    Task::perform(
+                        async move {
+                            let _permit = core.downloads.acquire().await.ok()?;
+                            slatty_core::steam::library::image(&core.http, &core.dirs, &url)
+                                .await
+                                .ok()
+                        },
+                        move |path| Message::Steam(SteamMsg::Cover(id, path)),
+                    )
+                }),
+        )
+    }
+
     /// The Steam app id of a game of the library, for a Steam game.
     pub fn steam_game(&self, game_id: &str) -> Option<u32> {
         store::steam_app(game_id)
@@ -113,13 +164,14 @@ impl App {
     }
 }
 
-/// Reads the library of the account signed in to Steam, off the interface thread.
-pub fn load() -> Task<Message> {
+/// Reads the library of the account signed in to Steam, off the interface thread; with
+/// `from_servers`, the images its client has not saved are named on Steam's image servers.
+pub fn load(from_servers: bool) -> Task<Message> {
     Task::perform(
-        async {
-            tokio::task::spawn_blocking(|| {
+        async move {
+            tokio::task::spawn_blocking(move || {
                 let home = std::env::var_os("HOME").map(std::path::PathBuf::from)?;
-                slatty_core::steam::library::read(&local::find(&home)?)
+                slatty_core::steam::library::read(&local::find(&home)?, from_servers)
             })
             .await
             .ok()

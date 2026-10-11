@@ -495,8 +495,12 @@ without GOG**, which needs no GOG account at all.
   as a Flatpak) and the account last signed in to it, then reads the account's games
   (`userdata/<account>/config/librarycache`), their names and images (`appcache/appinfo.vdf` and
   the client's image cache) and the games installed in each Steam library folder
-  (`appmanifest_*.acf`). Nothing is asked of Steam's servers and no Steam password or key is ever
-  asked for.
+  (`appmanifest_*.acf`). No Steam password or key is ever asked for.
+- **Images from Steam**, off until turned on in Settings → Steam: the covers, backgrounds and logos
+  the Steam client has not saved on this computer (games it never showed) are downloaded from
+  Steam's image servers (`shared.steamstatic.com`), without any account, and kept in
+  `~/.cache/slatty/steam/`. Off, those games show without them, and nothing at all is asked of
+  Steam's servers.
 - **Run by the Steam client.** Play, Install, **Verify files in Steam** and **Uninstall in Steam**
   hand the game to the Steam client (`steam://` addresses, opened by the desktop): it must be
   installed and signed in, and does the work in its own window. What it installed or removed shows
@@ -654,6 +658,7 @@ corners and the page transition. See [theming](theming.md).
 | `~/.local/share/slatty/diagnostics/` | Cloud copies downloaded by `slatty cloud diff` |
 | `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | Comet's data and configuration |
 | `~/.cache/slatty/<user id>/` | Library and covers; safe to delete |
+| `~/.cache/slatty/steam/` | Images of Steam's games downloaded from Steam's image servers, once turned on; safe to delete |
 | `~/.local/state/slatty/logs/` | Game, prefix creation, setup, Galaxy service and Comet logs: the last run of each and the two before (`.1`, `.2`); a game's go when it is uninstalled |
 
 Read a log before sharing it: a game's log holds whatever the game printed, which can include a

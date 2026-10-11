@@ -36,10 +36,11 @@ pub struct Boot {
     pub steamgriddb: bool,
     /// Whether a SteamGridDB API key is in the keyring; only asked once the integration is on.
     pub steamgriddb_key: Option<bool>,
-    /// The name of the account signed in to Steam here, when Steam is installed, and whether its
-    /// games show.
+    /// The name of the account signed in to Steam here, when Steam is installed, whether its
+    /// games show, and whether images its client has not saved come from Steam's servers.
     pub steam_found: Option<String>,
     pub steam_games: bool,
+    pub steam_images: bool,
     pub proton: Option<PathBuf>,
     /// Whether Proton builds may be downloaded from GitHub, and those already downloaded.
     pub proton_downloads: bool,
@@ -169,6 +170,7 @@ async fn boot() -> Result<Boot, String> {
     let isolate_new_games = slatty_core::settings::isolate_new_games(&db).map_err(err)?;
     let manual_achievements = slatty_core::settings::manual_achievements(&db).map_err(err)?;
     let steam_games = slatty_core::settings::steam_games(&db).map_err(err)?;
+    let steam_images = slatty_core::settings::steam_images(&db).map_err(err)?;
     // Steam's own small file in the home folder; its library folders are read later.
     let steam_found = std::env::var_os("HOME")
         .and_then(|home| slatty_core::steam::local::find(std::path::Path::new(&home)))
@@ -255,6 +257,7 @@ async fn boot() -> Result<Boot, String> {
         steamgriddb_key,
         steam_found,
         steam_games,
+        steam_images,
         favorites,
         playtime,
         overview,
