@@ -174,7 +174,8 @@ impl App {
         let (label_of, ready, next) = if d.installer_first() {
             (
                 match (d.busy, d.windows()) {
-                    (true, _) => "Installing…",
+                    (true, true) => "Installing…",
+                    (true, false) => "Unpacking…",
                     (false, true) => "Run installer",
                     (false, false) => "Unpack",
                 },

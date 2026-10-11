@@ -255,6 +255,26 @@ fn a_linux_program_is_added_not_isolated_unless_asked() {
     assert!(!isolated(&app), "the choice made stays");
 }
 
+/// An archive being unpacked is not said to be installing, on the button either.
+#[test]
+fn an_archive_being_unpacked_says_so() {
+    use crate::add::AddMsg;
+    let mut app = library_app();
+    let _ = app.update(Message::Add(AddMsg::Open));
+    let _ = app.update(Message::Add(AddMsg::WithInstaller(true)));
+    let _ = app.update(Message::Add(AddMsg::PickedInstaller(Some(
+        "/downloads/[FAKE] quest.tar.gz".into(),
+    ))));
+    let _ = app.update(Message::Add(AddMsg::RunInstaller));
+    let mut ui = render(&app);
+    assert!(ui.find("Installing…").is_err());
+    assert_eq!(
+        texts(&mut ui).iter().filter(|t| *t == "Unpacking…").count(),
+        2,
+        "the note and the button"
+    );
+}
+
 /// The page of the game added goes back to the library where it was scrolled.
 #[test]
 fn the_game_added_goes_back_to_where_the_library_was() {
