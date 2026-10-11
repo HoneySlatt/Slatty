@@ -29,16 +29,51 @@ pub struct Task {
     pub args: Vec<String>,
     /// Where it starts; the folder itself when empty.
     pub working_dir: PathBuf,
-    /// The files SlattyLauncher unpacked into the folder, which removing the game deletes.
+    /// The files SlattyLauncher unpacked into the folder, which removing the game deletes while
+    /// they are as they were unpacked.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub unpacked: Vec<PathBuf>,
+    pub unpacked: Vec<UnpackedFile>,
+}
+
+/// A file SlattyLauncher unpacked for a game, with its size and modification time just after; a
+/// list written before they were kept names the file alone.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum UnpackedFile {
+    Stamped {
+        path: PathBuf,
+        size: u64,
+        mtime: i64,
+        mtime_nsec: i64,
+    },
+    Bare(PathBuf),
+}
+
+impl UnpackedFile {
+    /// `rel` in `folder` as it is now, or `None` when nothing is there.
+    fn stamp(folder: &Path, rel: PathBuf) -> Option<UnpackedFile> {
+        use std::os::unix::fs::MetadataExt;
+        let m = std::fs::symlink_metadata(folder.join(&rel)).ok()?;
+        Some(UnpackedFile::Stamped {
+            path: rel,
+            size: m.len(),
+            mtime: m.mtime(),
+            mtime_nsec: m.mtime_nsec(),
+        })
+    }
+
+    fn path(&self) -> &Path {
+        match self {
+            Self::Stamped { path, .. } | Self::Bare(path) => path,
+        }
+    }
 }
 
 /// A Linux installer or archive unpacked for a game not added yet: where, and which files.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Unpacked {
     folder: PathBuf,
-    files: Vec<PathBuf>,
+    files: Vec<UnpackedFile>,
 }
 
 /// A game to add.
@@ -182,7 +217,7 @@ pub fn discard_installer(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
     }
     let _busy = crate::lock::game(dirs, game_id)?;
     if let Ok(unpacked) = load_unpacked(dirs, game_id) {
-        let files = checked_files(&unpacked.folder, &unpacked.files)?;
+        let files = deletable(&unpacked.folder, &unpacked.files)?;
         let mut report = crate::maintenance::UninstallReport::default();
         crate::maintenance::delete_listed(&unpacked.folder, &files, &mut report)?;
         let _ = std::fs::remove_file(unpacked_file(dirs, game_id));
@@ -229,16 +264,31 @@ fn next_id(db: &Db, dirs: &Dirs) -> Result<String> {
     }
 }
 
-/// `files`, relative to `folder`, refused whole when one would lead out of it.
-fn checked_files(folder: &Path, files: &[PathBuf]) -> Result<Vec<PathBuf>> {
-    files
-        .iter()
-        .map(|f| {
-            let rel = crate::installer::safe_relative(&f.to_string_lossy())?;
-            crate::installer::refuse_outside(folder, &folder.join(&rel))?;
-            Ok(rel)
-        })
-        .collect()
+/// The files of `files`, relative to `folder`, to delete as the game goes: those still as they
+/// were unpacked. One the game rewrote since (a save slot, settings it ships) stays, as do those
+/// of a list that never said how they were. Refused whole when one would lead out of `folder`.
+fn deletable(folder: &Path, files: &[UnpackedFile]) -> Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    for f in files {
+        let rel = crate::installer::safe_relative(&f.path().to_string_lossy())?;
+        crate::installer::refuse_outside(folder, &folder.join(&rel))?;
+        let unchanged = match f {
+            UnpackedFile::Stamped {
+                size,
+                mtime,
+                mtime_nsec,
+                ..
+            } => UnpackedFile::stamp(folder, rel.clone()).is_some_and(|now| {
+                matches!(now, UnpackedFile::Stamped { size: s, mtime: m, mtime_nsec: n, .. }
+                    if (s, m, n) == (*size, *mtime, *mtime_nsec))
+            }),
+            UnpackedFile::Bare(_) => false,
+        };
+        if unchanged {
+            out.push(rel);
+        }
+    }
+    Ok(out)
 }
 
 /// Whether SlattyLauncher can unpack this file for a Linux game: a MojoSetup installer (GOG's
@@ -304,12 +354,17 @@ pub async fn unpack(
     if files.is_err() {
         let _ = std::fs::remove_dir_all(&partial);
     }
+    // As they are now, to tell later whether the game rewrote one; what is not there was left out.
+    let files = files?
+        .into_iter()
+        .filter_map(|rel| UnpackedFile::stamp(&target, rel))
+        .collect();
     save_unpacked(
         dirs,
         &game_id,
         &Unpacked {
             folder: target.clone(),
-            files: files?,
+            files,
         },
     )?;
     Ok((game_id, target))
@@ -597,7 +652,7 @@ pub fn remove(
     let unpacked = load_task(dirs, game_id)
         .map(|t| t.unpacked)
         .unwrap_or_default();
-    let unpacked = checked_files(&install.path, &unpacked)?;
+    let unpacked = deletable(&install.path, &unpacked)?;
     let mut report = crate::maintenance::UninstallReport::default();
     if let Some(prefix) = install.runner.prefix().filter(|_| delete_prefix) {
         // Its own, as SlattyLauncher named it: no other game's, nor one reached through `..`.
@@ -1312,6 +1367,105 @@ mod tests {
         assert!(
             folder.join("save.dat").is_file(),
             "what the game wrote stays"
+        );
+    }
+
+    /// Removing a game deletes what SlattyLauncher unpacked for it only as it was unpacked: a file
+    /// the game rewrote since (a save slot or settings it ships) stays, listed as kept.
+    #[tokio::test]
+    async fn files_the_game_rewrote_stay_when_it_is_removed() {
+        let f = fake("rewritten");
+        let zip = f.root.join("[FAKE] game.zip");
+        let files = [
+            zip_file("Game/run.sh", b"#!/bin/sh\n"),
+            zip_file("Game/save.dat", b"[FAKE] empty slot"),
+        ];
+        std::fs::write(
+            &zip,
+            crate::installer::zip::build::installer(b"", &files, false),
+        )
+        .unwrap();
+        let (id, folder) = unpacked(&f, &zip, "[FAKE] Saved").await.unwrap();
+        add(
+            &f.db,
+            &f.dirs,
+            NewGame {
+                title: "[FAKE] Saved".into(),
+                program: folder.join("Game/run.sh"),
+                isolated: Some(false),
+                installed_by: Some(id.clone()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(folder.join("Game/save.dat"), b"[FAKE] my progress").unwrap();
+        let report = remove(&f.db, &f.dirs, &id, false).unwrap();
+        assert_eq!(
+            std::fs::read(folder.join("Game/save.dat")).unwrap(),
+            b"[FAKE] my progress"
+        );
+        assert!(
+            report.kept.contains(&PathBuf::from("Game/save.dat")),
+            "{:?}",
+            report.kept
+        );
+        assert!(!folder.join("Game/run.sh").exists());
+    }
+
+    /// A game added before the state of its files was kept: its list still reads, and removing it
+    /// deletes none of them, rather than files the game may have rewritten.
+    #[test]
+    fn a_list_without_the_state_of_its_files_deletes_nothing() {
+        let task: Task = serde_json::from_str(
+            r#"{"program":"run.sh","args":[],"working_dir":"","unpacked":["run.sh"]}"#,
+        )
+        .unwrap();
+        assert_eq!(task.unpacked, [UnpackedFile::Bare("run.sh".into())]);
+        let f = fake("bare-list");
+        std::fs::write(f.game.join("run.sh"), b"#!/bin/sh\n").unwrap();
+        assert!(deletable(&f.game, &task.unpacked).unwrap().is_empty());
+    }
+
+    /// A link left out because it led out of the folder was never put there: a file the user puts
+    /// at its place later stays when the game is removed.
+    #[tokio::test]
+    async fn a_link_left_out_of_an_archive_is_no_file_of_slattys() {
+        let f = fake("left-out-link");
+        let zip = f.root.join("[FAKE] game.zip");
+        let files = [
+            zip_file("Game/run.sh", b"#!/bin/sh\n"),
+            crate::installer::zip::build::File {
+                name: "Game/lib.so",
+                data: b"/etc/[FAKE]",
+                mode: 0o120777,
+                deflate: false,
+            },
+        ];
+        std::fs::write(
+            &zip,
+            crate::installer::zip::build::installer(b"", &files, false),
+        )
+        .unwrap();
+        let (id, folder) = unpacked(&f, &zip, "[FAKE] Linked").await.unwrap();
+        assert!(std::fs::symlink_metadata(folder.join("Game/lib.so")).is_err());
+        add(
+            &f.db,
+            &f.dirs,
+            NewGame {
+                title: "[FAKE] Linked".into(),
+                program: folder.join("Game/run.sh"),
+                isolated: Some(false),
+                installed_by: Some(id.clone()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        std::fs::write(folder.join("Game/lib.so"), b"[FAKE] mine").unwrap();
+        remove(&f.db, &f.dirs, &id, false).unwrap();
+        assert_eq!(
+            std::fs::read(folder.join("Game/lib.so")).unwrap(),
+            b"[FAKE] mine"
         );
     }
 

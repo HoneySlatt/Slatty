@@ -134,7 +134,8 @@ show game titles and achievement names on a lock screen.
   folders (but for the game's own prefix). GOG is never told of them, nor is umu's database asked about them.
   A Linux installer or archive is unpacked, never run (a MojoSetup installer's script included),
   with the same path checks as GOG's installers; removing that game deletes the files unpacked
-  and only those. A Windows installer runs in the game's own prefix, isolated when asked.
+  and only those, while they are as they were unpacked (a save or a setting file the game rewrote
+  stays). A Windows installer runs in the game's own prefix, isolated when asked.
 - **Sizes.** Limits apply before memory or disk is taken: network answers (256 MiB), manifests once
   inflated (512 MiB), download chunks (64 MiB), a game's own `goggame-*.info` and `start.sh`
   (16 MiB), each Linux installer entry (the size its installer gives), a library listing (10,000

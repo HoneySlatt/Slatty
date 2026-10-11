@@ -524,8 +524,10 @@ slatty remove <game-id> [--delete-prefix]
     copied to the backups first).
 - A game moved elsewhere is found again with **Locate…** in its Game settings (Folder): its
   program must be at the same place in the folder chosen.
-- A game unpacked by SlattyLauncher keeps the list of the files it unpacked: removing it deletes
-  those files and only those; what the game wrote in its folder since (saves, settings) stays.
+- A game unpacked by SlattyLauncher keeps the list of the files it unpacked, with their size and
+  modification time: removing it deletes those files and only those, while they are as they were
+  unpacked. What the game wrote in its folder since (saves, settings), a file it shipped with
+  and rewrote included, stays.
 
 - A Windows program (`.exe`) runs through umu and Proton, in a Wine prefix of its own made at its
   first launch; a Linux program, script or AppImage runs as GOG's Linux builds do (see
