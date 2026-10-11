@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use slatty_core::library::{LibraryCache, MetadataSource};
 use slatty_core::steam::client::Action;
 use slatty_core::steam::library::SteamLibrary;
@@ -422,6 +424,7 @@ fn a_download_steam_makes_shows_until_it_is_done() {
     let downloading = Update {
         done: 1_000,
         total: 4_000,
+        stage_total: 0,
         started: true,
         paused: false,
     };
@@ -473,11 +476,13 @@ fn a_download_steam_makes_shows_until_it_is_done() {
             Some(installed(620, 0, false, Some(paused))),
         )]
         .into(),
+        HashMap::new(),
     )));
     assert_eq!(app.steam_downloads_every(), None, "Steam's to resume");
     assert!(toasted(&app).is_empty());
     let _ = app.update(Message::Steam(SteamMsg::Downloads(
         [("steam-620".into(), Some(installed(620, 4_000, true, None)))].into(),
+        HashMap::new(),
     )));
     assert_eq!(toasted(&app).len(), 1, "{:?}", toasted(&app));
     assert_eq!(toasted(&app)[0].0, "Download complete");
@@ -494,9 +499,69 @@ fn a_download_steam_makes_shows_until_it_is_done() {
     )])));
     let _ = app.update(Message::Steam(SteamMsg::Downloads(
         [("steam-620".into(), Some(installed(620, 4_000, true, None)))].into(),
+        HashMap::new(),
     )));
     assert_eq!(toasted(&app).len(), 1, "still told once");
     assert_eq!(app.steam_downloads_every(), None);
+}
+
+/// Steam downloads one game at a time: of two it began, the one without a `downloading` folder
+/// while the other has one waits its turn, and the other's progress comes from what it wrote
+/// there, its manifest staying as it was. Its folder growing keeps it followed, every few seconds.
+/// Not checked against a real download.
+#[test]
+fn of_two_downloads_steam_began_the_one_waiting_its_turn_says_so() {
+    use slatty_core::steam::local::Written;
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let began = Update {
+        done: 0,
+        total: 4_000,
+        stage_total: 8_000,
+        started: true,
+        paused: false,
+    };
+    let manifests = || -> HashMap<String, Option<Installed>> {
+        [620, 440]
+            .into_iter()
+            .map(|app| {
+                (
+                    slatty_core::store::steam_id(app),
+                    Some(installed(app, 0, false, Some(began))),
+                )
+            })
+            .collect()
+    };
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        manifests(),
+        HashMap::new(),
+    )));
+    let written = |bytes| {
+        [(
+            "steam-620".to_string(),
+            Written {
+                apparent: bytes,
+                allocated: bytes,
+            },
+        )]
+        .into()
+    };
+    app.steam.download_moved =
+        Some(std::time::Instant::now() - std::time::Duration::from_secs(600));
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        manifests(),
+        written(2_000),
+    )));
+    assert_eq!(
+        app.steam_downloads_every(),
+        Some(crate::steam::DOWNLOAD_EVERY),
+        "it wrote"
+    );
+    let _ = app.update(Message::Select("steam-620".into()));
+    assert!(render(&app).find("Downloading 25 %").is_ok());
+    let _ = app.update(Message::Select("steam-440".into()));
+    assert!(render(&app).find("Queued in Steam").is_ok());
 }
 
 /// A game owned on GOG and on Steam shows once, as GOG's: matched by the Steam app GOG's database

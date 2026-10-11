@@ -582,10 +582,12 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
 - **Steam's downloads.** An install or update the client makes shows on the game's page
   (Downloading, Paused or Queued in Steam) and in the Downloads tab under **In Steam**, with its
   progress, and a notification says when it is done. They are read from the game's manifest
-  (`appmanifest_<id>.acf`) every five seconds while one downloads; once it stayed the same for two
-  minutes (Steam closed, or busy with another), every thirty seconds while the launcher's window is
-  in front, and not at all while it is behind (it is read again as the window comes to the
-  front). Steam's own window pauses or cancels them.
+  (`appmanifest_<id>.acf`) and from what Steam wrote so far in its `steamapps/downloading` folder
+  every five seconds while one downloads (Steam downloads one game at a time: one waiting for
+  another shows as Queued in Steam); once nothing moved for two minutes (Steam closed, or busy
+  with another), every thirty seconds while the launcher's window is in front, and not at all
+  while it is behind (it is read again as the window comes to the front). Steam's own window
+  pauses or cancels them.
 - **Play time and last played** are Steam's own records for the account
   (`userdata/<account>/config/localconfig.vdf`), shown on the game page and used by the library's
   sorts with GOG's; they are never sent to GOG. They are read again when a game Steam ran ends,

@@ -55,9 +55,75 @@ pub struct Update {
     /// Bytes downloaded, of those to download (0 of 0 until Steam knows).
     pub done: u64,
     pub total: u64,
+    /// Bytes Steam puts in place once downloaded and unpacked (`BytesToStage`; 0 when not told).
+    pub stage_total: u64,
     /// Whether Steam began it: it downloads, or waits for its turn or for Steam to run.
     pub started: bool,
     pub paused: bool,
+}
+
+impl Update {
+    /// How far it went, as (done, of): from what Steam wrote in its `downloading` folder when
+    /// there is one, its manifest being said to stay as it was until the download ends; else from
+    /// the manifest. Never all of it until the manifest says it is done.
+    pub fn progress(&self, written: Option<Written>) -> Option<(u64, u64)> {
+        match written {
+            Some(w) if self.stage_total > 0 => {
+                // Files made whole and empty beforehand take room on the disk as they are
+                // written; else, made as they come, their sizes are what was written.
+                let staged = if w.allocated < w.apparent {
+                    w.allocated
+                } else {
+                    w.apparent
+                };
+                Some((staged.min(self.stage_total / 100 * 99), self.stage_total))
+            }
+            _ => (self.total > 0).then_some((self.done, self.total)),
+        }
+    }
+}
+
+/// What Steam wrote so far for a game it downloads, in `steamapps/downloading/<app id>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Written {
+    /// The files' sizes.
+    pub apparent: u64,
+    /// The room they take on the disk.
+    pub allocated: u64,
+}
+
+/// Entries of a `downloading` folder counted at most: a game of more files is not measured.
+const MAX_WRITTEN_ENTRIES: usize = 500_000;
+
+/// What Steam wrote so far for `game`, while it downloads it: `None` without its `downloading`
+/// folder (not begun, done, or waiting for another to end). Links are not followed. Reads a
+/// folder of a library, which can be a network drive: not for the interface thread.
+pub fn written(game: &Installed) -> Option<Written> {
+    use std::os::unix::fs::MetadataExt;
+    let apps = game.dir.parent()?.parent()?;
+    let folder = apps.join("downloading").join(game.app_id.to_string());
+    if !std::fs::symlink_metadata(&folder).is_ok_and(|m| m.is_dir()) {
+        return None;
+    }
+    let mut out = Written::default();
+    let (mut dirs, mut seen) = (vec![folder], 0);
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            seen += 1;
+            if seen > MAX_WRITTEN_ENTRIES {
+                return None;
+            }
+            match entry.metadata() {
+                Ok(m) if m.is_dir() => dirs.push(entry.path()),
+                Ok(m) if m.is_file() => {
+                    out.apparent += m.len();
+                    out.allocated += m.blocks() * 512;
+                }
+                _ => {}
+            }
+        }
+    }
+    Some(out)
 }
 
 /// Steam's app state bits (`StateFlags`), as SteamKit names them (`EAppState`).
@@ -247,6 +313,7 @@ fn manifest(apps: &Path, vdf: &Vdf) -> Option<Installed> {
         Update {
             done: number("BytesDownloaded").unwrap_or(0).min(total),
             total,
+            stage_total: number("BytesToStage").unwrap_or(0),
             started: flags & (UPDATE_RUNNING | UPDATE_STARTED) != 0,
             paused: flags & UPDATE_PAUSED != 0,
         }
@@ -406,6 +473,7 @@ pub(crate) mod tests {
             Some(Update {
                 done: 1000,
                 total: 4000,
+                stage_total: 0,
                 started: true,
                 paused: false
             })
@@ -440,6 +508,54 @@ pub(crate) mod tests {
         );
         std::fs::remove_file(&manifest).unwrap();
         assert_eq!(read_again(life), None, "uninstalled");
+    }
+
+    /// What Steam wrote of a game it downloads is measured in its `downloading` folder, Steam's
+    /// manifest being said to stay as it was until the end: the files' sizes, and the room they
+    /// take, small for a file made whole and empty until written; nothing through a link.
+    /// Not checked against a real download.
+    #[test]
+    fn what_steam_wrote_of_a_download_is_measured_in_its_folder() {
+        use std::io::{Seek, Write};
+        let fake = FakeSteam::new("written");
+        let life = installed(&fake.steam)
+            .into_iter()
+            .find(|g| g.app_id == 70)
+            .unwrap();
+        assert_eq!(written(&life), None, "not begun");
+        let folder = fake.home.join("other-library/steamapps/downloading/70");
+        std::fs::create_dir_all(folder.join("data")).unwrap();
+        let mut big = std::fs::File::create(folder.join("data/big.pak")).unwrap();
+        big.set_len(64 << 20).unwrap();
+        std::fs::write(folder.join("small.dll"), vec![1u8; 4096]).unwrap();
+        std::os::unix::fs::symlink("/etc", folder.join("elsewhere")).unwrap();
+        let before = written(&life).unwrap();
+        assert_eq!(before.apparent, (64 << 20) + 4096);
+        assert!(before.allocated < 1 << 20, "{before:?}");
+        big.seek(std::io::SeekFrom::Start(0)).unwrap();
+        big.write_all(&vec![7u8; 8 << 20]).unwrap();
+        big.sync_all().unwrap();
+        let after = written(&life).unwrap();
+        assert_eq!(after.apparent, before.apparent);
+        assert!(after.allocated >= 8 << 20, "{after:?}");
+
+        // As far as what was written, of what is staged; never done before the manifest says so.
+        let update = Update {
+            done: 0,
+            total: 1 << 20,
+            stage_total: 32 << 20,
+            started: true,
+            paused: false,
+        };
+        let (done, of) = update.progress(Some(after)).unwrap();
+        assert_eq!(of, 32 << 20);
+        assert!(done >= 8 << 20 && done < of, "{done}");
+        let whole = Written {
+            apparent: 40 << 20,
+            allocated: 40 << 20,
+        };
+        assert!(update.progress(Some(whole)).unwrap().0 < of);
+        assert_eq!(update.progress(None), Some((0, 1 << 20)), "the manifest");
     }
 
     /// Steam found through its `~/.steam/steam` link names its main library by its real path: read

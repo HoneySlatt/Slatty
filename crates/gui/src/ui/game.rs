@@ -240,7 +240,7 @@ impl App {
                 }
                 Some(installed) if installed.update.is_some_and(|u| u.started) => big(
                     Icon::Download,
-                    steam_download(installed.update.as_ref().expect("just checked")),
+                    self.steam_status(&g.id, installed.update.as_ref().expect("just checked")),
                     None,
                     false,
                 ),
@@ -837,7 +837,7 @@ impl App {
         let (label, action) = match installed {
             _ if self.steam.running.contains(twin) => ("Running in Steam".to_string(), None),
             Some(i) if i.update.is_some_and(|u| u.started) => (
-                steam_download(i.update.as_ref().expect("just checked")),
+                self.steam_status(twin, i.update.as_ref().expect("just checked")),
                 None,
             ),
             Some(i) if i.ready => ("Play the Steam version".to_string(), Some(Action::Play)),

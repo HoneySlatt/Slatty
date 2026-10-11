@@ -30,17 +30,20 @@ pub fn human_size(bytes: u64) -> String {
     slatty_core::units::size(bytes)
 }
 
-/// Where an install or update Steam makes is: "Downloading 45 %", paused, or waiting.
-pub fn steam_download(u: &slatty_core::steam::local::Update) -> String {
-    if u.paused {
-        "Paused in Steam".into()
-    } else if u.total == 0 {
-        "Queued in Steam".into()
-    } else {
-        format!(
-            "Downloading {:.0} %",
-            u.done as f64 * 100.0 / u.total as f64
-        )
+/// Where an install or update Steam makes is: "Downloading 45 %" (`progress`, done of), paused, or
+/// waiting; `writing` when Steam writes it but its size is not known yet.
+pub fn steam_download(
+    u: &slatty_core::steam::local::Update,
+    progress: Option<(u64, u64)>,
+    writing: bool,
+    waiting: bool,
+) -> String {
+    match progress {
+        _ if u.paused => "Paused in Steam".into(),
+        _ if waiting => "Queued in Steam".into(),
+        Some((done, of)) => format!("Downloading {:.0} %", done as f64 * 100.0 / of as f64),
+        None if writing => "Downloading".into(),
+        None => "Queued in Steam".into(),
     }
 }
 

@@ -424,16 +424,11 @@ impl App {
         id: &'a str,
         u: &slatty_core::steam::local::Update,
     ) -> Element<'a, Message> {
-        let share = if u.total == 0 {
-            0.0
-        } else {
-            u.done as f32 / u.total as f32
-        };
-        let amount = if u.total == 0 {
-            String::new()
-        } else {
-            format!("{} / {}", human_size(u.done), human_size(u.total))
-        };
+        let progress = self.steam_progress(id, u);
+        let share = progress.map_or(0.0, |(done, of)| done as f32 / of as f32);
+        let amount = progress.map_or(String::new(), |(done, of)| {
+            format!("{} / {}", human_size(done), human_size(of))
+        });
         container(
             row![
                 self.cover_art(id, 40.0),
@@ -446,7 +441,7 @@ impl App {
                 .spacing(8)
                 .width(Length::Fill),
                 text(amount).size(15).width(200),
-                text(steam_download(u))
+                text(self.steam_status(id, u))
                     .size(14)
                     .color(tokens().muted)
                     .width(170),

@@ -75,6 +75,10 @@ pub struct SteamView {
     pub running: BTreeSet<String>,
     /// A game Steam was asked to play, until it runs or `START_WAIT` passed.
     pub starting: Option<(String, Instant)>,
+    /// What Steam wrote so far in the `downloading` folder of each game it downloads, as last read;
+    /// and whether those are being read again.
+    pub written: HashMap<String, local::Written>,
+    pub reading_downloads: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -89,8 +93,12 @@ pub enum SteamMsg {
     Installed(Vec<Installed>),
     /// Time to read again the manifests of the games Steam downloads.
     ReadDownloads,
-    /// Those manifests, by game id; none for a game Steam removed.
-    Downloads(HashMap<String, Option<Installed>>),
+    /// Those manifests, by game id (none for a game Steam removed), and what Steam wrote in the
+    /// `downloading` folders it has.
+    Downloads(
+        HashMap<String, Option<Installed>>,
+        HashMap<String, local::Written>,
+    ),
     /// Play times read again, with the Steam id of the account they are of.
     Played(Option<(u64, HashMap<String, Played>)>),
     /// Unlocked and total achievements of the games that have any, with the account's Steam id.
@@ -226,6 +234,10 @@ impl App {
             }
             SteamMsg::Installed(_) => self.steam.reading_installed = false,
             SteamMsg::ReadDownloads if self.steam.on => {
+                // One read at a time: a network drive not answering would have them pile up.
+                if std::mem::replace(&mut self.steam.reading_downloads, true) {
+                    return Task::none();
+                }
                 let downloading: Vec<Installed> = self
                     .steam
                     .installed
@@ -236,23 +248,38 @@ impl App {
                 return Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
-                            downloading
-                                .into_iter()
-                                .map(|g| {
-                                    let id = store::steam_id(g.app_id);
-                                    (id, local::read_again(&g))
-                                })
-                                .collect()
+                            let (mut read, mut written) = (HashMap::new(), HashMap::new());
+                            for g in downloading {
+                                let id = store::steam_id(g.app_id);
+                                if let Some(w) = local::written(&g) {
+                                    written.insert(id.clone(), w);
+                                }
+                                read.insert(id, local::read_again(&g));
+                            }
+                            (read, written)
                         })
                         .await
                         .unwrap_or_default()
                     },
-                    |read| Message::Steam(SteamMsg::Downloads(read)),
+                    |(read, written)| Message::Steam(SteamMsg::Downloads(read, written)),
                 );
             }
             SteamMsg::ReadDownloads => {}
-            SteamMsg::Downloads(read) if self.steam.on => return self.steam_installed(read),
-            SteamMsg::Downloads(_) => {}
+            SteamMsg::Downloads(read, written) if self.steam.on => {
+                self.steam.reading_downloads = false;
+                // Steam's manifest is said to stay as it was while it downloads: what it writes
+                // in its `downloading` folder tells that the download goes on.
+                if written.iter().any(|(id, now)| {
+                    self.steam.written.get(id).is_none_or(|was| {
+                        now.apparent > was.apparent || now.allocated > was.allocated
+                    })
+                }) {
+                    self.steam.download_moved = Some(Instant::now());
+                }
+                self.steam.written = written;
+                return self.steam_installed(read);
+            }
+            SteamMsg::Downloads(..) => self.steam.reading_downloads = false,
             // Another account signed in to Steam meanwhile: its own games show.
             SteamMsg::Played(Some((account, _)))
                 if self.steam.on && self.steam.account != Some(account) =>
@@ -634,6 +661,29 @@ impl App {
             );
             self.notify(Kind::Downloads, Some(&id), "Download complete", body)
         }))
+    }
+
+    /// Whether a download Steam began waits for another to end: Steam downloads one game at a time,
+    /// in a `downloading` folder of its own, which this one has not while another has. Their
+    /// manifests tell them apart in nothing (both "started").
+    fn steam_waiting(&self, id: &str) -> bool {
+        !self.steam.written.contains_key(id) && !self.steam.written.is_empty()
+    }
+
+    /// How far an install or update Steam makes went (done, of), from what it wrote when it can
+    /// be told.
+    pub fn steam_progress(&self, id: &str, u: &local::Update) -> Option<(u64, u64)> {
+        u.progress(self.steam.written.get(id).copied())
+    }
+
+    /// Where an install or update Steam makes is, in words.
+    pub fn steam_status(&self, id: &str, u: &local::Update) -> String {
+        crate::ui::format::steam_download(
+            u,
+            self.steam_progress(id, u),
+            self.steam.written.contains_key(id),
+            self.steam_waiting(id),
+        )
     }
 
     /// How often the manifests of the games Steam downloads are read: every few seconds while one
