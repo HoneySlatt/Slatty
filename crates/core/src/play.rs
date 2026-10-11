@@ -404,6 +404,8 @@ async fn run_session(
         other => return Err(Error::parse("session supervisor", format!("{other:?}"))),
     }
     let id = session::record_start(db, &req.game_id, user_id)?;
+    // Monotonic: suspend is not play time, and the wall clock can be set meanwhile.
+    let played = Instant::now();
     let mut stop_open = true;
     let mut look = tokio::time::interval(UNLOCKS_EVERY);
     let outcome = loop {
@@ -412,7 +414,8 @@ async fn run_session(
                 Some(SupervisorEvent::MainExited { code }) => emit(PlayEvent::LauncherExited { code }),
                 Some(SupervisorEvent::Ended { main_code }) => break SessionOutcome { main_code, clean: true },
                 Some(SupervisorEvent::Failed { message }) => {
-                    end_session(db, id, &SessionOutcome { main_code: None, clean: false }, user_id)?;
+                    let lost = SessionOutcome { main_code: None, clean: false };
+                    end_session(db, id, &lost, user_id, played.elapsed())?;
                     return Err(Error::Refused(message));
                 }
                 Some(SupervisorEvent::Started { .. }) => {}
@@ -438,15 +441,21 @@ async fn run_session(
     if !new.is_empty() {
         emit(PlayEvent::Achieved(new));
     }
-    end_session(db, id, &outcome, user_id)?;
+    end_session(db, id, &outcome, user_id, played.elapsed())?;
     Ok(outcome)
 }
 
 /// Records a session's end. With play time reporting off it is kept from GOG at once, rather than
 /// after the steps that follow the game (Comet's stop, the cloud): a launcher closed meanwhile
 /// would have left it to be sent later.
-fn end_session(db: &Db, id: i64, outcome: &SessionOutcome, user_id: Option<&str>) -> Result<()> {
-    session::record_end(db, id, outcome)?;
+fn end_session(
+    db: &Db,
+    id: i64,
+    outcome: &SessionOutcome,
+    user_id: Option<&str>,
+    played: Duration,
+) -> Result<()> {
+    session::record_end(db, id, outcome, played)?;
     if let Some(user_id) = user_id
         && !crate::settings::report_playtime(db)?
     {
@@ -569,7 +578,7 @@ mod tests {
             main_code: Some(0),
             clean: true,
         };
-        end_session(&db, id, &outcome, Some("1234")).unwrap();
+        end_session(&db, id, &outcome, Some("1234"), Duration::from_secs(120)).unwrap();
         crate::settings::set_report_playtime(&db, true).unwrap();
         let reported: i64 = db
             .conn()

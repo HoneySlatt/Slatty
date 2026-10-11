@@ -333,12 +333,20 @@ pub fn record_start(db: &Db, game_id: &str, user_id: Option<&str>) -> Result<i64
     Ok(conn.last_insert_rowid())
 }
 
-pub fn record_end(db: &Db, id: i64, outcome: &SessionOutcome) -> Result<()> {
+/// Records how a session ended, `played` after its start: measured on a monotonic clock, it leaves
+/// out suspend and is not moved by the wall clock being set meanwhile, which would otherwise reach
+/// GOG and the local play time.
+pub fn record_end(
+    db: &Db,
+    id: i64,
+    outcome: &SessionOutcome,
+    played: std::time::Duration,
+) -> Result<()> {
     db.conn().execute(
-        "UPDATE sessions SET ended_at = ?2, exit_code = ?3, state = ?4 WHERE id = ?1",
+        "UPDATE sessions SET ended_at = started_at + ?2, exit_code = ?3, state = ?4 WHERE id = ?1",
         params![
             id,
-            Utc::now().timestamp(),
+            i64::try_from(played.as_secs()).unwrap_or(i64::MAX),
             outcome.main_code,
             if outcome.clean { "ended" } else { "lost" }
         ],
@@ -420,6 +428,28 @@ mod tests {
             }
         );
         assert_eq!(p["2"].seconds, 30);
+    }
+
+    /// A session lasts what was played, measured without the wall clock: a night of suspend, or
+    /// the clock set forward or back meanwhile (NTP correcting a dual-boot offset), changes
+    /// neither what GOG receives nor the local play time.
+    #[test]
+    fn a_session_lasts_what_was_played_whatever_the_clock_did() {
+        let db = Db::in_memory().unwrap();
+        let id = record_start(&db, "1", Some("a")).unwrap();
+        // The wall clock jumps two hours ahead before the end is recorded.
+        db.conn()
+            .execute(
+                "UPDATE sessions SET started_at = started_at - 7200 WHERE id = ?1",
+                [id],
+            )
+            .unwrap();
+        let outcome = SessionOutcome {
+            main_code: Some(0),
+            clean: true,
+        };
+        record_end(&db, id, &outcome, std::time::Duration::from_secs(90)).unwrap();
+        assert_eq!(playtime(&db, Some("a")).unwrap()["1"].seconds, 90);
     }
 
     /// The next account signed in on this computer sees nothing of what the previous one played.
