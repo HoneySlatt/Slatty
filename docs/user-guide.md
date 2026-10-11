@@ -505,13 +505,14 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   it, then reads the account's games
   (`userdata/<account>/config/librarycache`), their names and images (`appcache/appinfo.vdf` and
   the client's image cache) and the games installed in each Steam library folder
-  (`appmanifest_*.acf`). No Steam password or key is ever asked for.
+  (`appmanifest_*.acf`). No Steam password is ever asked for, and a key only for the Web API
+  (below), which is optional.
 - **Images from Steam**, off until turned on in Settings → Steam: the covers, backgrounds and logos
   the Steam client has not saved on this computer (games it never showed), and the icons of
   achievements, are downloaded from
   Steam's image servers (`shared.steamstatic.com`), without any account, and kept in
-  `~/.cache/slatty/steam/`. Off, those games show without them, and nothing at all is asked of
-  Steam's servers.
+  `~/.cache/slatty/steam/`. Off, those games show without them. With both this and the Web API
+  off, nothing at all is asked of Steam's servers.
 - **Run by the Steam client.** Play, Install, **Verify files in Steam** and **Uninstall in Steam**
   hand the game to the Steam client (`steam://` addresses, opened by the desktop): it must be
   installed and signed in, and does the work in its own window. What it installed or removed shows
@@ -559,7 +560,8 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   the sessions of both, and its last session is the latest of either. Its achievements and cloud
   saves are GOG's.
 - Steam's games can be renamed, illustrated, hidden and marked as favorites like GOG's. A game the
-  Steam client has no details of yet (some recently added games) does not show until it has. If
+  Steam client has no details of yet (some recently added games) does not show until it has, or
+  until the Web API names it. If
   Steam changes the format of its list of apps (`appcache/appinfo.vdf`), no Steam game can show
   until SlattyLauncher reads the new one: Settings → Steam and `slatty steam status` say so.
 
