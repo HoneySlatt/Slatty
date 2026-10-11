@@ -258,6 +258,9 @@ fn windows_spec(
                     proton.display()
                 )));
             }
+            if install.isolated {
+                container_of(proton)?;
+            }
             let umu = find_in_path("umu-run")
                 .ok_or_else(|| Error::NotFound("umu-run is not in PATH".into()))?;
             let mut args = args;
@@ -715,6 +718,33 @@ const RUNTIME_APPIDS: [(&str, &str); 4] = [
     ("steamrt4", "4183110"),
     ("steamrt4-arm64", "4185400"),
 ];
+
+/// The folder of the runtime whose container a Proton build runs in: the one its
+/// `toolmanifest.vdf` names by `require_tool_appid`. umu starts a build naming none on the host,
+/// without pressure-vessel (umu 1.4's `CompatLayer.required_runtime`, "host"): nothing an isolated
+/// launch sets would hold, so such a build is refused for an isolated game.
+fn container_of(proton: &Path) -> Result<&'static str> {
+    let appid = crate::fsutil::read_game_file(&proton.join("toolmanifest.vdf"))
+        .ok()
+        .flatten()
+        .and_then(|bytes| crate::steam::vdf::parse(&String::from_utf8_lossy(&bytes)).ok())
+        .and_then(|vdf| {
+            vdf.get("manifest")?
+                .text("require_tool_appid")
+                .map(str::to_string)
+        });
+    appid
+        .and_then(|appid| RUNTIME_APPIDS.iter().find(|(_, a)| *a == appid))
+        .map(|(name, _)| *name)
+        .ok_or_else(|| {
+            Error::Refused(format!(
+                "{} would run outside umu's container (its toolmanifest.vdf names no Steam Linux \
+                 Runtime umu knows), seeing all your files: choose another Proton build for this \
+                 game, or turn its isolation off",
+                proton.display()
+            ))
+        })
+}
 
 /// A compatibility tool that runs its command as it is in the runtime of folder `name`, made as
 /// umu makes its own `umu-sniper`: umu brings the runtime up to date before using it. umu's own
@@ -1252,6 +1282,53 @@ mod tests {
             isolated_home(&dirs, "1").unwrap(),
             dirs.data.join("homes/1")
         );
+    }
+
+    /// umu starts a Proton build whose `toolmanifest.vdf` names no runtime (Proton-tkg and other
+    /// builds made to run on the host) without its container: the game would see the whole disk
+    /// through Z: while shown isolated. Such a build is refused for an isolated game, before
+    /// anything starts; one naming the sniper runtime is not.
+    #[test]
+    fn a_proton_build_umu_runs_outside_its_container_is_refused_isolated() {
+        let dir = std::env::temp_dir().join(format!("slatty-host-proton-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let proton = dir.join("proton-tkg");
+        std::fs::create_dir_all(&proton).unwrap();
+        std::fs::write(proton.join("proton"), b"").unwrap();
+        let manifest = |extra: &str| {
+            let text = format!(
+                "\"manifest\"\n{{\n\t\"version\"\t\"2\"\n\t\"commandline\"\t\"/proton %verb%\"\n{extra}}}\n"
+            );
+            std::fs::write(proton.join("toolmanifest.vdf"), text).unwrap();
+        };
+        let mut install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: dir.join("game"),
+            client_id: None,
+            runner: Runner::Umu {
+                proton: proton.clone(),
+                prefix: dir.join("prefix"),
+            },
+            umu_id: None,
+            isolated: true,
+        };
+        let dirs = Dirs::under(&dir.join("slatty"));
+        let outside = |install: &Install| {
+            matches!(windows_command(&dirs, install, vec![], dir.clone()),
+                Err(Error::Refused(m)) if m.contains("outside umu's container"))
+        };
+        manifest("");
+        assert!(outside(&install));
+        std::fs::remove_file(proton.join("toolmanifest.vdf")).unwrap();
+        assert!(outside(&install), "none at all");
+        manifest("\t\"require_tool_appid\"\t\"1628350\"\n");
+        assert!(!outside(&install), "the sniper runtime");
+        manifest("");
+        install.isolated = false;
+        assert!(!outside(&install), "not isolated, as the user");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

@@ -300,7 +300,9 @@ An isolated game sees its own folder, its Wine prefix and a home folder of its o
 `~/.local/share/slatty/homes/<id>/`, instead of yours. Wine's `z:` drive then shows nothing of your
 files. Windows games installed with Proton start isolated, unless **Isolate new Windows games** is
 off in Settings → Privacy; Linux games do not, since their saves may be in your home folder. The
-session says when a game runs isolated.
+session says when a game runs isolated. A Proton build made to run outside the Steam Linux Runtime
+(Proton-tkg, some custom builds: their `toolmanifest.vdf` names no runtime) cannot isolate a game,
+which then refuses to start with it: choose another build, or turn isolation off for that game.
 
 **Isolation** in a game's Game settings turns it on or off from its next launch; so does the
 command line:

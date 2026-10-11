@@ -244,8 +244,11 @@ resumes it with the pinned build.
 ### Game isolation
 
 An isolated game (`Install::isolated`; on by default for Windows builds run through Proton) runs
-in the container umu already uses, pressure-vessel from the Steam Linux Runtime, told through its
-environment (`runner::isolation_env`) to share less:
+in the container umu already uses, pressure-vessel from the Steam Linux Runtime. umu starts a
+Proton build in it only when the build's `toolmanifest.vdf` names a runtime (`require_tool_appid`);
+a build naming none, made to run on the host (Proton-tkg, some custom builds), umu starts without
+the container, so `runner::container_of` refuses it for an isolated game. The container is told
+through its environment (`runner::isolation_env`) to share less:
 
 - `PRESSURE_VESSEL_HOME`: a home folder of the game's own, `~/.local/share/slatty/homes/<id>`,
   mounted where the user's is;

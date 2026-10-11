@@ -156,7 +156,9 @@ isolated by default, since their saves may be in your home folder.
 **Isolated games** (Windows games installed with Proton, by default; see the
 [user guide](docs/user-guide.md#isolation-from-your-files)) run in the container umu already uses,
 pressure-vessel from the Steam Linux Runtime, told to share less, inside a bubblewrap sandbox
-SlattyLauncher adds (`bwrap` must be installed):
+SlattyLauncher adds (`bwrap` must be installed). A Proton build that umu would start without that
+container (one whose `toolmanifest.vdf` names no runtime, such as Proton-tkg) is refused for an
+isolated game:
 
 - the game sees its own folder (writable), its Wine prefix and a home folder of its own; umu's
   runtime, the Proton build, the tool a Linux game runs through and the setup files SlattyLauncher
