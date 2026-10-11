@@ -648,6 +648,7 @@ async fn update_replaces_changed_files_and_removes_dropped_ones_only() {
         path: Some(game.clone()),
         dlcs: vec![],
         setup_build: None,
+        setup_failures: 0,
         files: recorded_files(&old_set),
     };
 
@@ -720,6 +721,7 @@ async fn an_update_without_room_changes_nothing_and_is_not_noted() {
         path: Some(game.clone()),
         dlcs: vec![],
         setup_build: None,
+        setup_failures: 0,
         files: recorded_files(&old_set),
     };
     let items = vec![env.source.file(
@@ -831,6 +833,7 @@ async fn dlc_files_come_from_their_product_and_removing_the_dlc_deletes_only_the
         path: Some(game.clone()),
         dlcs: vec!["2".into()],
         setup_build: None,
+        setup_failures: 0,
         files: recorded_files(&with_dlc),
     };
     let base_only = collect_files(&env.source, &[base]).await.unwrap();
@@ -1070,6 +1073,7 @@ fn a_game_id_unsafe_in_a_file_name_is_never_used() {
             path: None,
             dlcs: vec![],
             setup_build: None,
+            setup_failures: 0,
             files: vec![],
         }
         .save(&dirs, id),

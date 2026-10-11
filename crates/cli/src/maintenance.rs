@@ -366,6 +366,12 @@ pub async fn setup(ctx: &Ctx, args: SetupArgs) -> Result<()> {
         slatty_core::setup::SetupEvent::NonZeroExit { label, code } => {
             println!("  {label} exited with code {code:?}")
         }
+        slatty_core::setup::SetupEvent::Unfinished { again: true } => {
+            println!("A step failed: the setup runs again at the game's next launch.")
+        }
+        slatty_core::setup::SetupEvent::Unfinished { again: false } => {
+            println!("A step failed again: the setup is left as it is; `--force` runs it again.")
+        }
     };
     let ran = slatty_core::setup::run(
         &ctx.dirs,

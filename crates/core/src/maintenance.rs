@@ -487,6 +487,7 @@ pub async fn reconfigure(
         path: Some(install.path.clone()),
         dlcs: selected,
         setup_build: None,
+        setup_failures: 0,
         files,
     }
     .save(dirs, game_id)?;
@@ -731,6 +732,7 @@ mod tests {
                     path: Some(game),
                     dlcs: vec![],
                     setup_build: None,
+                    setup_failures: 0,
                     files: ["Game.exe", "data/a.pak"]
                         .iter()
                         .map(|p| RecordedFile {

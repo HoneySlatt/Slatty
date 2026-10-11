@@ -23,6 +23,10 @@ pub struct InstallRecord {
     /// Build whose post-install setup has run.
     #[serde(default)]
     pub setup_build: Option<String>,
+    /// Runs of the setup for `build_id` that had a step fail; it is run again until
+    /// `setup::SETUP_RUNS`.
+    #[serde(default)]
+    pub setup_failures: u32,
     pub files: Vec<RecordedFile>,
 }
 

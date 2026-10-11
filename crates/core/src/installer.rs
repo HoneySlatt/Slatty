@@ -215,6 +215,7 @@ pub async fn install(
         path: Some(target.clone()),
         dlcs: plan.selected_dlcs(),
         setup_build: None,
+        setup_failures: 0,
         files,
     }
     .save(dirs, &req.game_id)?;

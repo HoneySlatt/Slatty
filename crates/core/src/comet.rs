@@ -393,6 +393,7 @@ mod tests {
             path: Some(game.clone()),
             dlcs: Vec::new(),
             setup_build: None,
+            setup_failures: 0,
             files: vec![RecordedFile {
                 path: path.into(),
                 size: 1,

@@ -190,6 +190,14 @@ pub async fn play(
                     SetupEvent::NonZeroExit { label, code } => {
                         PlayEvent::SetupWarning(format!("{label} exited with code {code:?}"))
                     }
+                    SetupEvent::Unfinished { again: true } => PlayEvent::SetupWarning(
+                        "the setup runs again at the next launch".into(),
+                    ),
+                    SetupEvent::Unfinished { again: false } => PlayEvent::SetupWarning(format!(
+                        "the setup failed {} times and is left as it is; `slatty setup {} --force` runs it again",
+                        crate::setup::SETUP_RUNS,
+                        install.game_id
+                    )),
                 })
             };
             crate::setup::run_held(

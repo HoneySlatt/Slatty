@@ -242,9 +242,10 @@ A launch goes through these steps:
    folders exist.
    The post-install setup that GOG Galaxy performs runs once per installed build: GOG's script
    interpreter or each product's setup program (registry entries and similar), then the shared
-   redistributables the game declares (Visual C++, DirectX…), installed silently. Offline or on
-   failure the game still starts and the setup is retried at the next launch. `slatty setup <id>
-   --dry-run` shows what it would run; `--force` runs it again.
+   redistributables the game declares (Visual C++, DirectX…), installed silently. Offline, or
+   when a step fails, the game still starts and the setup runs again at the next launch; after
+   three runs with a failed step it is left as it is, so that it does not slow every launch.
+   `slatty setup <id> --dry-run` shows what it would run; `--force` runs it again.
 2. Cloud saves are synchronised. If both sides changed, the launch stops and asks you to choose
    (see [cloud saves](#cloud-saves)). Offline, the game starts with your local saves. On the
    first launch this is where your saves from GOG's cloud arrive, right after the prefix is

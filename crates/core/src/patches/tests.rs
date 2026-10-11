@@ -132,6 +132,7 @@ impl Env {
             path: Some(root.clone()),
             dlcs: vec![],
             setup_build: None,
+            setup_failures: 0,
             files: recorded_files(&old_set),
         };
         Env {

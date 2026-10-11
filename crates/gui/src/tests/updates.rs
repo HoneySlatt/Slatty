@@ -36,6 +36,7 @@ fn a_game_busy_or_updated_elsewhere_is_passed_over_without_an_error() {
         path: None,
         dlcs: Vec::new(),
         setup_build: None,
+        setup_failures: 0,
         files: Vec::new(),
     };
     record.save(&dirs, "5").unwrap();

@@ -30,11 +30,43 @@ pub struct SetupCommand {
 pub enum SetupEvent {
     Downloading,
     Running(String),
-    /// A command exited with a non-zero code; installers often do when already installed.
+    /// A command failed: it exited with a code other than those meaning done (`DONE_CODES`).
     NonZeroExit {
         label: String,
         code: Option<i32>,
     },
+    /// A step failed: the setup runs again at the next launch (`again`), or it was the last try
+    /// and only `slatty setup --force` runs it again.
+    Unfinished {
+        again: bool,
+    },
+}
+
+/// Exit codes of installers that mean done: 1638 found a newer version already installed, 1641
+/// and 3010 ask for a restart (Windows Installer codes, used by Microsoft's redistributables).
+const DONE_CODES: [i32; 4] = [0, 1638, 1641, 3010];
+/// Runs of the setup for one build that may fail before it is left as it is: a step that fails
+/// for good would otherwise run at every launch.
+pub const SETUP_RUNS: u32 = 3;
+
+/// Whether a step exited as done; one that did not exit by itself failed.
+fn done(code: Option<i32>) -> bool {
+    code.is_some_and(|c| DONE_CODES.contains(&c))
+}
+
+/// Notes how a run of the setup went. A run with a failed step leaves the setup pending, so it
+/// runs again at the next launch, until the last of `SETUP_RUNS`. Whether it runs again, when a
+/// step failed.
+fn finish(record: &mut InstallRecord, failed: bool) -> Option<bool> {
+    if failed {
+        record.setup_failures += 1;
+    }
+    let again = failed && record.setup_failures < SETUP_RUNS;
+    if !again {
+        record.setup_build = Some(record.build_id.clone());
+        record.setup_failures = 0;
+    }
+    failed.then_some(again)
 }
 
 pub struct SetupPaths<'a> {
@@ -320,6 +352,7 @@ pub(crate) async fn run_held(
     };
     let commands = commands(&meta, &needed, &record, &paths)?;
     let log = dirs.logs().join(format!("setup-{}.log", install.game_id));
+    let mut failed = false;
     for command in &commands {
         emit(SetupEvent::Running(command.label.clone()));
         let mut args = vec![command.program.display().to_string()];
@@ -330,15 +363,19 @@ pub(crate) async fn run_held(
             .await?
             .wait()
             .await?;
-        if outcome.main_code != Some(0) {
+        if !done(outcome.main_code) {
+            failed = true;
             emit(SetupEvent::NonZeroExit {
                 label: command.label.clone(),
                 code: outcome.main_code,
             });
         }
     }
-    record.setup_build = Some(record.build_id.clone());
+    let again = finish(&mut record, failed);
     record.save(dirs, &install.game_id)?;
+    if let Some(again) = again {
+        emit(SetupEvent::Unfinished { again });
+    }
     Ok(commands)
 }
 
@@ -392,8 +429,37 @@ mod tests {
             path: None,
             dlcs: vec!["2".into()],
             setup_build: None,
+            setup_failures: 0,
             files: vec![],
         }
+    }
+
+    /// A setup with a failed step (DOOM's DirectX setup given an argument it refused) runs again
+    /// at the next launches, not at every launch forever; an installer saying it is already
+    /// installed, or asking for a restart, has not failed.
+    #[test]
+    fn a_failed_setup_runs_again_a_few_times() {
+        assert!(done(Some(0)) && done(Some(3010)) && done(Some(1638)) && done(Some(1641)));
+        assert!(!done(Some(1)) && !done(None));
+
+        let mut r = record();
+        for run in 1..SETUP_RUNS {
+            assert_eq!(finish(&mut r, true), Some(true), "run {run}");
+            assert_eq!(r.setup_build, None, "still to run");
+        }
+        assert_eq!(finish(&mut r, true), Some(false), "the last try");
+        assert_eq!(
+            (r.setup_build.as_deref(), r.setup_failures),
+            (Some("b1"), 0)
+        );
+
+        let mut r = record();
+        assert_eq!(finish(&mut r, true), Some(true));
+        assert_eq!(finish(&mut r, false), None, "passed the next time");
+        assert_eq!(
+            (r.setup_build.as_deref(), r.setup_failures),
+            (Some("b1"), 0)
+        );
     }
 
     fn repository() -> Vec<Dependency> {
