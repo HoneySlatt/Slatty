@@ -736,8 +736,6 @@ fn count_achievements(apps: Vec<u32>) -> Task<Message> {
     )
 }
 
-/// The achievements of a Steam game, read from the Steam client's files; with `icons`, named on
-/// Steam's image servers.
 /// The achievements of a Steam game, read from the Steam client's files, else, with `web` (the
 /// HTTP client and the account's Steam id, once the Web API is to be asked), from Steam's Web
 /// API; with `icons`, named on Steam's image servers.
