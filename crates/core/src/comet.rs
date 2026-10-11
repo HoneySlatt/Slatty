@@ -37,10 +37,7 @@ impl Comet {
                 "XDG_RUNTIME_DIR is not set; refusing to write tokens to disk".into(),
             )
         })?;
-        let private_dir = private_dir(runtime)?;
-        let token_file = private_dir.join("cache/lutris/.gog.token");
-        write_private(&private_dir, &token_file, tokens)?;
-
+        // The log first: what can fail before Comet starts fails before the tokens are written.
         let log_path = dirs.logs().join("comet.log");
         crate::paths::ensure_dir(&dirs.logs())?;
         crate::logs::start_run(&log_path);
@@ -51,6 +48,13 @@ impl Comet {
             .open(&log_path)
             .map_err(|e| Error::io(format!("open {}", log_path.display()), e))?;
         let log_err = log.try_clone().map_err(|e| Error::io("comet log", e))?;
+
+        let private_dir = private_dir(runtime)?;
+        let token_file = private_dir.join("cache/lutris/.gog.token");
+        if let Err(e) = write_private(&private_dir, &token_file, tokens) {
+            let _ = std::fs::remove_dir_all(&private_dir);
+            return Err(e);
+        }
 
         let mut command = tokio::process::Command::new(bin);
         command
@@ -374,6 +378,42 @@ mod tests {
 
     use super::*;
     use crate::secret::Secret;
+
+    /// The account's tokens are written for Comet only once its log is open: a log that cannot be
+    /// opened (a full disk, a logs folder that cannot be made) leaves no token file behind.
+    #[tokio::test]
+    async fn no_token_file_is_left_when_comets_log_cannot_be_opened() {
+        if !crate::doctor::comet_port_free() {
+            return;
+        }
+        let root = std::env::temp_dir().join(format!("slatty-comet-log-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let dirs = Dirs::under(&root);
+        std::fs::create_dir_all(&dirs.state).unwrap();
+        std::fs::write(dirs.logs(), b"not a folder").unwrap();
+        let tokens = Tokens {
+            user_id: "1".into(),
+            access_token: Secret::new("[FAKE]"),
+            refresh_token: Secret::new("[FAKE]"),
+            expires_at: i64::MAX,
+        };
+        let started = Comet::start(Path::new("/bin/true"), &tokens, "[FAKE]", &dirs).await;
+        assert!(started.is_err());
+        let mut left = Vec::new();
+        let mut folders = vec![root.join("runtime")];
+        while let Some(folder) = folders.pop() {
+            for entry in std::fs::read_dir(&folder).into_iter().flatten().flatten() {
+                match entry.file_type() {
+                    Ok(t) if t.is_dir() => folders.push(entry.path()),
+                    _ => left.push(entry.path()),
+                }
+            }
+        }
+        assert!(left.is_empty(), "{left:?}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     /// The tokens go through `$XDG_RUNTIME_DIR`, which some sessions point at a folder others can
     /// write: there, anyone could plant the handoff's folders beforehand and swap what Comet reads.
