@@ -57,11 +57,11 @@ impl App {
             .width(Length::Fill),
             close,
         ];
-        // A Windows installer runs first, in the prefix made for the game; its program is then
-        // picked where it installed it.
+        // The game is installed first: a Windows installer runs in the prefix made for it, a Linux
+        // one or an archive is unpacked; its program is then picked where it was put.
         let mut fields = column![
             toggler(d.with_installer)
-                .label("Run a Windows installer first")
+                .label("Install it first, from an installer or archive")
                 .on_toggle_maybe(
                     (d.installed_by.is_none() && !d.busy)
                         .then_some(|v| Message::Add(AddMsg::WithInstaller(v)))
@@ -83,14 +83,32 @@ impl App {
                     .spacing(10)
                     .align_y(Alignment::Center),
                 )
-                .push(note(if d.busy {
-                    "Installing: finish the installer in its own window."
-                } else {
-                    "It installs the game into a Wine prefix made for it; its program is chosen \
-                     there once it ends. Its folder is the one it can write in when isolated."
+                .push(note(match (d.busy, d.windows()) {
+                    (true, true) => "Installing: finish the installer in its own window.",
+                    (true, false) => "Unpacking…",
+                    (false, true) => {
+                        "A Windows installer installs the game into a Wine prefix made for it; \
+                         its program is chosen there once it ends. Its folder is the one it can \
+                         write in when isolated."
+                    }
+                    (false, false) => {
+                        "A Linux installer (MojoSetup .sh) or archive (.zip, .tar.gz, .tar.xz) is \
+                         unpacked, never run, into a folder named after the title; its program \
+                         is chosen there."
+                    }
                 }))
                 .push(label("Title"))
                 .push(field("Game", &d.title, AddMsg::Title));
+            if !d.windows() {
+                fields = fields.push(label("Unpack into")).push(
+                    row![
+                        field("/games", &d.into, AddMsg::Into).width(Length::Fill),
+                        browse(AddMsg::PickInto),
+                    ]
+                    .spacing(10)
+                    .align_y(Alignment::Center),
+                );
+            }
         } else {
             if d.installed_by.is_some() {
                 fields = fields.push(note(
@@ -147,20 +165,23 @@ impl App {
                 .font(theme::font()),
         );
         fields = fields.push(note(
-            "Its files stay yours: removing it from the library leaves them. It has no cloud \
-             saves or achievements, and GOG is not told of it.",
+            "Removing it from the library deletes only what SlattyLauncher unpacked for it: your \
+             own files stay. It has no cloud saves or achievements, and GOG is not told of it.",
         ));
         if let Some(e) = &d.error {
             fields = fields.push(text(e.as_str()).size(14).color(tokens().danger));
         }
         let (label_of, ready, next) = if d.installer_first() {
             (
-                if d.busy {
-                    "Installing…"
-                } else {
-                    "Run installer"
+                match (d.busy, d.windows()) {
+                    (true, _) => "Installing…",
+                    (false, true) => "Run installer",
+                    (false, false) => "Unpack",
                 },
-                !d.busy && !d.installer.trim().is_empty(),
+                // A Linux one is unpacked into a folder named after the title.
+                !d.busy
+                    && !d.installer.trim().is_empty()
+                    && (d.windows() || !d.title.trim().is_empty()),
                 AddMsg::RunInstaller,
             )
         } else {

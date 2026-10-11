@@ -203,6 +203,15 @@ pub trait Source: Send + Sync {
 
 /// The game files of installer `part`: the entries under `data/noarch/`, read from its directory.
 pub async fn read_entries<S: Source>(source: &S, part: usize) -> Result<Vec<ZipEntry>> {
+    read_entries_under(source, part, GAME_DIR).await
+}
+
+/// The entries of zip `part` under `root` (`""` for all of them), read from its directory.
+pub async fn read_entries_under<S: Source>(
+    source: &S,
+    part: usize,
+    root: &str,
+) -> Result<Vec<ZipEntry>> {
     let size = source.size(part).await?;
     let start = size.saturating_sub(zip::TAIL);
     let tail = source.read(part, start, size).await?;
@@ -210,7 +219,7 @@ pub async fn read_entries<S: Source>(source: &S, part: usize) -> Result<Vec<ZipE
     let raw = source.read(part, dir.start, dir.start + dir.len).await?;
     Ok(zip::entries(&dir, &raw)?
         .into_iter()
-        .filter(|e| e.name.starts_with(GAME_DIR) && e.name.len() > GAME_DIR.len())
+        .filter(|e| e.name.starts_with(root) && e.name.len() > root.len())
         .collect())
 }
 
@@ -354,11 +363,20 @@ pub struct LinuxSet {
 
 impl LinuxSet {
     pub fn new(parts: &[Part]) -> Result<Self> {
+        Self::from_entries(parts.iter().map(|p| p.entries.as_slice()), GAME_DIR)
+    }
+
+    /// The files of zips whose entries are under `root` (`read_entries_under`), each one's path
+    /// without it.
+    pub fn from_entries<'e>(
+        parts: impl IntoIterator<Item = &'e [ZipEntry]>,
+        root: &str,
+    ) -> Result<Self> {
         let mut set = LinuxSet::default();
         let mut index: HashMap<PathBuf, (bool, usize)> = HashMap::new();
-        for (part, p) in parts.iter().enumerate() {
-            for e in &p.entries {
-                let path = safe_relative(&e.name[GAME_DIR.len()..])?;
+        for (part, entries) in parts.into_iter().enumerate() {
+            for e in entries {
+                let path = safe_relative(e.name.get(root.len()..).unwrap_or_default())?;
                 if e.is_dir() {
                     set.dirs.push(path);
                     continue;

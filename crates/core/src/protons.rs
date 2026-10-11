@@ -892,6 +892,18 @@ fn unpack(
     cancel: &CancellationToken,
     progress: &dyn Fn(u64, u64),
 ) -> Result<()> {
+    unpack_tar(archive, to, true, cancel, progress)
+}
+
+/// Unpacks a `.tar.gz` or `.tar.xz` into `to`, made again empty; with `strip`, without the
+/// folder each path starts with. What `unpack` leaves out, this does too.
+pub(crate) fn unpack_tar(
+    archive: &Path,
+    to: &Path,
+    strip: bool,
+    cancel: &CancellationToken,
+    progress: &dyn Fn(u64, u64),
+) -> Result<()> {
     let context = || format!("unpack {}", archive.display());
     if to.exists() {
         std::fs::remove_dir_all(to)
@@ -945,7 +957,9 @@ fn unpack(
             .into_owned();
         // Without the archive's own folder; what climbs out or starts at `/` is left out.
         let mut parts = raw.components().filter(|c| *c != Component::CurDir);
-        parts.next();
+        if strip {
+            parts.next();
+        }
         let rel: PathBuf = parts.collect();
         if rel.as_os_str().is_empty()
             || !rel.components().all(|c| matches!(c, Component::Normal(_)))
@@ -983,7 +997,9 @@ fn unpack(
                 continue;
             };
             let mut target_parts = target.components().filter(|c| *c != Component::CurDir);
-            target_parts.next();
+            if strip {
+                target_parts.next();
+            }
             let target = to.join(target_parts.collect::<PathBuf>());
             if !leads_inside(to, &target)
                 || !std::fs::symlink_metadata(&target).is_ok_and(|m| m.is_file())

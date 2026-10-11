@@ -23,18 +23,26 @@ pub struct AddDraft {
     pub busy: bool,
     /// Why the game was not added.
     pub error: Option<String>,
-    /// Whether a Windows installer is run first, and which.
+    /// Whether the game is installed first, from which installer or archive, and where a Linux
+    /// one is unpacked.
     pub with_installer: bool,
     pub installer: String,
-    /// The game the installer ran for, once it ended: its prefix holds the program.
+    pub into: String,
+    /// The game the installer ran for, once it ended, and where it put it: the program is there.
     pub installed_by: Option<String>,
+    pub installed_in: Option<PathBuf>,
 }
 
 impl AddDraft {
     /// Whether the program looks like a Windows one, which runs through Proton. Only shows the
     /// Proton choice: what the program is comes from its first bytes once added.
     pub fn windows(&self) -> bool {
-        self.with_installer || self.program.to_lowercase().ends_with(".exe")
+        let exe = |s: &str| s.to_lowercase().ends_with(".exe");
+        if self.installer_first() {
+            exe(&self.installer)
+        } else {
+            exe(&self.program)
+        }
     }
 
     /// Whether the installer is still to run before the program can be picked.
@@ -61,8 +69,12 @@ pub enum AddMsg {
     PickInstaller,
     PickedInstaller(Option<PathBuf>),
     RunInstaller,
-    /// The installer ended: the game it ran for.
-    InstallerEnded(Result<String, String>),
+    /// Where a Linux installer or archive is unpacked.
+    Into(String),
+    PickInto,
+    PickedInto(Option<PathBuf>),
+    /// The installer ended: the game it ran for, and where it put it.
+    InstallerEnded(Result<(String, PathBuf), String>),
     /// What the installer put in a prefix, thrown away as the dialog closed.
     Discarded(Result<(), String>),
     Save,
@@ -78,6 +90,7 @@ impl App {
                 self.add_game = Some(AddDraft {
                     proton: self.proton.clone(),
                     isolated: self.isolate_new_games,
+                    into: self.library_root.clone(),
                     ..Default::default()
                 });
             }
@@ -104,16 +117,7 @@ impl App {
             AddMsg::Discarded(Err(e)) => self.notify_error(e),
             AddMsg::PickProgram => {
                 // Where the installer put the game, once it ran.
-                let start = match (&self.core, self.add_game.as_ref()) {
-                    (
-                        Some(core),
-                        Some(AddDraft {
-                            installed_by: Some(id),
-                            ..
-                        }),
-                    ) => Some(core.dirs.data.join("prefixes").join(id).join("drive_c")),
-                    _ => None,
-                };
+                let start = self.add_game.as_ref().and_then(|d| d.installed_in.clone());
                 return Task::perform(
                     async move {
                         let mut dialog = rfd::AsyncFileDialog::new()
@@ -130,13 +134,24 @@ impl App {
                 return Task::perform(
                     async {
                         rfd::AsyncFileDialog::new()
-                            .set_title("Choose the game's Windows installer")
-                            .add_filter("Windows programs", &["exe", "EXE"])
+                            .set_title("Choose the game's installer or archive")
                             .pick_file()
                             .await
                             .map(|f| f.path().to_path_buf())
                     },
                     |path| Message::Add(AddMsg::PickedInstaller(path)),
+                );
+            }
+            AddMsg::PickInto => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Choose where to unpack the game")
+                            .pick_folder()
+                            .await
+                            .map(|f| f.path().to_path_buf())
+                    },
+                    |path| Message::Add(AddMsg::PickedInto(path)),
                 );
             }
             AddMsg::RunInstaller => {
@@ -146,10 +161,32 @@ impl App {
                 d.busy = true;
                 d.error = None;
                 let installer = PathBuf::from(d.installer.trim());
-                let (proton, isolated) = (d.proton.clone(), d.isolated);
+                let into = PathBuf::from(d.into.trim());
+                let (title, proton, isolated) = (d.title.clone(), d.proton.clone(), d.isolated);
                 return Task::perform(
                     async move {
-                        added::run_installer(
+                        // A Linux installer or archive is unpacked; a Windows one runs.
+                        let installer2 = installer.clone();
+                        let archive =
+                            tokio::task::spawn_blocking(move || added::is_archive(&installer2))
+                                .await
+                                .map_err(err)?;
+                        if archive {
+                            std::fs::create_dir_all(&into)
+                                .map_err(|e| format!("{}: {e}", into.display()))?;
+                            return added::unpack(
+                                &core.db,
+                                &core.dirs,
+                                &installer,
+                                &into,
+                                &title,
+                                Default::default(),
+                                &|_, _| {},
+                            )
+                            .await
+                            .map_err(err);
+                        }
+                        let id = added::run_installer(
                             &core.db,
                             &core.dirs,
                             &slatty_core::session::supervisor_exe(),
@@ -158,7 +195,9 @@ impl App {
                             isolated,
                         )
                         .await
-                        .map_err(err)
+                        .map_err(err)?;
+                        let drive = core.dirs.data.join("prefixes").join(&id).join("drive_c");
+                        Ok((id, drive))
                     },
                     |r| Message::Add(AddMsg::InstallerEnded(r)),
                 );
@@ -167,7 +206,10 @@ impl App {
                 if let Some(d) = &mut self.add_game {
                     d.busy = false;
                     match r {
-                        Ok(id) => d.installed_by = Some(id),
+                        Ok((id, folder)) => {
+                            d.installed_by = Some(id);
+                            d.installed_in = Some(folder);
+                        }
                         Err(e) => d.error = Some(e),
                     }
                 }
@@ -268,11 +310,15 @@ impl App {
                         d.with_installer = on;
                     }
                     AddMsg::Installer(v) => d.installer = v,
+                    AddMsg::Into(v) => d.into = v,
+                    AddMsg::PickedInto(Some(path)) => d.into = path.display().to_string(),
                     AddMsg::PickedInstaller(Some(path)) => {
                         if d.title.trim().is_empty()
                             && let Some(stem) = path.file_stem()
                         {
-                            d.title = stem.to_string_lossy().into_owned();
+                            let stem = stem.to_string_lossy();
+                            // `game.tar.gz`'s stem is `game.tar`.
+                            d.title = stem.strip_suffix(".tar").unwrap_or(&stem).to_string();
                         }
                         d.installer = path.display().to_string();
                     }

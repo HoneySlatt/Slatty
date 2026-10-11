@@ -1,10 +1,12 @@
-//! Games added by hand: a game from no store, already on the disk, started from the program the
-//! user picked. A Windows program runs through umu and Proton in a prefix of its own, a Linux one
-//! as GOG's native builds do. Their files are the user's: removing such a game never deletes them.
+//! Games added by hand: a game from no store, started from the program the user picked. A Windows
+//! program runs through umu and Proton in a prefix of its own, a Linux one as GOG's native builds
+//! do. Their files are the user's: removing such a game never deletes them, except those
+//! SlattyLauncher unpacked itself from a Linux installer or archive (`unpack`).
 //!
 //! The game is an install (`installs`, with its folder, runner and isolation) whose id is
-//! `local-<number>` (`store::local_id`), never given twice; what it starts is kept beside the
-//! install records, in `added/<id>.json`, relative to its folder.
+//! `local-<number>` (`store::local_id`), never given twice; what it starts, and the files unpacked
+//! for it, are kept beside the install records, in `added/<id>.json`, relative to its folder. Not
+//! in an install record: those make GOG's setup, updates and checks run.
 
 use std::path::{Path, PathBuf};
 
@@ -27,6 +29,16 @@ pub struct Task {
     pub args: Vec<String>,
     /// Where it starts; the folder itself when empty.
     pub working_dir: PathBuf,
+    /// The files SlattyLauncher unpacked into the folder, which removing the game deletes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unpacked: Vec<PathBuf>,
+}
+
+/// A Linux installer or archive unpacked for a game not added yet: where, and which files.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct Unpacked {
+    folder: PathBuf,
+    files: Vec<PathBuf>,
 }
 
 /// A game to add.
@@ -162,6 +174,12 @@ pub fn discard_installer(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
         )));
     }
     let _busy = crate::lock::game(dirs, game_id)?;
+    if let Ok(unpacked) = load_unpacked(dirs, game_id) {
+        let files = checked_files(&unpacked.folder, &unpacked.files)?;
+        let mut report = crate::maintenance::UninstallReport::default();
+        crate::maintenance::delete_listed(&unpacked.folder, &files, &mut report)?;
+        let _ = std::fs::remove_file(unpacked_file(dirs, game_id));
+    }
     let prefix = prefix_of(dirs, game_id);
     if prefix.exists() {
         crate::maintenance::back_up_prefix(dirs, game_id, &prefix)?;
@@ -169,6 +187,216 @@ pub fn discard_installer(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
             .map_err(|e| Error::io(format!("delete {}", prefix.display()), e))?;
     }
     crate::logs::remove_game(dirs, game_id)
+}
+
+/// `files`, relative to `folder`, refused whole when one would lead out of it.
+fn checked_files(folder: &Path, files: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    files
+        .iter()
+        .map(|f| {
+            let rel = crate::installer::safe_relative(&f.to_string_lossy())?;
+            crate::installer::refuse_outside(folder, &folder.join(&rel))?;
+            Ok(rel)
+        })
+        .collect()
+}
+
+/// Whether SlattyLauncher can unpack this file for a Linux game: a MojoSetup installer (GOG's
+/// offline ones, also sold elsewhere), a `.zip`, or a `.tar.gz` / `.tar.xz`.
+pub fn is_archive(path: &Path) -> bool {
+    let name = path.to_string_lossy().to_lowercase();
+    tar_archive(&name)
+        || head(path).is_ok_and(|h| h.starts_with(b"PK\x03\x04") || h.starts_with(b"#!"))
+            && !name.ends_with(".exe")
+}
+
+fn tar_archive(name: &str) -> bool {
+    [".tar.gz", ".tgz", ".tar.xz"]
+        .iter()
+        .any(|ext| name.ends_with(ext))
+}
+
+/// Unpacks a Linux game's installer or archive (`is_archive`) for a game to add, into a new
+/// folder named after `title` in `into`: the game's id, and that folder. Nothing is run: a
+/// MojoSetup installer's script is not, only the game files it holds (`data/noarch`) are taken.
+/// Paths that climb out of the folder and links that lead out are left out. The game is then
+/// added with its program picked there (`NewGame::installed_by`), or thrown away
+/// (`discard_installer`); removing it deletes the files unpacked, and only those.
+pub async fn unpack(
+    db: &Db,
+    dirs: &Dirs,
+    archive: &Path,
+    into: &Path,
+    title: &str,
+    cancel: tokio_util::sync::CancellationToken,
+    progress: &(dyn Fn(u64, u64) + Send + Sync),
+) -> Result<(String, PathBuf)> {
+    let archive = real(archive)?;
+    let into = real(into)?;
+    let name = title.trim().replace(['/', '\\', '\0'], " ");
+    let name = name.trim();
+    if name.is_empty() || name == "." || name == ".." {
+        return Err(Error::Refused("the game needs a title".into()));
+    }
+    let target = into.join(name);
+    if std::fs::symlink_metadata(&target).is_ok() {
+        return Err(Error::Refused(format!(
+            "{} exists already",
+            target.display()
+        )));
+    }
+    check_folder(&target)?;
+    let partial = into.join(format!(".{name}.slatty-unpack"));
+    let game_id = crate::store::local_id(next_number(db)?);
+    let files = unpack_into(&archive, &partial, &target, cancel, progress).await;
+    // Nothing is resumed: what was unpacked of a failed one goes.
+    if files.is_err() {
+        let _ = std::fs::remove_dir_all(&partial);
+    }
+    save_unpacked(
+        dirs,
+        &game_id,
+        &Unpacked {
+            folder: target.clone(),
+            files: files?,
+        },
+    )?;
+    Ok((game_id, target))
+}
+
+/// Unpacks `archive` into `partial`, then renames it to `target`: the files it put there.
+async fn unpack_into(
+    archive: &Path,
+    partial: &Path,
+    target: &Path,
+    cancel: tokio_util::sync::CancellationToken,
+    progress: &(dyn Fn(u64, u64) + Send + Sync),
+) -> Result<Vec<PathBuf>> {
+    use crate::installer::linux::{self, LinuxDownload, LinuxSet};
+    let lower = archive.to_string_lossy().to_lowercase();
+    Ok(if tar_archive(&lower) {
+        let (from, to) = (archive.to_path_buf(), partial.to_path_buf());
+        // The progress reaches the caller from the thread unpacking.
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let work = tokio::task::spawn_blocking(move || {
+            crate::protons::unpack_tar(&from, &to, false, &cancel, &|done, total| {
+                let _ = tx.send((done, total));
+            })
+        });
+        tokio::pin!(work);
+        let unpacked = loop {
+            tokio::select! {
+                Some((done, total)) = rx.recv() => progress(done, total),
+                r = &mut work => break r,
+            }
+        };
+        unpacked.map_err(|e| Error::io("unpack", std::io::Error::other(e)))??;
+        std::fs::rename(partial, target)
+            .map_err(|e| Error::io(format!("publish {}", target.display()), e))?;
+        crate::fsutil::sync_filesystem(target)?;
+        listed_files(target)
+    } else {
+        let source = LocalArchive(archive.to_path_buf());
+        let mut root = "data/noarch/";
+        let mut entries = linux::read_entries_under(&source, 0, root)
+            .await
+            .map_err(|_| {
+                Error::Refused(format!(
+                    "{} is no installer or archive SlattyLauncher can unpack",
+                    archive.display()
+                ))
+            })?;
+        // A plain zip: all of it.
+        if entries.is_empty() {
+            root = "";
+            entries = linux::read_entries_under(&source, 0, root).await?;
+        }
+        let set = LinuxSet::from_entries([entries.as_slice()], root)?;
+        let report = |p: crate::installer::Progress| progress(p.bytes_done, p.bytes_total);
+        LinuxDownload {
+            source: &source,
+            cancel,
+            progress: &report,
+            free_space: &crate::installer::free_space,
+        }
+        .run(&set, partial, target)
+        .await?;
+        set.files
+            .iter()
+            .chain(&set.links)
+            .map(|f| f.path.clone())
+            .collect()
+    })
+}
+
+/// The files and links under `folder`, relative to it.
+fn listed_files(folder: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut dirs = vec![folder.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            match entry.file_type() {
+                Ok(t) if t.is_dir() => dirs.push(path),
+                Ok(_) => out.extend(path.strip_prefix(folder).ok().map(Path::to_path_buf)),
+                Err(_) => {}
+            }
+        }
+    }
+    out
+}
+
+/// A zip or MojoSetup installer on this computer, read as GOG's are over the network.
+struct LocalArchive(PathBuf);
+
+impl crate::installer::linux::Source for LocalArchive {
+    async fn size(&self, _part: usize) -> Result<u64> {
+        std::fs::metadata(&self.0)
+            .map(|m| m.len())
+            .map_err(|e| Error::io(format!("read {}", self.0.display()), e))
+    }
+
+    async fn open(
+        &self,
+        _part: usize,
+        start: u64,
+        end: u64,
+    ) -> Result<futures::stream::BoxStream<'static, Result<Vec<u8>>>> {
+        use futures::StreamExt;
+        let path = self.0.clone();
+        let bytes = tokio::task::spawn_blocking(move || {
+            use std::os::unix::fs::FileExt;
+            let file = std::fs::File::open(&path)
+                .map_err(|e| Error::io(format!("read {}", path.display()), e))?;
+            let mut buf = vec![0; end.saturating_sub(start) as usize];
+            file.read_exact_at(&mut buf, start)
+                .map_err(|e| Error::io(format!("read {}", path.display()), e))?;
+            Ok::<_, Error>(buf)
+        })
+        .await
+        .map_err(|e| Error::io("read", std::io::Error::other(e)))??;
+        Ok(futures::stream::once(async move { Ok(bytes) }).boxed())
+    }
+}
+
+fn unpacked_file(dirs: &Dirs, game_id: &str) -> PathBuf {
+    dirs.data
+        .join("added")
+        .join(format!("{game_id}.unpacked.json"))
+}
+
+fn save_unpacked(dirs: &Dirs, game_id: &str, unpacked: &Unpacked) -> Result<()> {
+    crate::paths::check_owned_id(game_id)?;
+    let json = serde_json::to_vec_pretty(unpacked).map_err(|e| Error::parse("unpacked game", e))?;
+    crate::fsutil::write_atomic(&unpacked_file(dirs, game_id), &json)
+}
+
+fn load_unpacked(dirs: &Dirs, game_id: &str) -> Result<Unpacked> {
+    crate::paths::check_owned_id(game_id)?;
+    let path = unpacked_file(dirs, game_id);
+    let bytes =
+        std::fs::read(&path).map_err(|e| Error::io(format!("read {}", path.display()), e))?;
+    serde_json::from_slice(&bytes).map_err(|e| Error::parse("unpacked game", e))
 }
 
 /// Adds a game, which takes the next number never given; its Wine prefix is made at its first
@@ -180,9 +408,27 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
     }
     let program = real(&new.program)?;
     let platform = platform_of(&program)?;
-    let folder = match &new.folder {
-        Some(folder) => real(folder)?,
-        None => program
+    // What an installer was run for: the prefix it installed into, or the folder it was unpacked
+    // into, which is then the game's.
+    let unpacked = match &new.installed_by {
+        Some(id) => {
+            let unpacked = load_unpacked(dirs, id).ok();
+            if !crate::store::is_local(id)
+                || Install::get(db, id)?.is_some()
+                || (unpacked.is_none() && !prefix_of(dirs, id).is_dir())
+            {
+                return Err(Error::Refused(format!(
+                    "{id} is no game an installer was run for"
+                )));
+            }
+            unpacked
+        }
+        None => None,
+    };
+    let folder = match (&unpacked, &new.folder) {
+        (Some(unpacked), _) => real(&unpacked.folder)?,
+        (None, Some(folder)) => real(folder)?,
+        (None, None) => program
             .parent()
             .ok_or_else(|| Error::Refused(format!("{} has no folder", program.display())))?
             .to_path_buf(),
@@ -209,6 +455,7 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
                 folder.display()
             ))
         })?,
+        unpacked: unpacked.map(|u| u.files).unwrap_or_default(),
     };
     if !working_dir.is_dir() {
         return Err(Error::Refused(format!(
@@ -218,18 +465,7 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
     }
 
     let game_id = match new.installed_by {
-        Some(id) => {
-            // The prefix an installer was run in, which holds the game.
-            if !crate::store::is_local(&id)
-                || Install::get(db, &id)?.is_some()
-                || !prefix_of(dirs, &id).is_dir()
-            {
-                return Err(Error::Refused(format!(
-                    "{id} is no game an installer was run for"
-                )));
-            }
-            id
-        }
+        Some(id) => id,
         None => crate::store::local_id(next_number(db)?),
     };
     let runner = runner_for(db, dirs, &game_id, platform, new.proton)?;
@@ -252,6 +488,8 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
         let _ = std::fs::remove_file(task_file(dirs, &install.game_id));
         return Err(e);
     }
+    // Its files are now the game's, listed with what it starts.
+    let _ = std::fs::remove_file(unpacked_file(dirs, &install.game_id));
     Ok(install)
 }
 
@@ -307,6 +545,11 @@ pub fn remove(
     {
         return Err(Error::Refused(format!("{} is running", install.title)));
     }
+    // What SlattyLauncher unpacked for it goes, checked whole before anything is deleted.
+    let unpacked = load_task(dirs, game_id)
+        .map(|t| t.unpacked)
+        .unwrap_or_default();
+    let unpacked = checked_files(&install.path, &unpacked)?;
     let mut report = crate::maintenance::UninstallReport::default();
     if let Some(prefix) = install.runner.prefix().filter(|_| delete_prefix) {
         if !prefix.starts_with(dirs.data.join("prefixes")) {
@@ -321,6 +564,9 @@ pub fn remove(
                 .map_err(|e| Error::io(format!("delete {}", prefix.display()), e))?;
             report.prefix_removed = true;
         }
+    }
+    if !unpacked.is_empty() {
+        crate::maintenance::delete_listed(&install.path, &unpacked, &mut report)?;
     }
     Install::remove(db, game_id)?;
     let _ = std::fs::remove_file(task_file(dirs, game_id));
@@ -754,5 +1000,129 @@ mod tests {
         discard_installer(&f.db, &f.dirs, "local-2").unwrap();
         assert!(!other.exists());
         assert!(f.dirs.data.join("backups/prefixes/local-2").is_dir());
+    }
+
+    fn zip_file<'a>(name: &'a str, data: &'a [u8]) -> crate::installer::zip::build::File<'a> {
+        crate::installer::zip::build::File {
+            name,
+            data,
+            mode: if name.ends_with('/') {
+                0o40755
+            } else {
+                0o100755
+            },
+            deflate: true,
+        }
+    }
+
+    async fn unpacked(f: &Fake, archive: &Path, title: &str) -> Result<(String, PathBuf)> {
+        let into = f.root.join("library");
+        std::fs::create_dir_all(&into).unwrap();
+        unpack(
+            &f.db,
+            &f.dirs,
+            archive,
+            &into,
+            title,
+            Default::default(),
+            &|_, _| {},
+        )
+        .await
+    }
+
+    /// A MojoSetup installer gives its game files alone, its script never run; the game added
+    /// from them is removed with them, and only them.
+    #[tokio::test]
+    async fn a_linux_installer_is_unpacked_without_running_its_script() {
+        let f = fake("mojosetup");
+        let marker = f.root.join("script-ran");
+        let script = format!("#!/bin/sh\ntouch '{}'\n", marker.display());
+        let files = [
+            zip_file("scripts/config.lua", b"-- [FAKE] not the game"),
+            zip_file("data/noarch/", b""),
+            zip_file("data/noarch/start.sh", b"#!/bin/sh\n./game/run\n"),
+            zip_file("data/noarch/game/run", b"\x7fELF[FAKE]"),
+        ];
+        let archive = f.root.join("[FAKE]_game_1.0.sh");
+        std::fs::write(
+            &archive,
+            crate::installer::zip::build::installer(script.as_bytes(), &files, false),
+        )
+        .unwrap();
+        assert!(is_archive(&archive));
+        let (id, folder) = unpacked(&f, &archive, "[FAKE] Game").await.unwrap();
+        assert_eq!(
+            folder,
+            f.root.join("library/[FAKE] Game").canonicalize().unwrap()
+        );
+        assert!(folder.join("start.sh").is_file() && folder.join("game/run").is_file());
+        assert!(!folder.join("scripts").exists(), "only the game's files");
+        assert!(!marker.exists(), "the script never runs");
+        assert!(
+            unpacked(&f, &archive, "[FAKE] Game").await.is_err(),
+            "there already"
+        );
+
+        let install = add(
+            &f.db,
+            &f.dirs,
+            NewGame {
+                title: "[FAKE] Game".into(),
+                program: folder.join("start.sh"),
+                isolated: Some(false),
+                installed_by: Some(id.clone()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            (install.game_id.as_str(), &install.path),
+            (id.as_str(), &folder)
+        );
+        std::fs::write(folder.join("save.dat"), b"[FAKE] mine").unwrap();
+        let report = remove(&f.db, &f.dirs, &id, false).unwrap();
+        assert_eq!(report.removed_files, 2);
+        assert!(!folder.join("start.sh").exists() && !folder.join("game").exists());
+        assert!(
+            folder.join("save.dat").is_file(),
+            "what the game wrote stays"
+        );
+    }
+
+    /// A zip and a tarball are unpacked as they are; one never added is thrown away whole.
+    #[tokio::test]
+    async fn archives_are_unpacked_and_thrown_away_when_not_added() {
+        let f = fake("archives");
+        let zip = f.root.join("[FAKE] game.zip");
+        std::fs::write(
+            &zip,
+            crate::installer::zip::build::installer(
+                b"",
+                &[zip_file("Game/run.sh", b"#!/bin/sh\n")],
+                false,
+            ),
+        )
+        .unwrap();
+        let (_, folder) = unpacked(&f, &zip, "[FAKE] Zipped").await.unwrap();
+        assert!(folder.join("Game/run.sh").is_file());
+
+        let mut tar = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(10);
+        header.set_mode(0o755);
+        header.set_cksum();
+        tar.append_data(&mut header, "Game/run.sh", &b"#!/bin/sh\n"[..])
+            .unwrap();
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        std::io::Write::write_all(&mut gz, &tar.into_inner().unwrap()).unwrap();
+        let tarball = f.root.join("[FAKE] game.tar.gz");
+        std::fs::write(&tarball, gz.finish().unwrap()).unwrap();
+        assert!(is_archive(&tarball));
+        let (id, folder) = unpacked(&f, &tarball, "[FAKE] Tarred").await.unwrap();
+        assert!(folder.join("Game/run.sh").is_file());
+        discard_installer(&f.db, &f.dirs, &id).unwrap();
+        assert!(!folder.exists(), "nothing else was in it");
+
+        assert!(!is_archive(&f.game.join("bin/game.exe")));
     }
 }

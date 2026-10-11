@@ -503,16 +503,26 @@ other; Manage → **Remove from library** takes it out, asking first. On the com
 ```sh
 slatty add <program> --title <title> [--folder <folder>] [--working-dir <folder>] [--proton <Proton dir>] [--isolated | --not-isolated] [-- <arguments>]
 slatty add --installer <setup.exe> [--proton <Proton dir>] [--isolated | --not-isolated]
+slatty add --installer <installer.sh | archive> --title <title> [--into <folder>]
 slatty add <program in its prefix> --title <title> --installed-by <game-id>
 slatty remove <game-id> [--delete-prefix]
 ```
 
-- A Windows game that comes as an installer is installed first: **Run a Windows installer
-  first** in Add a game, or `slatty add --installer`, makes a Wine prefix for the game and runs the
-  installer in it (finish it in its own window). Once it ends, the program is picked where it
-  installed the game, in the prefix's `drive_c` (`--installed-by` names the game it ran for).
-  Closing the dialog then, or `slatty remove` on that id, throws the prefix away, its `users`
-  folder copied to the backups first. Isolated, the installer can write in its own folder only.
+- A game that comes as an installer or an archive is installed first: **Install it first, from an
+  installer or archive** in Add a game, or `slatty add --installer`.
+  - A Windows installer runs in a Wine prefix made for the game (finish it in its own window).
+    Once it ends, the program is picked where it installed the game, in the prefix's `drive_c`.
+    Isolated, the installer can write in its own folder only.
+  - A Linux installer (MojoSetup `.sh`, the format of GOG's offline installers, also sold
+    elsewhere) or archive (`.zip`, `.tar.gz`, `.tar.xz`) is unpacked, never run, into a folder
+    named after the title in the default installation path (or the one given). Of a MojoSetup
+    installer, only the game's files are taken. Paths that climb out of the folder and links
+    that lead out are left out. The program is then picked in that folder.
+  - `--installed-by` names the game the installer ran for. Closing the dialog before adding it,
+    or `slatty remove` on that id, throws away what was installed (a prefix's `users` folder
+    copied to the backups first).
+- A game unpacked by SlattyLauncher keeps the list of the files it unpacked: removing it deletes
+  those files and only those; what the game wrote in its folder since (saves, settings) stays.
 
 - A Windows program (`.exe`) runs through umu and Proton, in a Wine prefix of its own made at its
   first launch; a Linux program, script or AppImage runs as GOG's Linux builds do (see

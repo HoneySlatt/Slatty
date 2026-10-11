@@ -196,13 +196,42 @@ fn a_windows_installer_runs_before_the_program_is_picked() {
         let mut ui = render(&app);
         assert!(ui.find("Run installer").is_ok());
         assert!(ui.find("Program").is_err(), "picked once installed");
+        assert!(ui.find("Unpack into").is_err(), "a Windows one runs");
         snapshot(&mut ui, "add-game-installer");
     }
+    // A Linux one is unpacked, into the default installation path until told.
+    app.library_root = "/games".into();
+    let _ = app.update(Message::Add(AddMsg::Open));
+    let _ = app.update(Message::Add(AddMsg::WithInstaller(true)));
+    let _ = app.update(Message::Add(AddMsg::PickedInstaller(Some(
+        "/downloads/[FAKE] quest.tar.gz".into(),
+    ))));
+    let d = app.add_game.as_ref().unwrap();
+    assert_eq!(
+        (d.into.as_str(), d.title.as_str()),
+        ("/games", "[FAKE] quest")
+    );
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Unpack into").is_ok() && ui.find("Unpack").is_ok());
+        snapshot(&mut ui, "add-game-archive");
+    }
+    let _ = app.update(Message::Add(AddMsg::PickedInstaller(Some(
+        "/downloads/[FAKE] setup_quest.exe".into(),
+    ))));
     app.add_game.as_mut().unwrap().busy = true;
     let _ = app.update(Message::Add(AddMsg::Cancel));
     assert!(app.add_game.is_some(), "not while the installer runs");
 
-    let _ = app.update(Message::Add(AddMsg::InstallerEnded(Ok("local-3".into()))));
+    let _ = app.update(Message::Add(AddMsg::InstallerEnded(Ok((
+        "local-3".into(),
+        "/prefixes/local-3/drive_c".into(),
+    )))));
+    assert_eq!(
+        app.add_game.as_ref().unwrap().installed_in.as_deref(),
+        Some(std::path::Path::new("/prefixes/local-3/drive_c")),
+        "where the program is picked"
+    );
     let d = app.add_game.as_ref().unwrap();
     assert_eq!(d.installed_by.as_deref(), Some("local-3"));
     assert!(!d.busy);

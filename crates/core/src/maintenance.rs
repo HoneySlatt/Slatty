@@ -72,6 +72,36 @@ pub(crate) fn back_up_prefix(dirs: &Dirs, game_id: &str, prefix: &Path) -> Resul
     Ok(Some(backup))
 }
 
+/// Deletes `files` (relative, checked safe) from `root`, never through a link that leads out of
+/// it, then the folders they leave empty, and `root` itself once nothing else is left in it.
+pub(crate) fn delete_listed(
+    root: &Path,
+    files: &[PathBuf],
+    report: &mut UninstallReport,
+) -> Result<()> {
+    for rel in files {
+        let path = root.join(rel);
+        installer::refuse_outside(root, &path)?;
+        if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file() || m.is_symlink()) {
+            std::fs::remove_file(&path)
+                .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
+            report.removed_files += 1;
+        }
+    }
+    if root.is_dir() {
+        remove_empty_dirs(root)?;
+        report.kept = leftovers(root, root);
+        if report.kept.is_empty() {
+            std::fs::remove_dir(root)
+                .map_err(|e| Error::io(format!("delete {}", root.display()), e))?;
+            report.folder_removed = true;
+        }
+    } else {
+        report.folder_removed = true;
+    }
+    Ok(())
+}
+
 /// Removes the files slatty installed and keeps everything else. The Wine prefix (where most
 /// saves live) is deleted only on request, after its `users` folder is copied to the backups.
 pub fn uninstall(
@@ -107,26 +137,7 @@ pub fn uninstall(
     if let Some(prefix) = prefix {
         report.prefix_backup = back_up_prefix(dirs, game_id, prefix)?;
     }
-    for rel in files {
-        let path = root.join(rel);
-        installer::refuse_outside(root, &path)?;
-        if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file() || m.is_symlink()) {
-            std::fs::remove_file(&path)
-                .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
-            report.removed_files += 1;
-        }
-    }
-    if root.is_dir() {
-        remove_empty_dirs(root)?;
-        report.kept = leftovers(root, root);
-        if report.kept.is_empty() {
-            std::fs::remove_dir(root)
-                .map_err(|e| Error::io(format!("delete {}", root.display()), e))?;
-            report.folder_removed = true;
-        }
-    } else {
-        report.folder_removed = true;
-    }
+    delete_listed(root, &files, &mut report)?;
 
     if let Some(prefix) = prefix
         && prefix.exists()
