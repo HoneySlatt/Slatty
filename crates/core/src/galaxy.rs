@@ -194,7 +194,9 @@ pub async fn meta(http: &Client, build: &Build) -> Result<Meta> {
     decode_zlib_json(&raw, "build metadata")
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// A download server and its secure link's parameters, which carry a token: deliberately not
+/// `Debug`, so that it is never printed.
+#[derive(Clone, Deserialize)]
 struct Endpoint {
     #[serde(default)]
     endpoint_name: String,
