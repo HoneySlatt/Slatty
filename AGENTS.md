@@ -181,8 +181,11 @@ frames: check scrolling in the real application too (docs/testing.md says how).
 `view` runs after every message, scroll steps included: keep per-game work out of it, or make it
 once (sort keys are kept by title in `library::SortKeys`; the games each tab lists are kept in
 `library::Lists` until a message other than a scroll step, a frame or progress, see
-`Message::keeps_lists`). A new message that comes many times a second and changes no list belongs
-in `keeps_lists`; one that changes what a list shows must not be there. Images are shown from their cached
+`Message::keeps_lists`). A new message that comes many times a second, or with the others just
+after start, and changes no list belongs in `keeps_lists`; one that changes what a list shows must
+not be there, or must clear the lists itself when it does (`App::playtimes_fetched`, only when
+sorted by play time). Sort keys of the whole library are made at start, off the interface thread
+(`library::sort_names`). Images are shown from their cached
 files (`image::Handle::from_path`, files named after their format): never keep image bytes in
 `App`, which held about 880 MB of covers at 10,000 games.
 

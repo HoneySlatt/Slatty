@@ -469,6 +469,25 @@ fn the_games_listed_are_kept_while_scrolling_and_made_again_after_anything_else(
         Box::new(Message::Cover("2".into(), None)),
     ));
     assert_eq!(titles(&app)[..2], ["Zebra", "Game 2"]);
+    // Nor does what arrives just after start: how games start, the Proton builds, the updates.
+    for message in [
+        Message::LaunchOptions(Vec::new(), None),
+        Message::Runners(crate::runners::RunnersMsg::Listed(Vec::new(), Vec::new())),
+        Message::Updates(crate::updates::UpdatesMsg::Checked(Vec::new())),
+    ] {
+        let _ = app.update(message);
+        assert_eq!(titles(&app)[..2], ["Zebra", "Game 2"]);
+    }
+    // Nor do play times, unless the library is sorted by them and one changed.
+    let _ = app.update(Message::PlaytimesFetched(vec![("5".into(), 30)]));
+    assert_eq!(titles(&app)[..2], ["Zebra", "Game 2"]);
+    app.sort = Sort::MostPlayed;
+    assert_eq!(titles(&app)[..1], ["Game 5"]);
+    let _ = app.update(Message::PlaytimesFetched(vec![("5".into(), 30)]));
+    let _ = app.update(Message::PlaytimesFetched(vec![("1".into(), 20)]));
+    assert_eq!(titles(&app)[..2], ["Game 5", "Zebra"], "made again");
+    app.sort = Sort::default();
+    let _ = app.update(Message::DismissNotice);
     // Any other message makes it again.
     let _ = app.update(Message::DismissNotice);
     assert_eq!(titles(&app)[..1], ["Game 2"]);

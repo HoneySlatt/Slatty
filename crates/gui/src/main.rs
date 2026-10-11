@@ -488,6 +488,13 @@ impl Message {
                 | Message::Install(InstallMsg::Progress(..))
                 | Message::Maintenance(MaintenanceMsg::Progress(..))
                 | Message::Runners(runners::RunnersMsg::Progress(..))
+                // What arrives just after start, read off the interface thread, leaves the lists
+                // as they are: how games start, the Proton builds found, the updates found, and
+                // play times unless the library is sorted by them (`App::playtimes_fetched`).
+                | Message::LaunchOptions(..)
+                | Message::PlaytimesFetched(_)
+                | Message::Runners(runners::RunnersMsg::Listed(..))
+                | Message::Updates(updates::UpdatesMsg::Checked(..))
         )
     }
 }

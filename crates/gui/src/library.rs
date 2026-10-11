@@ -175,6 +175,7 @@ impl App {
 
     /// Saved only when a play time changed: at 10,000 games, writing the cache takes a few
     /// milliseconds on the interface thread, and opening a game page reads its play time again.
+    /// The library's list is made again only when sorted by play time (`Message::keeps_lists`).
     pub fn playtimes_fetched(&mut self, times: Vec<(String, u64)>) {
         let mut changed = false;
         for (id, minutes) in times {
@@ -184,6 +185,9 @@ impl App {
         }
         if changed {
             self.save_overview();
+            if self.sort == Sort::MostPlayed {
+                self.lists.clear();
+            }
         }
     }
 
