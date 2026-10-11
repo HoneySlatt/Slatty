@@ -153,9 +153,12 @@ pub fn twins<'a>(
     for (id, title, apps) in gog {
         if apps.is_empty() {
             by_name.push((id, title));
-        } else if let Some(steam_id) = apps.iter().find_map(|app| by_app.get(app))
-            && taken.insert(*steam_id)
+        } else if let Some(steam_id) = apps
+            .iter()
+            .filter_map(|app| by_app.get(app))
+            .find(|steam_id| !taken.contains(*steam_id))
         {
+            taken.insert(*steam_id);
             twins.insert(id.to_string(), steam_id.to_string());
         }
     }
@@ -414,7 +417,7 @@ mod tests {
             steam_game(40, "[FAKE] Elsewhere"),
             steam_game(50, "[FAKE] Claimed"),
         ];
-        let gog: [(&str, &str, &[u32]); 7] = [
+        let gog: [(&str, &str, &[u32]); 8] = [
             // GOG's database names the Steam app: matched whatever the titles.
             ("1", "[FAKE] Its GOG Name", &[9, 10]),
             ("2", "[FAKE] the witcher® 3 – WILD HUNT™", &[]),
@@ -424,6 +427,8 @@ mod tests {
             ("5", "[FAKE] Claimed", &[]),
             ("6", "[FAKE] Other", &[50]),
             ("7", "[FAKE] The Witcher 3 Wild Hunt", &[]),
+            // Its first Steam app already went to another: its second one is still free.
+            ("8", "[FAKE] Two Releases", &[50, 40]),
         ];
         let twins = twins(gog, &steam);
         let mut found: Vec<(&str, &str)> = twins
@@ -433,7 +438,12 @@ mod tests {
         found.sort();
         assert_eq!(
             found,
-            [("1", "steam-10"), ("2", "steam-20"), ("6", "steam-50")],
+            [
+                ("1", "steam-10"),
+                ("2", "steam-20"),
+                ("6", "steam-50"),
+                ("8", "steam-40")
+            ],
             "a title two Steam games share, and one whose Steam apps are elsewhere, stay apart"
         );
     }
