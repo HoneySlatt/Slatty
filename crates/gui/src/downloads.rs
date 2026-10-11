@@ -147,6 +147,13 @@ impl App {
         };
         if let Some(game_id) = waiting(crate::Interrupted::Download) {
             self.auto_resume = Some(game_id.clone());
+            // Planned already (its panel asked): it starts once planned.
+            if matches!(
+                self.install_views.get(&game_id),
+                Some(InstallView::Planning)
+            ) {
+                return Task::none();
+            }
             return self.update_install(InstallMsg::Prepare(game_id, None));
         }
         if waiting(crate::Interrupted::Paused).is_some() || self.queue.is_empty() {
@@ -160,6 +167,13 @@ impl App {
                 self.install_views
                     .insert(game_id.clone(), InstallView::Ready(info));
                 self.update_install(InstallMsg::Start(game_id))
+            }
+            // Planned again (its choices changed): it starts once planned.
+            Some(InstallView::Planning) => {
+                self.install_views
+                    .insert(game_id.clone(), InstallView::Planning);
+                self.auto_resume = Some(game_id);
+                Task::none()
             }
             // Not planned yet (just after start-up): planned, then started.
             _ => {

@@ -136,6 +136,31 @@ fn running_install_shows_progress_and_can_pause() {
     );
 }
 
+/// A plan asked for before the download started (an earlier choice in its panel) changes nothing
+/// once it runs: Pause and Cancel stay, and nothing else starts.
+#[test]
+fn a_late_plan_leaves_a_running_download_as_it_is() {
+    let mut app = library_app();
+    ready_to_install(&mut app, "5");
+    let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(fake_plan()),
+    )));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Running { .. })
+    ));
+    let _ = app.update(Message::Install(InstallMsg::Unreachable(
+        "5".into(),
+        "[FAKE] network error".into(),
+    )));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Running { .. })
+    ));
+}
+
 #[test]
 fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
     let mut app = library_app();

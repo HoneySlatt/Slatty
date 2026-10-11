@@ -93,6 +93,34 @@ fn the_queue_waits_for_gog_rather_than_fail_game_after_game() {
     assert_eq!(app.queue, ["6", "7"]);
 }
 
+/// The next install, being planned again (its choices changed), starts once planned rather than
+/// being planned a second time; a cut-off download discarded meanwhile does not hold the queue.
+#[test]
+fn a_game_being_planned_is_not_planned_twice_to_start() {
+    let mut app = library_app();
+    app.queue = vec!["5".into(), "6".into()];
+    app.install_views.insert("5".into(), InstallView::Planning);
+    assert_eq!(app.start_next().units(), 0, "planned once");
+    assert_eq!(app.auto_resume.as_deref(), Some("5"));
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(fake_plan()),
+    )));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Running { .. })
+    ));
+
+    let mut app = library_app();
+    app.interrupted = vec![("5".into(), crate::Interrupted::Download)];
+    app.queue = vec!["6".into()];
+    // Its discard runs.
+    app.install_views.insert("5".into(), InstallView::Planning);
+    let _ = app.start_next();
+    let _ = app.update(Message::Install(InstallMsg::Discarded("5".into(), Ok(()))));
+    assert_eq!(app.auto_resume.as_deref(), Some("6"), "the queue goes on");
+}
+
 /// A download cut off because GOG stopped answering is left to resume, and holds the queue until
 /// GOG answers again, rather than the next install failing the same way at once.
 #[test]

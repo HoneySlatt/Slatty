@@ -185,6 +185,12 @@ impl App {
                 let language = Some(info.language.clone());
                 return self.prepare(core, game_id, language, Some(build), None);
             }
+            // A plan asked for before the game started downloading changes nothing once it does.
+            InstallMsg::Planned(game_id, _) | InstallMsg::Unreachable(game_id, _)
+                if matches!(
+                    self.install_views.get(&game_id),
+                    Some(InstallView::Running { .. })
+                ) => {}
             InstallMsg::Planned(game_id, result) => {
                 let auto = self.auto_resume.take_if(|id| *id == game_id).is_some();
                 // GOG answered: nothing waits for it any longer.
@@ -348,6 +354,8 @@ impl App {
             }
             InstallMsg::Discarded(game_id, result) => {
                 self.install_views.remove(&game_id);
+                // Nor is it started once planned, which the queue may be waiting for.
+                self.auto_resume.take_if(|id| *id == game_id);
                 // Nothing is left to show in its Install panel.
                 self.dialog.take_if(|(id, _)| *id == game_id);
                 if self.selected.as_deref() == Some(game_id.as_str())
