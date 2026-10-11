@@ -91,7 +91,10 @@ async fn art_at(http: &Client, api: &str, key: &Secret, game: u64, kind: Kind) -
             ("humor", "false"),
         ])
         .bearer_auth(key.expose());
-    read(req, "listing SteamGridDB art").await
+    let mut art: Vec<Art> = read(req, "listing SteamGridDB art").await?;
+    // Previews are fetched as soon as they are listed, so they come from SteamGridDB only too.
+    art.retain(|a| from_steamgriddb(&a.url) && from_steamgriddb(&a.thumb));
+    Ok(art)
 }
 
 /// The list a request answers; none when SteamGridDB has nothing for it.
@@ -206,6 +209,28 @@ mod tests {
             "{first}"
         );
         assert!(first.contains("nsfw=false") && first.contains("types=static"));
+    }
+
+    /// Previews are shown as soon as they are listed: one SteamGridDB's answer places elsewhere, or
+    /// over plain HTTP, is left out, as a full image would be.
+    #[tokio::test]
+    async fn art_from_elsewhere_is_left_out() {
+        const MIXED: &str = r#"{"success":true,"data":[
+            {"url":"https://cdn2.steamgriddb.com/grid/a.png","thumb":"http://cdn2.steamgriddb.com/thumb/a.jpg","width":600,"height":900},
+            {"url":"https://elsewhere.example/b.png","thumb":"https://cdn2.steamgriddb.com/thumb/b.jpg","width":600,"height":900},
+            {"url":"https://cdn2.steamgriddb.com/grid/c.png","thumb":"https://cdn2.steamgriddb.com/thumb/c.jpg","width":600,"height":900}]}"#;
+        let (api, _) = serve("200 OK", MIXED).await;
+        let art = art_at(
+            &http::client().unwrap(),
+            &api,
+            &Secret::new("k"),
+            1,
+            Kind::Cover,
+        )
+        .await
+        .unwrap();
+        let urls: Vec<&str> = art.iter().map(|a| a.url.as_str()).collect();
+        assert_eq!(urls, ["https://cdn2.steamgriddb.com/grid/c.png"]);
     }
 
     #[tokio::test]
