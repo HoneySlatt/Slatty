@@ -51,6 +51,8 @@ pub struct Boot {
     pub jobs: Vec<(String, Interrupted)>,
     pub queue: Vec<String>,
     pub customs: HashMap<String, slatty_core::custom::Custom>,
+    /// What each game sorts by, made here rather than in the first view (10 ms at 10,000 games).
+    pub sort_keys: Vec<(String, crate::library::NaturalKey)>,
     pub cover_width: Option<f32>,
     pub sort: Option<Sort>,
 }
@@ -166,6 +168,10 @@ async fn boot() -> Result<Boot, String> {
         slatty_core::protons::update_due(&db, chrono::Utc::now().timestamp()).map_err(err)?;
     let favorites = slatty_core::settings::favorites(&db).map_err(err)?;
     let customs = slatty_core::custom::all(&db).map_err(err)?;
+    let sort_keys = library
+        .as_ref()
+        .map(|l| crate::library::sort_names(&l.games, &customs))
+        .unwrap_or_default();
     let cover_width = slatty_core::settings::cover_width(&db).map_err(err)?;
     let sort = slatty_core::settings::library_sort(&db)
         .map_err(err)?
@@ -226,6 +232,7 @@ async fn boot() -> Result<Boot, String> {
         jobs,
         queue,
         customs,
+        sort_keys,
         cover_width,
         sort,
     })

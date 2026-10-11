@@ -422,6 +422,40 @@ fn cached_covers_show_at_once_and_only_missing_ones_are_downloaded() {
     assert_eq!(downloads.units(), 1);
 }
 
+/// What each game sorts by is made at start, off the interface thread, from GOG's titles and the
+/// user's changes: the first view, sorted by name either way, makes no key of its own.
+#[test]
+fn the_sort_keys_made_at_start_are_all_the_first_view_needs() {
+    use slatty_core::custom::Custom;
+    let mut app = library_app();
+    app.customs.insert(
+        "2".into(),
+        Custom {
+            title: Some("[FAKE] Renamed".into()),
+            ..Default::default()
+        },
+    );
+    app.customs.insert(
+        "3".into(),
+        Custom {
+            sort_title: Some("[FAKE] Aaa".into()),
+            ..Default::default()
+        },
+    );
+    app.sort_keys
+        .fill(crate::library::sort_names(&app.library, &app.customs));
+    app.apply_customs();
+    let made = app.sort_keys.len();
+    for sort in [Sort::NameAsc, Sort::NameDesc] {
+        app.sort = sort;
+        assert!(!titles(&app).is_empty());
+        assert_eq!(app.sort_keys.len(), made, "{sort:?}");
+    }
+    app.sort = Sort::NameAsc;
+    assert_eq!(titles(&app)[..2], ["Game 3", "Game 1"], "its sort title");
+    assert!(titles(&app).contains(&"Renamed".to_string()));
+}
+
 #[test]
 fn the_games_listed_are_kept_while_scrolling_and_made_again_after_anything_else() {
     let mut app = library_app();

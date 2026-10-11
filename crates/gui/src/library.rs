@@ -583,6 +583,37 @@ impl SortKeys {
     pub fn clear(&self) {
         self.0.borrow_mut().clear();
     }
+
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.0.borrow().len()
+    }
+
+    /// Keys made ahead (at start, off the interface thread).
+    pub fn fill(&self, made: Vec<(String, NaturalKey)>) {
+        let mut keys = self.0.borrow_mut();
+        for (title, key) in made {
+            keys.insert(title, Rc::new(key));
+        }
+    }
+}
+
+/// The name each game of `games` sorts by (its own sort title, else its title, the user's if they
+/// changed it), with its key.
+pub fn sort_names(
+    games: &[LibraryGame],
+    customs: &HashMap<String, slatty_core::custom::Custom>,
+) -> Vec<(String, NaturalKey)> {
+    games
+        .iter()
+        .map(|g| {
+            let custom = customs.get(&g.id);
+            let name = custom
+                .and_then(|c| c.sort_title.as_deref().or(c.title.as_deref()))
+                .unwrap_or(&g.title);
+            (name.to_string(), NaturalKey::of(name))
+        })
+        .collect()
 }
 
 /// A title sorted the way people read it: case aside, and numbers by their value, so "Game 2"

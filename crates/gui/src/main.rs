@@ -644,6 +644,7 @@ impl App {
                 self.interrupted = boot.jobs;
                 self.queue = boot.queue;
                 self.customs = boot.customs;
+                self.sort_keys.fill(boot.sort_keys);
                 if let Some(sort) = boot.sort {
                     self.sort = sort;
                 }
