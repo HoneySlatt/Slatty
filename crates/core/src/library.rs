@@ -97,8 +97,11 @@ async fn fetch_releases(http: &Client, tokens: &Tokens) -> Result<Vec<Release>> 
     .await
 }
 
-/// Every GOG release of the listing, page after page as `page` reads them. A page already read
-/// stops it with an error rather than have it read forever.
+/// Far more pages than a library of 10,000 games takes.
+const MAX_PAGES: usize = 10_000;
+
+/// Every GOG release of the listing, page after page as `page` reads them. A page already read,
+/// or more pages than any library has, stops it with an error rather than have it read forever.
 async fn collect_releases<F: Future<Output = Result<ReleasesPage>>>(
     mut page: impl FnMut(Option<String>) -> F,
 ) -> Result<Vec<Release>> {
@@ -106,6 +109,12 @@ async fn collect_releases<F: Future<Output = Result<ReleasesPage>>>(
     let mut page_token: Option<String> = None;
     let mut seen = std::collections::HashSet::new();
     loop {
+        if seen.len() >= MAX_PAGES {
+            return Err(Error::parse(
+                "fetching the library",
+                "GOG gave more pages than any library has",
+            ));
+        }
         let read = page(page_token.clone()).await?;
         releases.extend(read.items.into_iter().filter(|r| r.platform_id == "gog"));
         match read.next_page_token.filter(|t| !t.is_empty()) {
@@ -594,6 +603,21 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(pages.len(), 2, "every page of a listing that ends");
+    }
+
+    #[tokio::test]
+    async fn a_library_listing_that_never_ends_stops() {
+        let asked = std::sync::atomic::AtomicUsize::new(0);
+        let result = collect_releases(|_| {
+            let n = asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            assert!(n <= MAX_PAGES, "asked again and again");
+            std::future::ready(Ok(ReleasesPage {
+                items: Vec::new(),
+                next_page_token: Some(n.to_string()),
+            }))
+        })
+        .await;
+        assert!(matches!(result, Err(Error::Parse { .. })), "{result:?}");
     }
 
     #[test]
