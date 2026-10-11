@@ -67,9 +67,17 @@ impl From<SourceArg> for Source {
     }
 }
 
+/// Makes the links in Steam's `compatibilitytools.d` follow the builds. One that cannot be made
+/// only leaves that build out of Steam and Heroic: the command goes on.
+fn sync_shared(ctx: &Ctx) {
+    if let Err(e) = protons::sync_shared(&ctx.db, &ctx.dirs) {
+        eprintln!("Proton builds not shared with Steam and Heroic: {e}");
+    }
+}
+
 pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
     protons::link_newest(&ctx.dirs)?;
-    protons::sync_shared(&ctx.db, &ctx.dirs)?;
+    sync_shared(ctx);
     match cmd {
         ProtonCommand::List => {
             for build in settings::proton_candidates(&ctx.dirs) {
@@ -113,12 +121,12 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
             let path =
                 protons::install(&ctx.http, &ctx.dirs, &release, progress, &stop_on_ctrl_c())
                     .await?;
-            protons::sync_shared(&ctx.db, &ctx.dirs)?;
+            sync_shared(ctx);
             println!("Installed in {}", path.display());
         }
         ProtonCommand::Remove { name } => {
             protons::remove(&ctx.db, &ctx.dirs, &protons::dir(&ctx.dirs).join(&name))?;
-            protons::sync_shared(&ctx.db, &ctx.dirs)?;
+            sync_shared(ctx);
             println!("Deleted {name}");
         }
         ProtonCommand::Updates { state } => {
@@ -153,7 +161,7 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
                 &stop_on_ctrl_c(),
             )
             .await?;
-            protons::sync_shared(&ctx.db, &ctx.dirs)?;
+            sync_shared(ctx);
             if updated.installed.is_empty() && updated.failed.is_empty() {
                 println!("Up to date");
             }

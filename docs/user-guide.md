@@ -505,7 +505,11 @@ slatty proton share on                 # list the downloaded builds in Steam and
   Steam and Heroic list custom builds (Steam after a restart). Only the builds themselves are
   shared, by their numbered names, not the `-latest` links; a name already there is left alone.
   The links follow the builds (a download adds one, a deletion removes one) and go when the
-  setting is turned off. Steam installed as a Flatpak cannot see them.
+  setting is turned off. Steam installed as a Flatpak cannot see them. A build that cannot be
+  linked is only left out of Steam and Heroic; the launcher says so and carries on.
+  SlattyLauncher only knows which builds its own games use: a build that **Keep up to date**
+  deletes, or that you delete, disappears from Steam and Heroic too, even if one of their games
+  was set to it; choose another build for that game in Steam or Heroic.
 - Valve's own builds (Proton Experimental, stable, Hotfix) need Steam's client library: an
   isolated game run with one is given `steamclient.so` from Steam's `linux64` and `linux32`
   folders, read-only, and nothing else of Steam. The other builds run without it.
