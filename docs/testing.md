@@ -148,7 +148,8 @@ Heroic or any other launcher using Comet first.
 5. **Cloud round trip:** play and save, quit (upload expected), then `slatty cloud status <id>`
    (nothing left to do). Change the save from another machine, then sync: it must be downloaded and
    the previous local copy backed up.
-6. **Achievement through Comet:** play until an achievement unlocks. The end of the session must
-   report it, and it must appear on the GOG profile.
+6. **Achievement through Comet:** play until an achievement unlocks. It must be told within a
+   second or two (a notification from the desktop while the game is in front), the end of the
+   session must report it without a second notification, and it must appear on the GOG profile.
 7. **Maintenance:** `slatty verify <id>`. Damage a file, then `slatty verify <id> --repair`. Finally
    `slatty uninstall <id>`: files added to the game folder must remain.

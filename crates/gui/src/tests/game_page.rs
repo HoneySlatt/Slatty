@@ -258,6 +258,7 @@ fn the_session_shows_in_a_drawer_with_stop() {
         log: vec!["Preparing…".into(), "Game started.".into()],
         stop,
         running: true,
+        told: Vec::new(),
     });
     let messages: Vec<Message> = {
         let mut ui = render(&app);

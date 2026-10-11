@@ -117,6 +117,7 @@ fn updates_wait_while_a_game_runs_and_start_once_it_ends() {
         log: Vec::new(),
         stop,
         running: true,
+        told: Vec::new(),
     });
     let _ = app.update(found());
     assert!(app.updates.current.is_none());
@@ -157,6 +158,7 @@ fn playing(app: &mut App) {
         log: Vec::new(),
         stop,
         running: true,
+        told: Vec::new(),
     });
 }
 
@@ -274,6 +276,7 @@ fn automatic_updates_are_turned_off_in_settings() {
         log: Vec::new(),
         stop,
         running: true,
+        told: Vec::new(),
     });
     let _ = busy.update(found());
     let _ = busy.update(Message::Updates(UpdatesMsg::Toggle(false)));

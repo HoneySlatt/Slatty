@@ -253,8 +253,9 @@ A launch goes through these steps:
    Before the first session, Comet's dummy
    `GalaxyCommunication` service is registered in the prefix; some games need it to reach Comet.
 4. The game runs. SlattyLauncher waits until **every** game process has exited, not only the
-   launcher.
-5. Cloud saves are uploaded, Comet stops, and newly recorded achievements are listed.
+   launcher. With Comet, each achievement is told as the game unlocks it.
+5. Cloud saves are uploaded, Comet stops, and the achievements GOG recorded during the session are
+   listed.
 6. The session is added to your play time on GOG, as GOG Galaxy does. Sessions shorter than a
    minute are not sent (GOG ignores them). Offline, it is sent after the next session. A session
    GOG refuses outright is not sent again, and the ones after it still are.
@@ -520,9 +521,9 @@ library, and the size of the covers. **Installs** holds:
 `slatty install --dir` and `--proton` set the same values.
 
 **Notifications** tells what happens in the background, as Steam does: a download started,
-complete, failed or waiting for GOG; a game or Proton update applied or failed; the achievements
-unlocked in a game, said when it ends (Comet sends them to GOG during the game without telling the
-launcher); cloud saves needing attention before a game or left out of the upload after it. While
+complete, failed or waiting for GOG; a game or Proton update applied or failed; an achievement
+unlocked in a game, as it unlocks (one only GOG reports, when the game ends); cloud saves needing
+attention before a game or left out of the upload after it. While
 the window is in front, they show as cards in its bottom right corner for a few seconds, a click
 opening the game's page; otherwise (a game in front, the window hidden) as the desktop's own
 notifications, with the game's cover. A switch turns them all off, and one each kind; all are on

@@ -276,6 +276,7 @@ fn the_session_says_when_a_game_runs_isolated() {
         log: Vec::new(),
         stop,
         running: true,
+        told: Vec::new(),
     });
     let _ = app.update(Message::Playing(PlayMsg::Event(
         slatty_core::play::PlayEvent::Isolated,

@@ -217,6 +217,7 @@ pub fn describe_play_event(e: &PlayEvent) -> String {
         PlayEvent::PlaytimeNotReported(why) => {
             format!("Play time not sent to GOG ({why}); it will be sent after the next session.")
         }
+        PlayEvent::Achieved(names) => format!("Achievement unlocked: {}", names.join(", ")),
         PlayEvent::Unlocked(names) => {
             format!("Achievements recorded on GOG: {}", names.join(", "))
         }

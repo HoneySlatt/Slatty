@@ -101,6 +101,11 @@ fn print_event(game_id: &str, event: PlayEvent) {
         PlayEvent::PlaytimeNotReported(why) => {
             println!("Play time not sent to GOG ({why}); it will be sent after the next session.")
         }
+        PlayEvent::Achieved(names) => {
+            for n in names {
+                println!("Achievement unlocked: {n}");
+            }
+        }
         PlayEvent::Unlocked(names) => {
             for n in names {
                 println!("Achievement unlocked on GOG: {n}");

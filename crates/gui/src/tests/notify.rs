@@ -60,6 +60,7 @@ fn achievements_unlocked_are_said_when_the_game_ends() {
         log: Vec::new(),
         stop,
         running: true,
+        told: Vec::new(),
     });
     let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(vec![
         "[FAKE] First Steps".into(),
@@ -86,6 +87,54 @@ fn achievements_unlocked_are_said_when_the_game_ends() {
                 "Cloud saves not uploaded".to_string(),
                 "[FAKE] Game 3: the end of the session is uncertain".to_string()
             ),
+        ]
+    );
+}
+
+/// With Comet, an achievement is told as the game unlocks it, and not again once GOG has it; one
+/// only GOG reports at the end is still told then.
+#[test]
+fn achievements_are_said_as_the_game_unlocks_them() {
+    let mut app = library_app();
+    let (stop, _rx) = tokio::sync::mpsc::unbounded_channel();
+    app.play = Some(PlayState {
+        game_id: "3".into(),
+        log: Vec::new(),
+        stop,
+        running: true,
+        told: Vec::new(),
+    });
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Achieved(vec![
+        "[FAKE] First Steps".into(),
+    ]))));
+    assert_eq!(
+        toasted(&app),
+        [(
+            "Achievement unlocked".to_string(),
+            "[FAKE] First Steps · [FAKE] Game 3".to_string()
+        )]
+    );
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(vec![
+        "[FAKE] First Steps".into(),
+    ]))));
+    assert_eq!(toasted(&app).len(), 1, "not told twice");
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(vec![
+        "[FAKE] First Steps".into(),
+        "[FAKE] Alpha".into(),
+    ]))));
+    assert_eq!(
+        toasted(&app).last(),
+        Some(&(
+            "Achievement unlocked".to_string(),
+            "[FAKE] Alpha · [FAKE] Game 3".to_string()
+        ))
+    );
+    assert_eq!(
+        app.play.as_ref().unwrap().log,
+        [
+            "Achievement unlocked: [FAKE] First Steps",
+            "Achievements recorded on GOG: [FAKE] First Steps",
+            "Achievements recorded on GOG: [FAKE] First Steps, [FAKE] Alpha",
         ]
     );
 }

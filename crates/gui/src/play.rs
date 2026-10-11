@@ -14,6 +14,8 @@ pub struct PlayState {
     pub log: Vec<String>,
     pub stop: UnboundedSender<()>,
     pub running: bool,
+    /// Achievements already told while the game ran, not told again once GOG has them.
+    pub told: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,21 +60,38 @@ impl App {
             log: vec!["Preparing…".into()],
             stop: stop_tx,
             running: true,
+            told: Vec::new(),
         });
         Task::run(play_stream(core, game_id, stop_rx), Message::Playing)
     }
 
-    /// What a session tells by a notification: the achievements unlocked (known once the game
-    /// ended), and cloud saves needing attention or left out of the upload.
+    /// What a session tells by a notification: the achievements unlocked (as the game unlocks
+    /// them when Comet runs, the others once GOG has them), and cloud saves needing attention or
+    /// left out of the upload.
     fn play_notification(&mut self, game_id: &str, event: &PlayEvent) -> Task<Message> {
         let title = self.title_of(game_id);
+        let names: Vec<String> = match (event, self.play.as_mut()) {
+            (PlayEvent::Achieved(names), Some(p)) => {
+                p.told.extend(names.iter().cloned());
+                names.clone()
+            }
+            (PlayEvent::Unlocked(names), Some(p)) => names
+                .iter()
+                .filter(|n| !p.told.contains(n))
+                .cloned()
+                .collect(),
+            _ => Vec::new(),
+        };
         let (kind, heading, body) = match event {
-            PlayEvent::Unlocked(names) if names.len() == 1 => (
+            PlayEvent::Achieved(_) | PlayEvent::Unlocked(_) if names.is_empty() => {
+                return Task::none();
+            }
+            PlayEvent::Achieved(_) | PlayEvent::Unlocked(_) if names.len() == 1 => (
                 Kind::Achievements,
                 "Achievement unlocked".to_string(),
                 format!("{} · {title}", names[0]),
             ),
-            PlayEvent::Unlocked(names) => (
+            PlayEvent::Achieved(_) | PlayEvent::Unlocked(_) => (
                 Kind::Achievements,
                 format!("{} achievements unlocked", names.len()),
                 format!("{} · {title}", names.join(", ")),

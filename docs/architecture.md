@@ -33,7 +33,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `umu` | Game id in umu's database, looked up once per game, so umu applies its fixes for it |
 | `protons` | Proton builds downloaded from GitHub releases (GE-Proton, Proton-CachyOS, UMU-Proton), once turned on: the archive for this computer, resumed downloads, its published SHA-512 sum checked before it is opened, then unpacked (a `.tar.xz` made in blocks of 32 MiB or less, compressed, on up to four threads, a block each) without anything leaving its folder (paths that climb out, links out, even through another link, and special files are left out). Each project has a `<project>-latest` link to its newest downloaded build, replaced in one step (`rename`) once a newer build is unpacked, never by an older version (the numbers in the names, in order, are compared, with every build of the project rather than only the link's); games and the default can be set to it (`link_newest`, at start, gives a project without a link, or whose link leads to a build deleted by hand, one to its newest build). `update` (at most once a day at start once turned on) downloads the newest build of each project followed that way, keeps the build the link led to before and deletes older ones no game uses; a project that fails is reported beside the others (`Updated`), and the day starts again only once GitHub answered. One lock (`protons.lock`) covers each change of the builds or links, from a download to its link, from an update to its pruning, and the links made at start, so the interface and the command line never interleave. Builds are downloaded and unpacked in `protons/.staging` and deleted by being moved there first; a build that fails to unpack (a full disk, a stop) is removed at once, and the next download clears what cut-off runs left there. A build a game or the default uses, or that a followed link leads to, is not deleted |
 | `session` | Session supervisor (subreaper), session records, play time |
-| `play` | Full play flow: prefix, cloud, Comet, session, upload, achievement diff |
+| `play` | Full play flow: prefix, cloud, Comet, session (unlocks as they come), upload, achievement diff |
 | `cloud` | Save locations, local scan, three-way plan, transport, sync executor, diagnostics |
 | `comet` | Supervised Comet process |
 | `galaxy_service` | Comet's dummy `GalaxyCommunication` service, registered in game prefixes |
@@ -314,8 +314,15 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
   directory under `$XDG_RUNTIME_DIR`, removed as soon as Comet listens. They never appear in process
   arguments.
 - **Shutdown.** Comet is stopped with SIGINT, so pending requests can finish.
+- **Unlocks as they come.** Comet records an unlock in its own SQLite database at once
+  (`<data>/comet/comet/gameplay/<client id>/<user id>/gameplay.db`, Comet adding its folder to the
+  `XDG_DATA_HOME` it is given) and sends it to GOG later. During the session `comet::Unlocks` opens
+  it read-only, never waiting on Comet's locks, and looks each second: `PRAGMA data_version` tells
+  whether Comet wrote since the last look, so the rows are read again only then (4 to 8 µs a look,
+  0.4 ms after a write, with 1,000 achievements). What was unlocked on GOG at the start, or found
+  at the first reading, is not new. Each new one is a `PlayEvent::Achieved`.
 - **Achievement report.** Achievements are read before and after the session, so the report reflects
-  what GOG actually recorded.
+  what GOG actually recorded. The interface does not notify again one already told during the game.
 - **Galaxy service.** Some Galaxy SDK versions only reach Comet when a `GalaxyCommunication` Windows
   service exists, as GOG Galaxy installs one. Before the first session with Comet, the play flow
   registers Comet's dummy service in the prefix (`sc create`, plus the `GalaxyClient\paths`

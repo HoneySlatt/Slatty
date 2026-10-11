@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use reqwest::Client;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -8,7 +8,7 @@ use crate::account::Account;
 use crate::achievements::{self, Achievement};
 use crate::auth::Tokens;
 use crate::cloud::{self, LocationOutcome, sync::SyncOptions};
-use crate::comet::Comet;
+use crate::comet::{self, Comet};
 use crate::db::Db;
 use crate::doctor::find_in_path;
 use crate::error::{Error, Result};
@@ -18,6 +18,9 @@ use crate::paths::Dirs;
 use crate::runner;
 use crate::session::{self, SessionHandle, SessionOutcome, SupervisorEvent};
 use crate::setup::SetupEvent;
+
+/// How often Comet's database is looked at for unlocks while a game runs.
+const UNLOCKS_EVERY: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CloudSummary {
@@ -91,6 +94,8 @@ pub enum PlayEvent {
         code: Option<i32>,
     },
     StopRequested,
+    /// Achievements the game unlocked just now, as Comet records them; it sends them to GOG.
+    Achieved(Vec<String>),
     /// Stop was asked for while the launch was being prepared: the game was not started.
     StoppedBeforeStart,
     Ended {
@@ -117,7 +122,8 @@ pub struct PlayRequest {
     pub supervisor: PathBuf,
 }
 
-/// Full play flow: cloud check, Comet, supervised session, cloud upload, achievement diff.
+/// Full play flow: cloud check, Comet, supervised session (unlocks told as they come), cloud
+/// upload, achievement diff.
 /// Each message on `stop` asks the game to quit; the second one forces it. One sent before the game
 /// starts keeps it from starting.
 pub async fn play(
@@ -246,7 +252,7 @@ pub async fn play(
         }
     }
 
-    let comet = if use_comet {
+    let mut comet = if use_comet {
         match start_comet(db, dirs, http, &install, user_id.as_deref()).await {
             Ok(started) => {
                 emit(PlayEvent::CometReady);
@@ -264,7 +270,7 @@ pub async fn play(
     // Stop asked for while all this ran (it can take long offline): the game is not started, rather
     // than started and asked to quit at once, its saves then left out of the upload.
     if stop.try_recv().is_ok() {
-        if let Some((comet, _)) = comet {
+        if let Some((comet, _, _)) = comet {
             let _ = comet.stop().await;
         }
         emit(PlayEvent::StoppedBeforeStart);
@@ -274,11 +280,22 @@ pub async fn play(
         emit(PlayEvent::Isolated);
     }
     let started = Instant::now();
-    let outcome = run_session(db, dirs, &req, &spec, user_id.as_deref(), &emit, &mut stop).await;
+    let unlocks = comet.as_mut().and_then(|(_, _, unlocks)| unlocks.as_mut());
+    let outcome = run_session(
+        db,
+        dirs,
+        &req,
+        &spec,
+        user_id.as_deref(),
+        &emit,
+        &mut stop,
+        unlocks,
+    )
+    .await;
     let outcome = match outcome {
         Ok(o) => o,
         Err(e) => {
-            if let Some((comet, _)) = comet {
+            if let Some((comet, _, _)) = comet {
                 let _ = comet.stop().await;
             }
             return Err(e);
@@ -291,7 +308,7 @@ pub async fn play(
     });
 
     let before = match comet {
-        Some((comet, before)) => {
+        Some((comet, before, _)) => {
             comet.stop().await?;
             Some(before)
         }
@@ -324,7 +341,9 @@ pub async fn play(
         emit(
             match (
                 before,
-                achievements_now(db, dirs, http, &install, user_id.as_deref()).await,
+                achievements_now(db, dirs, http, &install, user_id.as_deref())
+                    .await
+                    .map(|(_, after)| after),
             ) {
                 (Some(before), Some(after)) => {
                     let new: Vec<String> = achievements::newly_unlocked(&before, &after)
@@ -344,6 +363,7 @@ pub async fn play(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_session(
     db: &Db,
     dirs: &Dirs,
@@ -352,6 +372,7 @@ async fn run_session(
     user_id: Option<&str>,
     emit: &(impl Fn(PlayEvent) + Send + Sync),
     stop: &mut UnboundedReceiver<()>,
+    mut unlocks: Option<&mut comet::Unlocks>,
 ) -> Result<SessionOutcome> {
     let log = dirs.logs().join(format!("game-{}.log", req.game_id));
     let busy = crate::lock::session(dirs, &req.game_id);
@@ -363,6 +384,7 @@ async fn run_session(
     }
     let id = session::record_start(db, &req.game_id, user_id)?;
     let mut stop_open = true;
+    let mut look = tokio::time::interval(UNLOCKS_EVERY);
     let outcome = loop {
         tokio::select! {
             event = handle.next_event() => match event? {
@@ -382,6 +404,12 @@ async fn run_session(
                 }
                 None => stop_open = false,
             },
+            _ = look.tick(), if unlocks.is_some() => {
+                let new = unlocks.as_deref_mut().map(comet::Unlocks::new_ones).unwrap_or_default();
+                if !new.is_empty() {
+                    emit(PlayEvent::Achieved(new));
+                }
+            }
         }
     };
     session::record_end(db, id, &outcome)?;
@@ -432,30 +460,43 @@ async fn start_comet(
     http: &Client,
     install: &Install,
     user_id: Option<&str>,
-) -> Result<(Comet, Option<Vec<Achievement>>)> {
+) -> Result<(Comet, Option<Vec<Achievement>>, Option<comet::Unlocks>)> {
     let bin =
         find_in_path("comet").ok_or_else(|| Error::NotFound("`comet` is not in PATH".into()))?;
     let mut account = Account::load_for(db, dirs, user_id.ok_or(Error::NotLoggedIn)?).await?;
     let tokens = account.tokens(http).await?.clone();
     let comet = Comet::start(&bin, &tokens, &account.info.username, dirs).await?;
-    let before = achievements_now(db, dirs, http, install, user_id).await;
-    Ok((comet, before))
+    let (client_id, before) = match achievements_now(db, dirs, http, install, user_id).await {
+        Some((client_id, before)) => (Some(client_id), Some(before)),
+        None => (install.client_id.clone(), None),
+    };
+    let unlocks = client_id.map(|client_id| {
+        comet::Unlocks::new(
+            dirs,
+            &client_id,
+            &tokens.user_id,
+            before.as_deref().unwrap_or_default(),
+        )
+    });
+    Ok((comet, before, unlocks))
 }
 
+/// The game's achievements on GOG, with its client id.
 async fn achievements_now(
     db: &Db,
     dirs: &Dirs,
     http: &Client,
     install: &Install,
     user_id: Option<&str>,
-) -> Option<Vec<Achievement>> {
+) -> Option<(String, Vec<Achievement>)> {
     let tokens = tokens(db, dirs, http, user_id).await.ok()?;
     let (client_id, token) = achievements::game_token(http, &tokens, install)
         .await
         .ok()?;
-    achievements::fetch(http, &tokens.user_id, &client_id, &token)
+    let achievements = achievements::fetch(http, &tokens.user_id, &client_id, &token)
         .await
-        .ok()
+        .ok()?;
+    Some((client_id, achievements))
 }
 
 /// Sessions without a recorded end (launcher crash or kill) are marked as interrupted. One whose

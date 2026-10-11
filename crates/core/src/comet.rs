@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -7,6 +8,7 @@ use nix::sys::signal::{self, Signal};
 use nix::unistd::Pid;
 use tokio::process::Child;
 
+use crate::achievements::Achievement;
 use crate::auth::Tokens;
 use crate::error::{Error, Result};
 use crate::paths::Dirs;
@@ -148,6 +150,92 @@ fn write_private(private_dir: &Path, token_file: &Path, tokens: &Tokens) -> Resu
         .map_err(|e| Error::io("write the Comet token file", e))
 }
 
+/// Achievements unlocked while the game runs, read from Comet's own database: Comet records an
+/// unlock there at once and sends it to GOG later. Those already unlocked when the session started
+/// (on GOG, or in the database at its first reading) are not new.
+pub struct Unlocks {
+    file: PathBuf,
+    connection: Option<rusqlite::Connection>,
+    known: HashSet<String>,
+    read_once: bool,
+    /// SQLite's `data_version` at the last reading.
+    version: Option<i64>,
+}
+
+impl Unlocks {
+    pub fn new(dirs: &Dirs, client_id: &str, user_id: &str, unlocked: &[Achievement]) -> Unlocks {
+        let mut unlocks = Unlocks {
+            // Comet adds its own folder to the XDG_DATA_HOME it is given.
+            file: dirs
+                .data
+                .join("comet/comet/gameplay")
+                .join(client_id)
+                .join(user_id)
+                .join("gameplay.db"),
+            connection: None,
+            known: unlocked
+                .iter()
+                .filter(|a| a.date_unlocked.is_some())
+                .map(|a| a.achievement_key.clone())
+                .collect(),
+            read_once: false,
+            version: None,
+        };
+        unlocks.new_ones();
+        unlocks
+    }
+
+    /// Names of the achievements unlocked since the last look. Never waits on Comet: a database
+    /// being written is read at the next look.
+    pub fn new_ones(&mut self) -> Vec<String> {
+        let Some(rows) = self.read() else {
+            return Vec::new();
+        };
+        let new: Vec<String> = rows
+            .into_iter()
+            .filter_map(|(key, name)| self.known.insert(key).then_some(name))
+            .collect();
+        if std::mem::replace(&mut self.read_once, true) {
+            new
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn read(&mut self) -> Option<Vec<(String, String)>> {
+        if self.connection.is_none() {
+            if !self.file.is_file() {
+                return None;
+            }
+            let connection = rusqlite::Connection::open_with_flags(
+                &self.file,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
+            .ok()?;
+            connection.busy_timeout(Duration::ZERO).ok()?;
+            self.connection = Some(connection);
+        }
+        let connection = self.connection.as_ref()?;
+        // Changes only when Comet has written: the rows are read again only then.
+        let version = connection
+            .query_row("PRAGMA data_version", [], |row| row.get(0))
+            .ok()?;
+        if self.version == Some(version) {
+            return None;
+        }
+        let mut statement = connection
+            .prepare_cached("SELECT key, name FROM achievement WHERE unlock_time IS NOT NULL")
+            .ok()?;
+        let rows = statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .ok()?
+            .collect::<rusqlite::Result<_>>()
+            .ok()?;
+        self.version = Some(version);
+        Some(rows)
+    }
+}
+
 /// Files of GOG's Galaxy SDK, the only way a game reports achievements to Comet.
 const GALAXY_SDK: [&str; 4] = [
     "galaxy.dll",
@@ -216,6 +304,62 @@ mod tests {
         let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
         assert_eq!(v["refresh_token"], "r");
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// An unlock is seen as soon as Comet records it, once; those unlocked before the session (on
+    /// GOG, or in Comet's database from an earlier one) are not.
+    #[test]
+    fn unlocks_are_read_from_comets_database_as_they_come() {
+        let root = std::env::temp_dir().join(format!("slatty-unlocks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dirs = Dirs::under(&root);
+        let gog = |key: &str, unlocked: bool| Achievement {
+            achievement_id: key.into(),
+            achievement_key: key.into(),
+            name: format!("[FAKE] {key}"),
+            description: String::new(),
+            visible: true,
+            date_unlocked: unlocked.then(|| "2026-10-10T10:00:00+00:00".into()),
+            rarity: 0.0,
+            image_url_unlocked: String::new(),
+            image_url_locked: String::new(),
+        };
+        // Not created yet: Comet makes it when the game first asks for achievements.
+        let mut unlocks = Unlocks::new(&dirs, "123", "456", &[gog("a", true), gog("b", false)]);
+        assert!(unlocks.new_ones().is_empty());
+
+        let file = dirs.data.join("comet/comet/gameplay/123/456/gameplay.db");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let comet = rusqlite::Connection::open(&file).unwrap();
+        comet
+            .execute_batch(
+                "CREATE TABLE achievement (id INTEGER PRIMARY KEY, key TEXT, name TEXT, unlock_time TEXT);
+                 INSERT INTO achievement VALUES
+                   (1, 'a', '[FAKE] a', '2026-10-10T10:00:00+00:00'),
+                   (2, 'b', '[FAKE] b', NULL),
+                   (3, 'c', '[FAKE] c', '2026-10-09T10:00:00+00:00'),
+                   (4, 'd', '[FAKE] d', NULL);",
+            )
+            .unwrap();
+        assert!(
+            unlocks.new_ones().is_empty(),
+            "what the first reading finds was there before"
+        );
+
+        let unlock = |id: u32| {
+            comet
+                .execute(
+                    "UPDATE achievement SET unlock_time = '2026-10-10T11:00:00+00:00' WHERE id = ?1",
+                    [id],
+                )
+                .unwrap()
+        };
+        unlock(2);
+        assert_eq!(unlocks.new_ones(), ["[FAKE] b"]);
+        assert!(unlocks.new_ones().is_empty(), "said once");
+        unlock(4);
+        assert_eq!(unlocks.new_ones(), ["[FAKE] d"]);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
