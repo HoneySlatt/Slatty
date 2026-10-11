@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Subcommand;
 use slatty_core::account::Account;
-use slatty_core::library::{self, MetadataSource};
+use slatty_core::library::{self, LibraryGame, MetadataSource};
 
 use crate::{Ctx, shown};
 
@@ -9,7 +9,7 @@ use crate::{Ctx, shown};
 pub enum LibraryCommand {
     /// Download the library and refresh the local cache
     Sync,
-    /// List games from the local cache (works offline)
+    /// List games from the local cache (works offline), and Steam's once turned on
     List {
         /// Case-insensitive title filter
         search: Option<String>,
@@ -33,25 +33,38 @@ pub async fn run(ctx: &Ctx, cmd: LibraryCommand) -> Result<()> {
             );
         }
         LibraryCommand::List { search } => {
-            let info = Account::active(&ctx.db)?.ok_or(slatty_core::Error::NotLoggedIn)?;
-            let Some(cache) = library::load_cache(&ctx.dirs, &info.user_id)? else {
-                println!("No cached library yet. Run `slatty library sync`.");
-                return Ok(());
-            };
             let needle = search.map(|s| s.to_lowercase());
-            for g in cache.games.iter().filter(|g| {
-                needle
-                    .as_ref()
-                    .is_none_or(|n| g.title.to_lowercase().contains(n))
-            }) {
-                println!(
-                    "{:>12}  {:<50} {}",
-                    shown(&g.id),
-                    shown(&g.title),
-                    shown(g.os.join(","))
-                );
+            let print = |games: &[LibraryGame]| {
+                for g in games.iter().filter(|g| {
+                    needle
+                        .as_ref()
+                        .is_none_or(|n| g.title.to_lowercase().contains(n))
+                }) {
+                    println!(
+                        "{:>12}  {:<50} {}",
+                        shown(&g.id),
+                        shown(&g.title),
+                        shown(g.os.join(","))
+                    );
+                }
+            };
+            let steam = crate::steam::games(ctx)?;
+            match Account::active(&ctx.db)? {
+                Some(info) => match library::load_cache(&ctx.dirs, &info.user_id)? {
+                    Some(cache) => {
+                        print(&cache.games);
+                        println!("(cache from {})", crate::local_time(cache.fetched_at));
+                    }
+                    None => println!("No cached library yet. Run `slatty library sync`."),
+                },
+                // Steam's games need no GOG account.
+                None if steam.is_some() => {}
+                None => return Err(slatty_core::Error::NotLoggedIn.into()),
             }
-            println!("(cache from {})", crate::local_time(cache.fetched_at));
+            if let Some(steam) = steam {
+                print(&steam.games);
+                println!("(Steam games, read from the Steam client's files)");
+            }
         }
     }
     Ok(())

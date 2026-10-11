@@ -491,6 +491,11 @@ The games of the account signed in to the Steam client can show in the library b
 until turned on: in **Settings → Steam**, or on the GOG sign-in page with **Use my Steam games
 without GOG**, which needs no GOG account at all.
 
+```sh
+slatty steam status    # Steam found, the account signed in, its games and those installed
+slatty library list    # Steam's games too once turned on, with or without a GOG account
+```
+
 - **Read from Steam's own files, never written.** SlattyLauncher finds Steam (installed natively or
   as a Flatpak) and the account last signed in to it, then reads the account's games
   (`userdata/<account>/config/librarycache`), their names and images (`appcache/appinfo.vdf` and

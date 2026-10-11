@@ -7,6 +7,7 @@ mod launch;
 mod library;
 mod maintenance;
 mod proton;
+mod steam;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -62,6 +63,9 @@ enum Command {
     /// Proton builds: list them, or download them from GitHub
     #[command(subcommand)]
     Proton(proton::ProtonCommand),
+    /// Steam games, read from the Steam client's files
+    #[command(subcommand)]
+    Steam(steam::SteamCommand),
 }
 
 pub struct Ctx {
@@ -126,6 +130,7 @@ async fn run() -> Result<()> {
         Command::Cloud(cmd) => cloud::run(&ctx, cmd).await,
         Command::Achievements(args) => achievements::run(&ctx, args).await,
         Command::Proton(cmd) => proton::run(&ctx, cmd).await,
+        Command::Steam(cmd) => steam::run(&ctx, cmd),
     }
 }
 
