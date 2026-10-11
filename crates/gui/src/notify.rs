@@ -201,10 +201,29 @@ fn desktop(title: &str, body: &str, image: Option<&std::path::Path>) {
             0u32,
             "",
             title,
-            body,
+            plain(body),
             Vec::<&str>::new(),
             hints,
             -1i32,
         ),
     );
+}
+
+/// A notification's body as text: services that read markup there (links, images) would otherwise
+/// take it from a title, an achievement name or an error, which games and GOG write.
+fn plain(body: &str) -> String {
+    body.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_body_is_never_read_as_markup() {
+        assert_eq!(
+            super::plain("[FAKE] <a href=\"https://x.example\">Q&A</a> <img src=\"/tmp/i.png\"/>"),
+            "[FAKE] &lt;a href=\"https://x.example\"&gt;Q&amp;A&lt;/a&gt; &lt;img src=\"/tmp/i.png\"/&gt;"
+        );
+    }
 }
