@@ -151,6 +151,8 @@ pub fn uninstall(
     if let Some(prefix) = prefix {
         report.prefix_backup = back_up_prefix(dirs, game_id, prefix)?;
     }
+    // Its install's mark, when the install could not delete it, is SlattyLauncher's own file too.
+    let _ = std::fs::remove_file(root.join(installer::STAGED_MARK));
     delete_listed(root, &files, &mut report)?;
 
     if let Some(prefix) = prefix
@@ -858,6 +860,8 @@ mod tests {
     fn deleting_the_prefix_backs_up_its_user_folder_first() {
         let env = Env::new("prefix", true);
         std::fs::remove_dir_all(env.game().join("saves")).unwrap();
+        // Left by an install that could not delete it: SlattyLauncher's own file.
+        std::fs::write(env.game().join(installer::STAGED_MARK), "").unwrap();
         let r = uninstall(&env.db, &env.dirs, "1", true).unwrap();
         assert!(r.folder_removed && r.prefix_removed);
         let backup = r.prefix_backup.unwrap();

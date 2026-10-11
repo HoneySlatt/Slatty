@@ -17,6 +17,32 @@ pub fn partial_dir(root: &Path, directory: &str) -> PathBuf {
     root.join(format!(".{directory}{PARTIAL_SUFFIX}"))
 }
 
+/// Written into a partial folder as its download starts, carried into the game folder by the
+/// rename and removed once the game is registered: a game folder holding it was published by
+/// SlattyLauncher and is finished by resuming its job; one without it is someone else's, never
+/// adopted.
+pub const STAGED_MARK: &str = ".slatty-staged";
+
+/// Makes `partial` with its mark, or keeps them as an earlier attempt left them.
+pub(crate) fn mark_staged(partial: &Path) -> Result<()> {
+    crate::paths::ensure_dir(partial)?;
+    let mark = partial.join(STAGED_MARK);
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&mark)
+    {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(Error::io(format!("create {}", mark.display()), e)),
+    }
+}
+
+/// Whether SlattyLauncher published `target` (see `STAGED_MARK`).
+pub(crate) fn staged_here(target: &Path) -> bool {
+    std::fs::symlink_metadata(target.join(STAGED_MARK)).is_ok_and(|m| m.is_file())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InstallJob {
     pub game_id: String,
@@ -157,8 +183,8 @@ pub fn discard(db: &Db, dirs: &Dirs, game_id: &str) -> Result<Option<PathBuf>> {
     let partial = partial_dir(&job.root, &job.directory);
     let target = job.root.join(&job.directory);
     // The download finished and took the game folder's place; only the job lets an install finish
-    // it, since a new one refuses an existing folder.
-    if !partial.exists() && target.is_dir() {
+    // it, since a new one refuses an existing folder. A folder it did not publish is not its own.
+    if !partial.exists() && staged_here(&target) {
         return Err(Error::Refused(format!(
             "{} is already downloaded; install the game again to finish it",
             target.display()

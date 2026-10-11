@@ -994,6 +994,7 @@ fn discarding_an_install_whose_folder_was_published_is_refused() {
     let db = Db::in_memory().unwrap();
     std::fs::create_dir_all(root.join("Game")).unwrap();
     std::fs::write(root.join("Game/Game.exe"), "[FAKE]").unwrap();
+    std::fs::write(root.join("Game").join(STAGED_MARK), "").unwrap();
     InstallJob {
         game_id: "1".into(),
         build_id: "b".into(),
@@ -1136,7 +1137,7 @@ fn an_install_cut_off_after_publishing_is_checked_where_it_landed() {
     let root = std::env::temp_dir().join(format!("slatty-published-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let (partial, target) = (partial_dir(&root, "Game"), root.join("Game"));
-    std::fs::create_dir_all(&partial).unwrap();
+    mark_staged(&partial).unwrap();
     assert!(
         !published_unregistered(true, &partial, &target),
         "still downloading"
@@ -1146,6 +1147,40 @@ fn an_install_cut_off_after_publishing_is_checked_where_it_landed() {
     assert!(
         !published_unregistered(false, &partial, &target),
         "a new install never adopts an existing folder"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// A folder already where the game goes that SlattyLauncher did not publish (another launcher's
+/// copy of the game, modded) is never adopted by a retried install, which would overwrite its
+/// files and record them as its own; its job can be discarded without touching it.
+#[test]
+fn a_folder_slatty_did_not_publish_is_never_adopted() {
+    let root = std::env::temp_dir().join(format!("slatty-foreign-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let dirs = Dirs::under(&root.join("app"));
+    let db = Db::in_memory().unwrap();
+    let (partial, target) = (partial_dir(&root, "Game"), root.join("Game"));
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::write(target.join("[FAKE] mod.dll"), "mod").unwrap();
+    assert!(!published_unregistered(true, &partial, &target));
+    InstallJob {
+        game_id: "1".into(),
+        build_id: "b".into(),
+        language: "en-US".into(),
+        root: root.clone(),
+        directory: "Game".into(),
+        state: FAILED.into(),
+        dlcs: vec![],
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    assert!(discard(&db, &dirs, "1").is_ok());
+    assert!(InstallJob::load(&db, "1").unwrap().is_none());
+    assert_eq!(
+        std::fs::read(target.join("[FAKE] mod.dll")).unwrap(),
+        b"mod"
     );
     std::fs::remove_dir_all(root).unwrap();
 }

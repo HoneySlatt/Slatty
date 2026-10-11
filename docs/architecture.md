@@ -190,8 +190,12 @@ choices made in its panel; the order of the queue is a setting. A queued job is 
 download already published, even when its folder exists. Its state tells a pause on request (`paused`, resumed when asked) from a cut-off
 (`downloading`, resumed by the interface at start-up). Updates do the same with `updating-paused`
 and `updating`; both keep the game from starting. A cut-off after the partial folder was renamed
-but before the game was registered is resumed by checking the game folder in place; a job left
-behind by a game registered just before a cut-off is dropped at start-up.
+but before the game was registered is resumed by checking the game folder in place. The partial
+folder gets a mark (`.slatty-staged`) as its download starts, which the rename carries into the
+game folder and the registration deletes: a folder already where the game goes without it
+(another launcher's copy, modded) is never adopted, only refused, and its job can be discarded
+without touching it. A job left behind by a game registered just before a cut-off is dropped at
+start-up.
 
 ### Post-install setup
 

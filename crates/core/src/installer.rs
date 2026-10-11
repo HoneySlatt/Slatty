@@ -170,6 +170,10 @@ pub async fn install(
     let resumed_published = published_unregistered(job_resumed, &partial, &target);
     // What was written: the game's files, GOG's support files, links left out.
     let result = async {
+        // A folder already where the game goes is refused by the download below, unmarked.
+        if !resumed_published && !target.exists() {
+            mark_staged(&partial)?;
+        }
         if plan.platform == Platform::Linux {
             let source = linux::GogInstallers::new(
                 http.clone(),
@@ -255,6 +259,8 @@ pub async fn install(
     };
     install.save(db)?;
     InstallJob::delete(db, &req.game_id)?;
+    // Registered: the mark has done its work. One left behind is deleted by the uninstall.
+    let _ = std::fs::remove_file(target.join(STAGED_MARK));
     emit(InstallEvent::Finished {
         path: target,
         support_files,
@@ -264,10 +270,11 @@ pub async fn install(
     Ok(install)
 }
 
-/// The partial folder of a resumed install is gone and the game folder exists: the download
-/// finished and was renamed into place, but the game was not registered yet.
+/// The partial folder of a resumed install is gone and the game folder it became exists: the
+/// download finished and was renamed into place, but the game was not registered yet. A folder
+/// already there that SlattyLauncher did not publish is never taken for it.
 fn published_unregistered(resumed: bool, partial: &Path, target: &Path) -> bool {
-    resumed && !partial.exists() && target.is_dir()
+    resumed && !partial.exists() && staged_here(target)
 }
 
 /// Whether an install holds its game back from automatic updates (an older build chosen), decided
