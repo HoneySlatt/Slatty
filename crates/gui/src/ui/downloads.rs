@@ -78,8 +78,10 @@ impl App {
                 .spacing(16)
                 .align_y(Alignment::Center),
             );
-        } else if active == 0 && self.updates.current.is_none() {
-            downloading = downloading.push(note(if self.queue.is_empty() {
+        } else if active == steam.len() && self.updates.current.is_none() {
+            downloading = downloading.push(note(if !steam.is_empty() {
+                "Nothing is downloading from GOG; what Steam downloads is below."
+            } else if self.queue.is_empty() {
                 "Nothing is downloading. Installs started while another one downloads wait here."
             } else {
                 "Nothing is downloading: the queue starts with the next install."

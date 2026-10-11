@@ -358,7 +358,11 @@ fn a_download_steam_makes_shows_until_it_is_done() {
             "{all:?}"
         );
         assert!(all.iter().any(|t| t.starts_with("1 active")), "{all:?}");
-        assert!(!all.iter().any(|t| t.starts_with("Nothing is downloading")));
+        assert!(
+            all.iter()
+                .any(|t| t.starts_with("Nothing is downloading from GOG")),
+            "{all:?}"
+        );
     }
 
     let paused = Update {
