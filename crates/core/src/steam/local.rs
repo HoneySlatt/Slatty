@@ -136,6 +136,10 @@ pub fn owned(steam: &Steam, user: &SteamUser) -> Vec<u32> {
     ids
 }
 
+/// More minutes than anyone plays (190 years): a larger play time is cut to it, so that sums of
+/// seconds cannot overflow.
+pub const MAX_MINUTES: u64 = 100_000_000;
+
 /// How long a game was played and when last, as the Steam client records them for the account.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Played {
@@ -169,7 +173,7 @@ pub fn played(steam: &Steam, user: &SteamUser) -> HashMap<u32, Played> {
                     .unwrap_or(0)
             };
             let played = Played {
-                minutes: number("Playtime") as u64,
+                minutes: (number("Playtime") as u64).min(MAX_MINUTES),
                 last_played: number("LastPlayed"),
             };
             (played != Played::default()).then_some((id.parse().ok()?, played))
@@ -336,6 +340,7 @@ pub(crate) mod tests {
                         "440" { "LastPlayed" "1760000000" "Playtime" "754" }
                         "70" { "LastPlayed" "1700000000" }
                         "220" { "Playtime" "0" "LastPlayed" "garbage" }
+                        "10" { "Playtime" "9223372036854775807" }
                         "not-an-app" { "Playtime" "5" }
                     } } } }
                 }"#,
@@ -491,7 +496,8 @@ pub(crate) mod tests {
                 last_played: 1_700_000_000
             })
         );
-        assert_eq!(played.len(), 2, "nothing for a game never played");
+        assert_eq!(played.len(), 3, "nothing for a game never played");
+        assert_eq!(played[&10].minutes, MAX_MINUTES, "cut, so that seconds fit");
 
         let other = SteamUser {
             id64: 76561198000000001,

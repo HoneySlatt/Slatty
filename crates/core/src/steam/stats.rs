@@ -18,6 +18,9 @@ const MAX_FILE: u64 = 64 << 20;
 const MAX_CACHE_FILE: u64 = 4 << 20;
 /// Where Steam's image servers keep a game's achievement icons.
 const ICONS: &str = "https://shared.steamstatic.com/community_assets/images/apps/";
+/// More achievements than any game has: larger counts are cut to it, so that comparing shares
+/// (products of counts) cannot overflow.
+const MAX_ACHIEVEMENTS: u64 = 100_000;
 
 /// The achievements of `app_id` for the account, as the client knows them; none when it keeps no
 /// schema for the game. With `icons`, each names its icons on Steam's image servers. How common
@@ -90,8 +93,9 @@ pub fn counts(steam: &Steam, user: &SteamUser, apps: &[u32]) -> HashMap<u32, (us
     apps.iter()
         .filter_map(|&app| {
             let cached = library_cache(steam, user, app).and_then(|c| {
-                let n = |key: &str| c[key].as_u64().map(|n| n as usize);
-                Some((n("nAchieved")?, n("nTotal")?)).filter(|(_, total)| *total > 0)
+                let n = |key: &str| c[key].as_u64().map(|n| n.min(MAX_ACHIEVEMENTS) as usize);
+                let (done, total) = (n("nAchieved")?, n("nTotal")?);
+                Some((done.min(total), total)).filter(|(_, total)| *total > 0)
             });
             let counted = cached
                 .or_else(|| crate::overview::counts(&achievements(steam, user, app, false)?))?;
@@ -380,6 +384,16 @@ pub(crate) mod tests {
         assert_eq!(
             counts(&fake.steam, &user, &[70]),
             HashMap::from([(70, (5, 9))])
+        );
+        std::fs::write(
+            &cache,
+            r#"[["achievements",{"version":1,"data":{"nAchieved":18446744073709551615,"nTotal":4}}]]"#,
+        )
+        .unwrap();
+        assert_eq!(
+            counts(&fake.steam, &user, &[70]),
+            HashMap::from([(70, (4, 4))]),
+            "never more unlocked than there are"
         );
     }
 

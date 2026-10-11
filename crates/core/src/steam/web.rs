@@ -87,7 +87,7 @@ async fn owned_games_at(
         .map(|g| OwnedGame {
             app_id: g.appid,
             name: g.name.trim().to_string(),
-            minutes: g.playtime_forever,
+            minutes: g.playtime_forever.min(super::local::MAX_MINUTES),
             last_played: g.rtime_last_played.max(0),
         })
         .collect())
