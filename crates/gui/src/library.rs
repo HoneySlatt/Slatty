@@ -334,7 +334,7 @@ impl App {
         };
         // Those the Steam client has not saved come from Steam's image servers once turned on,
         // whatever the GOG account; the others from GOG, for the account.
-        let steam_images = self.steam.images;
+        let steam_images = self.steam_images_allowed();
         let wanted: Vec<String> = urls
             .into_iter()
             .filter(|u| steam_images || !slatty_core::steam::library::is_server_image(u))
@@ -343,14 +343,20 @@ impl App {
         let (steam, gog): (Vec<String>, Vec<String>) = wanted
             .into_iter()
             .partition(|u| slatty_core::steam::library::is_server_image(u));
+        let allowed = self.steam.images_allowed.clone();
         let fetch = |core: Core, url: String, user_id: Option<String>| {
             let key = url.clone();
+            let allowed = allowed.clone();
             Task::perform(
                 async move {
                     let _permit = core.downloads.acquire().await.ok()?;
                     let path = match user_id {
                         Some(user_id) => {
                             library::image(&core.http, &core.dirs, &user_id, &url).await
+                        }
+                        // Turned off while waiting its turn: not asked.
+                        None if !allowed.load(std::sync::atomic::Ordering::Relaxed) => {
+                            return None;
                         }
                         None => {
                             slatty_core::steam::library::image(&core.http, &core.dirs, &url).await

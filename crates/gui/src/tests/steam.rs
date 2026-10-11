@@ -161,6 +161,7 @@ fn images_from_steams_servers_once_turned_on() {
             .contains("https://images.gog.com/[FAKE].jpg")
     );
 
+    assert!(app.steam_images_allowed());
     let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
     let _ = app.update(Message::Steam(SteamMsg::Cover(
         "steam-620".into(),
@@ -170,6 +171,35 @@ fn images_from_steams_servers_once_turned_on() {
         !app.covers.contains_key("steam-620"),
         "Steam's games are off"
     );
+    assert!(
+        !app.steam_images_allowed(),
+        "downloads waiting their turn give up"
+    );
+    let late = "https://shared.steamstatic.com/community_assets/images/apps/620/a.jpg";
+    let _ = app.request_images(vec![late.into()]);
+    assert!(
+        !app.images_requested.contains(late),
+        "Steam's games are off"
+    );
+
+    // Turned off while the library was read with them: the addresses read are not used.
+    let _ = app.update(Message::Steam(SteamMsg::Switch(true)));
+    let _ = app.update(Message::Steam(SteamMsg::Images(false)));
+    let mut library = steam_library();
+    library.games[1].cover = Some(
+        "https://shared.steamstatic.com/store_item_assets/steam/apps/620/library_600x900.jpg"
+            .into(),
+    );
+    library.games[1].background = Some(url.into());
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(library))));
+    assert!(
+        app.steam
+            .games
+            .iter()
+            .all(|g| g.cover.is_none() && g.background.is_none()),
+        "nothing named on Steam's servers while they are not to be asked"
+    );
+    assert!(!app.steam_images_allowed());
 }
 
 /// Steam's play time and last session show on a Steam game's page and sort the library with GOG's

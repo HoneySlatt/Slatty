@@ -37,6 +37,9 @@ pub struct SteamView {
     pub on: bool,
     /// Whether the images the client has not saved come from Steam's image servers.
     pub images: bool,
+    /// Whether they may be downloaded now (Steam's games and their images on), read by downloads
+    /// waiting their turn: turned off meanwhile, they give up.
+    pub images_allowed: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Whether Steam's Web API fills in what the client has not saved, whether its key is in the
     /// keyring (once asked), the key being typed, and the games it added.
     pub web: bool,
@@ -110,6 +113,7 @@ impl App {
         match msg {
             SteamMsg::Switch(on) => {
                 self.steam.on = on;
+                self.allow_steam_images();
                 self.login_open = false;
                 if let Some(core) = &self.core
                     && let Err(e) = slatty_core::settings::set_steam_games(&core.db, on)
@@ -124,14 +128,17 @@ impl App {
                 self.steam = crate::steam::SteamView {
                     found,
                     images: self.steam.images,
+                    images_allowed: self.steam.images_allowed.clone(),
                     web: self.steam.web,
                     web_key: self.steam.web_key,
                     ..Default::default()
                 };
+                self.allow_steam_images();
                 self.merge_steam();
             }
             SteamMsg::Images(on) => {
                 self.steam.images = on;
+                self.allow_steam_images();
                 if let Some(core) = &self.core
                     && let Err(e) = slatty_core::settings::set_steam_images(&core.db, on)
                 {
@@ -152,6 +159,17 @@ impl App {
                 self.steam.found = Some(library.user.name.clone());
                 self.steam.account = Some(library.user.id64);
                 self.steam.games = library.games;
+                // Read while images from Steam's servers were on, and turned off since.
+                if !self.steam.images {
+                    let local = |url: &mut Option<String>| {
+                        url.take_if(|u| slatty_core::steam::library::is_server_image(u));
+                    };
+                    for g in &mut self.steam.games {
+                        local(&mut g.cover);
+                        local(&mut g.background);
+                        local(&mut g.logo);
+                    }
+                }
                 self.steam.covers = library.covers;
                 self.steam.played = library.played;
                 self.steam.unreadable = library.unreadable;
@@ -449,6 +467,9 @@ impl App {
         let Some(core) = self.core.clone() else {
             return Task::none();
         };
+        if !self.steam_images_allowed() {
+            return Task::none();
+        }
         Task::batch(
             self.steam
                 .games
@@ -456,10 +477,13 @@ impl App {
                 .filter(|g| !self.steam.covers.contains_key(&g.id))
                 .filter_map(|g| Some((g.id.clone(), g.cover.clone()?)))
                 .map(|(id, url)| {
-                    let core = core.clone();
+                    let (core, allowed) = (core.clone(), self.steam.images_allowed.clone());
                     Task::perform(
                         async move {
                             let _permit = core.downloads.acquire().await.ok()?;
+                            if !allowed.load(std::sync::atomic::Ordering::Relaxed) {
+                                return None;
+                            }
                             slatty_core::steam::library::image(&core.http, &core.dirs, &url)
                                 .await
                                 .ok()
@@ -468,6 +492,22 @@ impl App {
                     )
                 }),
         )
+    }
+
+    /// Whether images may be downloaded from Steam's image servers now.
+    pub fn steam_images_allowed(&self) -> bool {
+        self.steam
+            .images_allowed
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Tells downloads, waiting their turn or yet to start, whether Steam's image servers may be
+    /// asked: Steam's games and their images on.
+    pub fn allow_steam_images(&self) {
+        self.steam.images_allowed.store(
+            self.steam.on && self.steam.images,
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
 
     /// The Steam app id of a game of the library, for a Steam game.
