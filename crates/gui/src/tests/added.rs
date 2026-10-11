@@ -232,6 +232,29 @@ fn a_game_is_added_from_the_library() {
     );
 }
 
+/// Isolation starts as for a game installed now, for a Windows program alone (unless turned off in
+/// Settings), and follows the program chosen until the switch is touched.
+#[test]
+fn a_linux_program_is_added_not_isolated_unless_asked() {
+    use crate::add::AddMsg;
+    let mut app = library_app();
+    let isolated = |app: &App| app.add_game.as_ref().unwrap().isolated;
+    let _ = app.update(Message::Add(AddMsg::Open));
+    let _ = app.update(Message::Add(AddMsg::PickedProgram(Some(
+        "/games/[FAKE]/run.sh".into(),
+    ))));
+    assert!(!isolated(&app));
+    let _ = app.update(Message::Add(AddMsg::PickedProgram(Some(
+        "/games/[FAKE]/Quest.exe".into(),
+    ))));
+    assert_eq!(isolated(&app), app.isolate_new_games);
+    let _ = app.update(Message::Add(AddMsg::Isolated(false)));
+    let _ = app.update(Message::Add(AddMsg::PickedProgram(Some(
+        "/games/[FAKE]/Other.exe".into(),
+    ))));
+    assert!(!isolated(&app), "the choice made stays");
+}
+
 /// The page of the game added goes back to the library where it was scrolled.
 #[test]
 fn the_game_added_goes_back_to_where_the_library_was() {

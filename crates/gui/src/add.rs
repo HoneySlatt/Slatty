@@ -20,6 +20,8 @@ pub struct AddDraft {
     pub folder: String,
     pub proton: Option<PathBuf>,
     pub isolated: bool,
+    /// Whether the user set `isolated`: until then it follows the program.
+    pub isolation_chosen: bool,
     pub busy: bool,
     /// Why the game was not added.
     pub error: Option<String>,
@@ -89,7 +91,6 @@ impl App {
             AddMsg::Open => {
                 self.add_game = Some(AddDraft {
                     proton: self.proton.clone(),
-                    isolated: self.isolate_new_games,
                     into: self.library_root.clone(),
                     ..Default::default()
                 });
@@ -304,7 +305,10 @@ impl App {
                     AddMsg::Folder(v) => d.folder = v,
                     AddMsg::PickedFolder(Some(path)) => d.folder = path.display().to_string(),
                     AddMsg::Proton(choice) => d.proton = Some(choice.0),
-                    AddMsg::Isolated(on) => d.isolated = on,
+                    AddMsg::Isolated(on) => {
+                        d.isolated = on;
+                        d.isolation_chosen = true;
+                    }
                     // Once it ran, the game is in the prefix made for it.
                     AddMsg::WithInstaller(on) if d.installed_by.is_none() => {
                         d.with_installer = on;
@@ -323,6 +327,11 @@ impl App {
                         d.installer = path.display().to_string();
                     }
                     _ => {}
+                }
+                // As for a game installed now, as the command line does: a Windows one runs
+                // isolated unless turned off in Settings, a Linux one does not.
+                if !d.isolation_chosen {
+                    d.isolated = self.isolate_new_games && d.windows();
                 }
             }
         }
