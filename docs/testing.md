@@ -21,6 +21,10 @@ The automated tests check SlattyLauncher's own logic, against simulated services
 - **Session supervisor:** detached processes, `setsid` double forks, stop requests. These spawn real
   processes.
 - **Interface:** rendered without a window with `iced_test`. Test data is marked `[FAKE]`.
+- **Steam:** the Steam client's files (text and binary KeyValues, `appinfo.vdf` 40 and 41, stats
+  files, manifests, `localconfig.vdf`) read from fake installations, damaged, cut or nested too deep
+  ones refused; running games found in a fake `/proc`; Steam's Web API against a local server;
+  nothing written into Steam's folders, and GOG never asked about a Steam game.
 
 Passing tests show the logic behaves as designed. They do not show that GOG accepts the requests;
 that is what the checks below are for.
@@ -161,3 +165,24 @@ Heroic or any other launcher using Comet first.
    session must report it without a second notification, and it must appear on the GOG profile.
 7. **Maintenance:** `slatty verify <id>`. Damage a file, then `slatty verify <id> --repair`. Finally
    `slatty uninstall <id>`: files added to the game folder must remain.
+
+## Checks against Steam
+
+These need the Steam client installed and signed in; SlattyLauncher only reads its files and hands
+it requests. Record each result in [compatibility.md](compatibility.md).
+
+1. **Status:** `slatty steam status` names the installation, the account, and how many of its games
+   there are and are installed.
+2. **Library:** turn on Settings → Steam → Steam games. The account's games show beside GOG's, with
+   the client's covers, play time and last played; a game owned on GOG too shows once, as GOG's,
+   once the GOG library was refreshed.
+3. **Play:** Play on a Steam game's page. Steam starts it; the page says Running within a few
+   seconds, and Play again once the game is closed, with its play time updated.
+4. **Install, verify, uninstall:** Install on a game not installed, then follow the download on its
+   page and in the Downloads tab under In Steam until the notification says it is done. Then
+   Verify files in Steam and Uninstall in Steam: the page shows Install again once the launcher's
+   window is in front.
+5. **Achievements:** a game played on this computer lists its achievements, unlocked ones with their
+   date, in its drawer and in the Achievements tab.
+6. **Steam Web API** (with your own key): a game the client has not described, and the achievements
+   of a game never played here, show once turned on, and go once turned off.
