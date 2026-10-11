@@ -347,12 +347,14 @@ fn safe_name(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', '\0'])
 }
 
-/// A text file of Steam's, if it is one.
+/// A text file of Steam's, if it is one. Steam can cut a name (a friend's, in `localconfig.vdf`)
+/// in the middle of a character: such bytes are read as a replacement character, not as a file
+/// that is no text.
 fn read(path: &Path) -> Option<Vdf> {
     let file = super::open(path).ok()?;
-    let mut text = String::new();
-    std::io::Read::read_to_string(&mut std::io::Read::take(file, MAX_TEXT_FILE), &mut text).ok()?;
-    vdf::parse(&text).ok()
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(&mut std::io::Read::take(file, MAX_TEXT_FILE), &mut bytes).ok()?;
+    vdf::parse(&String::from_utf8_lossy(&bytes)).ok()
 }
 
 #[cfg(test)]
@@ -672,5 +674,29 @@ pub(crate) mod tests {
             name: String::new(),
         };
         assert!(super::played(&fake.steam, &other).is_empty(), "no records");
+    }
+
+    /// Steam can cut a friend's name in the middle of a character: the rest of the file is still
+    /// read, play times and the account signed in with it.
+    #[test]
+    fn a_name_cut_in_the_middle_of_a_character_spoils_nothing_else() {
+        let fake = FakeSteam::new("cut-name");
+        let path = fake
+            .steam
+            .root
+            .join("userdata/39734274/config/localconfig.vdf");
+        let mut bytes =
+            br#""UserLocalConfigStore" { "friends" { "76561198000000003" { "name" "[FAKE] "#
+                .to_vec();
+        bytes.extend(b"\xE6\x97");
+        bytes.extend(
+            br#"" } } "Software" { "Valve" { "Steam" { "apps" { "440" { "LastPlayed" "1760000000" "Playtime" "754" } } } } } }"#,
+        );
+        std::fs::write(&path, bytes).unwrap();
+        let user = signed_in_user(&fake.steam).unwrap();
+        assert_eq!(
+            played(&fake.steam, &user).get(&440).map(|p| p.minutes),
+            Some(754)
+        );
     }
 }
