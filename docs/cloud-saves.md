@@ -63,8 +63,9 @@ Modification dates are never used to decide.
   cloud version is downloaded to `…/<location>/remote/` beside the local copies. Backups are never
   deleted by SlattyLauncher.
 - **Deletions need permission.** They are applied only with `--allow-deletions`, file by file.
-  One conflict is the exception: the cloud deleted a file you changed, and you keep the cloud's
-  side. That choice is the permission; your copy is backed up first.
+  Two conflicts are the exception: the cloud deleted a file you changed and you keep the cloud's
+  side, or you deleted a file the cloud changed and you keep your side. That choice is the
+  permission; the copy that goes is backed up first.
 - **A save is checked again just before it is replaced or deleted.** If the game, or anything
   else, changed or created it while the sync waited on the network, it is left alone and the sync
   reports it. Nothing is written or deleted through a symbolic link below the save folder. Each

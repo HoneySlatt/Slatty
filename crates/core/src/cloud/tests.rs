@@ -587,6 +587,36 @@ async fn concurrent_sync_of_the_same_game_is_refused() {
     ));
 }
 
+/// The mirror of keeping the cloud's side of a cloud deletion: keeping the local side of a local
+/// deletion is the permission to delete the cloud copy, which is kept first.
+#[tokio::test]
+async fn keeping_the_local_side_of_a_local_deletion_deletes_the_cloud_copy() {
+    let env = Env::new("keep-local-deletion");
+    env.write("a.sav", "base");
+    env.write("b.sav", "other");
+    env.sync(SyncOptions::default()).await;
+    std::fs::remove_file(env.root().join("a.sav")).unwrap();
+    env.put_remote("a.sav", "remote edit");
+    let r = env.sync(SyncOptions::default()).await;
+    assert_eq!(
+        r.conflicts,
+        vec![(
+            "a.sav".to_string(),
+            ConflictKind::LocalDeletedRemoteModified
+        )]
+    );
+    let r = env
+        .sync(SyncOptions {
+            prefer: Some(Prefer::Local),
+            ..Default::default()
+        })
+        .await;
+    assert_eq!(r.deleted_remote, vec!["a.sav"]);
+    assert!(env.remote("a.sav").is_none());
+    assert_eq!(env.backups(), vec!["saves/remote/a.sav=remote edit"]);
+    assert!(env.sync(SyncOptions::default()).await.is_clean());
+}
+
 /// Two accounts own the game and share its save folder. When the first signs back in, its history
 /// no longer describes the folder: the other account's save is not uploaded over its own.
 #[tokio::test]

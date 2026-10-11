@@ -68,7 +68,10 @@ pub(crate) struct RemoteRef {
 
 enum Deferred {
     Upload,
-    DeleteRemote,
+    /// `chosen` when it is the side of a conflict the user chose: the choice is the permission.
+    DeleteRemote {
+        chosen: bool,
+    },
 }
 
 struct Run<'a, T> {
@@ -204,7 +207,10 @@ impl<T: CloudTransport> Run<'_, T> {
         match action {
             Action::Keep => {}
             Action::Upload => self.deferred.push((key.into(), Deferred::Upload)),
-            Action::DeleteRemote => self.deferred.push((key.into(), Deferred::DeleteRemote)),
+            Action::DeleteRemote => {
+                let delete = Deferred::DeleteRemote { chosen: false };
+                self.deferred.push((key.into(), delete))
+            }
             Action::Download => self.download_replace(key).await?,
             Action::ForgetBase => delete_base(self.target, key)?,
             Action::DeleteLocal => {
@@ -258,7 +264,10 @@ impl<T: CloudTransport> Run<'_, T> {
                 if plan.remote_deletions_blocked() {
                     self.report.conflicts.push((self.display(key), kind));
                 } else {
-                    self.deferred.push((key.into(), Deferred::DeleteRemote));
+                    // Choosing the local side of this conflict is the permission; the cloud copy
+                    // is kept first.
+                    let delete = Deferred::DeleteRemote { chosen: true };
+                    self.deferred.push((key.into(), delete));
                 }
             }
             (Some(Prefer::Local), _) => self.deferred.push((key.into(), Deferred::Upload)),
@@ -375,7 +384,7 @@ impl<T: CloudTransport> Run<'_, T> {
                     .upload(&key)
                     .await
                     .map(|sha| uploaded.push((key.clone(), sha))),
-                Deferred::DeleteRemote => self.delete_remote(&key).await,
+                Deferred::DeleteRemote { chosen } => self.delete_remote(&key, chosen).await,
             };
             if let Err(e) = result {
                 self.report.errors.push((self.display(&key), e.to_string()));
@@ -436,8 +445,9 @@ impl<T: CloudTransport> Run<'_, T> {
         Ok(sha)
     }
 
-    async fn delete_remote(&mut self, key: &str) -> Result<()> {
-        if !self.opts.allow_deletions || self.report.plan.remote_deletions_blocked() {
+    async fn delete_remote(&mut self, key: &str, chosen: bool) -> Result<()> {
+        let allowed = self.opts.allow_deletions || chosen;
+        if !allowed || self.report.plan.remote_deletions_blocked() {
             self.report.pending_deletions.push(self.display(key));
             return Ok(());
         }
