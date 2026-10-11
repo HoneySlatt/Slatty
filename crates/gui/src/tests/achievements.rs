@@ -65,6 +65,29 @@ fn cancelling_drops_the_pending_change() {
     assert!(app.pending_change.is_none());
 }
 
+/// Achievements that could not be read (offline, a change that failed) say why in the drawer, with
+/// Retry, instead of loading forever.
+#[test]
+fn the_achievements_drawer_says_why_they_are_unavailable() {
+    let mut app = app_with_achievements();
+    app.achievements.insert(
+        "5".into(),
+        crate::Loadable::Failed("[FAKE] network unreachable".into()),
+    );
+    let mut ui = render(&app);
+    assert!(ui.find("Unavailable: [FAKE] network unreachable").is_ok());
+    assert_eq!(
+        texts(&mut ui).iter().filter(|t| *t == "Retry").count(),
+        2,
+        "the drawer's and the game page's"
+    );
+    ui.click("Retry").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::LoadAchievements(id) if id == "5"))
+    );
+}
+
 #[test]
 fn achievements_tab_lists_games_by_completion() {
     let mut app = library_app();

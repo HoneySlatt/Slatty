@@ -123,6 +123,14 @@ impl App {
                 .spacing(14)
                 .into()
             }
+            Some(Loadable::Failed(e)) => column![
+                note(format!("Unavailable: {e}")),
+                button(text("Retry").size(14))
+                    .on_press(Message::LoadAchievements(g.id.clone()))
+                    .style(theme::link),
+            ]
+            .spacing(8)
+            .into(),
             _ => note("Loading…"),
         };
         let subtitle = text(&g.title).size(18).color(tokens().accent);
