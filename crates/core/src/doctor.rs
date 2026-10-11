@@ -23,6 +23,38 @@ fn find_in(path: &std::ffi::OsStr, program: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
+/// Whether bubblewrap, which every isolated launch runs in, is there and can start a sandbox.
+fn bubblewrap(bwrap: Option<PathBuf>) -> Check {
+    let name = "bubblewrap";
+    let Some(bwrap) = bwrap else {
+        return Check {
+            name,
+            ok: false,
+            detail: "`bwrap` not found in PATH: isolated games cannot start".into(),
+        };
+    };
+    let started = std::process::Command::new(&bwrap)
+        .args(["--dev-bind", "/", "/", "true"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+    Check {
+        name,
+        ok: started,
+        detail: if started {
+            bwrap.display().to_string()
+        } else {
+            format!(
+                "{} cannot start a sandbox (user namespaces not allowed?): isolated games cannot \
+                 start",
+                bwrap.display()
+            )
+        },
+    }
+}
+
 pub fn comet_port_free() -> bool {
     TcpListener::bind(("127.0.0.1", crate::comet::PORT)).is_ok()
 }
@@ -88,6 +120,7 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
     };
     vec![
         tool("umu-launcher", "umu-run"),
+        bubblewrap(find_in_path("bwrap")),
         tool("comet", "comet"),
         service,
         keyring,
@@ -112,5 +145,14 @@ mod tests {
             );
         }
         assert!(find_in("/nonexistent:/bin".as_ref(), "sh").is_some_and(|p| p.is_absolute()));
+    }
+
+    /// `true` and `false` stand in for a bubblewrap that starts a sandbox and one that cannot (no
+    /// user namespaces allowed, as some systems keep them).
+    #[test]
+    fn bubblewrap_is_found_and_tried() {
+        assert!(!bubblewrap(None).ok);
+        assert!(bubblewrap(find_in_path("true")).ok);
+        assert!(!bubblewrap(find_in_path("false")).ok);
     }
 }

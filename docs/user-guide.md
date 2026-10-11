@@ -637,6 +637,7 @@ Comet's log may contain game client identifiers; review it before sharing.
 | A game does not start | `~/.local/state/slatty/logs/game-<id>.log`. `slatty launch-spec <id>` shows the exact command. |
 | The first launch fails while creating the prefix | `~/.local/state/slatty/logs/prefix-<id>.log` |
 | A game misbehaves since it runs isolated (missing files, settings not found) | `slatty isolation <id> --off`, and tell us which game. |
+| "bubblewrap (bwrap) is needed to run a game isolated", or an isolated game does not start | Install bubblewrap (Flatpak needs it too). `slatty doctor` says whether it can start a sandbox; where user namespaces are not allowed it cannot, and `slatty isolation <id> --off` runs the game without isolation. |
 | Achievements are not reported | `~/.local/state/slatty/logs/comet.log`. `slatty doctor` must find `GalaxyCommunication.exe`; the launch output says whether the Galaxy service was registered. |
 | A cloud conflict blocks the launch | `slatty cloud diff <id>`, then `slatty cloud sync <id> --prefer local` or `--prefer remote`. |
 | The session was interrupted (crash, power loss) | The next launch reports it. Check `slatty cloud status <id>` before playing. |
