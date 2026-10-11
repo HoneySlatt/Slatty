@@ -80,7 +80,7 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
         }
         (Platform::Windows, Runner::Umu { .. } | Runner::Wine { .. }) => {
             let (exe, args, cwd) = windows_task(install, choice)?;
-            windows_command(dirs, install, prepend(exe, args), cwd)
+            windows_spec(dirs, install, prepend(exe, args), cwd, true)
         }
         (platform, runner) => Err(Error::Unsupported(format!(
             "{platform:?} game with runner {runner:?}"
@@ -196,11 +196,24 @@ pub fn prefix_init_spec(dirs: &Dirs, install: &Install) -> Result<Option<LaunchS
     .map(Some)
 }
 
+/// A program other than the game run in its prefix (setup, redistributables, `reg`, `wineboot`).
 pub fn windows_command(
     dirs: &Dirs,
     install: &Install,
     args: Vec<String>,
     cwd: PathBuf,
+) -> Result<LaunchSpec> {
+    windows_spec(dirs, install, args, cwd, false)
+}
+
+/// Proton's fixes for the game apply to the game only: some add arguments to whatever runs with
+/// its id (DOOM's `+r_renderAPI 1`), which other programs refuse.
+fn windows_spec(
+    dirs: &Dirs,
+    install: &Install,
+    args: Vec<String>,
+    cwd: PathBuf,
+    game: bool,
 ) -> Result<LaunchSpec> {
     match &install.runner {
         Runner::Umu { proton, prefix } => {
@@ -224,11 +237,15 @@ pub fn windows_command(
             if install.isolated {
                 check_shared(install, &args, &cwd)?;
             }
+            let mut env = umu_env(dirs, install, proton, prefix)?;
+            if !game {
+                env.push(("PROTONFIXES_DISABLE".into(), "1".into()));
+            }
             Ok(LaunchSpec {
                 program: umu,
                 args,
                 cwd,
-                env: umu_env(dirs, install, proton, prefix)?,
+                env,
             })
         }
         Runner::Wine { .. } if install.isolated => Err(Error::Refused(format!(
@@ -742,6 +759,44 @@ mod tests {
         assert_eq!((program, args), (umu, arg));
         assert!(env.contains(&("UMU_NO_PROTON".into(), "1".into())));
         assert!(env.contains(&("RUNTIMEPATH".into(), "steamrt3".into())));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Proton's fixes for a game target the game: DOOM's adds `+r_renderAPI 1` to every program
+    /// run with its id, which made DirectX's setup and `reg add` refuse their command line.
+    #[test]
+    fn protons_fixes_apply_to_the_game_only() {
+        let dir = std::env::temp_dir().join(format!("slatty-fixes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("proton")).unwrap();
+        std::fs::write(dir.join("proton/proton"), b"").unwrap();
+        std::fs::write(
+            dir.join("goggame-1.info"),
+            r#"{"gameId":"1","name":"Game","playTasks":[
+              {"category":"game","isPrimary":true,"name":"Game","path":"game.exe","type":"FileTask"}]}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.join("game.exe"), b"").unwrap();
+        let install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: dir.clone(),
+            client_id: None,
+            runner: Runner::Umu {
+                proton: dir.join("proton"),
+                prefix: dir.join("prefix"),
+            },
+            umu_id: Some("umu-379720".into()),
+            isolated: false,
+        };
+        let dirs = Dirs::under(&dir.join("slatty"));
+        assert!(find_in_path("umu-run").is_some(), "run in `nix develop`");
+        let game = launch_spec(&dirs, &install, None).unwrap();
+        assert_eq!(value(&game.env, "PROTONFIXES_DISABLE"), None);
+        assert_eq!(value(&game.env, "GAMEID"), Some("umu-379720"));
+        let tool = windows_command(&dirs, &install, vec!["reg".into()], dir.clone()).unwrap();
+        assert_eq!(value(&tool.env, "PROTONFIXES_DISABLE"), Some("1"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 
