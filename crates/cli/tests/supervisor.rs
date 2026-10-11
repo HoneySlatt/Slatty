@@ -88,27 +88,31 @@ async fn missing_program_is_reported() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+/// Asked for at once, as the game starts, the stop is not lost: several times over, since a stop
+/// that comes just before the supervisor waits used to wait for the game to end by itself.
 #[tokio::test]
 async fn stop_request_terminates_the_game() {
     let dir = scratch("stop");
     let spec = sh("sleep 30 & wait", &dir);
-    let started = Instant::now();
-    let mut handle = SessionHandle::start(
-        Path::new(env!("CARGO_BIN_EXE_slatty")),
-        &spec,
-        &dir.join("game.log"),
-        None,
-    )
-    .await
-    .unwrap();
-    assert!(matches!(
-        handle.next_event().await.unwrap(),
-        Some(SupervisorEvent::Started { .. })
-    ));
-    handle.request_stop();
-    let outcome = handle.wait().await.unwrap();
-    assert!(outcome.clean);
-    assert!(started.elapsed() < Duration::from_secs(10));
+    for _ in 0..20 {
+        let started = Instant::now();
+        let mut handle = SessionHandle::start(
+            Path::new(env!("CARGO_BIN_EXE_slatty")),
+            &spec,
+            &dir.join("game.log"),
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            handle.next_event().await.unwrap(),
+            Some(SupervisorEvent::Started { .. })
+        ));
+        handle.request_stop();
+        let outcome = handle.wait().await.unwrap();
+        assert!(outcome.clean);
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
     std::fs::remove_dir_all(dir).unwrap();
 }
 

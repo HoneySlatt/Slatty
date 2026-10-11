@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::Utc;
 use nix::errno::Errno;
-use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal};
-use nix::sys::wait::{WaitStatus, waitpid};
+use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, SigmaskHow, Signal};
+use nix::sys::wait::{WaitPidFlag, WaitStatus, waitpid};
 use nix::unistd::Pid;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -50,6 +50,9 @@ static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 extern "C" fn on_stop(_: nix::libc::c_int) {
     STOP_REQUESTED.store(true, Ordering::SeqCst);
 }
+
+/// Only wakes the supervisor from `sigsuspend`; its loop reaps the children.
+extern "C" fn on_child(_: nix::libc::c_int) {}
 
 /// Runs in the supervisor process. The session ends only when no descendant is left,
 /// which covers launchers that exit early and Wine's detached processes.
@@ -107,6 +110,13 @@ pub fn supervise_main() -> i32 {
         // SAFETY: the handler only stores to an atomic.
         unsafe { signal::sigaction(sig, &action) }.expect("installing a signal handler");
     }
+    let woken = SigAction::new(
+        SigHandler::Handler(on_child),
+        SaFlags::SA_NOCLDSTOP,
+        SigSet::empty(),
+    );
+    // SAFETY: the handler does nothing.
+    unsafe { signal::sigaction(Signal::SIGCHLD, &woken) }.expect("installing a signal handler");
 
     let log = std::fs::OpenOptions::new()
         .create(true)
@@ -139,10 +149,34 @@ pub fn supervise_main() -> i32 {
         pid: main_pid.as_raw() as u32,
     });
 
+    // From here the signals are taken only inside `suspend`: a stop asked for between the look
+    // at the flag and the wait would otherwise wait for the next child to end.
+    let mut watched = SigSet::empty();
+    for sig in [Signal::SIGCHLD, Signal::SIGTERM, Signal::SIGINT] {
+        watched.add(sig);
+    }
+    let unblocked = watched
+        .thread_swap_mask(SigmaskHow::SIG_BLOCK)
+        .expect("blocking signals");
     let mut main_code = None;
     let mut stop_sent = 0;
     loop {
-        match waitpid(None, None) {
+        if STOP_REQUESTED.swap(false, Ordering::SeqCst) {
+            stop_sent += 1;
+            let sig = if stop_sent > 1 {
+                Signal::SIGKILL
+            } else {
+                Signal::SIGTERM
+            };
+            let _ = signal::killpg(main_pid, sig);
+            for pid in direct_children() {
+                let _ = signal::kill(pid, sig);
+            }
+        }
+        match waitpid(None, Some(WaitPidFlag::WNOHANG)) {
+            Ok(WaitStatus::StillAlive) => {
+                let _ = unblocked.suspend();
+            }
             Ok(WaitStatus::Exited(pid, code)) if pid == main_pid => {
                 main_code = Some(code);
                 emit(&SupervisorEvent::MainExited { code: Some(code) });
@@ -158,18 +192,6 @@ pub fn supervise_main() -> i32 {
                     message: format!("waitpid: {e}"),
                 });
                 return 1;
-            }
-        }
-        if STOP_REQUESTED.swap(false, Ordering::SeqCst) {
-            stop_sent += 1;
-            let sig = if stop_sent > 1 {
-                Signal::SIGKILL
-            } else {
-                Signal::SIGTERM
-            };
-            let _ = signal::killpg(main_pid, sig);
-            for pid in direct_children() {
-                let _ = signal::kill(pid, sig);
             }
         }
     }
