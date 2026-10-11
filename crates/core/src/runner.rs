@@ -767,21 +767,36 @@ pub async fn refresh_runtimes(db: &crate::db::Db, dirs: &Dirs) {
         let Some(Ok(tool)) = runtime_tool(dirs, name) else {
             continue;
         };
+        if crate::paths::ensure_dir(&dirs.data.join("umu-runtimes")).is_err() {
+            return;
+        }
         let output =
             |log: &std::fs::File| log.try_clone().map_or_else(|_| Stdio::null(), Into::into);
-        let _ = tokio::process::Command::new(&umu)
-            .arg("true")
-            .env("PROTONPATH", &tool)
-            .env("GAMEID", "umu-0")
-            // Else umu makes `~/Games/umu/umu-0` for a prefix.
-            .env("WINEPREFIX", dirs.data.join("umu-runtimes"))
-            .stdin(Stdio::null())
+        let _ = refresh_command(&umu, &tool, dirs)
             .stdout(output(&log))
             .stderr(output(&log))
             .status()
             .await;
     }
     let _ = crate::settings::set_umu_runtimes_checked_at(db, now);
+}
+
+/// What brings a runtime up to date: umu running `true` through `tool`, from a folder of its own.
+/// umu takes its first argument for a program in the working directory when one of that name is
+/// there: from a game's folder (the command line started there), a `true` the game wrote would
+/// run, not isolated.
+fn refresh_command(umu: &Path, tool: &Path, dirs: &Dirs) -> tokio::process::Command {
+    let own = dirs.data.join("umu-runtimes");
+    let mut command = tokio::process::Command::new(umu);
+    command
+        .arg("true")
+        .env("PROTONPATH", tool)
+        .env("GAMEID", "umu-0")
+        // Else umu makes `~/Games/umu/umu-0` for a prefix.
+        .env("WINEPREFIX", &own)
+        .current_dir(own)
+        .stdin(Stdio::null());
+    command
 }
 
 /// umu's runtimes (Steam Linux Runtime 2, 3, 4…), in umu's data folder.
@@ -840,6 +855,19 @@ fn path_list(paths: &[PathBuf]) -> Result<String> {
 mod tests {
     use super::*;
     use crate::install::Platform;
+
+    /// umu takes `true` for a program in its working directory when one of that name is there:
+    /// started from a game's folder, the refresh would run a `true` the game wrote there, not
+    /// isolated. It runs in a folder of SlattyLauncher's own.
+    #[test]
+    fn the_runtime_refresh_runs_in_a_folder_of_its_own() {
+        let dirs = Dirs::under(Path::new("/[FAKE]/slatty"));
+        let command = refresh_command(Path::new("/umu-run"), Path::new("/tool"), &dirs);
+        assert_eq!(
+            command.as_std().get_current_dir(),
+            Some(dirs.data.join("umu-runtimes").as_path())
+        );
+    }
 
     /// Proton compares what it wrote with Python's `str(os.path.getmtime(…))`; anything else and it
     /// would apply the fixups again inside the sandbox, where the build is read-only. These are

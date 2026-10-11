@@ -171,7 +171,9 @@ SlattyLauncher adds (`bwrap` must be installed):
   `WINEPREFIX` for a Linux game) are set by SlattyLauncher for every isolated launch;
 - a game cannot widen it between two sessions: a file in its folder named like the program umu is
   given (`sh`, `sc`, `Z:\…\game.exe`), or a link named as its working directory, would have umu
-  share the whole disk or the container where the link leads; the launch is refused instead;
+  share the whole disk or the container where the link leads; the launch is refused instead. The
+  daily runtime refresh and the sandbox check, which run outside the container, take nothing from
+  the folder the launcher was started in (a `true` a game wrote in its folder);
 - the D-Bus session and system buses stay out: through them a program could have other services
   act for it (systemd starting a command outside the container, or, where your system allows it,
   suspending the computer or mounting a drive). Wine loses only Bluetooth devices reached through

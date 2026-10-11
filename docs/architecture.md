@@ -299,7 +299,11 @@ cannot hard-link the runtime across the read-only mount (EXDEV) and copies it: r
 or XFS (an isolated launch took 2.3 s instead of 1.4 s), written in full on ext4 (about 750 MB).
 umu cannot update a runtime it sees read-only, so isolated launches set `UMU_RUNTIME_UPDATE=0`,
 and `runner::refresh_runtimes` runs umu once a day before one, outside bubblewrap, through the
-same runtime tool: umu's `UMU_NO_PROTON` would ask GitHub for umu's Proton releases first.
+same runtime tool: umu's `UMU_NO_PROTON` would ask GitHub for umu's Proton releases first. It
+gives umu `true` to run, from a folder of SlattyLauncher's own (`umu-runtimes`): umu takes its
+first argument for a program in the working directory when one of that name is there, and the
+command line may be started from a game's folder. The bubblewrap check below runs from `/`, with
+`true` by its absolute path, for the same reason.
 
 Before each isolated launch, `runner::sandbox` tries bubblewrap (`doctor::sandbox_problem`, about
 5 ms): a sandbox, then one inside it, as pressure-vessel's starts inside ours. On Ubuntu 23.10 and

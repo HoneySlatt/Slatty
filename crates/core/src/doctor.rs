@@ -56,19 +56,30 @@ pub fn sandbox_problem(bwrap: &Path) -> Option<String> {
     sandbox_problem_with(bwrap, restricted)
 }
 
+/// `bwrap` sharing the whole system, running `inner` then `true` inside: from `/`, and `true` by
+/// its absolute path, so that nothing is taken from the working directory (a game's folder, for
+/// the command line started there) through an empty or `.` entry of `PATH`.
+fn sandbox_command(bwrap: &Path, inner: &[&std::ffi::OsStr]) -> std::process::Command {
+    let mut command = std::process::Command::new(bwrap);
+    command
+        .args(["--dev-bind", "/", "/"])
+        .args(inner)
+        .arg(find_in_path("true").unwrap_or_else(|| "true".into()))
+        .current_dir("/")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    command
+}
+
 fn sandbox_problem_with(bwrap: &Path, apparmor_restricted: bool) -> Option<String> {
     let starts = |inner: &[&std::ffi::OsStr]| {
-        std::process::Command::new(bwrap)
-            .args(["--dev-bind", "/", "/"])
-            .args(inner)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
+        sandbox_command(bwrap, inner)
             .status()
             .is_ok_and(|s| s.success())
     };
     let see = "see \"Ubuntu and AppArmor\" in the user guide's Troubleshooting";
-    if !starts(&["true".as_ref()]) {
+    if !starts(&[]) {
         return Some(if apparmor_restricted {
             format!(
                 "bubblewrap cannot start a sandbox: this system (Ubuntu 23.10 and later) lets only \
@@ -79,7 +90,7 @@ fn sandbox_problem_with(bwrap: &Path, apparmor_restricted: bool) -> Option<Strin
             "bubblewrap cannot start a sandbox (are user namespaces turned off?)".into()
         });
     }
-    let inner = ["--dev-bind", "/", "/", "true"].map(std::ffi::OsStr::new);
+    let inner = ["--dev-bind", "/", "/"].map(std::ffi::OsStr::new);
     if !starts(&[&[bwrap.as_os_str()], &inner[..]].concat()) {
         return Some(format!(
             "bubblewrap cannot start a sandbox inside another, which an isolated game needs (umu's \
@@ -167,6 +178,21 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// bubblewrap looks `true` up in `PATH` from the working directory: with an empty or `.`
+    /// entry, started from a game's folder, it would run a `true` the game wrote there. The check
+    /// runs from `/`, with `true` named by its absolute path when there is one.
+    #[test]
+    fn the_sandbox_check_runs_nothing_from_the_working_directory() {
+        let command = sandbox_command(Path::new("/bwrap"), &[]);
+        assert_eq!(command.get_current_dir(), Some(Path::new("/")));
+        let args: Vec<_> = command.get_args().collect();
+        let last = Path::new(args.last().unwrap());
+        assert!(
+            last.is_absolute() || find_in_path("true").is_none(),
+            "{last:?}"
+        );
+    }
 
     /// Tests run from the crate's folder, which holds Cargo.toml: found through an empty or `.`
     /// entry, it would be found in a game's folder the same way.
