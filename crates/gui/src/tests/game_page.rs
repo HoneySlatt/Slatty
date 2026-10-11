@@ -140,12 +140,12 @@ fn play_time_comes_from_gog_even_for_games_played_elsewhere() {
     app.overview.insert(
         "5".into(),
         GameOverview {
-            playtime_minutes: Some(3175),
+            playtime_minutes: Some(3007),
             ..Default::default()
         },
     );
     let mut ui = render(&app);
-    assert!(ui.find("52 h 55 m").is_ok());
+    assert!(ui.find("50 h 7 m").is_ok());
     assert!(
         ui.find("Never").is_err(),
         "GOG does not tell when it was last played"
@@ -161,7 +161,7 @@ fn play_time_comes_from_gog_even_for_games_played_elsewhere() {
     );
     assert_eq!(
         app.played_seconds("5"),
-        3175 * 60,
+        3007 * 60,
         "only GOG's total counts"
     );
 }
