@@ -50,6 +50,59 @@ fn late_account_results_are_ignored_after_signing_back_in() {
     assert!(app.overview.contains_key("1"));
 }
 
+/// While GOG's library is read for the first time, the empty library says so; if that read fails,
+/// the notice claims no cached version, there being none.
+#[test]
+fn a_first_library_read_says_so_and_claims_no_cache_when_it_fails() {
+    let mut app = library_app();
+    app.library.clear();
+    app.fetched_at = None;
+    app.library_busy = true;
+    assert!(render(&app).find("Reading your library from GOG…").is_ok());
+    let _ = app.update(Message::LibrarySynced(Err("[FAKE] offline".into())));
+    assert_eq!(
+        app.notice.as_ref().map(|n| n.text.as_str()),
+        Some("Library not refreshed: [FAKE] offline.")
+    );
+    assert!(
+        render(&app)
+            .find("Your library is empty: refresh it in Settings.")
+            .is_ok()
+    );
+    app.fetched_at = Some(1_791_500_000);
+    let _ = app.update(Message::LibrarySynced(Err("[FAKE] offline".into())));
+    assert_eq!(
+        app.notice.as_ref().map(|n| n.text.as_str()),
+        Some("Library not refreshed: [FAKE] offline. Showing the cached version.")
+    );
+}
+
+/// Without a GOG account (Steam's games alone), nothing points to Refresh, which is off: there is
+/// no GOG library to read.
+#[test]
+fn without_a_gog_account_nothing_offers_a_refresh() {
+    let mut app = library_app();
+    app.logged_out();
+    app.steam.on = true;
+    assert!(
+        render(&app)
+            .find("Your library is empty: sign in to GOG in Settings.")
+            .is_ok()
+    );
+    app.page = Page::Achievements;
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("No game with achievements found.").is_ok());
+        ui.click("Refresh").unwrap();
+        assert!(ui.into_messages().next().is_none());
+    }
+    app.page = Page::Settings;
+    app.window = Size::new(1440.0, 2400.0);
+    let mut ui = render_window(&app);
+    ui.click("Refresh library").unwrap();
+    assert!(ui.into_messages().next().is_none());
+}
+
 #[test]
 fn login_screen_offers_browser_login_without_password_field() {
     let app = App {

@@ -95,7 +95,13 @@ impl App {
         let gallery: Element<'_, Message> = if games.is_empty() {
             container(
                 text(if self.library.is_empty() {
-                    "Your library is empty: refresh it in Settings."
+                    if self.library_busy {
+                        "Reading your library from GOG…"
+                    } else if self.account.is_none() {
+                        "Your library is empty: sign in to GOG in Settings."
+                    } else {
+                        "Your library is empty: refresh it in Settings."
+                    }
                 } else if !self.search.trim().is_empty() || self.filters.any() {
                     "No game matches."
                 } else {

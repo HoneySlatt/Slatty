@@ -54,13 +54,17 @@ impl App {
                 .align_y(Alignment::Center)
             )
             .padding([10, 16])
-            .on_press_maybe((!self.overview_busy).then_some(Message::ScanOverview))
+            .on_press_maybe(
+                (!self.overview_busy && self.account.is_some()).then_some(Message::ScanOverview),
+            )
             .style(theme::tonal),
         ]
         .align_y(Alignment::Center);
         if games.is_empty() {
             let why = if self.overview_busy {
                 "Reading achievements from GOG…"
+            } else if self.account.is_none() {
+                "No game with achievements found."
             } else {
                 "No game with achievements found. Refresh to ask GOG again."
             };

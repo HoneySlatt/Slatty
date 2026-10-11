@@ -130,9 +130,12 @@ impl App {
         match result {
             Ok(cache) => self.set_library(cache),
             Err(e) => {
-                self.notify_error(format!(
-                    "Library not refreshed: {e}. Showing the cached version."
-                ));
+                let cached = if self.fetched_at.is_some() {
+                    " Showing the cached version."
+                } else {
+                    ""
+                };
+                self.notify_error(format!("Library not refreshed: {e}.{cached}"));
                 Task::none()
             }
         }

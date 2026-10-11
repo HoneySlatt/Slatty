@@ -769,7 +769,9 @@ impl App {
             .size(14),
         )
         .padding([8, 16])
-        .on_press_maybe((!self.library_busy).then_some(Message::SyncLibrary))
+        .on_press_maybe(
+            (!self.library_busy && self.account.is_some()).then_some(Message::SyncLibrary),
+        )
         .style(theme::tonal);
         let mut rows = vec![
             setting(
