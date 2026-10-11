@@ -149,7 +149,8 @@ impl App {
         self.cloud.remove(&game);
         self.achievements.remove(&game);
         if let Some(core) = &self.core {
-            self.playtime = session::playtime(&core.db).unwrap_or_default();
+            let user = self.account.as_ref().map(|a| a.user_id.as_str());
+            self.playtime = session::playtime(&core.db, user).unwrap_or_default();
         }
         let playtime = self.refresh_playtime(vec![game.clone()]);
         if self.selected.as_deref() == Some(game.as_str()) {

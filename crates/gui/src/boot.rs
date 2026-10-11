@@ -191,7 +191,8 @@ async fn boot() -> Result<Boot, String> {
     let sort = slatty_core::settings::library_sort(&db)
         .map_err(err)?
         .and_then(|s| Sort::from_key(&s));
-    let playtime = session::playtime(&db).map_err(err)?;
+    let playtime =
+        session::playtime(&db, account.as_ref().map(|a| a.user_id.as_str())).map_err(err)?;
     InstallJob::forget_finished(&db).map_err(err)?;
     let (queued, jobs): (Vec<InstallJob>, Vec<InstallJob>) = InstallJob::list(&db)
         .map_err(err)?

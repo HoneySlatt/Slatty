@@ -352,14 +352,15 @@ pub struct Playtime {
     pub last_played: i64,
 }
 
-/// Play time per game, from the sessions SlattyLauncher supervised.
-pub fn playtime(db: &Db) -> Result<HashMap<String, Playtime>> {
+/// Play time per game, from the sessions SlattyLauncher supervised for the account `user_id` (or
+/// with none signed in): another account's play history is its own.
+pub fn playtime(db: &Db, user_id: Option<&str>) -> Result<HashMap<String, Playtime>> {
     let conn = db.conn();
     let mut stmt = conn.prepare(
         "SELECT game_id, SUM(COALESCE(ended_at - started_at, 0)), MAX(COALESCE(ended_at, started_at))
-         FROM sessions GROUP BY game_id",
+         FROM sessions WHERE user_id IS ?1 GROUP BY game_id",
     )?;
-    let rows = stmt.query_map([], |r| {
+    let rows = stmt.query_map([user_id], |r| {
         Ok((
             r.get::<_, String>(0)?,
             Playtime {
@@ -380,12 +381,12 @@ mod tests {
         let db = Db::in_memory().unwrap();
         db.conn()
             .execute_batch(
-                "INSERT INTO sessions (game_id, started_at, ended_at, state) VALUES
-                   ('1', 100, 160, 'ended'), ('1', 1000, 1300, 'ended'),
-                   ('1', 2000, NULL, 'interrupted'), ('2', 50, 80, 'lost');",
+                "INSERT INTO sessions (game_id, user_id, started_at, ended_at, state) VALUES
+                   ('1', 'a', 100, 160, 'ended'), ('1', 'a', 1000, 1300, 'ended'),
+                   ('1', 'a', 2000, NULL, 'interrupted'), ('2', 'a', 50, 80, 'lost');",
             )
             .unwrap();
-        let p = playtime(&db).unwrap();
+        let p = playtime(&db, Some("a")).unwrap();
         assert_eq!(
             p["1"],
             Playtime {
@@ -394,5 +395,26 @@ mod tests {
             }
         );
         assert_eq!(p["2"].seconds, 30);
+    }
+
+    /// The next account signed in on this computer sees nothing of what the previous one played.
+    #[test]
+    fn playtime_is_each_accounts_own() {
+        let db = Db::in_memory().unwrap();
+        db.conn()
+            .execute_batch(
+                "INSERT INTO sessions (game_id, user_id, started_at, ended_at, state) VALUES
+                   ('1', 'a', 100, 160, 'ended'), ('2', 'b', 1000, 1300, 'ended'),
+                   ('3', NULL, 10, 20, 'ended');",
+            )
+            .unwrap();
+        let games = |user| {
+            let mut ids: Vec<String> = playtime(&db, user).unwrap().into_keys().collect();
+            ids.sort();
+            ids
+        };
+        assert_eq!(games(Some("a")), ["1"]);
+        assert_eq!(games(Some("b")), ["2"]);
+        assert_eq!(games(None), ["3"]);
     }
 }

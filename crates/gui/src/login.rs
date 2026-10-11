@@ -60,6 +60,8 @@ impl App {
         };
         if let Some(core) = &self.core {
             self.overview = overview::load(&core.dirs, &info.user_id).unwrap_or_default();
+            self.playtime =
+                slatty_core::session::playtime(&core.db, Some(&info.user_id)).unwrap_or_default();
         }
         self.account_epoch += 1;
         self.account = Some(info);
@@ -109,6 +111,7 @@ impl App {
         self.images.clear();
         self.images_requested.clear();
         self.overview.clear();
+        self.playtime.clear();
         self.selected = None;
         self.panel = None;
         self.page = Page::Library;
