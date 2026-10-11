@@ -242,7 +242,7 @@ pub async fn cover(
     let Some(url) = &game.cover else {
         return Ok(None);
     };
-    crate::paths::check_game_id(&game.id)?;
+    crate::store::of(&game.id)?;
     let folder = dirs.account_cache(user_id).join("covers");
     cached(http, folder, game.id.clone(), url, "downloading a cover")
         .await
@@ -299,7 +299,7 @@ pub fn cached_covers(dirs: &Dirs, user_id: &str) -> HashMap<String, PathBuf> {
                 return None;
             }
             let id = path.file_stem()?.to_str()?.to_string();
-            crate::paths::check_game_id(&id).ok()?;
+            crate::store::of(&id).ok()?;
             Some((id, path))
         })
         .collect()
