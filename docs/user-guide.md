@@ -249,7 +249,10 @@ A launch goes through these steps:
    list runs without them. With **Settings → Privacy → Proton fixes online** turned on (off by
    default), a game the copy does not list is looked up in umu's public database at its first
    launch, and the answer kept: only the GOG product id is sent. If that database cannot be
-   reached, the game starts without fixes and the lookup is tried again next time.
+   reached, the game starts without fixes and the lookup is tried again next time. A fix is
+   community code run with the game: some download what they install (redistributables from
+   Microsoft and others) from other sites. umu itself asks Valve (`repo.steampowered.com`) at each
+   launch whether its Steam Linux Runtime is current, and downloads it on first use.
    On the first launch of a fresh install, the Wine prefix is created (`wineboot`), so that save
    folders exist.
    The post-install setup that GOG Galaxy performs runs once per installed build: GOG's script
@@ -299,6 +302,11 @@ slatty isolation <game-id> --off    # access to your files, from the next launch
 slatty isolation <game-id> --on
 ```
 
+- An isolated launch needs bubblewrap (`bwrap`), which keeps umu's runtime, the Proton build and
+  the other tools the game runs through read-only: a game cannot change what other games run.
+  The runtime is then copied at each launch rather than linked: about a second more on btrfs or
+  XFS, about 750 MB written on ext4.
+- An isolated game sees and signals only its own processes, not your other programs.
 - An isolated Linux game runs in umu's Steam Linux Runtime (`umu-run` is needed), on NixOS too,
   instead of `steam-run`. It does not find the saves it made in your home folder: it starts from
   its own. To carry on with a save, copy it to the same place under its home folder.
@@ -313,7 +321,7 @@ slatty isolation <game-id> --on
   turn isolation off for that game.
 - Proton's logs (`PROTON_LOG=1`) of an isolated game go to its own home folder.
 - Isolation keeps a game out of your files, not a hostile program out of your system: see
-  [SECURITY.md](../SECURITY.md#scope).
+  [SECURITY.md](../SECURITY.md#games-and-isolation).
 
 ## Cloud saves
 
@@ -571,18 +579,23 @@ next time. **Keep up to date**, off until turned on, updates the builds games fo
 `<project>-latest`; **Update now** does it at once. **Downloaded** lists the builds SlattyLauncher
 downloaded, with **Delete**.
 
-**Privacy** has four switches, all on until turned off:
+**Privacy** has four switches:
 
-- **Proton fixes**: a game's GOG id goes to umu's public database at its first launch, to pick its
-  community fixes; off, the game runs without them.
-- **Achievements in game**: Comet runs while a game that uses GOG's Galaxy runs; off, unlocks made
-  in games are not reported; unlocking by hand does not need it.
-- **Isolate new Windows games**: Windows games installed from then on run
+- **Proton fixes online**, off until turned on: a game that the copy of umu's database in its
+  Proton build does not list is looked up in umu's public database at its first launch, sending
+  its GOG id; off, such a game runs without fixes.
+- **Achievements in game**, on until turned off: Comet runs while a game that uses GOG's Galaxy
+  runs. While it runs, it keeps a connection to GOG open for your account, and any program on
+  this computer can get your GOG access token from it (see
+  [SECURITY.md](../SECURITY.md#comet)). Off, unlocks made in games are not reported; unlocking by
+  hand does not need it.
+- **Isolate new Windows games**, on until turned off: Windows games installed from then on run
   [isolated from your files](#isolation-from-your-files); each game's Game settings changes it.
-- **Play time on GOG**: each session goes to GOG so it counts on your profile, as Galaxy does;
-  sessions played while it is off are never sent.
+- **Play time on GOG**, on until turned off: each session goes to GOG so it counts on your
+  profile, as Galaxy does; sessions played while it is off are never sent.
 
-SlattyLauncher has no telemetry.
+SlattyLauncher has no telemetry. [SECURITY.md](../SECURITY.md#what-leaves-your-computer) lists
+everything that leaves your computer, and when.
 
 **Advanced** holds **Manual achievements**, off until turned on: it adds Unlock, Clear and Unlock
 all beside a game's achievements (see [Achievements](#achievements)). **SteamGridDB**, off until turned
