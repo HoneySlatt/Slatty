@@ -9,10 +9,18 @@ use crate::{Ctx, shown};
 #[derive(Args)]
 pub struct AddArgs {
     /// The program that starts the game: a Windows .exe, or a Linux program, script or AppImage
-    program: PathBuf,
+    #[arg(required_unless_present = "installer")]
+    program: Option<PathBuf>,
     /// The title shown in the library
+    #[arg(long, required_unless_present = "installer")]
+    title: Option<String>,
+    /// Run this Windows installer first, in a Wine prefix made for the game; its program, once
+    /// installed there, is added with `--installed-by`
+    #[arg(long, conflicts_with_all = ["program", "installed_by"])]
+    installer: Option<PathBuf>,
+    /// The game an installer was run for (`local-<number>`), whose prefix holds the program
     #[arg(long)]
-    title: String,
+    installed_by: Option<String>,
     /// The game's folder, which holds the program; an isolated game can write in it [default: the
     /// program's folder]
     #[arg(long)]
@@ -35,11 +43,37 @@ pub struct AddArgs {
     args: Vec<String>,
 }
 
-pub fn add(ctx: &Ctx, args: AddArgs) -> Result<()> {
+pub async fn add(ctx: &Ctx, args: AddArgs) -> Result<()> {
+    let isolated = (args.isolated || args.not_isolated).then_some(args.isolated);
+    if let Some(installer) = args.installer {
+        let isolated = match isolated {
+            Some(isolated) => isolated,
+            None => slatty_core::settings::isolate_new_games(&ctx.db)?,
+        };
+        println!("Running the installer; finish it in its own window.");
+        let id = added::run_installer(
+            &ctx.db,
+            &ctx.dirs,
+            &slatty_core::session::supervisor_exe(),
+            &installer,
+            args.proton,
+            isolated,
+        )
+        .await?;
+        let drive = ctx.dirs.data.join("prefixes").join(&id).join("drive_c");
+        println!(
+            "The installer ended. Add the game it installed with:\n  slatty add '{}/<folder>/<game>.exe' --title <title> --installed-by {id}\nor throw it away with `slatty remove {id}`.",
+            shown(drive.display())
+        );
+        return Ok(());
+    }
+    let (Some(program), Some(title)) = (args.program, args.title) else {
+        anyhow::bail!("give the game's program and --title");
+    };
     let folder = args
         .folder
         .clone()
-        .or_else(|| args.program.parent().map(Into::into));
+        .or_else(|| program.parent().map(Into::into));
     if let Some(id) = folder.as_deref().and_then(added::gog_game_in) {
         eprintln!(
             "This folder holds a GOG game ({id}). Installed from GOG (`slatty install {id}`), it \
@@ -50,13 +84,14 @@ pub fn add(ctx: &Ctx, args: AddArgs) -> Result<()> {
         &ctx.db,
         &ctx.dirs,
         NewGame {
-            title: args.title,
-            program: args.program,
+            title,
+            program,
             args: args.args,
             folder: args.folder,
             working_dir: args.working_dir,
             proton: args.proton,
-            isolated: (args.isolated || args.not_isolated).then_some(args.isolated),
+            isolated,
+            installed_by: args.installed_by,
         },
     )?;
     println!(
@@ -79,9 +114,16 @@ pub struct RemoveArgs {
 }
 
 pub fn remove(ctx: &Ctx, args: RemoveArgs) -> Result<()> {
-    let title = slatty_core::install::Install::get(&ctx.db, &args.game_id)?
-        .map(|i| i.title)
-        .unwrap_or_default();
+    let Some(title) = slatty_core::install::Install::get(&ctx.db, &args.game_id)?.map(|i| i.title)
+    else {
+        // An installer was run for it, and the game never added.
+        added::discard_installer(&ctx.db, &ctx.dirs, &args.game_id)?;
+        println!(
+            "What the installer put in {}'s prefix was thrown away; its saves were copied to the backups.",
+            args.game_id
+        );
+        return Ok(());
+    };
     let report = added::remove(&ctx.db, &ctx.dirs, &args.game_id, args.delete_prefix)?;
     println!(
         "{} is no longer in the library; its files are untouched.",

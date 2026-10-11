@@ -121,7 +121,7 @@ async fn run() -> Result<()> {
         Command::Auth(cmd) => auth::run(&ctx, cmd).await,
         Command::Library(cmd) => library::run(&ctx, cmd).await,
         Command::Import(args) => games::import(&ctx, args),
-        Command::Add(args) => added::add(&ctx, args),
+        Command::Add(args) => added::add(&ctx, args).await,
         Command::Remove(args) => added::remove(&ctx, args),
         Command::Install(args) => install::run(&ctx, args).await,
         Command::Installs => games::list(&ctx).and_then(|()| install::list_jobs(&ctx)),

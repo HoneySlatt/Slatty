@@ -502,8 +502,17 @@ other; Manage → **Remove from library** takes it out, asking first. On the com
 
 ```sh
 slatty add <program> --title <title> [--folder <folder>] [--working-dir <folder>] [--proton <Proton dir>] [--isolated | --not-isolated] [-- <arguments>]
+slatty add --installer <setup.exe> [--proton <Proton dir>] [--isolated | --not-isolated]
+slatty add <program in its prefix> --title <title> --installed-by <game-id>
 slatty remove <game-id> [--delete-prefix]
 ```
+
+- A Windows game that comes as an installer is installed first: **Run a Windows installer
+  first** in Add a game, or `slatty add --installer`, makes a Wine prefix for the game and runs the
+  installer in it (finish it in its own window). Once it ends, the program is picked where it
+  installed the game, in the prefix's `drive_c` (`--installed-by` names the game it ran for).
+  Closing the dialog then, or `slatty remove` on that id, throws the prefix away, its `users`
+  folder copied to the backups first. Isolated, the installer can write in its own folder only.
 
 - A Windows program (`.exe`) runs through umu and Proton, in a Wine prefix of its own made at its
   first launch; a Linux program, script or AppImage runs as GOG's Linux builds do (see

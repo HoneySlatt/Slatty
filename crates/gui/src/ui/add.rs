@@ -57,31 +57,73 @@ impl App {
             .width(Length::Fill),
             close,
         ];
+        // A Windows installer runs first, in the prefix made for the game; its program is then
+        // picked where it installed it.
         let mut fields = column![
-            label("Program"),
-            row![
-                field("/games/Game/game.exe", &d.program, AddMsg::Program).width(Length::Fill),
-                browse(AddMsg::PickProgram),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-            label("Title"),
-            field("Game", &d.title, AddMsg::Title),
-            label("Arguments"),
-            field("-windowed", &d.args, AddMsg::Args),
-            label("Game folder"),
-            row![
-                field("The program's folder", &d.folder, AddMsg::Folder).width(Length::Fill),
-                browse(AddMsg::PickFolder),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-            note(
-                "The folder the game is in, when the program sits deeper in it. An isolated game \
-                 can write in it and nowhere else of yours."
-            ),
+            toggler(d.with_installer)
+                .label("Run a Windows installer first")
+                .on_toggle_maybe(
+                    (d.installed_by.is_none() && !d.busy)
+                        .then_some(|v| Message::Add(AddMsg::WithInstaller(v)))
+                )
+                .size(22)
+                .text_size(14)
+                .font(theme::font()),
         ]
         .spacing(8);
+        if d.installer_first() {
+            fields = fields
+                .push(label("Installer"))
+                .push(
+                    row![
+                        field("/downloads/setup.exe", &d.installer, AddMsg::Installer)
+                            .width(Length::Fill),
+                        browse(AddMsg::PickInstaller),
+                    ]
+                    .spacing(10)
+                    .align_y(Alignment::Center),
+                )
+                .push(note(if d.busy {
+                    "Installing: finish the installer in its own window."
+                } else {
+                    "It installs the game into a Wine prefix made for it; its program is chosen \
+                     there once it ends. Its folder is the one it can write in when isolated."
+                }))
+                .push(label("Title"))
+                .push(field("Game", &d.title, AddMsg::Title));
+        } else {
+            if d.installed_by.is_some() {
+                fields = fields.push(note(
+                    "The installer ended: choose the game's program where it installed it.",
+                ));
+            }
+            fields = fields.extend([
+                label("Program").into(),
+                row![
+                    field("/games/Game/game.exe", &d.program, AddMsg::Program).width(Length::Fill),
+                    browse(AddMsg::PickProgram),
+                ]
+                .spacing(10)
+                .align_y(Alignment::Center)
+                .into(),
+                label("Title").into(),
+                field("Game", &d.title, AddMsg::Title).into(),
+                label("Arguments").into(),
+                field("-windowed", &d.args, AddMsg::Args).into(),
+                label("Game folder").into(),
+                row![
+                    field("The program's folder", &d.folder, AddMsg::Folder).width(Length::Fill),
+                    browse(AddMsg::PickFolder),
+                ]
+                .spacing(10)
+                .align_y(Alignment::Center)
+                .into(),
+                note(
+                    "The folder the game is in, when the program sits deeper in it. An isolated \
+                     game can write in it and nowhere else of yours.",
+                ),
+            ]);
+        }
         if d.windows() {
             fields = fields.push(label("Proton")).push(
                 pick_list(
@@ -111,16 +153,32 @@ impl App {
         if let Some(e) = &d.error {
             fields = fields.push(text(e.as_str()).size(14).color(tokens().danger));
         }
-        let ready = !d.busy && !d.program.trim().is_empty() && !d.title.trim().is_empty();
+        let (label_of, ready, next) = if d.installer_first() {
+            (
+                if d.busy {
+                    "Installing…"
+                } else {
+                    "Run installer"
+                },
+                !d.busy && !d.installer.trim().is_empty(),
+                AddMsg::RunInstaller,
+            )
+        } else {
+            (
+                if d.busy { "Adding…" } else { "Add" },
+                !d.busy && !d.program.trim().is_empty() && !d.title.trim().is_empty(),
+                AddMsg::Save,
+            )
+        };
         let actions = row![
             space().width(Length::Fill),
             button(text("Cancel").size(14))
                 .padding([10, 18])
-                .on_press(msg(AddMsg::Cancel))
+                .on_press_maybe((!d.busy).then(|| msg(AddMsg::Cancel)))
                 .style(theme::tonal),
-            button(text(if d.busy { "Adding…" } else { "Add" }).size(14))
+            button(text(label_of).size(14))
                 .padding([10, 22])
-                .on_press_maybe(ready.then(|| msg(AddMsg::Save)))
+                .on_press_maybe(ready.then(|| msg(next)))
                 .style(theme::primary),
         ]
         .spacing(10)

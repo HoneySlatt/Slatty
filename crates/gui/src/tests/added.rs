@@ -179,3 +179,43 @@ fn a_game_is_added_from_the_library() {
             .is_some_and(|n| n.text.contains("GOG game (1207658924)"))
     );
 }
+
+/// With an installer, it runs first; the dialog stays open while it does, then asks for the
+/// program it installed; closing it then throws that away.
+#[test]
+fn a_windows_installer_runs_before_the_program_is_picked() {
+    use crate::add::AddMsg;
+    let mut app = library_app();
+    let _ = app.update(Message::Add(AddMsg::Open));
+    let _ = app.update(Message::Add(AddMsg::WithInstaller(true)));
+    let _ = app.update(Message::Add(AddMsg::PickedInstaller(Some(
+        "/downloads/[FAKE] setup_quest.exe".into(),
+    ))));
+    assert_eq!(app.add_game.as_ref().unwrap().title, "[FAKE] setup_quest");
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Run installer").is_ok());
+        assert!(ui.find("Program").is_err(), "picked once installed");
+        snapshot(&mut ui, "add-game-installer");
+    }
+    app.add_game.as_mut().unwrap().busy = true;
+    let _ = app.update(Message::Add(AddMsg::Cancel));
+    assert!(app.add_game.is_some(), "not while the installer runs");
+
+    let _ = app.update(Message::Add(AddMsg::InstallerEnded(Ok("local-3".into()))));
+    let d = app.add_game.as_ref().unwrap();
+    assert_eq!(d.installed_by.as_deref(), Some("local-3"));
+    assert!(!d.busy);
+    assert!(
+        render(&app)
+            .find("The installer ended: choose the game's program where it installed it.")
+            .is_ok()
+    );
+    let _ = app.update(Message::Add(AddMsg::WithInstaller(false)));
+    assert!(
+        app.add_game.as_ref().unwrap().with_installer,
+        "it ran already"
+    );
+    let _ = app.update(Message::Add(AddMsg::Cancel));
+    assert!(app.add_game.is_none());
+}

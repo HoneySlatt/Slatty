@@ -45,6 +45,130 @@ pub struct NewGame {
     pub proton: Option<PathBuf>,
     /// Whether it runs isolated: as a game installed now would, when not given.
     pub isolated: Option<bool>,
+    /// The game an installer was run for (`run_installer`): it takes that id, and the prefix the
+    /// installer put it in.
+    pub installed_by: Option<String>,
+}
+
+/// How a game added as `game_id` runs: natively, or through Proton (the default one when not
+/// given) in a prefix of its own.
+fn runner_for(
+    db: &Db,
+    dirs: &Dirs,
+    game_id: &str,
+    platform: Platform,
+    proton: Option<PathBuf>,
+) -> Result<Runner> {
+    if platform == Platform::Linux {
+        return Ok(Runner::Native);
+    }
+    let proton = match proton {
+        Some(proton) => proton,
+        None => crate::settings::default_proton(db)?.ok_or_else(|| {
+            Error::Refused(
+                "a Windows game needs a Proton build: choose one in Settings → Runners".into(),
+            )
+        })?,
+    };
+    if !proton.join("proton").is_file() {
+        return Err(Error::Refused(format!(
+            "{} is not a Proton build",
+            proton.display()
+        )));
+    }
+    Ok(Runner::Umu {
+        proton,
+        prefix: prefix_of(dirs, game_id),
+    })
+}
+
+fn prefix_of(dirs: &Dirs, game_id: &str) -> PathBuf {
+    dirs.data.join("prefixes").join(game_id)
+}
+
+/// Runs a Windows installer for a game to add, in a prefix made for it, and waits for it to end:
+/// the game's id, whose prefix now holds what it installed (its `drive_c`). The game is added
+/// once its program is picked there (`NewGame::installed_by`), or the prefix thrown away
+/// (`discard_installer`). The installer's folder is the one it can write in when isolated.
+pub async fn run_installer(
+    db: &Db,
+    dirs: &Dirs,
+    supervisor: &Path,
+    installer: &Path,
+    proton: Option<PathBuf>,
+    isolated: bool,
+) -> Result<String> {
+    use crate::session::SessionHandle;
+    let installer = real(installer)?;
+    if platform_of(&installer)? != Platform::Windows {
+        return Err(Error::Refused(format!(
+            "{} is not a Windows installer",
+            installer.display()
+        )));
+    }
+    let folder = installer
+        .parent()
+        .ok_or_else(|| Error::Refused(format!("{} has no folder", installer.display())))?
+        .to_path_buf();
+    check_folder(&folder)?;
+    let game_id = crate::store::local_id(next_number(db)?);
+    let install = Install {
+        runner: runner_for(db, dirs, &game_id, Platform::Windows, proton)?,
+        game_id,
+        title: String::new(),
+        platform: Platform::Windows,
+        path: folder.clone(),
+        client_id: None,
+        umu_id: None,
+        isolated,
+    };
+    let _busy = crate::lock::game(dirs, &install.game_id)?;
+    let busy = crate::lock::session(dirs, &install.game_id);
+    if let Some(init) = crate::runner::prefix_init_spec(dirs, &install)? {
+        let log = crate::logs::of_game(dirs, "prefix", &install.game_id);
+        crate::logs::start_run(&log);
+        let outcome = SessionHandle::start(supervisor, &init, &log, Some(&busy))
+            .await?
+            .wait()
+            .await?;
+        if !outcome.clean || !crate::runner::prefix_ready(&install) {
+            return Err(Error::Refused(format!(
+                "the Wine prefix could not be created; see {}",
+                log.display()
+            )));
+        }
+    }
+    let spec = crate::runner::windows_command(
+        dirs,
+        &install,
+        vec![installer.display().to_string()],
+        folder,
+    )?;
+    let log = crate::logs::of_game(dirs, "setup", &install.game_id);
+    crate::logs::start_run(&log);
+    SessionHandle::start(supervisor, &spec, &log, Some(&busy))
+        .await?
+        .wait()
+        .await?;
+    Ok(install.game_id)
+}
+
+/// Throws away what an installer was run for, when the game is not added after all: its prefix,
+/// the saves in it copied first, and its logs.
+pub fn discard_installer(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
+    if !crate::store::is_local(game_id) || Install::get(db, game_id)?.is_some() {
+        return Err(Error::Refused(format!(
+            "{game_id} is no game an installer was run for"
+        )));
+    }
+    let _busy = crate::lock::game(dirs, game_id)?;
+    let prefix = prefix_of(dirs, game_id);
+    if prefix.exists() {
+        crate::maintenance::back_up_prefix(dirs, game_id, &prefix)?;
+        std::fs::remove_dir_all(&prefix)
+            .map_err(|e| Error::io(format!("delete {}", prefix.display()), e))?;
+    }
+    crate::logs::remove_game(dirs, game_id)
 }
 
 /// Adds a game, which takes the next number never given; its Wine prefix is made at its first
@@ -93,31 +217,22 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
         )));
     }
 
-    let game_id = crate::store::local_id(next_number(db)?);
-    let runner = match platform {
-        Platform::Linux => Runner::Native,
-        Platform::Windows => {
-            let proton = match new.proton {
-                Some(proton) => proton,
-                None => crate::settings::default_proton(db)?.ok_or_else(|| {
-                    Error::Refused(
-                        "a Windows game needs a Proton build: choose one in Settings → Runners"
-                            .into(),
-                    )
-                })?,
-            };
-            if !proton.join("proton").is_file() {
+    let game_id = match new.installed_by {
+        Some(id) => {
+            // The prefix an installer was run in, which holds the game.
+            if !crate::store::is_local(&id)
+                || Install::get(db, &id)?.is_some()
+                || !prefix_of(dirs, &id).is_dir()
+            {
                 return Err(Error::Refused(format!(
-                    "{} is not a Proton build",
-                    proton.display()
+                    "{id} is no game an installer was run for"
                 )));
             }
-            Runner::Umu {
-                proton,
-                prefix: dirs.data.join("prefixes").join(&game_id),
-            }
+            id
         }
+        None => crate::store::local_id(next_number(db)?),
     };
+    let runner = runner_for(db, dirs, &game_id, platform, new.proton)?;
     let isolated = match new.isolated {
         Some(isolated) => isolated,
         None => crate::install::isolated_when_installed(db, platform, &runner)?,
@@ -600,5 +715,44 @@ mod tests {
         std::fs::remove_dir_all(f.game.join("bin")).unwrap();
         std::os::unix::fs::symlink(&elsewhere, f.game.join("bin")).unwrap();
         assert!(launch_task(&f.dirs, &install).is_err());
+    }
+
+    /// A game an installer put in its prefix is added under the id the installer ran for, with
+    /// that prefix; or thrown away with it, its saves copied first.
+    #[test]
+    fn a_game_installed_by_an_installer_keeps_its_prefix() {
+        let f = fake("installer");
+        let prefix = f.dirs.data.join("prefixes/local-1");
+        let game = prefix.join("drive_c/Games/[FAKE] Quest");
+        std::fs::create_dir_all(&game).unwrap();
+        std::fs::write(game.join("quest.exe"), b"MZ").unwrap();
+        next_number(&f.db).unwrap();
+        let new = |id: &str| NewGame {
+            title: "[FAKE] Quest".into(),
+            program: game.join("quest.exe"),
+            proton: Some(f.proton.clone()),
+            installed_by: Some(id.into()),
+            ..Default::default()
+        };
+        assert!(add(&f.db, &f.dirs, new("local-2")).is_err(), "no prefix");
+        assert!(add(&f.db, &f.dirs, new("1")).is_err(), "not added by hand");
+        let install = add(&f.db, &f.dirs, new("local-1")).unwrap();
+        assert_eq!(install.game_id, "local-1");
+        assert_eq!(install.runner.prefix(), Some(prefix.as_path()));
+        assert!(
+            add(&f.db, &f.dirs, new("local-1")).is_err(),
+            "added already"
+        );
+        assert!(
+            discard_installer(&f.db, &f.dirs, "local-1").is_err(),
+            "a game"
+        );
+
+        let other = f.dirs.data.join("prefixes/local-2");
+        std::fs::create_dir_all(other.join("drive_c/users/steamuser")).unwrap();
+        std::fs::write(other.join("drive_c/users/steamuser/save"), b"[FAKE]").unwrap();
+        discard_installer(&f.db, &f.dirs, "local-2").unwrap();
+        assert!(!other.exists());
+        assert!(f.dirs.data.join("backups/prefixes/local-2").is_dir());
     }
 }

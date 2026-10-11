@@ -23,13 +23,23 @@ pub struct AddDraft {
     pub busy: bool,
     /// Why the game was not added.
     pub error: Option<String>,
+    /// Whether a Windows installer is run first, and which.
+    pub with_installer: bool,
+    pub installer: String,
+    /// The game the installer ran for, once it ended: its prefix holds the program.
+    pub installed_by: Option<String>,
 }
 
 impl AddDraft {
     /// Whether the program looks like a Windows one, which runs through Proton. Only shows the
     /// Proton choice: what the program is comes from its first bytes once added.
     pub fn windows(&self) -> bool {
-        self.program.to_lowercase().ends_with(".exe")
+        self.with_installer || self.program.to_lowercase().ends_with(".exe")
+    }
+
+    /// Whether the installer is still to run before the program can be picked.
+    pub fn installer_first(&self) -> bool {
+        self.with_installer && self.installed_by.is_none()
     }
 }
 
@@ -46,6 +56,15 @@ pub enum AddMsg {
     PickedFolder(Option<PathBuf>),
     Proton(ProtonChoice),
     Isolated(bool),
+    WithInstaller(bool),
+    Installer(String),
+    PickInstaller,
+    PickedInstaller(Option<PathBuf>),
+    RunInstaller,
+    /// The installer ended: the game it ran for.
+    InstallerEnded(Result<String, String>),
+    /// What the installer put in a prefix, thrown away as the dialog closed.
+    Discarded(Result<(), String>),
     Save,
     /// The game added, and the GOG game its folder holds, if any.
     Saved(Result<(Install, Option<String>), String>),
@@ -62,18 +81,96 @@ impl App {
                     ..Default::default()
                 });
             }
-            AddMsg::Cancel => self.add_game = None,
+            // Not while the installer runs: what it installs would be left behind.
+            AddMsg::Cancel if self.add_game.as_ref().is_some_and(|d| d.busy) => {}
+            AddMsg::Cancel => {
+                // What an installer put in the game's prefix goes with it.
+                let installed = self.add_game.take().and_then(|d| d.installed_by);
+                if let (Some(core), Some(id)) = (self.core.clone(), installed) {
+                    return Task::perform(
+                        async move {
+                            tokio::task::spawn_blocking(move || {
+                                added::discard_installer(&core.db, &core.dirs, &id)
+                            })
+                            .await
+                            .map_err(err)?
+                            .map_err(err)
+                        },
+                        |r| Message::Add(AddMsg::Discarded(r)),
+                    );
+                }
+            }
+            AddMsg::Discarded(Ok(())) => {}
+            AddMsg::Discarded(Err(e)) => self.notify_error(e),
             AddMsg::PickProgram => {
+                // Where the installer put the game, once it ran.
+                let start = match (&self.core, self.add_game.as_ref()) {
+                    (
+                        Some(core),
+                        Some(AddDraft {
+                            installed_by: Some(id),
+                            ..
+                        }),
+                    ) => Some(core.dirs.data.join("prefixes").join(id).join("drive_c")),
+                    _ => None,
+                };
+                return Task::perform(
+                    async move {
+                        let mut dialog = rfd::AsyncFileDialog::new()
+                            .set_title("Choose the program that starts the game");
+                        if let Some(start) = start {
+                            dialog = dialog.set_directory(start);
+                        }
+                        dialog.pick_file().await.map(|f| f.path().to_path_buf())
+                    },
+                    |path| Message::Add(AddMsg::PickedProgram(path)),
+                );
+            }
+            AddMsg::PickInstaller => {
                 return Task::perform(
                     async {
                         rfd::AsyncFileDialog::new()
-                            .set_title("Choose the program that starts the game")
+                            .set_title("Choose the game's Windows installer")
+                            .add_filter("Windows programs", &["exe", "EXE"])
                             .pick_file()
                             .await
                             .map(|f| f.path().to_path_buf())
                     },
-                    |path| Message::Add(AddMsg::PickedProgram(path)),
+                    |path| Message::Add(AddMsg::PickedInstaller(path)),
                 );
+            }
+            AddMsg::RunInstaller => {
+                let (Some(core), Some(d)) = (self.core.clone(), self.add_game.as_mut()) else {
+                    return Task::none();
+                };
+                d.busy = true;
+                d.error = None;
+                let installer = PathBuf::from(d.installer.trim());
+                let (proton, isolated) = (d.proton.clone(), d.isolated);
+                return Task::perform(
+                    async move {
+                        added::run_installer(
+                            &core.db,
+                            &core.dirs,
+                            &slatty_core::session::supervisor_exe(),
+                            &installer,
+                            proton,
+                            isolated,
+                        )
+                        .await
+                        .map_err(err)
+                    },
+                    |r| Message::Add(AddMsg::InstallerEnded(r)),
+                );
+            }
+            AddMsg::InstallerEnded(r) => {
+                if let Some(d) = &mut self.add_game {
+                    d.busy = false;
+                    match r {
+                        Ok(id) => d.installed_by = Some(id),
+                        Err(e) => d.error = Some(e),
+                    }
+                }
             }
             AddMsg::PickFolder => {
                 return Task::perform(
@@ -103,6 +200,7 @@ impl App {
                     working_dir: None,
                     proton: d.proton.clone(),
                     isolated: Some(d.isolated),
+                    installed_by: d.installed_by.clone(),
                     program,
                 };
                 return Task::perform(
@@ -165,6 +263,19 @@ impl App {
                     AddMsg::PickedFolder(Some(path)) => d.folder = path.display().to_string(),
                     AddMsg::Proton(choice) => d.proton = Some(choice.0),
                     AddMsg::Isolated(on) => d.isolated = on,
+                    // Once it ran, the game is in the prefix made for it.
+                    AddMsg::WithInstaller(on) if d.installed_by.is_none() => {
+                        d.with_installer = on;
+                    }
+                    AddMsg::Installer(v) => d.installer = v,
+                    AddMsg::PickedInstaller(Some(path)) => {
+                        if d.title.trim().is_empty()
+                            && let Some(stem) = path.file_stem()
+                        {
+                            d.title = stem.to_string_lossy().into_owned();
+                        }
+                        d.installer = path.display().to_string();
+                    }
                     _ => {}
                 }
             }
