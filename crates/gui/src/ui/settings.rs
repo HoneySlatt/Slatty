@@ -219,7 +219,8 @@ impl App {
                     SettingsMsg::UmuLookup,
                     "A game's community fixes are found in the copy of umu's database that comes \
                      with its Proton build. When it is not listed there, this asks umu's public \
-                     database online at the game's first launch, sending its GOG id.",
+                     database online at the game's first launch, sending its GOG id. Some fixes \
+                     download what they install from other sites.",
                 ),
                 None,
             ),
@@ -230,8 +231,9 @@ impl App {
                     self.game_achievements,
                     SettingsMsg::GameAchievements,
                     "Starts Comet while a game that uses GOG's Galaxy runs, so what it unlocks \
-                     reaches GOG. Comet acts for your account and listens on this computer until \
-                     the game ends. Unlocking by hand (Advanced) does not need it.",
+                     reaches GOG. Until the game ends, Comet keeps a connection to GOG open for \
+                     your account, and any program on this computer can get your GOG access \
+                     token from it. Unlocking by hand (Advanced) does not need it.",
                 ),
                 None,
             ),
@@ -261,7 +263,9 @@ impl App {
             note(
                 "No telemetry: SlattyLauncher talks to GOG, to the download servers GOG names, \
                  to umu's database when allowed above, to GitHub once Proton downloads are \
-                 turned on in Runners, and to SteamGridDB once turned on in Advanced.",
+                 turned on in Runners, and to SteamGridDB once turned on in Advanced. umu, which \
+                 runs Windows games, asks Valve (repo.steampowered.com) whether its runtime is \
+                 current. SECURITY.md lists everything that leaves your computer.",
             ),
         ]
     }

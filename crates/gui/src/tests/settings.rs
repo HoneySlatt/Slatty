@@ -313,6 +313,28 @@ fn what_leaves_the_computer_can_be_turned_off() {
     snapshot(&mut ui, "settings-privacy");
 }
 
+/// Where the user decides, the switches say what they share, and the note names every host.
+#[test]
+fn the_privacy_page_says_what_comet_exposes_and_every_host_reached() {
+    let mut app = library_app();
+    app.page = Page::Settings;
+    app.window = Size::new(1440.0, 1900.0);
+    let texts = texts(&mut Simulator::with_size(
+        settings(),
+        app.window,
+        app.view(),
+    ))
+    .join(" ");
+    for said in [
+        "any program on this computer can get your GOG access token",
+        "download what they install",
+        "repo.steampowered.com",
+        "SECURITY.md",
+    ] {
+        assert!(texts.contains(said), "{said}");
+    }
+}
+
 #[test]
 fn new_windows_games_are_isolated_until_turned_off() {
     use crate::settings::SettingsMsg;
