@@ -452,6 +452,38 @@ async fn a_download_refuses_a_local_change_after_the_scan() {
     assert_eq!(env.sync(SyncOptions::default()).await.conflicts.len(), 1);
 }
 
+/// A game writes its save folder: a pipe left where a save goes would make reading it wait forever
+/// for a writer, holding the game's lock.
+#[test]
+fn a_pipe_in_place_of_a_save_is_never_waited_on() {
+    use std::os::unix::fs::OpenOptionsExt;
+    let (path_tx, path_rx) = std::sync::mpsc::channel();
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    // On a thread of its own: a sync stuck on the pipe would hold the test's runtime too.
+    std::thread::spawn(move || {
+        let env = Env::new("pipe-save");
+        env.write("b.sav", "keeps the folder in use");
+        env.put_remote("a.sav", "remote");
+        let pipe = env.root().join("a.sav");
+        nix::unistd::mkfifo(&pipe, nix::sys::stat::Mode::S_IRWXU).unwrap();
+        path_tx.send(pipe).unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let r = runtime.block_on(env.sync(SyncOptions::default()));
+        let _ = done_tx.send(!r.is_clean() && r.downloaded.is_empty());
+    });
+    let pipe = path_rx.recv().unwrap();
+    let refused = done_rx.recv_timeout(std::time::Duration::from_secs(5));
+    // Lets a reader stuck on the pipe go, so the test ends either way.
+    let _ = std::fs::OpenOptions::new()
+        .write(true)
+        .custom_flags(nix::fcntl::OFlag::O_NONBLOCK.bits())
+        .open(&pipe);
+    assert_eq!(refused, Ok(true), "the sync waited on the pipe, or used it");
+}
+
 #[tokio::test]
 async fn cloud_deletion_refuses_a_local_file_recreated_after_the_scan() {
     let env = Env::new("recreated-save");
