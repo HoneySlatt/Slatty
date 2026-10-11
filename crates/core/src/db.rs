@@ -97,9 +97,14 @@ pub struct Db {
 
 impl Db {
     pub fn open(path: &Path) -> Result<Self> {
-        use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        // Made private as it is made: the interface opens the database before anything else.
         if let Some(parent) = path.parent() {
-            crate::paths::ensure_dir(parent)?;
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(parent)
+                .map_err(|e| Error::io(format!("create {}", parent.display()), e))?;
         }
         let db = Self::init(Connection::open(path)?)?;
         // Readable by the user only, with the journal SQLite keeps beside it.
@@ -193,6 +198,23 @@ fn migrate(conn: &mut Connection) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The interface reads its settings before anything else, which made the data folder at the
+    /// first start, readable by others until the folders were made private: the database was
+    /// created in it before that.
+    #[test]
+    fn the_folder_of_a_new_database_is_the_users_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("slatty-db-folder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        Db::open(&root.join("data/state.db")).unwrap();
+        let mode = std::fs::metadata(root.join("data"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o700);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     /// The interface and the command line started at once on a database to create or bring up to
     /// date: each opens it, neither fails on the other's steps.
