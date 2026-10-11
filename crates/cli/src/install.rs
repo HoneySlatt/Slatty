@@ -12,7 +12,7 @@ use slatty_core::installer::{
 use slatty_core::settings;
 use tokio_util::sync::CancellationToken;
 
-use crate::Ctx;
+use crate::{Ctx, shown};
 
 #[derive(Args)]
 pub struct InstallArgs {
@@ -307,8 +307,8 @@ pub fn print_dlcs(dlcs: &[DlcChoice]) {
         };
         println!(
             "  {:>12}  {:<40} {:<10} {}",
-            d.id,
-            d.name,
+            shown(&d.id),
+            shown(&d.name),
             state,
             size(d.disk_size)
         );

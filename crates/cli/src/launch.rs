@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Args;
 use slatty_core::play::{self, CloudSummary, PlayEvent, PlayRequest};
 
-use crate::Ctx;
+use crate::{Ctx, shown};
 
 #[derive(Args)]
 pub struct LaunchArgs {
@@ -53,15 +53,17 @@ pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
 fn print_event(game_id: &str, event: PlayEvent) {
     match event {
         PlayEvent::PreparingPrefix => println!("First launch: creating the Wine prefix…"),
-        PlayEvent::SetupStep(step) => println!("Setup: {step}…"),
-        PlayEvent::SetupWarning(w) => println!("Setup warning: {w}"),
-        PlayEvent::SetupSkipped(why) => {
-            println!("Setup not run ({why}); it will be retried at the next launch.")
-        }
+        PlayEvent::SetupStep(step) => println!("Setup: {}…", shown(step)),
+        PlayEvent::SetupWarning(w) => println!("Setup warning: {}", shown(w)),
+        PlayEvent::SetupSkipped(why) => println!(
+            "Setup not run ({}); it will be retried at the next launch.",
+            shown(why)
+        ),
         PlayEvent::CloudChecked(s) => print_cloud("Cloud saves checked", &s),
-        PlayEvent::CloudSkipped(why) => {
-            println!("Cloud saves not checked ({why}); local saves are kept.")
-        }
+        PlayEvent::CloudSkipped(why) => println!(
+            "Cloud saves not checked ({}); local saves are kept.",
+            shown(why)
+        ),
         PlayEvent::Blocked(s) => {
             print_cloud("Cloud saves need attention", &s);
             println!(
@@ -72,7 +74,7 @@ fn print_event(game_id: &str, event: PlayEvent) {
             println!("Comet is running; achievements unlocked in game are sent to GOG.")
         }
         PlayEvent::CometUnavailable(why) => {
-            println!("Achievements unavailable for this session: {why}")
+            println!("Achievements unavailable for this session: {}", shown(why))
         }
         PlayEvent::Isolated => {
             println!("Isolated from your files: the game sees its own folder and its own home.")
@@ -94,21 +96,25 @@ fn print_event(game_id: &str, event: PlayEvent) {
         PlayEvent::CloudUploaded(s) => print_cloud("Cloud saves after playing", &s),
         PlayEvent::CloudUploadSkipped(why) => {
             println!(
-                "Cloud saves not uploaded ({why}); local saves are kept. Retry with `slatty cloud sync {game_id}`."
+                "Cloud saves not uploaded ({}); local saves are kept. Retry with `slatty cloud sync {game_id}`.",
+                shown(why)
             )
         }
         PlayEvent::PlaytimeReported(m) => println!("Play time sent to GOG: {m} min."),
         PlayEvent::PlaytimeNotReported(why) => {
-            println!("Play time not sent to GOG ({why}); it will be sent after the next session.")
+            println!(
+                "Play time not sent to GOG ({}); it will be sent after the next session.",
+                shown(why)
+            )
         }
         PlayEvent::Achieved(names) => {
             for n in names {
-                println!("Achievement unlocked: {n}");
+                println!("Achievement unlocked: {}", shown(n));
             }
         }
         PlayEvent::Unlocked(names) => {
             for n in names {
-                println!("Achievement unlocked on GOG: {n}");
+                println!("Achievement unlocked on GOG: {}", shown(n));
             }
         }
         PlayEvent::NoNewAchievement => {
@@ -124,15 +130,15 @@ fn print_cloud(title: &str, s: &CloudSummary) {
         s.uploaded, s.downloaded
     );
     for c in &s.conflicts {
-        println!("  conflict: {c}");
+        println!("  conflict: {}", shown(c));
     }
     for p in &s.problems {
-        println!("  problem: {p}");
+        println!("  problem: {}", shown(p));
     }
     for d in &s.pending_deletions {
-        println!("  deletion not applied: {d}");
+        println!("  deletion not applied: {}", shown(d));
     }
     if let Some(dir) = &s.backup_dir {
-        println!("  previous versions saved in {}", dir.display());
+        println!("  previous versions saved in {}", shown(dir.display()));
     }
 }

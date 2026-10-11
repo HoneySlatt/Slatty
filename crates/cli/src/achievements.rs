@@ -7,7 +7,7 @@ use slatty_core::achievements::{self, Achievement};
 use slatty_core::install::Install;
 use slatty_core::library;
 
-use crate::Ctx;
+use crate::{Ctx, shown};
 
 #[derive(Args)]
 pub struct AchievementsArgs {
@@ -79,11 +79,16 @@ pub async fn run(ctx: &Ctx, args: AchievementsArgs) -> Result<()> {
     }
 
     println!(
-        "{title}: {} change(s) on your GOG profile, made outside the game:",
+        "{}: {} change(s) on your GOG profile, made outside the game:",
+        shown(&title),
         changes.len()
     );
     for (a, unlock) in &changes {
-        println!("  {} {}", if *unlock { "unlock" } else { "clear " }, a.name);
+        println!(
+            "  {} {}",
+            if *unlock { "unlock" } else { "clear " },
+            shown(&a.name)
+        );
     }
     if !args.yes && !confirm()? {
         println!("Cancelled.");
@@ -101,10 +106,10 @@ pub async fn run(ctx: &Ctx, args: AchievementsArgs) -> Result<()> {
         )
         .await
         {
-            Ok(()) => println!("  done: {}", a.name),
+            Ok(()) => println!("  done: {}", shown(&a.name)),
             Err(e) => {
                 failed += 1;
-                println!("  FAILED {}: {e}", a.name);
+                println!("  FAILED {}: {e}", shown(&a.name));
             }
         }
     }
@@ -126,12 +131,14 @@ fn confirm() -> Result<bool> {
 
 fn print_list(title: &str, list: &[Achievement]) {
     let unlocked = list.iter().filter(|a| a.date_unlocked.is_some()).count();
-    println!("{title}: {unlocked}/{} unlocked", list.len());
+    println!("{}: {unlocked}/{} unlocked", shown(title), list.len());
     for a in list {
-        let mark = a.date_unlocked.as_deref().unwrap_or("locked");
+        let mark = shown(a.date_unlocked.as_deref().unwrap_or("locked"));
         println!(
             "  {mark:<26} {:>5.1}%  {:<40} {}",
-            a.rarity, a.name, a.achievement_key
+            a.rarity,
+            shown(&a.name),
+            shown(&a.achievement_key)
         );
     }
 }

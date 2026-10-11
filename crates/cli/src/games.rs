@@ -5,7 +5,7 @@ use clap::{Args, ValueEnum};
 use slatty_core::install::{self, Install};
 use slatty_core::runner::{self, Runner};
 
-use crate::Ctx;
+use crate::{Ctx, shown};
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum RunnerKind {
@@ -91,11 +91,12 @@ pub fn print_spec(ctx: &Ctx, game_id: &str) -> Result<()> {
     let install = get(ctx, game_id)?;
     let choice = slatty_core::settings::launch_choice(&ctx.db, game_id)?;
     let spec = runner::launch_spec(&ctx.dirs, &install, choice.as_deref())?;
-    println!("program: {}", spec.program.display());
+    // The program, its arguments and its folder come from the game's own goggame-*.info.
+    println!("program: {}", shown(spec.program.display()));
     println!("args:    {:?}", spec.args);
-    println!("cwd:     {}", spec.cwd.display());
+    println!("cwd:     {}", shown(spec.cwd.display()));
     for (k, v) in &spec.env {
-        println!("env:     {k}={v}");
+        println!("env:     {k}={}", shown(v));
     }
     Ok(())
 }
@@ -142,11 +143,11 @@ pub fn isolation(ctx: &Ctx, args: IsolationArgs) -> Result<()> {
         let home = runner::isolated_home(&ctx.dirs, &install.game_id)?;
         println!(
             "{} runs isolated: it sees its own folder, and {} as its home folder.",
-            install.title,
+            shown(&install.title),
             home.display()
         );
     } else {
-        println!("{} runs with access to your files.", install.title);
+        println!("{} runs with access to your files.", shown(&install.title));
     }
     Ok(())
 }
@@ -156,8 +157,8 @@ pub fn forget(ctx: &Ctx, game_id: &str) -> Result<()> {
     Install::remove(&ctx.db, game_id)?;
     println!(
         "{} is no longer managed by slatty. Nothing was deleted: {} is untouched.",
-        install.title,
-        install.path.display()
+        shown(&install.title),
+        shown(install.path.display())
     );
     Ok(())
 }

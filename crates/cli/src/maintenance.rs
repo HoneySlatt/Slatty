@@ -10,7 +10,7 @@ use slatty_core::maintenance::{self, Change};
 use slatty_core::settings;
 use tokio_util::sync::CancellationToken;
 
-use crate::Ctx;
+use crate::{Ctx, shown};
 
 #[derive(Args)]
 pub struct UninstallArgs {
@@ -35,8 +35,8 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
     let install = crate::games::get(ctx, &args.game_id)?;
     println!(
         "Uninstall {} from {}.",
-        install.title,
-        install.path.display()
+        shown(&install.title),
+        shown(install.path.display())
     );
     println!("Only files installed by slatty are deleted; anything else in that folder is kept.");
     match (args.delete_prefix, install.runner.prefix()) {
@@ -58,8 +58,9 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
             "Kept in {} (not installed by slatty):",
             install.path.display()
         );
+        // Named by the game, which writes its folder.
         for k in &r.kept {
-            println!("  {}", k.display());
+            println!("  {}", shown(k.display()));
         }
     }
     if let Some(b) = &r.prefix_backup {
@@ -113,7 +114,7 @@ pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
             }
         );
         for b in &bad {
-            println!("  {}", b.display());
+            println!("  {}", shown(b.display()));
         }
         if !args.repair {
             println!("Run with --repair to download them again.");
@@ -178,7 +179,7 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
                 Ok(Some(u)) => println!(
                     "{:>12}  {:<40} {} -> {}{}",
                     install.game_id,
-                    install.title,
+                    shown(&install.title),
                     u.installed_version,
                     u.available_version,
                     if settings::held_back(&ctx.db, &install.game_id)? {
@@ -187,14 +188,23 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
                         ""
                     }
                 ),
-                Ok(None) => println!("{:>12}  {:<40} up to date", install.game_id, install.title),
+                Ok(None) => println!(
+                    "{:>12}  {:<40} up to date",
+                    install.game_id,
+                    shown(&install.title)
+                ),
                 Err(slatty_core::Error::Refused(_)) => {
                     println!(
                         "{:>12}  {:<40} not installed by slatty",
-                        install.game_id, install.title
+                        install.game_id,
+                        shown(&install.title)
                     )
                 }
-                Err(e) => println!("{:>12}  {:<40} error: {e}", install.game_id, install.title),
+                Err(e) => println!(
+                    "{:>12}  {:<40} error: {e}",
+                    install.game_id,
+                    shown(&install.title)
+                ),
             }
         }
         return Ok(());
@@ -312,7 +322,11 @@ pub async fn content(ctx: &Ctx, args: ContentArgs) -> Result<()> {
     }
     let plan =
         maintenance::content_options(&ctx.db, &ctx.dirs, &ctx.http, &tokens, &args.game_id).await?;
-    println!("{} — version {}", plan.title, plan.build.version_name);
+    println!(
+        "{} — version {}",
+        shown(&plan.title),
+        shown(&plan.build.version_name)
+    );
     crate::install::print_language(&plan);
     crate::install::print_dlcs(&plan.dlcs);
     Ok(())

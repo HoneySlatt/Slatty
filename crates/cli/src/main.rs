@@ -129,6 +129,22 @@ async fn run() -> Result<()> {
     }
 }
 
+/// `s` with control and bidirectional-override characters escaped: a name from a game's files or
+/// from GOG then cannot drive the terminal (move the cursor, hide lines, set its title, write the
+/// clipboard).
+pub fn shown(s: impl std::fmt::Display) -> String {
+    s.to_string()
+        .chars()
+        .map(|c| {
+            if c.is_control() || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}') {
+                c.escape_unicode().to_string()
+            } else {
+                c.to_string()
+            }
+        })
+        .collect()
+}
+
 pub fn local_time(ts: i64) -> String {
     use chrono::TimeZone;
     chrono::Utc

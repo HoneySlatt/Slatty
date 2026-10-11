@@ -166,7 +166,7 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
                 println!("Up to date");
             }
             for release in &updated.installed {
-                println!("Updated to {}", release.name);
+                println!("Updated to {}", crate::shown(&release.name));
             }
             for (source, e) in &updated.failed {
                 eprintln!("{}: {e}", source.name());

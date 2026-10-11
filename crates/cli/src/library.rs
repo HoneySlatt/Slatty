@@ -3,7 +3,7 @@ use clap::Subcommand;
 use slatty_core::account::Account;
 use slatty_core::library::{self, MetadataSource};
 
-use crate::Ctx;
+use crate::{Ctx, shown};
 
 #[derive(Subcommand)]
 pub enum LibraryCommand {
@@ -44,7 +44,12 @@ pub async fn run(ctx: &Ctx, cmd: LibraryCommand) -> Result<()> {
                     .as_ref()
                     .is_none_or(|n| g.title.to_lowercase().contains(n))
             }) {
-                println!("{:>12}  {:<50} {}", g.id, g.title, g.os.join(","));
+                println!(
+                    "{:>12}  {:<50} {}",
+                    shown(&g.id),
+                    shown(&g.title),
+                    shown(g.os.join(","))
+                );
             }
             println!("(cache from {})", crate::local_time(cache.fetched_at));
         }

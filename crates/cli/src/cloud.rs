@@ -7,8 +7,9 @@ use slatty_core::cloud::{
     sync::{Prefer, SyncOptions, SyncReport},
 };
 use slatty_core::install::Install;
+use std::io::Write;
 
-use crate::Ctx;
+use crate::{Ctx, shown};
 
 #[derive(Subcommand)]
 pub enum CloudCommand {
@@ -78,16 +79,16 @@ pub async fn sync_game(ctx: &Ctx, install: &Install, opts: SyncOptions) -> Resul
     let Some(outcomes) =
         cloud::sync_game(&ctx.db, &ctx.dirs, &ctx.http, &tokens, install, opts).await?
     else {
-        println!("GOG has no cloud saves for {}.", install.title);
+        println!("GOG has no cloud saves for {}.", shown(&install.title));
         return Ok(true);
     };
     for o in &outcomes {
         match (&o.root, &o.result) {
             (Some(root), Ok(report)) => {
-                println!("[{}] {}", o.name, root.display());
+                println!("[{}] {}", shown(&o.name), shown(root.display()));
                 print_report(report, opts.dry_run);
             }
-            (_, Err(e)) => println!("[{}] {} — {e}", o.name, o.template),
+            (_, Err(e)) => println!("[{}] {} — {}", shown(&o.name), shown(&o.template), shown(e)),
             (None, Ok(_)) => unreachable!("a report needs a resolved root"),
         }
     }
@@ -95,12 +96,19 @@ pub async fn sync_game(ctx: &Ctx, install: &Install, opts: SyncOptions) -> Resul
 }
 
 fn print_report(r: &SyncReport, dry_run: bool) {
+    let _ = write_report(&mut std::io::stdout().lock(), r, dry_run);
+}
+
+/// The report of a sync. Save names come from the game's folder and the cloud: they are shown
+/// escaped.
+fn write_report(out: &mut impl Write, r: &SyncReport, dry_run: bool) -> std::io::Result<()> {
     for w in &r.plan.warnings {
-        println!("  warning: {w:?}");
+        writeln!(out, "  warning: {}", shown(format!("{w:?}")))?;
     }
     if dry_run {
         let p = &r.plan;
-        println!(
+        writeln!(
+            out,
             "  plan: {} unchanged, {} to upload, {} to download, {} to compare, {} remote / {} local deletions, {} conflicts",
             p.count(Action::Keep),
             p.count(Action::Upload),
@@ -109,42 +117,49 @@ fn print_report(r: &SyncReport, dry_run: bool) {
             p.count(Action::DeleteRemote),
             p.count(Action::DeleteLocal),
             p.conflicts().count()
-        );
+        )?;
         for (path, kind) in p.conflicts() {
-            println!("  conflict: {path} ({kind:?})");
+            writeln!(out, "  conflict: {} ({kind:?})", shown(path))?;
         }
-        return;
+        return Ok(());
     }
-    let list = |label: &str, items: &[String]| {
-        if !items.is_empty() {
-            println!("  {label}: {}", items.join(", "));
+    let mut list = |label: &str, items: &[String]| {
+        if items.is_empty() {
+            return Ok(());
         }
+        let items: Vec<String> = items.iter().map(shown).collect();
+        writeln!(out, "  {label}: {}", items.join(", "))
     };
-    list("uploaded", &r.uploaded);
-    list("downloaded", &r.downloaded);
-    list("already identical", &r.adopted);
-    list("deleted in cloud", &r.deleted_remote);
-    list("deleted locally", &r.deleted_local);
+    list("uploaded", &r.uploaded)?;
+    list("downloaded", &r.downloaded)?;
+    list("already identical", &r.adopted)?;
+    list("deleted in cloud", &r.deleted_remote)?;
+    list("deleted locally", &r.deleted_local)?;
     list(
         "deletions waiting for --allow-deletions",
         &r.pending_deletions,
-    );
-    list("skipped local entries", &r.skipped_local);
+    )?;
+    list("skipped local entries", &r.skipped_local)?;
     for (path, kind) in &r.conflicts {
-        println!("  CONFLICT {path} ({kind:?}): rerun with --prefer local or --prefer remote");
+        writeln!(
+            out,
+            "  CONFLICT {} ({kind:?}): rerun with --prefer local or --prefer remote",
+            shown(path)
+        )?;
     }
     for (path, why) in &r.refused {
-        println!("  refused {path}: {why}");
+        writeln!(out, "  refused {}: {}", shown(path), shown(why))?;
     }
     for (path, err) in &r.errors {
-        println!("  ERROR {path}: {err}");
+        writeln!(out, "  ERROR {}: {}", shown(path), shown(err))?;
     }
     if let Some(dir) = &r.backup_dir {
-        println!("  previous versions saved in {}", dir.display());
+        writeln!(out, "  previous versions saved in {}", shown(dir.display()))?;
     }
     if r.is_clean() && r.plan.is_noop() {
-        println!("  up to date");
+        writeln!(out, "  up to date")?;
     }
+    Ok(())
 }
 
 async fn diff(ctx: &Ctx, game_id: &str, filter: Option<&str>) -> Result<()> {
@@ -152,7 +167,7 @@ async fn diff(ctx: &Ctx, game_id: &str, filter: Option<&str>) -> Result<()> {
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
     let Some(game_cloud) = cloud::open(&ctx.http, &tokens, &install).await? else {
-        println!("GOG has no cloud saves for {}.", install.title);
+        println!("GOG has no cloud saves for {}.", shown(&install.title));
         return Ok(());
     };
     let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
@@ -165,14 +180,14 @@ async fn diff(ctx: &Ctx, game_id: &str, filter: Option<&str>) -> Result<()> {
             .join(game_id)
             .join(&stamp)
             .join(&location.name);
-        println!("[{}] {}", location.name, root.display());
+        println!("[{}] {}", shown(&location.name), shown(root.display()));
         let files =
             cloud::inspect::compare(&game_cloud.transport, &location.name, root, &copies, filter)
                 .await?;
         for f in &files {
             println!(
                 "  {}{}",
-                f.path,
+                shown(&f.path),
                 if f.identical() { "  (identical)" } else { "" }
             );
             match &f.local {
@@ -191,20 +206,45 @@ async fn diff(ctx: &Ctx, game_id: &str, filter: Option<&str>) -> Result<()> {
                     println!(
                         "    cloud : {} bytes, modified {}, sha256 {}, listed hash {}",
                         r.size,
-                        r.last_modified.as_deref().unwrap_or("?"),
+                        shown(r.last_modified.as_deref().unwrap_or("?")),
                         &r.sha256[..16],
-                        r.listed_hash
+                        shown(&r.listed_hash)
                     );
                     if r.gzip_magic {
                         println!(
                             "    WARNING: the cloud copy still looks gzip-compressed (transport decoding issue)"
                         );
                     }
-                    println!("    cloud copy saved to {}", r.copy.display());
+                    println!("    cloud copy saved to {}", shown(r.copy.display()));
                 }
                 None => println!("    cloud : absent"),
             }
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A game names the files of its save folder: escape sequences there, printed as they are,
+    /// would hide the conflicts below them, rewrite earlier lines, set the terminal's title or
+    /// write the clipboard.
+    #[test]
+    fn save_names_cannot_drive_the_terminal() {
+        let report = SyncReport {
+            uploaded: vec![
+                "[FAKE] a\u{1b}[8m.sav".into(),
+                "b\u{1b}]52;c;Zm9v\u{7}".into(),
+            ],
+            refused: vec![("c\u{202e}vas.exe".into(), "\u{1b}]0;title\u{7}".into())],
+            ..Default::default()
+        };
+        let mut out = Vec::new();
+        write_report(&mut out, &report, false).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(!text.contains(['\u{1b}', '\u{7}', '\u{202e}']), "{text:?}");
+        assert!(text.contains("[FAKE] a\\u{1b}[8m.sav"), "{text}");
+    }
 }
