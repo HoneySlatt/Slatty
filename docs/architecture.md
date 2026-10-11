@@ -55,7 +55,8 @@ The interface follows Iced's state, message, update and view split. `main.rs` ho
 application state, the `Message` enum and navigation; `update` only dispatches. `boot.rs` reads
 everything the first page needs, on a thread of its own begun as the program starts (`boot::start`),
 while the window and the graphics driver are set up (about 100 ms) rather than after, and nothing
-from game folders or Steam
+from the keyring (whether the Steam Web API's and SteamGridDB's keys are saved is asked once the
+library shows: a locked keyring holds a read until its prompt is answered), game folders or Steam
 libraries, which can sit on a network drive taking seconds to wake up: how each game starts
 (`App::read_launch_options`, which a Play pressed before waits for) and the Proton builds found
 there (`runners::list`) are read once the library shows, as after an install or an update. Each

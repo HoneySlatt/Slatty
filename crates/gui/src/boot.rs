@@ -34,18 +34,17 @@ pub struct Boot {
     pub game_achievements: bool,
     pub isolate_new_games: bool,
     pub manual_achievements: bool,
+    /// Whether SteamGridDB is turned on; whether its key is in the keyring is asked once the
+    /// library shows.
     pub steamgriddb: bool,
-    /// Whether a SteamGridDB API key is in the keyring; only asked once the integration is on.
-    pub steamgriddb_key: Option<bool>,
     /// The name of the account signed in to Steam here, when Steam is installed, whether its
     /// games show, and whether images its client has not saved come from Steam's servers.
     pub steam_found: Option<String>,
     pub steam_games: bool,
     pub steam_images: bool,
-    /// Whether Steam's Web API is asked, and whether its key is in the keyring (only read once
-    /// turned on).
+    /// Whether Steam's Web API is asked; whether its key is in the keyring is asked once the
+    /// library shows.
     pub steam_web_api: bool,
-    pub steam_web_key: Option<bool>,
     pub proton: Option<PathBuf>,
     /// Whether Proton builds may be downloaded from GitHub, and those already downloaded.
     pub proton_downloads: bool,
@@ -178,22 +177,12 @@ async fn boot() -> Result<Boot, String> {
     let steam_games = slatty_core::settings::steam_games(&db).map_err(err)?;
     let steam_images = slatty_core::settings::steam_images(&db).map_err(err)?;
     let steam_web_api = slatty_core::settings::steam_web_api(&db).map_err(err)?;
-    let steam_web_key = if steam_web_api {
-        crate::steam::web_key_saved().await.ok()
-    } else {
-        None
-    };
     // Steam's own small file in the home folder; its library folders are read later.
     let steam_found = std::env::var_os("HOME")
         .and_then(|home| slatty_core::steam::local::find(std::path::Path::new(&home)))
         .and_then(|steam| slatty_core::steam::local::signed_in_user(&steam))
         .map(|user| user.name);
     let steamgriddb = slatty_core::settings::steamgriddb(&db).map_err(err)?;
-    let steamgriddb_key = if steamgriddb {
-        crate::settings::steamgriddb_key_saved().await.ok()
-    } else {
-        None
-    };
     // A link it could not make only leaves that `-latest` entry out of the menus. Game folders and
     // Steam libraries, which can sit on a network drive still waking up, are read once the library
     // shows (`App::read_launch_options`, `runners::list`).
@@ -267,12 +256,10 @@ async fn boot() -> Result<Boot, String> {
         isolate_new_games,
         manual_achievements,
         steamgriddb,
-        steamgriddb_key,
         steam_found,
         steam_games,
         steam_images,
         steam_web_api,
-        steam_web_key,
         favorites,
         playtime,
         overview,

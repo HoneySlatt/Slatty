@@ -753,7 +753,6 @@ impl App {
                 self.isolate_new_games = boot.isolate_new_games;
                 self.manual_achievements = boot.manual_achievements;
                 self.steamgriddb = boot.steamgriddb;
-                self.steamgriddb_key = boot.steamgriddb_key;
                 self.launch_choices = boot.launch_choices;
                 self.installs = boot
                     .installs
@@ -798,12 +797,32 @@ impl App {
                 self.steam.on = boot.steam_games;
                 self.steam.images = boot.steam_images;
                 self.steam.web = boot.steam_web_api;
-                self.steam.web_key = boot.steam_web_key;
                 self.allow_steam_requests();
                 let steam = if self.steam.on {
                     steam::load(self.steam.images)
                 } else {
                     Task::none()
+                };
+                // Whether the keys are in the keyring, asked once the library shows: a locked
+                // keyring holds a read until its prompt is answered. Unanswered, as before, they
+                // stay unknown.
+                let web_key = match boot.steam_web_api {
+                    true => Task::future(steam::web_key_saved()).then(|saved| match saved {
+                        Ok(saved) => Task::done(Message::Steam(steam::SteamMsg::WebKey(Ok(saved)))),
+                        Err(_) => Task::none(),
+                    }),
+                    false => Task::none(),
+                };
+                let griddb_key = match boot.steamgriddb {
+                    true => {
+                        Task::future(settings::steamgriddb_key_saved()).then(|saved| match saved {
+                            Ok(saved) => Task::done(Message::Settings(
+                                SettingsMsg::SteamGridDbKey(Ok(saved)),
+                            )),
+                            Err(_) => Task::none(),
+                        })
+                    }
+                    false => Task::none(),
                 };
                 let tasks = [
                     avatar,
@@ -813,6 +832,8 @@ impl App {
                     folders,
                     protons,
                     steam,
+                    web_key,
+                    griddb_key,
                 ];
                 if let Some(cache) = boot.library {
                     return Task::batch(tasks.into_iter().chain([self.set_library(cache)]));
