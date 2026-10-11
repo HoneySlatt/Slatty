@@ -307,7 +307,12 @@ pub fn read_again(game: &Installed) -> Option<Installed> {
     let path = apps.join(format!("appmanifest_{}.acf", game.app_id));
     match read(&path).and_then(|m| manifest(apps, &m)) {
         Some(again) => Some(again),
-        None if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == NotFound) => None,
+        // Its manifest gone from a folder still there; not the folder itself gone (unmounted).
+        None if apps.is_dir()
+            && std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == NotFound) =>
+        {
+            None
+        }
         None => Some(game.clone()),
     }
 }
@@ -517,6 +522,23 @@ pub(crate) mod tests {
         );
         std::fs::remove_file(&manifest).unwrap();
         assert_eq!(read_again(life), None, "uninstalled");
+    }
+
+    /// A library folder gone for a moment (a network drive, a disk unplugged) is not taken for an
+    /// uninstall: the game stays as it was; its manifest alone gone is one.
+    #[test]
+    fn a_library_folder_gone_for_a_moment_is_no_uninstall() {
+        let fake = FakeSteam::new("drive-gone");
+        let life = installed(&fake.steam)
+            .into_iter()
+            .find(|g| g.app_id == 70)
+            .unwrap();
+        let apps = fake.home.join("other-library/steamapps");
+        std::fs::rename(&apps, fake.home.join("unmounted")).unwrap();
+        assert_eq!(read_again(&life).as_ref(), Some(&life));
+        std::fs::rename(fake.home.join("unmounted"), &apps).unwrap();
+        std::fs::remove_file(apps.join("appmanifest_70.acf")).unwrap();
+        assert_eq!(read_again(&life), None);
     }
 
     /// The manifest of one game is found in whichever library folder Steam put it.
