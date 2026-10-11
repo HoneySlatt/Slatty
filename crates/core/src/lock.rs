@@ -6,7 +6,15 @@ use crate::error::{Error, Result};
 
 /// Advisory lock released when dropped.
 #[derive(Debug)]
-pub struct FileLock(#[allow(dead_code)] File);
+pub struct FileLock(File);
+
+impl Drop for FileLock {
+    /// Released explicitly rather than by closing the file: a program another thread is starting
+    /// holds a copy of every open file until it runs its program, which would keep the lock.
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
 
 pub fn try_acquire(path: &Path) -> Result<Option<FileLock>> {
     if let Some(parent) = path.parent() {
@@ -77,6 +85,35 @@ mod tests {
         assert!(try_acquire(&path).unwrap().is_none());
         drop(first);
         assert!(try_acquire(&path).unwrap().is_some());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A program another thread starts gets a copy of every open file until it runs (fork, then
+    /// exec), the lock's among them: dropped meanwhile, the lock must still be free at once.
+    #[test]
+    fn a_lock_dropped_while_another_thread_starts_a_program_is_free() {
+        use std::os::unix::process::CommandExt;
+        let dir = std::env::temp_dir().join(format!("slatty-lock-fork-{}", std::process::id()));
+        let path = dir.join("a.lock");
+        let held = try_acquire(&path).unwrap().unwrap();
+        let starting = std::thread::spawn(|| {
+            let mut command = std::process::Command::new("true");
+            // Runs in the child, before its program: it holds the copies meanwhile.
+            unsafe {
+                command.pre_exec(|| {
+                    std::thread::sleep(Duration::from_millis(300));
+                    Ok(())
+                });
+            }
+            command.status()
+        });
+        std::thread::sleep(Duration::from_millis(100));
+        drop(held);
+        assert!(
+            try_acquire(&path).unwrap().is_some(),
+            "free, though the child has not run its program yet"
+        );
+        starting.join().unwrap().unwrap();
         let _ = std::fs::remove_dir_all(dir);
     }
 }
