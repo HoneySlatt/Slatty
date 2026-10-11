@@ -576,6 +576,9 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
         Some(isolated) => isolated,
         None => crate::install::isolated_when_installed(db, platform, &runner)?,
     };
+    if platform == Platform::Linux {
+        check_executable(&program, &task, isolated)?;
+    }
     let install = Install {
         game_id,
         title,
@@ -723,6 +726,9 @@ pub fn locate(db: &Db, dirs: &Dirs, game_id: &str, folder: &Path) -> Result<Inst
             folder.display()
         )));
     }
+    if install.platform == Platform::Linux {
+        check_executable(&program, &task, install.isolated)?;
+    }
     install.path = folder;
     install.save(db)?;
     Ok(install)
@@ -758,6 +764,28 @@ pub fn is_appimage(program: &Path) -> bool {
 /// Whether a Linux file is a program (ELF) rather than a script.
 pub fn is_program(path: &Path) -> bool {
     head(path).is_ok_and(|h| h.starts_with(b"\x7fELF"))
+}
+
+/// Refuses a Linux program that would not start for want of an execute bit: a program (ELF)
+/// always, a script unless isolated (then started through its interpreter). One SlattyLauncher
+/// unpacked for the game is made executable instead: an archive made on Windows keeps no modes.
+fn check_executable(program: &Path, task: &Task, isolated: bool) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = std::fs::metadata(program)
+        .map_err(|e| Error::io(format!("read {}", program.display()), e))?
+        .permissions()
+        .mode();
+    if mode & 0o111 != 0 || isolated && !is_program(program) {
+        return Ok(());
+    }
+    if task.unpacked.iter().any(|f| f.path() == task.program) {
+        return std::fs::set_permissions(program, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| Error::io(format!("make {} executable", program.display()), e));
+    }
+    Err(Error::Refused(format!(
+        "{} is not executable: allow it to run as a program (chmod +x)",
+        program.display()
+    )))
 }
 
 /// Which system a program is for, from its first bytes: a Windows program (`MZ`), else a Linux
@@ -957,6 +985,11 @@ mod tests {
         std::fs::write(game.join("bin/game.exe"), b"MZ\x90\0").unwrap();
         std::fs::write(game.join("bin/game"), b"\x7fELF\x02\x01\x01").unwrap();
         std::fs::write(game.join("start.sh"), b"#!/bin/sh\nexec ./bin/game\n").unwrap();
+        for program in ["bin/game", "start.sh"] {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(game.join(program), std::fs::Permissions::from_mode(0o755))
+                .unwrap();
+        }
         let proton = root.join("proton");
         std::fs::create_dir_all(&proton).unwrap();
         std::fs::write(proton.join("proton"), b"").unwrap();
@@ -1616,6 +1649,61 @@ mod tests {
             std::fs::read(folder.join("Game/lib.so")).unwrap(),
             b"[FAKE] mine"
         );
+    }
+
+    /// A Linux program without an execute bit (an AppImage a browser saved) would not start: it is
+    /// refused, saying how to allow it, as is such a script not isolated (then started itself, not
+    /// through its interpreter). One SlattyLauncher unpacked for the game is made executable.
+    #[tokio::test]
+    async fn a_linux_program_that_may_not_run_is_refused_unless_unpacked_for_it() {
+        use std::os::unix::fs::PermissionsExt;
+        let f = fake("not-executable");
+        let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode();
+        for program in ["bin/game", "start.sh"] {
+            std::fs::set_permissions(f.game.join(program), std::fs::Permissions::from_mode(0o644))
+                .unwrap();
+        }
+        let new = |program: &str, isolated| NewGame {
+            title: "[FAKE] Native".into(),
+            program: f.game.join(program),
+            isolated: Some(isolated),
+            ..Default::default()
+        };
+        let refused = add(&f.db, &f.dirs, new("bin/game", true))
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("executable"), "{refused}");
+        assert!(add(&f.db, &f.dirs, new("start.sh", false)).is_err());
+        add(&f.db, &f.dirs, new("start.sh", true)).unwrap();
+        assert_eq!(mode(&f.game.join("bin/game")) & 0o111, 0, "the user's file");
+
+        // A zip made without modes, as on Windows.
+        let zip = f.root.join("[FAKE] game.zip");
+        let files = [crate::installer::zip::build::File {
+            name: "Game/game",
+            data: b"\x7fELF[FAKE]",
+            mode: 0o100644,
+            deflate: true,
+        }];
+        std::fs::write(
+            &zip,
+            crate::installer::zip::build::installer(b"", &files, false),
+        )
+        .unwrap();
+        let (id, folder) = unpacked(&f, &zip, "[FAKE] Zipped").await.unwrap();
+        add(
+            &f.db,
+            &f.dirs,
+            NewGame {
+                title: "[FAKE] Zipped".into(),
+                program: folder.join("Game/game"),
+                isolated: Some(false),
+                installed_by: Some(id),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(mode(&folder.join("Game/game")) & 0o777, 0o755);
     }
 
     /// A title's `:` stays out of the folder's name: an isolated game's folder is shared with its

@@ -34,6 +34,8 @@ fn a_game_is_added_listed_and_removed_on_the_command_line() {
     std::fs::create_dir_all(&game).unwrap();
     std::fs::write(game.join("run.sh"), "#!/bin/sh\n").unwrap();
     let program = game.join("run.sh");
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let added = stdout(&slatty(
         &root,
