@@ -456,9 +456,9 @@ impl<S: Source> LinuxDownload<'_, S> {
         let free = (self.free_space)(dir)?;
         if needed + needed / 50 > free {
             return Err(Error::Refused(format!(
-                "not enough disk space: {} MiB needed, {} MiB free",
-                needed >> 20,
-                free >> 20
+                "not enough disk space: {} needed, {} free",
+                crate::units::size(needed),
+                crate::units::size(free)
             )));
         }
         Ok(())

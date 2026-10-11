@@ -63,7 +63,7 @@ fn an_update_shows_its_progress_and_can_be_paused() {
         },
     )));
     let mut ui = render(&app);
-    assert!(ui.find("1.00 GiB / 4.00 GiB · files 3/10").is_ok());
+    assert!(ui.find("1.1 GB / 4.3 GB · files 3/10").is_ok());
     snapshot(&mut ui, "update-progress");
     ui.click("Pause").unwrap();
     for m in ui.into_messages().collect::<Vec<_>>() {
@@ -354,8 +354,8 @@ fn game_settings_list_only_owned_dlc() {
     )));
     {
         let mut ui = render(&app);
-        assert!(ui.find("[FAKE] Owned DLC (2.00 GiB)").is_ok());
-        assert!(ui.find("[FAKE] Other DLC (2.00 GiB)").is_err());
+        assert!(ui.find("[FAKE] Owned DLC (2.1 GB)").is_ok());
+        assert!(ui.find("[FAKE] Other DLC (2.1 GB)").is_err());
     }
 
     let _ = app.update(Message::Maintenance(MaintenanceMsg::ContentLoaded(

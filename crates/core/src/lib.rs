@@ -31,5 +31,6 @@ pub mod settings;
 pub mod setup;
 pub mod steamgriddb;
 pub mod umu;
+pub mod units;
 
 pub use error::{Error, Result};

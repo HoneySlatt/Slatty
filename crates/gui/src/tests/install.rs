@@ -92,7 +92,7 @@ fn a_resumed_install_keeps_its_folder() {
 #[test]
 fn running_install_shows_progress_and_can_pause() {
     let mut app = library_app();
-    // 20 MiB in two seconds.
+    // 20 MiB (21 MB) in two seconds.
     let mut rate = crate::install::Rate::default();
     let start = std::time::Instant::now();
     rate.record(start, 0);
@@ -120,7 +120,7 @@ fn running_install_shows_progress_and_can_pause() {
     assert_eq!(app.panel, None);
     settle(&mut app);
     let mut ui = render(&app);
-    assert!(ui.find("1.00 GiB / 4.00 GiB · 10.0 MiB/s").is_ok());
+    assert!(ui.find("1.1 GB / 4.3 GB · 10.5 MB/s").is_ok());
     assert!(ui.find("25 %").is_ok(), "at the end of the bar");
     snapshot(&mut ui, "install-running");
     ui.click("Pause").unwrap();
@@ -138,14 +138,14 @@ fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
     app.install_views
         .insert("5".into(), InstallView::Ready(fake_plan()));
     let mut ui = render(&app);
-    assert!(ui.find("4.00 GiB").is_ok() && ui.find("7.00 GiB").is_ok());
-    assert!(ui.find("100.00 GiB").is_ok(), "free space");
+    assert!(ui.find("4.3 GB").is_ok() && ui.find("7.5 GB").is_ok());
+    assert!(ui.find("107.4 GB").is_ok(), "free space");
     assert!(
-        ui.find("[FAKE] Other DLC (2.00 GiB)").is_err(),
+        ui.find("[FAKE] Other DLC (2.1 GB)").is_err(),
         "not owned: not listed"
     );
     snapshot(&mut ui, "install-dlc");
-    ui.click("[FAKE] Owned DLC (2.00 GiB)").unwrap();
+    ui.click("[FAKE] Owned DLC (2.1 GB)").unwrap();
     let messages: Vec<Message> = ui.into_messages().collect();
     assert!(
         matches!(messages.as_slice(), [Message::Install(InstallMsg::ToggleDlc(g, d))] if g == "5" && d == "21")
@@ -154,7 +154,7 @@ fn owned_dlc_can_be_deselected_before_install_and_sizes_follow() {
         let _ = app.update(m);
     }
     let mut ui = render(&app);
-    assert!(ui.find("3.00 GiB").is_ok() && ui.find("5.00 GiB").is_ok());
+    assert!(ui.find("3.2 GB").is_ok() && ui.find("5.4 GB").is_ok());
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn cancelling_a_download_asks_then_deletes_it() {
         let mut ui = render(&app);
         assert!(
             ui.find(
-                "Cancel the download of [FAKE] Game 5 and delete the 3.00 GiB downloaded so far?"
+                "Cancel the download of [FAKE] Game 5 and delete the 3.2 GB downloaded so far?"
             )
             .is_ok()
         );
@@ -274,7 +274,7 @@ fn install_panel_shows_the_free_space_and_warns_when_short() {
     let plan = fake_plan();
     app.install_views
         .insert("5".into(), InstallView::Ready(plan.clone()));
-    assert!(render(&app).find("100.00 GiB").is_ok());
+    assert!(render(&app).find("107.4 GB").is_ok());
 
     // Another folder: its drive is measured again, and an answer for the old one is ignored.
     let _ = app.update(Message::Install(InstallMsg::RootInput(
@@ -295,7 +295,7 @@ fn install_panel_shows_the_free_space_and_warns_when_short() {
     let mut ui = render(&app);
     assert!(
         ui.find(format!(
-            "Not enough space on this drive: 1.00 GiB free, {} needed.",
+            "Not enough space on this drive: 1.1 GB free, {} needed.",
             human_size(plan.total_disk())
         ))
         .is_ok()

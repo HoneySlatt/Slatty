@@ -82,7 +82,7 @@ fn the_newest_builds_can_be_installed_and_a_download_followed_and_stopped() {
     ])));
     {
         let mut ui = render_window(&app);
-        assert!(ui.find("GE-Proton11-7-x86_64 · 537.7 MiB").is_ok());
+        assert!(ui.find("GE-Proton11-7-x86_64 · 563.8 MB").is_ok());
         assert!(ui.find("Install").is_ok());
         assert!(
             ui.find("GitHub refuses more requests from this address for now; try again later")
