@@ -222,8 +222,11 @@ impl App {
         ))
     }
 
-    /// Seconds played, as GOG records them.
+    /// Seconds played, as GOG records them, or Steam for a Steam game.
     pub fn played_seconds(&self, game_id: &str) -> i64 {
+        if let Some(played) = self.steam.played.get(game_id) {
+            return played.minutes as i64 * 60;
+        }
         self.overview
             .get(game_id)
             .and_then(|o| o.playtime_minutes)
@@ -488,7 +491,6 @@ impl App {
                     && (!f.cloud_saves || o.is_some_and(|o| o.cloud_saves))
             })
             .collect();
-        let played = |g: &LibraryGame| self.playtime.get(&g.id).copied().unwrap_or_default();
         match self.sort {
             Sort::NameAsc => games.sort_by_cached_key(|(_, g)| self.sort_name(g)),
             Sort::NameDesc => {
@@ -496,7 +498,10 @@ impl App {
             }
             Sort::RecentlyPlayed => {
                 games.sort_by_cached_key(|(_, g)| {
-                    (std::cmp::Reverse(played(g).last_played), self.sort_name(g))
+                    (
+                        std::cmp::Reverse(self.last_played(&g.id).unwrap_or_default()),
+                        self.sort_name(g),
+                    )
                 });
             }
             Sort::MostPlayed => {

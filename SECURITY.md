@@ -192,7 +192,11 @@ on one without (ext4), the runtime's files, about 750 MB, are written at each la
   only reads Steam's files and never writes them, and asks Steam's servers nothing but images once
   **Images from Steam** is on, but the games are run by the Steam client, with its own access to
   your files, network and account, and cannot be isolated. Prefer a game's GOG build where you
-  have the choice.
+  have the choice. Of the files it reads, `localconfig.vdf` also holds the client's download
+  tokens and your friends' names: only each game's play time and last session are kept from it.
+  The client's settings and sign-in files (`config/config.vdf`, `local.vdf`, `ssfn*`,
+  `registry.vdf`) are never read. To tell a Steam game runs, the names of your processes are
+  read, and the arguments of the client's `reaper` processes alone.
 - GOG's servers, the GitHub account of a Proton project or umu's database turned malicious: their
   data is checked for shape, size and paths, not for intent.
 - Someone watching your network: connections use TLS, but which hosts you contact, and when, can

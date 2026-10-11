@@ -273,6 +273,7 @@ impl App {
             use slatty_core::steam::client::Action;
             let ready = self.steam.installed.get(&g.id).map(|i| i.ready);
             let (ic, action) = match ready {
+                _ if self.steam.running.contains(&g.id) => (Icon::Play, None),
                 Some(true) => (Icon::Play, Some(Action::Play)),
                 Some(false) => (Icon::Download, None),
                 None => (Icon::Download, Some(Action::Install)),

@@ -214,6 +214,10 @@ impl App {
             use slatty_core::steam::client::Action;
             let ask = |action| Some(Message::Steam(SteamMsg::Ask(g.id.clone(), action)));
             match self.steam.installed.get(&g.id) {
+                // Steam has no way to be asked to stop a game.
+                _ if self.steam.running.contains(&g.id) => {
+                    big(Icon::Play, "Running".into(), None, false)
+                }
                 Some(installed) if installed.ready => {
                     big(Icon::Play, "Play".into(), ask(Action::Play), false)
                 }
@@ -371,7 +375,7 @@ impl App {
     }
 
     pub(super) fn stats<'a>(&'a self, g: &'a LibraryGame, narrow: bool) -> Element<'a, Message> {
-        let played = self.playtime.get(&g.id);
+        let last_played = self.last_played(&g.id);
         let stat = |ic: Icon, value: String, label: &'a str| {
             row![]
                 .push((!narrow).then(|| {
@@ -411,7 +415,7 @@ impl App {
                 .style(theme::divider),
             stat(
                 Icon::Calendar,
-                played.map_or("—".into(), |p| relative_day(p.last_played)),
+                last_played.map_or("—".into(), relative_day),
                 "Last played",
             ),
         ]

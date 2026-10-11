@@ -542,6 +542,8 @@ impl Message {
                 | Message::PlaytimesFetched(_)
                 // Notification cards come and go, and the window's focus with them.
                 | Message::Notify(_)
+                // Which games Steam runs, looked at every two seconds while one does.
+                | Message::Steam(steam::SteamMsg::Look | steam::SteamMsg::Running(_))
                 | Message::Runners(runners::RunnersMsg::Listed(..))
                 | Message::Updates(updates::UpdatesMsg::Checked(..))
         )
@@ -596,11 +598,17 @@ impl App {
             iced::time::every(std::time::Duration::from_millis(500))
                 .map(|now| Message::Notify(notify::NotifyMsg::Expire(now)))
         };
+        let steam_games = if self.watching_steam() {
+            iced::time::every(steam::LOOK_EVERY).map(|_| Message::Steam(steam::SteamMsg::Look))
+        } else {
+            Subscription::none()
+        };
         Subscription::batch([
             frames,
             update_checks,
             downloads,
             toasts,
+            steam_games,
             iced::window::events().filter_map(focus_message),
             keyboard::listen().filter_map(key_message),
             iced::window::close_requests().map(|_| Message::CloseRequested),

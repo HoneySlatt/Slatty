@@ -1,7 +1,7 @@
 use slatty_core::library::{LibraryCache, MetadataSource};
 use slatty_core::steam::client::Action;
 use slatty_core::steam::library::SteamLibrary;
-use slatty_core::steam::local::{Installed, SteamUser};
+use slatty_core::steam::local::{Installed, Played, SteamUser};
 
 use super::*;
 use crate::steam::SteamMsg;
@@ -30,6 +30,13 @@ fn steam_library() -> SteamLibrary {
             steam_game(620, "[FAKE] Portal"),
         ],
         covers: std::collections::HashMap::new(),
+        played: std::collections::HashMap::from([(
+            "steam-440".to_string(),
+            Played {
+                minutes: 754,
+                last_played: 1_791_590_000,
+            },
+        )]),
     }
 }
 
@@ -149,6 +156,85 @@ fn images_from_steams_servers_once_turned_on() {
         !app.covers.contains_key("steam-620"),
         "Steam's games are off"
     );
+}
+
+/// Steam's play time and last session show on a Steam game's page and sort the library with GOG's
+/// games; another account signed in to Steam meanwhile is not mixed with the one shown.
+#[test]
+fn steam_play_time_shows_and_sorts_with_gogs() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let _ = app.update(Message::PlaytimesFetched(vec![("2".into(), 60)]));
+    app.sort = crate::library::Sort::MostPlayed;
+    app.lists.clear();
+    assert_eq!(&titles(&app)[..3], ["Fortress", "Game 2", "Game 1"]);
+    app.sort = crate::library::Sort::RecentlyPlayed;
+    app.lists.clear();
+    assert_eq!(titles(&app)[0], "Fortress");
+
+    let _ = app.update(Message::Select("steam-440".into()));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("12 h 34 m").is_ok(), "{:?}", texts(&mut ui));
+    }
+
+    let mut other = std::collections::HashMap::new();
+    other.insert("steam-440".to_string(), Played::default());
+    let _ = app.update(Message::Steam(SteamMsg::Played(Some((
+        76561198000000009,
+        other,
+    )))));
+    assert_eq!(
+        app.steam.played["steam-440"].minutes, 754,
+        "read again, all of it"
+    );
+    let mut later = steam_library().played;
+    later.get_mut("steam-440").unwrap().minutes = 800;
+    let _ = app.update(Message::Steam(SteamMsg::Played(Some((
+        76561198000000002,
+        later,
+    )))));
+    assert_eq!(app.played_seconds("steam-440"), 800 * 60);
+}
+
+/// A game asked of Steam is looked for until it runs, then shows as running until it ends; only
+/// meanwhile are Steam's games looked at.
+#[test]
+fn a_steam_game_shows_as_running_while_steam_runs_it() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![Installed {
+        app_id: 440,
+        name: "[FAKE] Fortress".into(),
+        dir: "/games/steamapps/common/Fortress".into(),
+        size: 1,
+        ready: true,
+    }])));
+    assert!(!app.watching_steam());
+    let _ = app.update(Message::Steam(SteamMsg::Ask(
+        "steam-440".into(),
+        Action::Play,
+    )));
+    assert!(app.watching_steam(), "looked for once asked");
+
+    let _ = app.update(Message::Steam(SteamMsg::Running([440].into())));
+    assert!(app.steam.starting.is_none() && app.watching_steam());
+    let _ = app.update(Message::Select("steam-440".into()));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Running").is_ok());
+        assert!(ui.click("Running").is_ok());
+        assert!(
+            !ui.into_messages()
+                .any(|m| matches!(m, Message::Steam(SteamMsg::Ask(..)))),
+            "nothing to ask of Steam while it runs the game"
+        );
+    }
+    let _ = app.update(Message::Steam(SteamMsg::Running(Default::default())));
+    assert!(!app.watching_steam(), "it ended");
+    assert!(render(&app).find("Play").is_ok());
 }
 
 /// A Steam game's page plays, installs, verifies and uninstalls through Steam, and says it runs

@@ -141,9 +141,10 @@ impl App {
         match msg {
             NotifyMsg::Focus(focused) => {
                 self.unfocused = !focused;
-                // Back from Steam's own window, maybe after an install or an uninstall there.
+                // Back from Steam's own window (an install, an uninstall, another account), or
+                // from a game played through it.
                 if focused && self.steam.on {
-                    return crate::steam::read_installed();
+                    return crate::steam::refresh();
                 }
             }
             NotifyMsg::Expire(now) => self.toasts.retain(|t| t.until > now),

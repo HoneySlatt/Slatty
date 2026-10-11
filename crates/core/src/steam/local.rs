@@ -1,6 +1,7 @@
 //! The local Steam installation, read and never written: where it is, who is signed in to it,
 //! the games of that account, and those installed.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use super::vdf::{self, Vdf};
@@ -98,6 +99,47 @@ pub fn owned(steam: &Steam, user: &SteamUser) -> Vec<u32> {
         .collect();
     ids.sort_unstable();
     ids
+}
+
+/// How long a game was played and when last, as the Steam client records them for the account.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Played {
+    pub minutes: u64,
+    /// Seconds since 1970; 0 when never.
+    pub last_played: i64,
+}
+
+/// Play time and last session of the account's games, by app id, from the client's
+/// `userdata/<account>/config/localconfig.vdf`. That file also holds the client's download tokens
+/// and the account's friends: only these two numbers are kept from it.
+pub fn played(steam: &Steam, user: &SteamUser) -> HashMap<u32, Played> {
+    let path = steam
+        .root
+        .join("userdata")
+        .join(user.account_id().to_string())
+        .join("config/localconfig.vdf");
+    let Some(config) = read(&path) else {
+        return HashMap::new();
+    };
+    let apps = ["UserLocalConfigStore", "Software", "Valve", "Steam", "apps"]
+        .into_iter()
+        .try_fold(&config, |section, key| section.get(key));
+    apps.map_or(&[][..], Vdf::entries)
+        .iter()
+        .filter_map(|(id, app)| {
+            let number = |key| {
+                app.text(key)
+                    .and_then(|t| t.parse::<i64>().ok())
+                    .filter(|n| *n > 0)
+                    .unwrap_or(0)
+            };
+            let played = Played {
+                minutes: number("Playtime") as u64,
+                last_played: number("LastPlayed"),
+            };
+            (played != Played::default()).then_some((id.parse().ok()?, played))
+        })
+        .collect()
 }
 
 /// Steam's library folders, the main one first.
@@ -227,6 +269,19 @@ pub(crate) mod tests {
                 "userdata/39734274/config/librarycache/not-an-app.json",
                 "[]",
             );
+            write(
+                "userdata/39734274/config/localconfig.vdf",
+                r#""UserLocalConfigStore" {
+                    "friends" { "76561198000000003" { "name" "[FAKE] Friend" } }
+                    "depots" { "71" { "CDN" { "cdn.example" { "token" "[FAKE] token" } } } }
+                    "Software" { "Valve" { "Steam" { "apps" {
+                        "440" { "LastPlayed" "1760000000" "Playtime" "754" }
+                        "70" { "LastPlayed" "1700000000" }
+                        "220" { "Playtime" "0" "LastPlayed" "garbage" }
+                        "not-an-app" { "Playtime" "5" }
+                    } } } }
+                }"#,
+            );
             FakeSteam {
                 steam: Steam {
                     root,
@@ -270,5 +325,33 @@ pub(crate) mod tests {
             fake.steam.root.join("steamapps/common/Fortress")
         );
         assert_eq!(installed[1].size, 1000);
+    }
+
+    #[test]
+    fn play_time_and_last_session_come_from_the_clients_records() {
+        let fake = FakeSteam::new("played");
+        let user = signed_in_user(&fake.steam).unwrap();
+        let played = played(&fake.steam, &user);
+        assert_eq!(
+            played.get(&440),
+            Some(&Played {
+                minutes: 754,
+                last_played: 1_760_000_000
+            })
+        );
+        assert_eq!(
+            played.get(&70),
+            Some(&Played {
+                minutes: 0,
+                last_played: 1_700_000_000
+            })
+        );
+        assert_eq!(played.len(), 2, "nothing for a game never played");
+
+        let other = SteamUser {
+            id64: 76561198000000001,
+            name: String::new(),
+        };
+        assert!(super::played(&fake.steam, &other).is_empty(), "no records");
     }
 }

@@ -99,8 +99,9 @@ These changes are kept apart from GOG's data, so refreshing the library keeps th
 is not installed) and the favorite button over it; below, three cards give play time and last
 session, cloud save status, and achievement progress with the latest unlocks. Play time is the
 total GOG records, so it includes GOG Galaxy and other launchers that report sessions. "Last played"
-only knows sessions started by SlattyLauncher: GOG does not expose that date. The tools open in
-panels:
+only knows sessions started by SlattyLauncher: GOG does not expose that date. A Steam game's page
+gives Steam's own play time and last session instead (see [Steam games](#steam-games)). The tools
+open in panels:
 
 | Where | Panel |
 |---|---|
@@ -510,6 +511,15 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   hand the game to the Steam client (`steam://` addresses, opened by the desktop): it must be
   installed and signed in, and does the work in its own window. What it installed or removed shows
   once the launcher's window is in front again.
+- **Play time and last played** are Steam's own records for the account
+  (`userdata/<account>/config/localconfig.vdf`), shown on the game page and used by the library's
+  sorts with GOG's; they are never sent to GOG. They are read again when a game Steam ran ends,
+  and when the launcher's window is in front again.
+- **A game running.** After Play, and while the Steam client runs one of its games (even one
+  started from Steam itself, seen once the launcher's window is in front again), its page shows
+  **Running**: every two seconds meanwhile, SlattyLauncher looks for the client's `reaper` process
+  of that game among your processes (it reads the name of each, and the arguments of the
+  client's `reaper` alone). Steam cannot be asked to stop a game: close it in the game.
 - **What Steam keeps.** Updates, cloud saves, achievements in game and launch options are the Steam
   client's; Steam's games cannot run isolated from your files.
 - **GOG is the better choice where you have it.** GOG's games run isolated from your files, need no

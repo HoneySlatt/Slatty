@@ -25,6 +25,8 @@ pub struct SteamLibrary {
     pub games: Vec<LibraryGame>,
     /// Each game's cover, as the client cached it, by game id.
     pub covers: HashMap<String, PathBuf>,
+    /// How long each game was played and when last, by game id.
+    pub played: HashMap<String, local::Played>,
 }
 
 /// The library of the account signed in to Steam; none when no account ever signed in. With
@@ -39,10 +41,12 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
         .inspect_err(|e| tracing::warn!("Steam's appinfo.vdf: {e}"))
         .unwrap_or_default();
     let images = steam.root.join("appcache/librarycache");
+    let mut played = local::played(steam, &user);
     let mut library = SteamLibrary {
         user,
         games: Vec::new(),
         covers: HashMap::new(),
+        played: HashMap::new(),
     };
     for app_id in owned {
         let Some(common) = apps
@@ -75,6 +79,9 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
                 .or_else(|| server(asset, legacy))
         };
         let id = crate::store::steam_id(app_id);
+        if let Some(p) = played.remove(&app_id) {
+            library.played.insert(id.clone(), p);
+        }
         let cover = match here("library_capsule", "library_600x900.jpg") {
             Some(path) => {
                 library.covers.insert(id.clone(), path);
@@ -99,6 +106,17 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
         });
     }
     Some(library)
+}
+
+/// How long the games of the account signed in to Steam were played and when last, by game id,
+/// with that account's Steam id: what `read` gives of it, at a fraction of its cost.
+pub fn played(steam: &Steam) -> Option<(u64, HashMap<String, local::Played>)> {
+    let user = local::signed_in_user(steam)?;
+    let played = local::played(steam, &user)
+        .into_iter()
+        .map(|(app, p)| (crate::store::steam_id(app), p))
+        .collect();
+    Some((user.id64, played))
 }
 
 /// Where Steam's image servers keep `asset` of `app_id`: the file `library_assets_full` names, else
@@ -211,6 +229,11 @@ mod tests {
             "games of the account only, not its tools"
         );
         assert_eq!(library.games[0].os, ["windows", "linux"]);
+        let played: Vec<&str> = library.played.keys().map(String::as_str).collect();
+        assert_eq!(played, ["steam-70"], "the games' alone");
+        let (account, all) = super::played(&fake.steam).unwrap();
+        assert_eq!(account, library.user.id64);
+        assert_eq!(all["steam-70"], library.played["steam-70"]);
         assert_eq!(
             library.covers["steam-70"],
             cache.join("library_600x900.jpg")
