@@ -653,6 +653,16 @@ pub fn remove(
         .map(|t| t.unpacked)
         .unwrap_or_default();
     let unpacked = deletable(&install.path, &unpacked)?;
+    // The marks of an installer run or an archive unpacked for it, which adding it forgets but a
+    // crash could leave: kept, they would have its prefix thrown away later as a leftover.
+    for mark in [installer_file(dirs, game_id), unpacked_file(dirs, game_id)] {
+        match std::fs::remove_file(&mark) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                return Err(Error::io(format!("delete {}", mark.display()), e));
+            }
+            _ => {}
+        }
+    }
     let mut report = crate::maintenance::UninstallReport::default();
     if let Some(prefix) = install.runner.prefix().filter(|_| delete_prefix) {
         // Its own, as SlattyLauncher named it: no other game's, nor one reached through `..`.
@@ -664,8 +674,9 @@ pub fn remove(
         }
         report.prefix_backup = crate::maintenance::back_up_prefix(dirs, game_id, prefix)?;
         // An installer put the game itself in it, with whatever it keeps beside it (saves among
-        // them): copied too, before the prefix goes.
-        if install.path.starts_with(prefix) && install.path.is_dir() {
+        // them): copied too, before the prefix goes. Compared as they are on disk: the game's
+        // folder was kept resolved, the data folder may be reached through a link.
+        if crate::installer::leads_inside(prefix, &install.path) && install.path.is_dir() {
             let copy = dirs
                 .data
                 .join("backups/prefixes")
@@ -1271,6 +1282,58 @@ mod tests {
             .unwrap()
             .path();
         assert!(copy.join("save.dat").is_file(), "{}", copy.display());
+    }
+
+    /// The data folder reached through a link (moved to another disk): the game an installer put
+    /// in its prefix is still copied before the prefix is deleted with it.
+    #[test]
+    fn the_game_in_its_prefix_is_copied_when_the_data_folder_is_a_link() {
+        let mut f = fake("linked-data");
+        std::fs::create_dir_all(f.root.join("real")).unwrap();
+        std::os::unix::fs::symlink(f.root.join("real"), f.root.join("link")).unwrap();
+        f.dirs = Dirs::under(&f.root.join("link"));
+        let game = f
+            .dirs
+            .data
+            .join("prefixes/local-1/drive_c/Games/[FAKE] Quest");
+        std::fs::create_dir_all(&game).unwrap();
+        std::fs::write(game.join("quest.exe"), b"MZ").unwrap();
+        std::fs::write(game.join("save.dat"), b"[FAKE] progress").unwrap();
+        next_number(&f.db).unwrap();
+        crate::fsutil::write_atomic(&installer_file(&f.dirs, "local-1"), b"").unwrap();
+        add(&f.db, &f.dirs, new_quest(&f, &game, "local-1")).unwrap();
+        let report = remove(&f.db, &f.dirs, "local-1", true).unwrap();
+        assert!(report.prefix_removed);
+        let backups = f.dirs.data.join("backups/prefixes/local-1");
+        assert!(
+            std::fs::read_dir(&backups)
+                .unwrap()
+                .flatten()
+                .any(|e| e.path().join("save.dat").is_file()),
+            "the game and its save copied first"
+        );
+    }
+
+    /// A crash between adding the game an installer ran for and forgetting the installer's mark
+    /// left the mark: removing the game forgets it too, so the prefix holding the game is never
+    /// thrown away later as an installer's leftover.
+    #[test]
+    fn removing_a_game_forgets_the_mark_of_its_installer() {
+        let f = fake("stale-mark");
+        let game = f
+            .dirs
+            .data
+            .join("prefixes/local-1/drive_c/Games/[FAKE] Quest");
+        std::fs::create_dir_all(&game).unwrap();
+        std::fs::write(game.join("quest.exe"), b"MZ").unwrap();
+        next_number(&f.db).unwrap();
+        crate::fsutil::write_atomic(&installer_file(&f.dirs, "local-1"), b"").unwrap();
+        add(&f.db, &f.dirs, new_quest(&f, &game, "local-1")).unwrap();
+        // As a crash just after adding it would leave it.
+        crate::fsutil::write_atomic(&installer_file(&f.dirs, "local-1"), b"").unwrap();
+        remove(&f.db, &f.dirs, "local-1", false).unwrap();
+        assert!(discard_installer(&f.db, &f.dirs, "local-1").is_err());
+        assert!(game.join("quest.exe").is_file());
     }
 
     fn new_quest(f: &Fake, game: &Path, id: &str) -> NewGame {
