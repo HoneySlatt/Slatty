@@ -369,6 +369,14 @@ fn umu_env(
         .umu_id
         .clone()
         .unwrap_or_else(|| crate::umu::UNKNOWN.into());
+    // Isolated, the build a `-latest` link leads to now, as it is mounted read-only: one linked
+    // in its place before umu starts would run writable in the container.
+    let proton = match install.isolated {
+        true => proton
+            .canonicalize()
+            .unwrap_or_else(|_| proton.to_path_buf()),
+        false => proton.to_path_buf(),
+    };
     let mut env = vec![
         ("WINEPREFIX".into(), prefix.display().to_string()),
         ("PROTONPATH".into(), proton.display().to_string()),
@@ -382,11 +390,11 @@ fn umu_env(
     // writable: an isolated game's folder is shared on its own instead. Proton's fixes then find
     // the game from its working directory.
     if install.isolated {
-        env.extend(isolation_env(dirs, install, Some(proton))?);
+        env.extend(isolation_env(dirs, install, Some(&proton))?);
     } else {
         check_steam_sdk_in(
             Path::new(&std::env::var_os("HOME").unwrap_or_default()),
-            proton,
+            &proton,
         )?;
         env.push((
             "STEAM_COMPAT_INSTALL_PATH".into(),
@@ -1282,6 +1290,41 @@ mod tests {
             isolated_home(&dirs, "1").unwrap(),
             dirs.data.join("homes/1")
         );
+    }
+
+    /// An isolated game following `<project>-latest` gets the build the link leads to as the
+    /// launch is made, for umu as for the read-only mount: a newer build linked in between (a
+    /// download finishing while the cloud syncs) would otherwise run writable in the container.
+    #[test]
+    fn an_isolated_game_runs_the_build_its_link_led_to() {
+        let dir = std::env::temp_dir().join(format!("slatty-latest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let build = dir.join("GE-Proton1-1");
+        std::fs::create_dir_all(&build).unwrap();
+        std::os::unix::fs::symlink(&build, dir.join("GE-Proton-latest")).unwrap();
+        let mut install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: dir.join("game"),
+            client_id: None,
+            runner: Runner::Native,
+            umu_id: None,
+            isolated: true,
+        };
+        let dirs = Dirs::under(&dir.join("slatty"));
+        let latest = dir.join("GE-Proton-latest");
+        let env = umu_env(&dirs, &install, &latest, Path::new("/prefix")).unwrap();
+        let real = build.canonicalize().unwrap();
+        assert_eq!(value(&env, "PROTONPATH"), real.to_str());
+        install.isolated = false;
+        let env = umu_env(&dirs, &install, &latest, Path::new("/prefix")).unwrap();
+        assert_eq!(
+            value(&env, "PROTONPATH"),
+            latest.to_str(),
+            "followed as it moves"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     /// umu starts a Proton build whose `toolmanifest.vdf` names no runtime (Proton-tkg and other

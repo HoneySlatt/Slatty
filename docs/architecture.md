@@ -291,7 +291,8 @@ its code in other games, isolated or not. An isolated launch therefore runs umu 
 (`runner::read_only_tools`): the system as it is (`--dev-bind / /`), with umu's runtimes, the
 Proton build and SlattyLauncher's own runtime tool (`runner::runtime_tool`, written again before
 each launch) bound read-only over themselves, by where they lead (`runner::bind`: bubblewrap cannot
-mount over a link, which a `<project>-latest` build is). Each runtime's `var/`, where pressure-vessel copies
+mount over a link, which a `<project>-latest` build is); umu is given the same resolved path, so a
+build linked in its place before umu starts cannot run instead, writable. Each runtime's `var/`, where pressure-vessel copies
 the runtime, and the `.ref` lock files it takes in the runtime stay writable. So does a Valve
 build's `dist.lock`, which its `proton` script takes at every launch; what that script writes into
 its own folder after a Steam update (SteamPipe's fixups: empty folders, files made read-only, then
