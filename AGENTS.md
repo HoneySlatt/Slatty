@@ -242,7 +242,6 @@ The public documentation is in English and must match the code. Update it in the
 - Small commits, one change each, with a short imperative subject that says what changes for the
   user ("Build only the covers in view, for libraries of 10,000 games"), and a body explaining why,
   with measurements when the change is about speed.
-- Say when a commit was written with an AI agent, for example with a `Co-Authored-By:` trailer.
 - `cargo fmt`, clippy and the tests pass before each commit.
 
 ## Known pitfalls
