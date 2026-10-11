@@ -51,7 +51,8 @@ impl Comet {
             .map_err(|e| Error::io(format!("open {}", log_path.display()), e))?;
         let log_err = log.try_clone().map_err(|e| Error::io("comet log", e))?;
 
-        let spawned = tokio::process::Command::new(bin)
+        let mut command = tokio::process::Command::new(bin);
+        command
             .args(["--from-lutris", "--username", username])
             .env("HOME", private_dir.join("home"))
             .env("XDG_CACHE_HOME", private_dir.join("cache"))
@@ -63,8 +64,11 @@ impl Comet {
             .stdin(Stdio::null())
             .stdout(log)
             .stderr(log_err)
-            .kill_on_drop(true)
-            .spawn();
+            // Out of the terminal's reach: the launcher stops it once the game has ended, or
+            // when it ends itself (`tied_to_this_thread`, `Drop`).
+            .process_group(0);
+        tied_to_this_thread(&mut command);
+        let spawned = command.spawn();
         let child = match spawned {
             Ok(c) => c,
             Err(e) => {
@@ -124,8 +128,25 @@ impl Comet {
 }
 
 impl Drop for Comet {
+    /// A Comet not stopped (the launcher quitting during a session, a failed start) is asked to
+    /// stop as `stop` does, so that it sends what it holds.
     fn drop(&mut self) {
+        if let Some(pid) = self.child.id() {
+            let _ = signal::kill(Pid::from_raw(pid as i32), Signal::SIGINT);
+        }
         let _ = std::fs::remove_dir_all(&self.private_dir);
+    }
+}
+
+/// Has the program `command` starts stopped (SIGINT, so that Comet sends what it holds) when the
+/// thread starting it ends: Tokio's worker threads live as long as the launcher, and a launcher
+/// killed outright (a crash, the system out of memory) runs no code that could stop it.
+fn tied_to_this_thread(command: &mut tokio::process::Command) {
+    // SAFETY: the closure only makes one system call (prctl), which is async-signal-safe.
+    unsafe {
+        command.pre_exec(|| {
+            nix::sys::prctl::set_pdeathsig(Signal::SIGINT).map_err(std::io::Error::from)
+        });
     }
 }
 
@@ -363,6 +384,44 @@ mod tests {
             );
         }
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Comet holds the account's tokens and listens for any program while it runs: it must not
+    /// outlive a launcher killed during a session (a crash, the system out of memory).
+    #[test]
+    fn comet_does_not_outlive_the_launcher() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        // Stands for the launcher: the thread that started Comet, gone without stopping it.
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            runtime.block_on(async {
+                let mut command = tokio::process::Command::new("sleep");
+                command.arg("30");
+                tied_to_this_thread(&mut command);
+                let child = command.spawn().unwrap();
+                tx.send(child.id().unwrap()).unwrap();
+                std::mem::forget(child);
+            });
+        })
+        .join()
+        .unwrap();
+        let pid = rx.recv().unwrap();
+        let gone = || {
+            std::fs::read_to_string(format!("/proc/{pid}/stat")).map_or(true, |s| {
+                s.rsplit_once(')')
+                    .is_some_and(|(_, r)| r.trim_start().starts_with('Z'))
+            })
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while !gone() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let survived = !gone();
+        let _ = signal::kill(Pid::from_raw(pid as i32), Signal::SIGKILL);
+        assert!(!survived, "sleep {pid} outlived the thread that started it");
     }
 
     /// Comet's port taken by another user is not Comet: the game would talk to them.
