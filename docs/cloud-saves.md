@@ -41,7 +41,7 @@ Modification dates are never used to decide.
 | unchanged | unchanged | nothing |
 | changed | unchanged | upload |
 | unchanged | changed | download |
-| changed | changed | **conflict** |
+| changed | changed | contents compared: identical files are adopted, different ones are a **conflict** |
 | deleted | unchanged | delete in the cloud (needs permission, see below) |
 | unchanged | deleted | delete locally (needs permission) |
 | deleted | changed | **conflict** |
@@ -83,7 +83,8 @@ Modification dates are never used to decide.
 - **Uploads re-check the cloud.** Just before uploading, the cloud is listed again; a file that
   changed in the meantime is not overwritten and becomes a conflict at the next sync.
 - **Network failures leave local files untouched**, and history only advances for files that were
-  actually transferred.
+  actually transferred. An upload the cloud listing could not confirm gets no history; the next
+  sync finds the same content on both sides and adopts it.
 - **Cloud paths cannot escape the save folder.** A cloud file name containing `..` or an absolute
   path is rejected.
 - **Case-only duplicates are refused.** `Save.dat` and `save.dat` are one file on Windows, so a

@@ -655,6 +655,92 @@ async fn a_check_in_progress_does_not_refuse_a_sync() {
     assert_eq!(launch.unwrap().uploaded, vec!["a.sav"]);
 }
 
+/// A cloud whose `fail`-th listing (1-based) fails, as when the connection drops.
+struct FlakyCloud<'a> {
+    inner: &'a MemoryCloud,
+    fail: usize,
+    lists: std::sync::atomic::AtomicUsize,
+}
+
+impl super::transport::CloudTransport for FlakyCloud<'_> {
+    async fn list(&self) -> crate::Result<Vec<super::transport::RemoteEntry>> {
+        if self.lists.fetch_add(1, Ordering::SeqCst) + 1 == self.fail {
+            return Err(crate::Error::Http {
+                context: "flaky cloud",
+                status: 503,
+            });
+        }
+        self.inner.list().await
+    }
+    async fn download(&self, name: &str) -> crate::Result<Vec<u8>> {
+        self.inner.download(name).await
+    }
+    async fn upload(
+        &self,
+        name: &str,
+        data: &[u8],
+        m: chrono::DateTime<chrono::Utc>,
+    ) -> crate::Result<()> {
+        self.inner.upload(name, data, m).await
+    }
+    async fn delete(&self, name: &str) -> crate::Result<()> {
+        self.inner.delete(name).await
+    }
+}
+
+/// The listing that confirms an upload fails: the sync still reports what it did, and the next
+/// one finds the same content on both sides, which is no conflict.
+#[tokio::test]
+async fn an_unconfirmed_upload_is_not_a_conflict_next_time() {
+    let env = Env::new("unconfirmed");
+    env.write("a.sav", "1");
+    env.sync(SyncOptions::default()).await;
+    env.write("a.sav", "2");
+    let flaky = FlakyCloud {
+        inner: &env.cloud,
+        fail: 3,
+        lists: 0.into(),
+    };
+    let root = env.root();
+    let target = SyncTarget {
+        db: &env.db,
+        dirs: &env.dirs,
+        user_id: "u",
+        game_id: "g",
+        location: "saves",
+        root: &root,
+    };
+    let r = sync(&flaky, &target, SyncOptions::default()).await.unwrap();
+    assert_eq!(r.errors.len(), 1, "{:?}", r.errors);
+    assert!(r.backup_dir.is_some(), "the cloud copy it replaced is kept");
+    assert_eq!(env.remote("a.sav").as_deref(), Some("2"));
+
+    let next = env.sync(SyncOptions::default()).await;
+    assert!(next.is_clean(), "{:?}", next.conflicts);
+    assert_eq!(next.adopted, vec!["a.sav"]);
+    assert!(env.sync(SyncOptions::default()).await.plan.is_noop());
+}
+
+/// Two machines that changed a file the same way.
+#[tokio::test]
+async fn the_same_change_on_both_sides_is_no_conflict() {
+    let env = Env::new("same-change");
+    env.write("a.sav", "1");
+    env.sync(SyncOptions::default()).await;
+    env.write("a.sav", "2");
+    env.put_remote("a.sav", "2");
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(r.is_clean(), "{:?}", r.conflicts);
+    assert_eq!(r.adopted, vec!["a.sav"]);
+    env.write("a.sav", "3");
+    env.put_remote("a.sav", "4");
+    let r = env.sync(SyncOptions::default()).await;
+    assert_eq!(
+        r.conflicts,
+        vec![("a.sav".to_string(), ConflictKind::BothModified)]
+    );
+}
+
 struct MarkerCloud<'a>(&'a MemoryCloud);
 
 impl super::transport::CloudTransport for MarkerCloud<'_> {

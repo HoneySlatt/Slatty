@@ -209,19 +209,26 @@ impl<T: CloudTransport> Run<'_, T> {
                     self.report.pending_deletions.push(self.display(key));
                 }
             }
-            Action::Compare => {
-                let remote = &self.remote[key];
-                let bytes = self.cloud.download(&remote.name).await?;
-                if fsutil::sha256_hex(&bytes) == self.local.files[key].sha256 {
-                    let hash = remote.hash.clone();
-                    self.record(key, &fsutil::sha256_hex(&bytes), &hash)?;
-                    self.report.adopted.push(self.display(key));
-                } else {
-                    self.resolve(key, ConflictKind::Unrelated).await?;
-                }
+            Action::Compare => self.compare(key, ConflictKind::Unrelated).await?,
+            Action::Conflict(ConflictKind::BothModified) => {
+                self.compare(key, ConflictKind::BothModified).await?
             }
             Action::Conflict(kind) => self.resolve(key, kind).await?,
         }
+        Ok(())
+    }
+
+    /// Adopts a file both sides hold with the same content; else it is a conflict of `kind`.
+    async fn compare(&mut self, key: &str, kind: ConflictKind) -> Result<()> {
+        let remote = &self.remote[key];
+        let bytes = self.cloud.download(&remote.name).await?;
+        let sha = fsutil::sha256_hex(&bytes);
+        if sha != self.local.files[key].sha256 {
+            return self.resolve(key, kind).await;
+        }
+        let hash = remote.hash.clone();
+        self.record(key, &sha, &hash)?;
+        self.report.adopted.push(self.display(key));
         Ok(())
     }
 
@@ -372,7 +379,18 @@ impl<T: CloudTransport> Run<'_, T> {
         if uploaded.is_empty() {
             return Ok(());
         }
-        let after = remote_map(self.cloud.list().await?, self.target.location)?;
+        // Unconfirmed uploads get no history: the next sync finds the same content on both sides.
+        let listed = (self.cloud.list().await).and_then(|l| remote_map(l, self.target.location));
+        let after = match listed {
+            Ok(after) => after,
+            Err(e) => {
+                for (key, _) in uploaded {
+                    let error = format!("upload not confirmed: {e}");
+                    self.report.errors.push((self.display(&key), error));
+                }
+                return Ok(());
+            }
+        };
         for (key, sha) in uploaded {
             match after.get(&key) {
                 Some(r) => {
