@@ -589,6 +589,14 @@ fn steams_web_api_fills_in_once_turned_on_and_its_games_go_with_it() {
             .is_ok()
     );
     assert!(app.asks_steam_web());
+    let allowed = app.steam.web_allowed.clone();
+    assert!(allowed.load(std::sync::atomic::Ordering::Relaxed));
+    let _ = app.update(Message::Steam(SteamMsg::WebApi(false)));
+    assert!(
+        !allowed.load(std::sync::atomic::Ordering::Relaxed),
+        "requests waiting their turn give up"
+    );
+    let _ = app.update(Message::Steam(SteamMsg::WebApi(true)));
 
     let owned = |app_id, name: &str, minutes| OwnedGame {
         app_id,

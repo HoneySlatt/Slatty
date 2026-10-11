@@ -42,8 +42,9 @@ pub struct SteamView {
     /// Whether the images the client has not saved come from Steam's image servers.
     pub images: bool,
     /// Whether they may be downloaded now (Steam's games and their images on), read by downloads
-    /// waiting their turn: turned off meanwhile, they give up.
+    /// waiting their turn: turned off meanwhile, they give up. The same for the Web API.
     pub images_allowed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub web_allowed: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Whether Steam's Web API fills in what the client has not saved, whether its key is in the
     /// keyring (once asked), the key being typed, and the games it added.
     pub web: bool,
@@ -143,6 +144,7 @@ impl App {
                     images_allowed: self.steam.images_allowed.clone(),
                     web: self.steam.web,
                     web_key: self.steam.web_key,
+                    web_allowed: self.steam.web_allowed.clone(),
                     ..Default::default()
                 };
                 self.allow_steam_images();
@@ -316,6 +318,7 @@ impl App {
             }
             SteamMsg::WebApi(on) => {
                 self.steam.web = on;
+                self.allow_steam_images();
                 if let Some(core) = &self.core
                     && let Err(e) = slatty_core::settings::set_steam_web_api(&core.db, on)
                 {
@@ -366,6 +369,7 @@ impl App {
             }
             SteamMsg::WebKey(Ok(saved)) => {
                 self.steam.web_key = Some(saved);
+                self.allow_steam_images();
                 if !saved {
                     self.drop_web_games();
                 }
@@ -437,9 +441,13 @@ impl App {
         if !self.asks_steam_web() {
             return Task::none();
         }
+        let allowed = self.steam.web_allowed.clone();
         Task::perform(
             async move {
                 let key = web_key().await?;
+                if !allowed.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Ok(Vec::new());
+                }
                 web::owned_games(&core.http, &key, account)
                     .await
                     .map_err(|e| e.to_string())
@@ -522,13 +530,13 @@ impl App {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Tells downloads, waiting their turn or yet to start, whether Steam's image servers may be
-    /// asked: Steam's games and their images on.
+    /// Tells requests waiting their turn, or yet to start, whether Steam's image servers and Web
+    /// API may be asked: Steam's games on, and their switches.
     pub fn allow_steam_images(&self) {
-        self.steam.images_allowed.store(
-            self.steam.on && self.steam.images,
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        use std::sync::atomic::Ordering::Relaxed;
+        let images = self.steam.on && self.steam.images;
+        self.steam.images_allowed.store(images, Relaxed);
+        self.steam.web_allowed.store(self.asks_steam_web(), Relaxed);
     }
 
     /// The Steam app id of a game of the library, for a Steam game.
@@ -724,7 +732,10 @@ pub fn load_achievements(
     game_id: String,
     icons: bool,
     account: u64,
-    web: Option<slatty_core::http::HttpClient>,
+    web: Option<(
+        slatty_core::http::HttpClient,
+        std::sync::Arc<std::sync::atomic::AtomicBool>,
+    )>,
 ) -> Task<Message> {
     let id = game_id.clone();
     Task::perform(
@@ -742,7 +753,13 @@ pub fn load_achievements(
             .flatten();
             match (here, web) {
                 (Some(list), _) => Ok(list),
-                (None, Some(http)) => {
+                // Turned off while the client's files were read: not asked.
+                (None, Some((_, allowed)))
+                    if !allowed.load(std::sync::atomic::Ordering::Relaxed) =>
+                {
+                    Err("Steam's Web API is turned off.".to_string())
+                }
+                (None, Some((http, _))) => {
                     let key = web_key().await?;
                     web::achievements(&http, &key, account, app, icons)
                         .await

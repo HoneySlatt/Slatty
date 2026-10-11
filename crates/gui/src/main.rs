@@ -762,9 +762,9 @@ impl App {
                 self.steam.found = boot.steam_found;
                 self.steam.on = boot.steam_games;
                 self.steam.images = boot.steam_images;
-                self.allow_steam_images();
                 self.steam.web = boot.steam_web_api;
                 self.steam.web_key = boot.steam_web_key;
+                self.allow_steam_images();
                 let steam = if self.steam.on {
                     steam::load(self.steam.images)
                 } else {

@@ -34,7 +34,10 @@ impl App {
             self.achievements.insert(game_id.clone(), Loadable::Loading);
             let web = self
                 .asks_steam_web()
-                .then(|| Some(self.core.as_ref()?.http.clone()))
+                .then(|| {
+                    let http = self.core.as_ref()?.http.clone();
+                    Some((http, self.steam.web_allowed.clone()))
+                })
                 .flatten();
             return crate::steam::load_achievements(game_id, self.steam.images, account, web);
         }
