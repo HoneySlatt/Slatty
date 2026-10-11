@@ -92,11 +92,16 @@ fn a_resumed_install_keeps_its_folder() {
 #[test]
 fn running_install_shows_progress_and_can_pause() {
     let mut app = library_app();
-    // 20 MiB (21 MB) in two seconds.
+    // 15 MB received and 20 MiB written in two seconds: shown is the network's speed, in megabits
+    // a second as Steam shows it.
     let mut rate = crate::install::Rate::default();
     let start = std::time::Instant::now();
-    rate.record(start, 0);
-    rate.record(start + std::time::Duration::from_secs(2), 20 << 20);
+    rate.record(start, 0, 0);
+    rate.record(
+        start + std::time::Duration::from_secs(2),
+        20 << 20,
+        15_000_000,
+    );
     app.install_views.insert(
         "5".into(),
         InstallView::Running {
@@ -107,6 +112,7 @@ fn running_install_shows_progress_and_can_pause() {
                 files_total: 10,
                 bytes_done: 1 << 30,
                 bytes_total: 4 << 30,
+                network_bytes: 900_000_000,
             },
             cancel: tokio_util::sync::CancellationToken::new(),
             cancelling: crate::install::Cancelling::No,
@@ -120,7 +126,7 @@ fn running_install_shows_progress_and_can_pause() {
     assert_eq!(app.panel, None);
     settle(&mut app);
     let mut ui = render(&app);
-    assert!(ui.find("1.1 GB / 4.3 GB · 10.5 MB/s").is_ok());
+    assert!(ui.find("1.1 GB / 4.3 GB · 60.0 Mbps").is_ok());
     assert!(ui.find("25 %").is_ok(), "at the end of the bar");
     snapshot(&mut ui, "install-running");
     ui.click("Pause").unwrap();
@@ -173,6 +179,7 @@ fn cancelling_a_download_asks_then_deletes_it() {
                 files_total: 10,
                 bytes_done: 3 << 30,
                 bytes_total: 8 << 30,
+                network_bytes: 2 << 30,
             },
             cancel: cancel.clone(),
             cancelling: Cancelling::No,
@@ -253,17 +260,21 @@ fn download_speed_follows_the_last_seconds() {
     let mut rate = crate::install::Rate::default();
     let start = std::time::Instant::now();
     let at = |s: u64| start + Duration::from_millis(s * 250);
-    rate.record(at(0), 0);
+    // Written, then received (half as much: compressed on the way).
+    rate.record(at(0), 0, 0);
     assert_eq!(rate.per_second(), None, "not before a second");
-    rate.record(at(2), 1 << 20);
+    rate.record(at(2), 1 << 20, 1 << 19);
     assert_eq!(rate.per_second(), None);
-    rate.record(at(4), 2 << 20);
+    rate.record(at(4), 2 << 20, 1 << 20);
     assert_eq!(rate.per_second(), Some((2 << 20) as f64));
+    assert_eq!(rate.received_per_second(), Some((1 << 20) as f64));
     // A fast start no longer counts once it is more than three seconds old.
     for i in 5..=40 {
-        rate.record(at(i), (2 << 20) + (i - 4) * (256 << 10));
+        let written = (2 << 20) + (i - 4) * (256 << 10);
+        rate.record(at(i), written, written / 2);
     }
     assert_eq!(rate.per_second(), Some((1 << 20) as f64));
+    assert_eq!(rate.received_per_second(), Some((1 << 19) as f64));
 }
 
 #[test]

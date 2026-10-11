@@ -473,14 +473,17 @@ impl<S: Source> LinuxDownload<'_, S> {
         };
         let files_done = AtomicUsize::new(0);
         let bytes_done = AtomicU64::new(0);
+        let network = AtomicU64::new(0);
         let report = |files: usize, bytes: u64| {
             (self.progress)(Progress {
                 files_done: files_done.fetch_add(files, Ordering::Relaxed) + files,
                 bytes_done: bytes_done.fetch_add(bytes, Ordering::Relaxed) + bytes,
+                network_bytes: network.load(Ordering::Relaxed),
                 ..total
             })
         };
         report(0, 0);
+        let network = &network;
         let first_error: std::sync::Mutex<Option<Error>> = std::sync::Mutex::new(None);
         // On a full disk the other files would fail too, once downloaded.
         let full = AtomicBool::new(false);
@@ -511,7 +514,8 @@ impl<S: Source> LinuxDownload<'_, S> {
                         bad.lock().unwrap().push(file.path.clone());
                         if download {
                             refuse_outside(dir, &dest)?;
-                            self.download_file(&dest, file, &|n| report(0, n)).await?;
+                            self.download_file(&dest, file, &|n| report(0, n), network)
+                                .await?;
                         }
                         report(1, if download { 0 } else { file.entry.size });
                         Ok::<(), Error>(())
@@ -639,11 +643,13 @@ impl<S: Source> LinuxDownload<'_, S> {
     }
 
     /// Writes `file` at `dest` atomically, trying again when the connection fails on the way.
+    /// `network` counts the bytes received.
     async fn download_file(
         &self,
         dest: &Path,
         file: &LinuxFile,
         on_bytes: &(dyn Fn(u64) + Sync),
+        network: &AtomicU64,
     ) -> Result<()> {
         if let Some(parent) = dest.parent() {
             crate::paths::ensure_dir(parent)?;
@@ -664,7 +670,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         };
         let mut attempt = 0;
         loop {
-            match self.write_file(&tmp, file, &count).await {
+            match self.write_file(&tmp, file, &count, network).await {
                 Ok(()) => break,
                 Err(Error::Cancelled) => {
                     let _ = std::fs::remove_file(&tmp);
@@ -695,6 +701,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         tmp: &Path,
         file: &LinuxFile,
         count: &(dyn Fn(u64) + Sync),
+        network: &AtomicU64,
     ) -> Result<()> {
         let e = &file.entry;
         let out = fsutil::restart_staging(tmp)?;
@@ -738,6 +745,7 @@ impl<S: Source> LinuxDownload<'_, S> {
                 return Err(closed());
             };
             let mut bytes = &bytes?[..];
+            network.fetch_add(bytes.len() as u64, Ordering::Relaxed);
             if header_len.is_none() {
                 head.extend_from_slice(bytes);
                 if head.len() < 30 {

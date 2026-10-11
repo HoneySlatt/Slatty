@@ -259,6 +259,7 @@ fn installs_started_during_a_download_wait_in_a_queue_that_can_be_reordered() {
             files_total: 10,
             bytes_done: 4 << 30,
             bytes_total: 4 << 30,
+            network_bytes: 3 << 30,
         },
     )));
     let install = Install {

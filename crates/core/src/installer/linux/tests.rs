@@ -302,6 +302,14 @@ async fn installs_the_game_files_and_the_dlc_over_them() {
         (5, set.disk_size()),
         "counted once"
     );
+    // Received: the files as the installer holds them (deflated), the cut answer included.
+    let compressed: u64 = set.files.iter().map(|f| f.entry.compressed).sum();
+    assert!(
+        p.network_bytes > compressed && p.network_bytes < set.disk_size(),
+        "{} received, {compressed} compressed, {} written",
+        p.network_bytes,
+        set.disk_size()
+    );
 
     // Checked in place: a damaged file is found, then repaired.
     assert!(

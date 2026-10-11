@@ -316,7 +316,7 @@ impl App {
                 cancelling,
                 rate,
                 ..
-            }) => download_controls(g, *progress, *cancelling, rate.per_second(), false),
+            }) => download_controls(g, *progress, *cancelling, rate.received_per_second(), false),
             _ => Space::new().into(),
         }
     }
@@ -645,7 +645,7 @@ pub(super) fn download_controls<'a>(
     let msg = |m: fn(String) -> InstallMsg| Message::Install(m(g.id.clone()));
     let mut status = amount(progress);
     if let Some(speed) = speed {
-        status += &format!(" · {}/s", human_size(speed as u64));
+        status += &format!(" · {}", slatty_core::units::speed(speed));
     }
     let status = note(status);
     let buttons = (cancelling == Cancelling::No).then(|| {

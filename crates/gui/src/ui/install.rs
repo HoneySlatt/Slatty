@@ -127,7 +127,7 @@ impl App {
                 cancelling,
                 rate,
                 ..
-            }) => download_controls(g, *progress, *cancelling, rate.per_second(), true),
+            }) => download_controls(g, *progress, *cancelling, rate.received_per_second(), true),
             Some(InstallView::Queued(_)) => {
                 let place = self
                     .queue

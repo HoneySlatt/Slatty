@@ -296,7 +296,7 @@ impl App {
                     self.install_views.get_mut(&game_id)
                 {
                     *progress = p;
-                    rate.record(Instant::now(), p.bytes_done);
+                    rate.record(Instant::now(), p.bytes_done, p.network_bytes);
                 }
             }
             InstallMsg::Discard(game_id) => {
@@ -694,29 +694,39 @@ impl App {
     }
 }
 
-/// Download speed over the last few seconds of progress.
+/// Download speed over the last few seconds of progress: bytes written, which tell the time left,
+/// and bytes received, the speed shown.
 #[derive(Debug, Default)]
-pub struct Rate(VecDeque<(Instant, u64)>);
+pub struct Rate(VecDeque<(Instant, u64, u64)>);
 
 impl Rate {
     const WINDOW: Duration = Duration::from_secs(3);
 
-    pub fn record(&mut self, at: Instant, bytes: u64) {
-        self.0.push_back((at, bytes));
+    pub fn record(&mut self, at: Instant, written: u64, received: u64) {
+        self.0.push_back((at, written, received));
         while self
             .0
             .get(1)
-            .is_some_and(|(t, _)| at.duration_since(*t) >= Self::WINDOW)
+            .is_some_and(|(t, ..)| at.duration_since(*t) >= Self::WINDOW)
         {
             self.0.pop_front();
         }
     }
 
-    /// Bytes per second, once a second of progress has been seen.
+    /// Bytes written per second, once a second of progress has been seen.
     pub fn per_second(&self) -> Option<f64> {
-        let (&(t0, b0), &(t1, b1)) = (self.0.front()?, self.0.back()?);
-        let seconds = t1.duration_since(t0).as_secs_f64();
-        (seconds >= 1.0).then(|| b1.saturating_sub(b0) as f64 / seconds)
+        self.over(|&(_, written, _)| written)
+    }
+
+    /// Bytes received from the network per second, once a second of progress has been seen.
+    pub fn received_per_second(&self) -> Option<f64> {
+        self.over(|&(.., received)| received)
+    }
+
+    fn over(&self, bytes: impl Fn(&(Instant, u64, u64)) -> u64) -> Option<f64> {
+        let (first, last) = (self.0.front()?, self.0.back()?);
+        let seconds = last.0.duration_since(first.0).as_secs_f64();
+        (seconds >= 1.0).then(|| bytes(last).saturating_sub(bytes(first)) as f64 / seconds)
     }
 }
 

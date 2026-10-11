@@ -110,6 +110,8 @@ pub struct Progress {
     pub files_total: usize,
     pub bytes_done: u64,
     pub bytes_total: u64,
+    /// Received from the network, as sent (compressed): the speed shown, as Steam shows it.
+    pub network_bytes: u64,
 }
 
 /// Result of checking files in place.
@@ -207,14 +209,17 @@ impl<S: ContentSource> Download<'_, S> {
         };
         let files_done = AtomicUsize::new(0);
         let bytes_done = AtomicU64::new(0);
+        let network = AtomicU64::new(0);
         let report = |files: usize, bytes: u64| {
             (self.progress)(Progress {
                 files_done: files_done.fetch_add(files, Ordering::Relaxed) + files,
                 bytes_done: bytes_done.fetch_add(bytes, Ordering::Relaxed) + bytes,
+                network_bytes: network.load(Ordering::Relaxed),
                 ..total
             })
         };
         report(0, 0);
+        let network = &network;
 
         // A failed file does not stop the others, so a retry has less to fetch; cancelling stops all,
         // and so does a full disk, on which the others would fail too once downloaded.
@@ -251,7 +256,9 @@ impl<S: ContentSource> Download<'_, S> {
                         bad.lock().unwrap().push(rel.clone());
                         if download {
                             refuse_outside(dir, &dest)?;
-                            let local = self.download_file(&dest, file, &|n| report(0, n)).await?;
+                            let local = self
+                                .download_file(&dest, file, &|n| report(0, n), network)
+                                .await?;
                             reused.fetch_add(local, Ordering::Relaxed);
                         }
                         report(1, if download { 0 } else { file.size() });
@@ -282,11 +289,13 @@ impl<S: ContentSource> Download<'_, S> {
     }
 
     /// Writes `file` at `dest` atomically; returns the bytes taken from the file already there.
+    /// `network` counts the bytes received.
     async fn download_file(
         &self,
         dest: &Path,
         file: &DepotFile,
         on_bytes: &(dyn Fn(u64) + Sync),
+        network: &AtomicU64,
     ) -> Result<u64> {
         if let Some(parent) = dest.parent() {
             crate::paths::ensure_dir(parent)?;
@@ -334,6 +343,7 @@ impl<S: ContentSource> Download<'_, S> {
                         }
                     }
                     let raw = self.source.chunk(&product, &c.compressed_md5).await?;
+                    network.fetch_add(raw.len() as u64, Ordering::Relaxed);
                     tokio::task::spawn_blocking(move || unpack_chunk(&raw, &c))
                         .await
                         .expect("chunk task panicked")

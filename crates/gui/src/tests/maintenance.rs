@@ -60,6 +60,7 @@ fn an_update_shows_its_progress_and_can_be_paused() {
             bytes_total: 4 << 30,
             files_done: 3,
             files_total: 10,
+            network_bytes: 1 << 29,
         },
     )));
     let mut ui = render(&app);

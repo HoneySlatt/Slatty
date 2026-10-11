@@ -253,6 +253,55 @@ async fn interrupted_install_resumes_without_refetching_finished_files() {
     );
 }
 
+/// Progress tells the bytes received from the network (chunks as GOG sends them, compressed) apart
+/// from those written: the speed shown is the network's. A chunk copied from the file already
+/// there is not received.
+#[tokio::test]
+async fn progress_counts_the_bytes_received_apart_from_those_written() {
+    let env = Env::new("network-bytes");
+    let set = collect_files(&env.source, &env.depots).await.unwrap();
+    let sent: u64 = set
+        .files
+        .iter()
+        .flat_map(|(_, f)| &f.chunks)
+        .map(|c| c.compressed_size)
+        .sum();
+    let last = Mutex::new(Progress::default());
+    let free_space = |_: &Path| Ok(PLENTY);
+    Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|p| *last.lock().unwrap() = p,
+        free_space: &free_space,
+    }
+    .run(&set, &env.partial(), &env.target())
+    .await
+    .unwrap();
+    let p = *last.lock().unwrap();
+    assert_eq!(p.network_bytes, sent);
+    assert_eq!(p.bytes_done, set.disk_size());
+    assert_ne!(p.network_bytes, p.bytes_done, "compressed on the way");
+
+    // Repaired in place: the chunks still right are copied, not received.
+    std::fs::write(
+        env.target().join("data/level1.pak"),
+        b"0123456789abcdefghiX",
+    )
+    .unwrap();
+    let last = Mutex::new(Progress::default());
+    Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|p| *last.lock().unwrap() = p,
+        free_space: &free_space,
+    }
+    .check_installed(&set, &env.target(), true)
+    .await
+    .unwrap();
+    let p = *last.lock().unwrap();
+    assert!(p.network_bytes > 0 && p.network_bytes < sent, "{p:?}");
+}
+
 /// A disk found full stops every file at once: the others would fail the same way after their
 /// chunks were downloaded for nothing. No temporary file is left behind.
 #[tokio::test]

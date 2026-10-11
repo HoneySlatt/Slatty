@@ -188,8 +188,10 @@ impl App {
             return Space::new().into();
         };
         let p = *progress;
-        let speed = rate.per_second();
-        let left = speed
+        // Shown: the network's speed, as Steam shows it. The time left follows the bytes written.
+        let speed = rate.received_per_second();
+        let left = rate
+            .per_second()
             .filter(|s| *s > 0.0)
             .map(|s| p.bytes_total.saturating_sub(p.bytes_done) as f64 / s);
         let stat = |s: String| text(s).size(15).width(Length::Fill);
@@ -234,7 +236,7 @@ impl App {
             row![
                 stat(amount(p)),
                 vertical_rule(18.0),
-                stat(speed.map_or_else(|| "—".into(), |s| format!("{}/s", human_size(s as u64)))),
+                stat(speed.map_or_else(|| "—".into(), slatty_core::units::speed)),
                 vertical_rule(18.0),
                 stat(left.map_or_else(
                     || "Estimating…".into(),

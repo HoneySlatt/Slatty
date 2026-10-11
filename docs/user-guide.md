@@ -107,14 +107,16 @@ in your library on their own. Their page shows **Not installable** instead of In
 reason, once GOG has said so (one request to GOG's public product data, when the page opens).
 
 Once started, a download shows on the game page itself, with its progress, its percentage and its
-speed over the last seconds. The big button pauses it (then resumes it), and **Cancel** deletes it
+network speed over the last seconds. Sizes and speeds read as in Steam: sizes in decimal megabytes
+and gigabytes (1 GB = 1,000,000,000 bytes), the speed in megabits a second (Mbps) of data received,
+which GOG sends compressed, while the size downloaded counts the game's files as written. The big button pauses it (then resumes it), and **Cancel** deletes it
 after asking. The rest of the launcher stays usable meanwhile; the banner at the top of the Library
 tab leads back to the game.
 
 **Downloads tab.** The download button of the top bar (next to Settings) lists:
 
-- the install downloading, with its folder, progress, size downloaded, speed and time left, and
-  Pause and Cancel; downloads paused, cut off or failed are listed too, with Resume and Discard;
+- the install downloading, with its folder, progress, size written, network speed and time left,
+  and Pause and Cancel; downloads paused, cut off or failed are listed too, with Resume and Discard;
 - the **queue**: an install started while another one downloads (its button then reads **Add to
   queue**) waits there instead of being refused. It starts by itself once the ones before it are done, and also after a failed or
   cancelled download. Drag a row by its handle to change the order, or remove it with ×. Pausing

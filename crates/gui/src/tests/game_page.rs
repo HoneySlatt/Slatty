@@ -183,6 +183,7 @@ fn closing_asks_first_only_when_something_is_running() {
                 files_total: 4,
                 bytes_done: 1 << 30,
                 bytes_total: 2 << 30,
+                network_bytes: 900 << 20,
             },
             cancel: cancel.clone(),
             cancelling: crate::install::Cancelling::No,
