@@ -505,6 +505,28 @@ fn a_download_steam_makes_shows_until_it_is_done() {
     assert_eq!(app.steam_downloads_every(), None);
 }
 
+/// A first install Steam still downloads, or keeps waiting, is not installed yet (the Installed
+/// shelf, a GOG game owned on Steam too); an installed game being updated stays installed.
+#[test]
+fn a_steam_game_still_downloading_is_not_installed_yet() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let downloading = Update {
+        done: 10,
+        total: 100,
+        stage_total: 0,
+        started: true,
+        paused: false,
+    };
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![
+        installed(620, 0, false, Some(downloading)),
+        installed(440, 100, true, Some(downloading)),
+    ])));
+    assert!(!app.is_installed("steam-620"));
+    assert!(app.is_installed("steam-440"), "being updated");
+}
+
 /// Steam's own tools (its runtime, Proton, redistributables) have manifests and updates too, and
 /// so has an app of no game of the account: none shows in Downloads by its number, keeps the
 /// manifests read, or is told "ready to play".

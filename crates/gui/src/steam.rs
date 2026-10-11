@@ -621,11 +621,11 @@ impl App {
 
     /// Whether a game is installed, by SlattyLauncher or by Steam.
     pub fn is_installed(&self, game_id: &str) -> bool {
+        // Steam's whole once installed, updates included; a first install still downloads.
+        let on_steam = |id: &str| self.steam.installed.get(id).is_some_and(|g| g.ready);
         self.installs.contains_key(game_id)
-            || self.steam.installed.contains_key(game_id)
-            || self
-                .steam_twin(game_id)
-                .is_some_and(|twin| self.steam.installed.contains_key(twin))
+            || on_steam(game_id)
+            || self.steam_twin(game_id).is_some_and(on_steam)
     }
 
     /// When a game was last played: as Steam records it for a Steam game, else from the sessions
