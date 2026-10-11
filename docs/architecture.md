@@ -335,10 +335,14 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
   `XDG_DATA_HOME` it is given) and sends it to GOG later. During the session `comet::Unlocks` opens
   it read-only, never waiting on Comet's locks, and looks each second: `PRAGMA data_version` tells
   whether Comet wrote since the last look, so the rows are read again only then (4 to 8 µs a look,
-  0.4 ms after a write, with 1,000 achievements). What was unlocked on GOG at the start, or found
-  at the first reading, is not new. Each new one is a `PlayEvent::Achieved`.
+  0.4 ms after a write, with 1,000 achievements). What was unlocked on GOG at the start, or is
+  dated more than a minute before it (Comet copies GOG's list into the database, with GOG's dates,
+  whenever the game first asks), is not new. Each new one is a `PlayEvent::Achieved`, and a last
+  look follows the game's end.
 - **Achievement report.** Achievements are read before and after the session, so the report reflects
-  what GOG actually recorded. The interface does not notify again one already told during the game.
+  what GOG actually recorded. The interface does not notify again one already told during the game:
+  it compares keys, since Comet asks GOG for names in the system's language and the launcher does
+  not.
 - **Galaxy service.** Some Galaxy SDK versions only reach Comet when a `GalaxyCommunication` Windows
   service exists, as GOG Galaxy installs one. Before the first session with Comet, the play flow
   registers Comet's dummy service in the prefix (`sc create`, plus the `GalaxyClient\paths`

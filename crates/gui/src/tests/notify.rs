@@ -1,7 +1,17 @@
 use super::*;
 use crate::notify::{Kind, NotifyMsg, SHOWN_FOR};
 use crate::play::{PlayMsg, PlayState};
+use slatty_core::achievements::Unlock;
 use slatty_core::play::PlayEvent;
+
+fn unlocks(list: &[(&str, &str)]) -> Vec<Unlock> {
+    list.iter()
+        .map(|(key, name)| Unlock {
+            key: key.to_string(),
+            name: name.to_string(),
+        })
+        .collect()
+}
 
 /// A download says when it starts and when it is done, in a card in the window's corner; the card
 /// goes after a few seconds, and a click opens the game's page.
@@ -62,13 +72,12 @@ fn achievements_unlocked_are_said_when_the_game_ends() {
         running: true,
         told: Vec::new(),
     });
-    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(vec![
-        "[FAKE] First Steps".into(),
-    ]))));
-    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(vec![
-        "[FAKE] Alpha".into(),
-        "[FAKE] Beta".into(),
-    ]))));
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(
+        unlocks(&[("first", "[FAKE] First Steps")]),
+    ))));
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(
+        unlocks(&[("alpha", "[FAKE] Alpha"), ("beta", "[FAKE] Beta")]),
+    ))));
     let _ = app.update(Message::Playing(PlayMsg::Event(
         PlayEvent::CloudUploadSkipped("the end of the session is uncertain".into()),
     )));
@@ -104,9 +113,9 @@ fn achievements_are_said_as_the_game_unlocks_them() {
         running: true,
         told: Vec::new(),
     });
-    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Achieved(vec![
-        "[FAKE] First Steps".into(),
-    ]))));
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Achieved(
+        unlocks(&[("first", "[FAKE] First Steps")]),
+    ))));
     assert_eq!(
         toasted(&app),
         [(
@@ -114,14 +123,13 @@ fn achievements_are_said_as_the_game_unlocks_them() {
             "[FAKE] First Steps · [FAKE] Game 3".to_string()
         )]
     );
-    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(vec![
-        "[FAKE] First Steps".into(),
-    ]))));
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(
+        unlocks(&[("first", "[FAKE] First Steps")]),
+    ))));
     assert_eq!(toasted(&app).len(), 1, "not told twice");
-    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(vec![
-        "[FAKE] First Steps".into(),
-        "[FAKE] Alpha".into(),
-    ]))));
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(
+        unlocks(&[("first", "[FAKE] First Steps"), ("alpha", "[FAKE] Alpha")]),
+    ))));
     assert_eq!(
         toasted(&app).last(),
         Some(&(
@@ -136,6 +144,34 @@ fn achievements_are_said_as_the_game_unlocks_them() {
             "Achievements recorded on GOG: [FAKE] First Steps",
             "Achievements recorded on GOG: [FAKE] First Steps, [FAKE] Alpha",
         ]
+    );
+}
+
+/// Comet asks GOG for names in the system's language, the launcher does not: an achievement told
+/// in game under its French name is the same one GOG then reports under its English name.
+#[test]
+fn an_achievement_named_in_another_language_is_not_told_twice() {
+    let mut app = library_app();
+    let (stop, _rx) = tokio::sync::mpsc::unbounded_channel();
+    app.play = Some(PlayState {
+        game_id: "3".into(),
+        log: Vec::new(),
+        stop,
+        running: true,
+        told: Vec::new(),
+    });
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Achieved(
+        unlocks(&[("first", "[FAKE] Premiers pas")]),
+    ))));
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::Unlocked(
+        unlocks(&[("first", "[FAKE] First Steps")]),
+    ))));
+    assert_eq!(
+        toasted(&app),
+        [(
+            "Achievement unlocked".to_string(),
+            "[FAKE] Premiers pas · [FAKE] Game 3".to_string()
+        )]
     );
 }
 

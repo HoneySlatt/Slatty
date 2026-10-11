@@ -1,5 +1,6 @@
 //! Text shown to the user: sizes, durations, dates and descriptions of core events.
 
+use slatty_core::achievements::Unlock;
 use slatty_core::cloud::plan::Warning;
 use slatty_core::installer::Progress;
 use slatty_core::play::{CloudSummary, PlayEvent};
@@ -174,6 +175,10 @@ fn describe_cloud(prefix: &str, s: &CloudSummary) -> String {
 }
 
 pub fn describe_play_event(e: &PlayEvent) -> String {
+    let names = |new: &[Unlock]| {
+        let names: Vec<&str> = new.iter().map(|u| u.name.as_str()).collect();
+        names.join(", ")
+    };
     match e {
         PlayEvent::PreparingPrefix => "First launch: creating the Wine prefix…".into(),
         PlayEvent::SetupStep(step) => format!("Setup: {step}…"),
@@ -217,10 +222,8 @@ pub fn describe_play_event(e: &PlayEvent) -> String {
         PlayEvent::PlaytimeNotReported(why) => {
             format!("Play time not sent to GOG ({why}); it will be sent after the next session.")
         }
-        PlayEvent::Achieved(names) => format!("Achievement unlocked: {}", names.join(", ")),
-        PlayEvent::Unlocked(names) => {
-            format!("Achievements recorded on GOG: {}", names.join(", "))
-        }
+        PlayEvent::Achieved(new) => format!("Achievement unlocked: {}", names(new)),
+        PlayEvent::Unlocked(new) => format!("Achievements recorded on GOG: {}", names(new)),
         PlayEvent::NoNewAchievement => "No new achievement recorded on GOG.".into(),
         PlayEvent::AchievementsUnknown => "Could not read achievements back from GOG.".into(),
     }

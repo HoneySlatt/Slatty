@@ -26,6 +26,14 @@ pub struct Achievement {
     pub image_url_locked: String,
 }
 
+/// An achievement just unlocked. Its name may be in the system's language (Comet asks GOG in it)
+/// or not (the launcher does not): only the key tells two apart.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unlock {
+    pub key: String,
+    pub name: String,
+}
+
 #[derive(Deserialize)]
 struct Page {
     items: Vec<Achievement>,

@@ -107,14 +107,14 @@ fn print_event(game_id: &str, event: PlayEvent) {
                 shown(why)
             )
         }
-        PlayEvent::Achieved(names) => {
-            for n in names {
-                println!("Achievement unlocked: {}", shown(n));
+        PlayEvent::Achieved(new) => {
+            for u in new {
+                println!("Achievement unlocked: {}", shown(&u.name));
             }
         }
-        PlayEvent::Unlocked(names) => {
-            for n in names {
-                println!("Achievement unlocked on GOG: {}", shown(n));
+        PlayEvent::Unlocked(new) => {
+            for u in new {
+                println!("Achievement unlocked on GOG: {}", shown(&u.name));
             }
         }
         PlayEvent::NoNewAchievement => {

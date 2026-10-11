@@ -8,7 +8,7 @@ use nix::sys::signal::{self, Signal};
 use nix::unistd::Pid;
 use tokio::process::Child;
 
-use crate::achievements::Achievement;
+use crate::achievements::{Achievement, Unlock};
 use crate::auth::Tokens;
 use crate::error::{Error, Result};
 use crate::paths::Dirs;
@@ -237,13 +237,15 @@ fn write_private(private_dir: &Path, token_file: &Path, tokens: &Tokens) -> Resu
 
 /// Achievements unlocked while the game runs, read from Comet's own database: Comet records an
 /// unlock there at once and sends it to GOG later. Those already unlocked when the session started
-/// (on GOG, or in the database at its first reading) are not new.
+/// (on GOG, or in the database, dated before) are not new.
 pub struct Unlocks {
     /// `None` when an id cannot name a folder of Comet's.
     file: Option<PathBuf>,
     connection: Option<rusqlite::Connection>,
     known: HashSet<String>,
-    read_once: bool,
+    /// Unix time a minute before the session. Comet copies GOG's list into the database during
+    /// the session, with GOG's dates: an unlock dated earlier is not new, whenever it appears.
+    since: i64,
     /// SQLite's `data_version` at the last reading.
     version: Option<i64>,
 }
@@ -253,7 +255,7 @@ impl Unlocks {
         // GOG's ids are digits; a game imported from a folder brings its client id from its own
         // `goggame-*.info`.
         let digits = |id: &str| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit());
-        let mut unlocks = Unlocks {
+        Unlocks {
             // Comet adds its own folder to the XDG_DATA_HOME it is given.
             file: (digits(client_id) && digits(user_id)).then(|| {
                 dirs.data
@@ -268,31 +270,26 @@ impl Unlocks {
                 .filter(|a| a.date_unlocked.is_some())
                 .map(|a| a.achievement_key.clone())
                 .collect(),
-            read_once: false,
+            since: chrono::Utc::now().timestamp() - 60,
             version: None,
-        };
-        unlocks.new_ones();
-        unlocks
-    }
-
-    /// Names of the achievements unlocked since the last look. Never waits on Comet: a database
-    /// being written is read at the next look.
-    pub fn new_ones(&mut self) -> Vec<String> {
-        let Some(rows) = self.read() else {
-            return Vec::new();
-        };
-        let new: Vec<String> = rows
-            .into_iter()
-            .filter_map(|(key, name)| self.known.insert(key).then_some(name))
-            .collect();
-        if std::mem::replace(&mut self.read_once, true) {
-            new
-        } else {
-            Vec::new()
         }
     }
 
-    fn read(&mut self) -> Option<Vec<(String, String)>> {
+    /// The achievements unlocked since the last look. Never waits on Comet: a database being
+    /// written is read at the next look.
+    pub fn new_ones(&mut self) -> Vec<Unlock> {
+        let Some(rows) = self.read() else {
+            return Vec::new();
+        };
+        let since = self.since;
+        rows.into_iter()
+            .filter(|(.., time)| unlock_time(time).is_some_and(|t| t >= since))
+            .filter(|(key, ..)| self.known.insert(key.clone()))
+            .map(|(key, name, _)| Unlock { key, name })
+            .collect()
+    }
+
+    fn read(&mut self) -> Option<Vec<(String, String, String)>> {
         if self.connection.is_none() {
             let file = self.file.as_ref().filter(|f| f.is_file())?;
             let connection = rusqlite::Connection::open_with_flags(
@@ -312,16 +309,27 @@ impl Unlocks {
             return None;
         }
         let mut statement = connection
-            .prepare_cached("SELECT key, name FROM achievement WHERE unlock_time IS NOT NULL")
+            .prepare_cached(
+                "SELECT key, name, unlock_time FROM achievement WHERE unlock_time IS NOT NULL",
+            )
             .ok()?;
         let rows = statement
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
             .ok()?
             .collect::<rusqlite::Result<_>>()
             .ok()?;
         self.version = Some(version);
         Some(rows)
     }
+}
+
+/// Unix time of an unlock as Comet stores it: RFC 3339 for its own, GOG's own form (`+0000`) for
+/// those it copies from GOG.
+fn unlock_time(time: &str) -> Option<i64> {
+    chrono::DateTime::parse_from_rfc3339(time)
+        .or_else(|_| chrono::DateTime::parse_from_str(time, "%Y-%m-%dT%H:%M:%S%z"))
+        .ok()
+        .map(|t| t.timestamp())
 }
 
 /// Files of GOG's Galaxy SDK, the only way a game reports achievements to Comet.
@@ -535,16 +543,62 @@ mod tests {
         let unlock = |id: u32| {
             comet
                 .execute(
-                    "UPDATE achievement SET unlock_time = '2026-10-10T11:00:00+00:00' WHERE id = ?1",
-                    [id],
+                    "UPDATE achievement SET unlock_time = ?2 WHERE id = ?1",
+                    rusqlite::params![id, chrono::Utc::now().to_rfc3339()],
                 )
                 .unwrap()
         };
         unlock(2);
-        assert_eq!(unlocks.new_ones(), ["[FAKE] b"]);
+        assert_eq!(names(unlocks.new_ones()), ["[FAKE] b"]);
         assert!(unlocks.new_ones().is_empty(), "said once");
         unlock(4);
-        assert_eq!(unlocks.new_ones(), ["[FAKE] d"]);
+        assert_eq!(names(unlocks.new_ones()), ["[FAKE] d"]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn names(unlocks: Vec<Unlock>) -> Vec<String> {
+        unlocks.into_iter().map(|u| u.name).collect()
+    }
+
+    /// GOG could not be asked at the start, and the first reading found Comet's database still
+    /// empty: the unlocks Comet then copies from GOG, with GOG's dates, are still not new.
+    #[test]
+    fn unlocks_copied_from_gog_during_the_session_are_not_new() {
+        let root = std::env::temp_dir().join(format!("slatty-unlocks-old-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dirs = Dirs::under(&root);
+        let file = dirs.data.join("comet/comet/gameplay/123/456/gameplay.db");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let comet = rusqlite::Connection::open(&file).unwrap();
+        comet
+            .execute_batch(
+                "CREATE TABLE achievement (id INTEGER PRIMARY KEY, key TEXT, name TEXT, unlock_time TEXT);",
+            )
+            .unwrap();
+        let mut unlocks = Unlocks::new(&dirs, "123", "456", &[]);
+        assert!(unlocks.new_ones().is_empty());
+        comet
+            .execute_batch(
+                "INSERT INTO achievement VALUES
+                   (1, 'a', '[FAKE] a', '2024-10-10T10:00:00+0000'),
+                   (2, 'b', '[FAKE] b', '2024-10-11T10:00:00+00:00'),
+                   (3, 'c', '[FAKE] c', NULL);",
+            )
+            .unwrap();
+        assert!(unlocks.new_ones().is_empty());
+        comet
+            .execute(
+                "UPDATE achievement SET unlock_time = ?1 WHERE id = 3",
+                [chrono::Utc::now().to_rfc3339()],
+            )
+            .unwrap();
+        assert_eq!(
+            unlocks.new_ones(),
+            [Unlock {
+                key: "c".into(),
+                name: "[FAKE] c".into()
+            }]
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -566,8 +620,8 @@ mod tests {
         let client_id = root.join("elsewhere").display().to_string();
         let mut unlocks = Unlocks::new(&dirs, &client_id, "456", &[]);
         db.execute(
-            "UPDATE achievement SET unlock_time = '2026-10-10T11:00:00+00:00'",
-            [],
+            "UPDATE achievement SET unlock_time = ?1",
+            [chrono::Utc::now().to_rfc3339()],
         )
         .unwrap();
         assert!(unlocks.new_ones().is_empty());

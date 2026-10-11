@@ -14,7 +14,8 @@ pub struct PlayState {
     pub log: Vec<String>,
     pub stop: UnboundedSender<()>,
     pub running: bool,
-    /// Achievements already told while the game ran, not told again once GOG has them.
+    /// Keys of the achievements already told while the game ran, not told again once GOG has
+    /// them.
     pub told: Vec<String>,
 }
 
@@ -71,14 +72,14 @@ impl App {
     fn play_notification(&mut self, game_id: &str, event: &PlayEvent) -> Task<Message> {
         let title = self.title_of(game_id);
         let names: Vec<String> = match (event, self.play.as_mut()) {
-            (PlayEvent::Achieved(names), Some(p)) => {
-                p.told.extend(names.iter().cloned());
-                names.clone()
+            (PlayEvent::Achieved(new), Some(p)) => {
+                p.told.extend(new.iter().map(|u| u.key.clone()));
+                new.iter().map(|u| u.name.clone()).collect()
             }
-            (PlayEvent::Unlocked(names), Some(p)) => names
+            (PlayEvent::Unlocked(new), Some(p)) => new
                 .iter()
-                .filter(|n| !p.told.contains(n))
-                .cloned()
+                .filter(|u| !p.told.contains(&u.key))
+                .map(|u| u.name.clone())
                 .collect(),
             _ => Vec::new(),
         };

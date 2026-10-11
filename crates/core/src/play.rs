@@ -5,7 +5,7 @@ use reqwest::Client;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::account::Account;
-use crate::achievements::{self, Achievement};
+use crate::achievements::{self, Achievement, Unlock};
 use crate::auth::Tokens;
 use crate::cloud::{self, LocationOutcome, sync::SyncOptions};
 use crate::comet::{self, Comet};
@@ -95,7 +95,7 @@ pub enum PlayEvent {
     },
     StopRequested,
     /// Achievements the game unlocked just now, as Comet records them; it sends them to GOG.
-    Achieved(Vec<String>),
+    Achieved(Vec<Unlock>),
     /// Stop was asked for while the launch was being prepared: the game was not started.
     StoppedBeforeStart,
     Ended {
@@ -109,7 +109,8 @@ pub enum PlayEvent {
     PlaytimeReported(i64),
     /// Play time not sent now; it is retried after the next session.
     PlaytimeNotReported(String),
-    Unlocked(Vec<String>),
+    /// Achievements GOG records as unlocked since the session started.
+    Unlocked(Vec<Unlock>),
     NoNewAchievement,
     AchievementsUnknown,
 }
@@ -357,9 +358,12 @@ pub async fn play(
                     .map(|(_, after)| after),
             ) {
                 (Some(before), Some(after)) => {
-                    let new: Vec<String> = achievements::newly_unlocked(&before, &after)
+                    let new: Vec<Unlock> = achievements::newly_unlocked(&before, &after)
                         .iter()
-                        .map(|a| a.name.clone())
+                        .map(|a| Unlock {
+                            key: a.achievement_key.clone(),
+                            name: a.name.clone(),
+                        })
                         .collect();
                     if new.is_empty() {
                         PlayEvent::NoNewAchievement
@@ -423,6 +427,11 @@ async fn run_session(
             }
         }
     };
+    // A last look, for what the game unlocked in its last second.
+    let new = unlocks.map(comet::Unlocks::new_ones).unwrap_or_default();
+    if !new.is_empty() {
+        emit(PlayEvent::Achieved(new));
+    }
     end_session(db, id, &outcome, user_id)?;
     Ok(outcome)
 }
