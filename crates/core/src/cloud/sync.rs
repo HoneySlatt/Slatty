@@ -115,8 +115,13 @@ pub async fn sync<T: CloudTransport>(
     let remote = remote_map(cloud.list().await?, target.location)?;
     let stored_root = stored_root(target)?;
     let root_changed = match stored_root {
-        Some((root, last_sync_at)) => {
-            Path::new(&root) != target.root || synced_by_another(target, last_sync_at)?
+        Some(stored) => {
+            Path::new(&stored.root) != target.root
+                || synced_by_another(target, stored.last_sync_at)?
+                || stored
+                    .identity
+                    .zip(folder_identity(target.root))
+                    .is_some_and(|(was, is)| was != is)
         }
         None => false,
     };
@@ -545,17 +550,39 @@ fn delete_base(t: &SyncTarget<'_>, key: &str) -> Result<()> {
     Ok(())
 }
 
-/// The folder this account last synced the location in, and when.
-fn stored_root(t: &SyncTarget<'_>) -> Result<Option<(String, Option<i64>)>> {
+/// Where this account last synced a location.
+struct StoredRoot {
+    root: String,
+    last_sync_at: Option<i64>,
+    /// Which folder it was there (`folder_identity`); none before it was recorded.
+    identity: Option<String>,
+}
+
+fn stored_root(t: &SyncTarget<'_>) -> Result<Option<StoredRoot>> {
     Ok(t.db
         .conn()
         .query_row(
-            "SELECT root, last_sync_at FROM sync_roots
+            "SELECT root, last_sync_at, identity FROM sync_roots
              WHERE user_id = ?1 AND game_id = ?2 AND location = ?3",
             params![t.user_id, t.game_id, t.location],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| {
+                Ok(StoredRoot {
+                    root: r.get(0)?,
+                    last_sync_at: r.get(1)?,
+                    identity: r.get(2)?,
+                })
+            },
         )
         .optional()?)
+}
+
+/// Which folder `root` is (device and inode): a folder deleted and made again at the same path
+/// (a broken prefix made again) is another one, whose files the history does not describe.
+fn folder_identity(root: &Path) -> Option<String> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata(root)
+        .ok()
+        .map(|m| format!("{}:{}", m.dev(), m.ino()))
 }
 
 /// Whether another account synced the same folder since this one last did (accounts that own the
@@ -574,9 +601,18 @@ fn synced_by_another(t: &SyncTarget<'_>, since: Option<i64>) -> Result<bool> {
 
 fn save_root(t: &SyncTarget<'_>) -> Result<()> {
     t.db.conn().execute(
-        "INSERT INTO sync_roots (user_id, game_id, location, root, last_sync_at) VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT(user_id, game_id, location) DO UPDATE SET root = excluded.root, last_sync_at = excluded.last_sync_at",
-        params![t.user_id, t.game_id, t.location, t.root.to_string_lossy(), Utc::now().timestamp()],
+        "INSERT INTO sync_roots (user_id, game_id, location, root, last_sync_at, identity)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(user_id, game_id, location) DO UPDATE SET root = excluded.root,
+           last_sync_at = excluded.last_sync_at, identity = excluded.identity",
+        params![
+            t.user_id,
+            t.game_id,
+            t.location,
+            t.root.to_string_lossy(),
+            Utc::now().timestamp(),
+            folder_identity(t.root)
+        ],
     )?;
     Ok(())
 }

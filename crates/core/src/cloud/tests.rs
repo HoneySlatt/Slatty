@@ -658,6 +658,47 @@ async fn history_is_not_trusted_after_another_account_synced_the_folder() {
     assert_eq!(env.remote("a.sav").as_deref(), Some("A1"));
 }
 
+/// The save folder was deleted outside the launcher (a broken prefix made again), the game
+/// started offline, and saved a new game where the progress was: at the next sync the folder is
+/// not empty, so only its identity tells it is another folder. The new game is not uploaded over
+/// the progress; the file becomes a conflict.
+#[tokio::test]
+async fn a_save_folder_made_again_does_not_reuse_its_history() {
+    let env = Env::new("made-again");
+    env.write("a.sav", "progress");
+    env.write("b.sav", "progress too");
+    env.sync(SyncOptions::default()).await;
+    assert_eq!(env.remote("a.sav").as_deref(), Some("progress"));
+
+    std::fs::remove_dir_all(env.root()).unwrap();
+    env.write("a.sav", "new game");
+    let r = env.sync(SyncOptions::default()).await;
+    assert_eq!(
+        r.conflicts,
+        vec![("a.sav".to_string(), ConflictKind::Unrelated)]
+    );
+    assert!(r.uploaded.is_empty());
+    assert_eq!(env.remote("a.sav").as_deref(), Some("progress"));
+    assert_eq!(env.remote("b.sav").as_deref(), Some("progress too"));
+    assert_eq!(
+        env.read("b.sav").as_deref(),
+        Some("progress too"),
+        "what the folder lacks comes back from the cloud"
+    );
+
+    // The same folder synced again: its history is trusted as before.
+    let r = env
+        .sync(SyncOptions {
+            prefer: Some(Prefer::Remote),
+            ..Default::default()
+        })
+        .await;
+    assert!(r.conflicts.is_empty());
+    env.write("a.sav", "progress, later");
+    let r = env.sync(SyncOptions::default()).await;
+    assert_eq!(r.uploaded, ["a.sav"]);
+}
+
 /// A cloud whose first listing waits until `gate` is opened.
 struct SlowCloud<'a> {
     inner: &'a MemoryCloud,
