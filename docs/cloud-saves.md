@@ -58,6 +58,10 @@ Modification dates are never used to decide.
 - **A local file is never overwritten without a copy.** It is first copied to
   `~/.local/share/slatty/backups/<user>/<game>/<time>/<location>/local/`. The new content is
   written to a temporary file, then renamed into place.
+- **Nor is a cloud file.** Before an upload replaces it (a game that crashed while saving would
+  otherwise replace a good save in the cloud with a damaged one) or a deletion removes it, the
+  cloud version is downloaded to `…/<location>/remote/` beside the local copies. Backups are never
+  deleted by SlattyLauncher.
 - **Deletions need permission.** They are applied only with `--allow-deletions`, file by file.
   One conflict is the exception: the cloud deleted a file you changed, and you keep the cloud's
   side. That choice is the permission; your copy is backed up first.

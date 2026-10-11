@@ -194,6 +194,34 @@ async fn keeping_local_version_preserves_remote_copy() {
     assert_eq!(env.backups(), vec!["saves/remote/a.sav=remote edit"]);
 }
 
+/// A save the game damaged (a crash while writing it) is uploaded like any change: the cloud
+/// version it replaces is kept in the backups first.
+#[tokio::test]
+async fn an_upload_keeps_the_cloud_version_it_replaces() {
+    let env = Env::new("upload-keeps");
+    env.write("a.sav", "good");
+    env.sync(SyncOptions::default()).await;
+    env.write("a.sav", "");
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(r.is_clean() && r.uploaded == ["a.sav"]);
+    assert_eq!(env.remote("a.sav").as_deref(), Some(""));
+    assert_eq!(env.backups(), vec!["saves/remote/a.sav=good"]);
+}
+
+/// So is a cloud copy deleted because the save was deleted here.
+#[tokio::test]
+async fn a_cloud_deletion_keeps_the_copy_it_deletes() {
+    let env = Env::new("delete-keeps");
+    env.write("a.sav", "1");
+    env.write("b.sav", "2");
+    env.sync(SyncOptions::default()).await;
+    std::fs::remove_file(env.root().join("b.sav")).unwrap();
+    let r = env.sync(ALLOW_DELETIONS).await;
+    assert!(r.is_clean() && r.deleted_remote == ["b.sav"]);
+    assert_eq!(env.remote("b.sav"), None);
+    assert_eq!(env.backups(), vec!["saves/remote/b.sav=2"]);
+}
+
 #[tokio::test]
 async fn missing_or_empty_local_folder_gets_the_cloud_back() {
     // As after uninstalling a game with its prefix and installing it again: the history of the

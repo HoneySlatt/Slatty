@@ -240,14 +240,10 @@ impl<T: CloudTransport> Run<'_, T> {
                 if plan.remote_deletions_blocked() {
                     self.report.conflicts.push((self.display(key), kind));
                 } else {
-                    self.keep_remote_copy(key).await?;
                     self.deferred.push((key.into(), Deferred::DeleteRemote));
                 }
             }
-            (Some(Prefer::Local), _) => {
-                self.keep_remote_copy(key).await?;
-                self.deferred.push((key.into(), Deferred::Upload));
-            }
+            (Some(Prefer::Local), _) => self.deferred.push((key.into(), Deferred::Upload)),
         }
         Ok(())
     }
@@ -403,6 +399,10 @@ impl<T: CloudTransport> Run<'_, T> {
             Some(r) => r.name.clone(),
             None => format!("{}/{}", self.target.location, file.rel),
         };
+        // The game may have written a damaged save (a crash): the cloud's is kept first.
+        if self.remote.contains_key(key) {
+            self.keep_remote_copy(key).await?;
+        }
         self.cloud.upload(&name, &data, modified).await?;
         Ok(sha)
     }
@@ -413,6 +413,7 @@ impl<T: CloudTransport> Run<'_, T> {
             return Ok(());
         }
         self.unchanged_local(key)?;
+        self.keep_remote_copy(key).await?;
         self.cloud.delete(&self.remote[key].name).await?;
         delete_base(self.target, key)?;
         self.report.deleted_remote.push(self.display(key));
