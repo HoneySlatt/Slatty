@@ -150,7 +150,11 @@ impl App {
                 if on {
                     return load(self.steam.images);
                 }
-                // What is forgotten is what was read; the switches stay as they are saved.
+                // What is forgotten is what was read; the switches stay as they are saved. The
+                // achievements read too: another account may be signed in to Steam by the time
+                // its games are on again.
+                self.achievements
+                    .retain(|id, _| store::steam_app(id).is_none());
                 let found = self.steam.found.take();
                 self.steam = crate::steam::SteamView {
                     found,
@@ -342,17 +346,33 @@ impl App {
             SteamMsg::Look => {}
             SteamMsg::Running(apps) => {
                 let now: BTreeSet<String> = apps.into_iter().map(store::steam_id).collect();
-                let ended = self.steam.running.iter().any(|id| !now.contains(id));
+                let ended: Vec<String> = self.steam.running.difference(&now).cloned().collect();
                 self.steam.running = now;
                 if self.steam.starting.as_ref().is_some_and(|(id, asked)| {
                     self.steam.running.contains(id) || asked.elapsed() > START_WAIT
                 }) {
                     self.steam.starting = None;
                 }
-                // Steam records the session as the game ends; the window may have the focus back
-                // later, which reads it again too.
-                if ended {
-                    return read_played();
+                // Steam records the session as the game ends, and the achievements it unlocked;
+                // the window may have the focus back later, which reads the play times again too.
+                if !ended.is_empty() {
+                    let apps = self
+                        .steam
+                        .games
+                        .iter()
+                        .filter_map(|g| store::steam_app(&g.id))
+                        .collect();
+                    let mut tasks = vec![read_played(), count_achievements(apps)];
+                    for id in ended {
+                        self.achievements.remove(&id);
+                        let shown = [&self.selected, &self.achievements_game]
+                            .iter()
+                            .any(|s| s.as_deref() == Some(id.as_str()));
+                        if shown {
+                            tasks.push(Task::done(Message::LoadAchievements(id)));
+                        }
+                    }
+                    return Task::batch(tasks);
                 }
             }
             // Steam's own window takes over; what it installs or removes shows once the launcher's

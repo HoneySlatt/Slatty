@@ -505,6 +505,56 @@ fn a_download_steam_makes_shows_until_it_is_done() {
     assert_eq!(app.steam_downloads_every(), None);
 }
 
+/// A Steam game played is read again once it ends: the achievements it unlocked show, as a GOG
+/// game's do, rather than the list read before. And the lists of an account no longer shown go
+/// with Steam's games turned off, before another account's come.
+#[test]
+fn a_steam_games_achievements_are_read_again_after_it_is_played() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let account = app.steam.account.unwrap();
+    let list = |unlocked: bool| {
+        Ok(vec![slatty_core::achievements::Achievement {
+            achievement_id: "ACH".into(),
+            achievement_key: "ACH".into(),
+            name: "[FAKE] Known".into(),
+            description: String::new(),
+            visible: true,
+            date_unlocked: unlocked.then(|| "2026-10-10T10:00:00+0000".into()),
+            rarity: -1.0,
+            image_url_unlocked: String::new(),
+            image_url_locked: String::new(),
+        }])
+    };
+    let _ = app.update(Message::Steam(SteamMsg::Achieved(
+        account,
+        "steam-440".into(),
+        list(false),
+    )));
+    assert!(matches!(
+        app.achievements.get("steam-440"),
+        Some(crate::Loadable::Ready(_))
+    ));
+    let _ = app.update(Message::Steam(SteamMsg::Running([440].into())));
+    let _ = app.update(Message::Steam(SteamMsg::Running(Default::default())));
+    assert!(
+        !matches!(
+            app.achievements.get("steam-440"),
+            Some(crate::Loadable::Ready(_))
+        ),
+        "read again"
+    );
+
+    let _ = app.update(Message::Steam(SteamMsg::Achieved(
+        account,
+        "steam-440".into(),
+        list(true),
+    )));
+    let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
+    assert!(!app.achievements.contains_key("steam-440"), "turned off");
+}
+
 /// A first install Steam still downloads, or keeps waiting, is not installed yet (the Installed
 /// shelf, a GOG game owned on Steam too); an installed game being updated stays installed.
 #[test]
