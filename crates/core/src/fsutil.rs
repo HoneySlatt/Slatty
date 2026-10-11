@@ -41,21 +41,26 @@ pub(crate) fn restart_staging(path: &Path) -> Result<std::fs::File> {
         .map_err(|e| Error::io(format!("create {}", path.display()), e))
 }
 
-/// Reads a file a game can write (its folder); `None` when it is not a regular file: reading a pipe
-/// would wait forever for a writer. It is opened without waiting, then checked, so it cannot be
-/// swapped for a pipe in between.
+/// Largest file a game writes that is read whole (its `goggame-*.info`, its `start.sh`): such files
+/// are a few kilobytes, and a game could make one as large as the disk allows.
+const GAME_FILE_LIMIT: u64 = 16 << 20;
+
+/// Reads a file a game can write (its folder); `None` when it is not a regular file, as reading a
+/// pipe would wait forever for a writer, or when it is larger than `GAME_FILE_LIMIT`. It is opened
+/// without waiting, then checked, so it cannot be swapped for a pipe in between.
 pub fn read_game_file(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
     use std::io::Read;
     use std::os::unix::fs::OpenOptionsExt;
-    let mut file = std::fs::OpenOptions::new()
+    let file = std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(nix::fcntl::OFlag::O_NONBLOCK.bits())
         .open(path)?;
-    if !file.metadata()?.is_file() {
+    let meta = file.metadata()?;
+    if !meta.is_file() || meta.len() > GAME_FILE_LIMIT {
         return Ok(None);
     }
     let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
+    file.take(GAME_FILE_LIMIT).read_to_end(&mut bytes)?;
     Ok(Some(bytes))
 }
 
@@ -117,6 +122,23 @@ mod tests {
         write_atomic(&file, b"two").unwrap();
         assert_eq!(std::fs::read(&file).unwrap(), b"two");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A game writes its `goggame-*.info` and `start.sh`, and could make one as large as its disk
+    /// allows in an instant (a sparse file): such a file is not read into memory.
+    #[test]
+    fn a_game_file_too_large_is_not_read() {
+        let dir = std::env::temp_dir().join(format!("slatty-game-file-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("goggame-1.info");
+        std::fs::File::create(&file)
+            .unwrap()
+            .set_len(GAME_FILE_LIMIT + 1)
+            .unwrap();
+        assert!(read_game_file(&file).unwrap().is_none());
+        std::fs::write(&file, b"{}").unwrap();
+        assert_eq!(read_game_file(&file).unwrap().unwrap(), b"{}");
         std::fs::remove_dir_all(dir).unwrap();
     }
 
