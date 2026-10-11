@@ -663,8 +663,17 @@ impl App {
     /// Puts in what Steam's manifests now say of these games (none: removed), and tells of the
     /// downloads they show done.
     fn steam_installed(&mut self, read: HashMap<String, Option<Installed>>) -> Task<Message> {
+        // Steam's own tools (its runtimes, Proton, redistributables) and apps of no game of the
+        // account have manifests too: left out, as the library leaves them out, rather than shown
+        // and told by their numbers.
+        let games: std::collections::HashSet<String> =
+            self.steam.games.iter().map(|g| g.id.clone()).collect();
         let mut told = Vec::new();
         for (id, now) in read {
+            if !games.contains(&id) {
+                self.steam.installed.remove(&id);
+                continue;
+            }
             let before = self.steam.installed.get(&id).and_then(|g| g.update);
             let after = now.as_ref().and_then(|g| g.update);
             if before != after {

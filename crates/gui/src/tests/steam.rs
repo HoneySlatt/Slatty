@@ -505,6 +505,46 @@ fn a_download_steam_makes_shows_until_it_is_done() {
     assert_eq!(app.steam_downloads_every(), None);
 }
 
+/// Steam's own tools (its runtime, Proton, redistributables) have manifests and updates too, and
+/// so has an app of no game of the account: none shows in Downloads by its number, keeps the
+/// manifests read, or is told "ready to play".
+#[test]
+fn steams_own_tools_are_neither_listed_nor_told() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let updating = Update {
+        done: 10,
+        total: 100,
+        stage_total: 0,
+        started: true,
+        paused: false,
+    };
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        1628350,
+        0,
+        true,
+        Some(updating),
+    )])));
+    assert_eq!(app.steam_downloads_every(), None);
+    app.page = Page::Downloads;
+    assert!(
+        !texts(&mut render(&app))
+            .iter()
+            .any(|t| t.starts_with("In Steam")),
+        "not listed"
+    );
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        [(
+            "steam-1628350".into(),
+            Some(installed(1628350, 100, true, None)),
+        )]
+        .into(),
+        HashMap::new(),
+    )));
+    assert!(toasted(&app).is_empty(), "{:?}", toasted(&app));
+}
+
 /// A game asked of Steam to install shows as soon as Steam writes its manifest, the window in
 /// front or not: that file alone is looked for, every few seconds, for a while. A read of every
 /// library folder asked while one runs (the window's focus back) is made once it ends, not dropped.
