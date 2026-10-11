@@ -186,3 +186,34 @@ async fn proton_session_waits_for_detached_windows_process() {
     eprintln!("main exited at {main_exit:?}, session ended at {total:?}");
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+/// The supervisor stays out of the terminal's process group: a Ctrl+C reaches the command line
+/// alone, which asks the supervisor to stop the game once (it reached the supervisor too, which
+/// counted two requests and killed the game at once), and closing the terminal does not end the
+/// supervisor while the game runs.
+#[tokio::test]
+async fn the_supervisor_has_a_process_group_of_its_own() {
+    let dir = scratch("group");
+    let handle = SessionHandle::start(
+        Path::new(env!("CARGO_BIN_EXE_slatty")),
+        &sh("sleep 5", &dir),
+        &dir.join("game.log"),
+        None,
+    )
+    .await
+    .unwrap();
+    let pid = handle.supervisor_pid().unwrap();
+    let group = |pid: &str| {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap();
+        let (_, rest) = stat.rsplit_once(')').unwrap();
+        rest.split_whitespace().nth(2).unwrap().to_string()
+    };
+    let supervisor = group(&pid.to_string());
+    let ours = group("self");
+    handle.request_stop();
+    handle.request_stop();
+    let _ = handle.wait().await;
+    assert_eq!(supervisor, pid.to_string());
+    assert_ne!(supervisor, ours);
+    std::fs::remove_dir_all(dir).unwrap();
+}

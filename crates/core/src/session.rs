@@ -221,11 +221,14 @@ impl SessionHandle {
         if let Some(parent) = log.parent() {
             crate::paths::ensure_dir(parent)?;
         }
+        // In a process group of its own: a Ctrl+C or a terminal closing reaches the launcher alone,
+        // which asks the supervisor to stop the game once; the supervisor outlives the launcher.
         let mut child = tokio::process::Command::new(supervisor)
             .arg(SUPERVISE_ARG)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
+            .process_group(0)
             .spawn()
             .map_err(|e| Error::io("starting the session supervisor", e))?;
         let request = serde_json::to_vec(&SuperviseRequest {
