@@ -11,8 +11,14 @@ pub struct Check {
 }
 
 pub fn find_in_path(program: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
+    find_in(&std::env::var_os("PATH")?, program)
+}
+
+/// `program` in the folders `path` lists. Only absolute folders count: an empty or relative entry
+/// names the current folder, which is a game's own when the session supervisor starts it.
+fn find_in(path: &std::ffi::OsStr, program: &str) -> Option<PathBuf> {
+    std::env::split_paths(path)
+        .filter(|dir| dir.is_absolute())
         .map(|dir| dir.join(program))
         .find(|candidate| candidate.is_file())
 }
@@ -88,4 +94,23 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
         port,
         runtime,
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Tests run from the crate's folder, which holds Cargo.toml: found through an empty or `.`
+    /// entry, it would be found in a game's folder the same way.
+    #[test]
+    fn programs_are_found_in_absolute_folders_only() {
+        for relative in ["", ".", ":.", "./"] {
+            assert_eq!(
+                find_in(relative.as_ref(), "Cargo.toml"),
+                None,
+                "{relative:?}"
+            );
+        }
+        assert!(find_in("/nonexistent:/bin".as_ref(), "sh").is_some_and(|p| p.is_absolute()));
+    }
 }
