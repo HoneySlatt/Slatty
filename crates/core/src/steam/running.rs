@@ -1,7 +1,8 @@
 //! Which Steam games run, from the user's processes: the Steam client starts each game under its
 //! `reaper`, as `reaper SteamLaunch AppId=<id> -- <the game's command>`, natively or as a Flatpak.
-//! The name of each of the user's processes is read, and the arguments of their `reaper` processes
-//! alone: other programs' arguments can hold what is none of the launcher's business.
+//! The name of each of the user's processes is read, and the arguments of the client's own
+//! `reaper` processes alone (named so, and started from the client's folder): other programs'
+//! arguments can hold what is none of the launcher's business.
 
 use std::collections::BTreeSet;
 use std::os::unix::fs::MetadataExt;
@@ -56,6 +57,14 @@ fn reaper_app(process: &Path, me: u32) -> Option<u32> {
     if read("comm")?.trim_ascii() != b"reaper" {
         return None;
     }
+    // Steam's own, from its `ubuntu12_32` folder (`steamrt64` for its 64-bit client), natively or
+    // in the Flatpak: another program named so (REAPER, the audio workstation) keeps its arguments
+    // to itself.
+    let exe = nix::fcntl::readlinkat(&dir, "exe").ok()?;
+    let exe = Path::new(&exe);
+    if !exe.ends_with("ubuntu12_32/reaper") && !exe.ends_with("steamrt64/reaper") {
+        return None;
+    }
     app_of(&read("cmdline")?)
 }
 
@@ -89,6 +98,7 @@ mod tests {
             let mut cmdline = args.join("\0");
             cmdline.push('\0');
             std::fs::write(dir.join("cmdline"), cmdline).unwrap();
+            std::os::unix::fs::symlink(args[0], dir.join("exe")).unwrap();
         };
         std::fs::create_dir_all(proc.join("self")).unwrap();
         let reaper = "/home/[FAKE]/.local/share/Steam/ubuntu12_32/reaper";
@@ -112,6 +122,13 @@ mod tests {
             "104",
             "reaper",
             &[reaper, "SteamLaunch", "AppId=not-a-number"],
+        );
+        // Another program of that name (REAPER, the audio workstation): its arguments are none of
+        // the launcher's business, and not read.
+        process(
+            "105",
+            "reaper",
+            &["/usr/bin/reaper", "SteamLaunch", "AppId=730", "--", "x"],
         );
         std::fs::create_dir_all(proc.join("not-a-pid")).unwrap();
         assert_eq!(running(&proc), BTreeSet::from([440]));
