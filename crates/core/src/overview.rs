@@ -40,6 +40,7 @@ pub fn counts(list: &[achievements::Achievement]) -> Option<(usize, usize)> {
 /// Reads play time, achievements and cloud save support of one game. A game without a Galaxy
 /// build has no achievements or cloud saves.
 pub async fn fetch(http: &Client, tokens: &Tokens, game_id: &str) -> Result<GameOverview> {
+    crate::paths::check_game_id(game_id)?;
     let playtime_minutes = crate::playtime::total_minutes(http, tokens, game_id)
         .await
         .ok();
@@ -85,6 +86,38 @@ pub fn save(dirs: &Dirs, user_id: &str, all: &HashMap<String, GameOverview>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// GOG never learns which Steam games the library holds: what asks GOG about one game refuses
+    /// a Steam game's id before anything is sent (here, to an address that cannot answer).
+    #[tokio::test]
+    async fn a_steam_game_is_never_asked_of_gog() {
+        let http = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+            .build()
+            .unwrap();
+        let tokens = Tokens {
+            user_id: "1".into(),
+            access_token: crate::secret::Secret::new("[FAKE]"),
+            refresh_token: crate::secret::Secret::new("[FAKE]"),
+            expires_at: i64::MAX,
+        };
+        let refused = |r: Result<()>| matches!(r, Err(Error::Refused(_)));
+        let id = "steam-440";
+        assert!(refused(fetch(&http, &tokens, id).await.map(drop)));
+        assert!(refused(
+            crate::playtime::total_minutes(&http, &tokens, id)
+                .await
+                .map(drop)
+        ));
+        assert!(refused(
+            achievements::product_token(&http, &tokens, id)
+                .await
+                .map(drop)
+        ));
+        assert!(refused(
+            crate::library::not_installable(&http, id).await.map(drop)
+        ));
+    }
 
     #[test]
     fn cache_round_trips_and_starts_empty() {

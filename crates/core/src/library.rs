@@ -216,6 +216,7 @@ pub enum NotInstallable {
 
 /// `None` when GOG offers something to install for the product, from its public product data.
 pub async fn not_installable(http: &Client, id: &str) -> Result<Option<NotInstallable>> {
+    crate::paths::check_game_id(id)?;
     let req = http.get(format!("https://api.gog.com/products/{id}"));
     Ok(installability(
         &http::json::<Value>(req, "fetching product data").await?,

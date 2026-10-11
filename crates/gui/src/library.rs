@@ -11,6 +11,7 @@ use iced::Task;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use slatty_core::library::{self, LibraryCache, LibraryGame};
 use slatty_core::overview::{self, GameOverview};
+use slatty_core::store::{self, Store};
 
 use crate::work::tokens_for;
 use crate::{App, Core, Message, err};
@@ -191,8 +192,12 @@ impl App {
         }
     }
 
-    /// Reads play time recorded by GOG for these games.
+    /// Reads play time recorded by GOG for these games, GOG's alone.
     pub fn refresh_playtime(&self, ids: Vec<String>) -> Task<Message> {
+        let ids: Vec<String> = ids
+            .into_iter()
+            .filter(|id| store::of(id).is_ok_and(|s| s == Store::Gog))
+            .collect();
         let Some(core) = self.core.clone() else {
             return Task::none();
         };
@@ -246,22 +251,29 @@ impl App {
         self.overview.get(game_id).is_some_and(|o| o.checked)
     }
 
+    /// GOG's games of the library: GOG is asked about these alone, never about another store's.
+    fn gog_games(&self) -> impl Iterator<Item = &LibraryGame> {
+        self.library
+            .iter()
+            .filter(|g| store::of(&g.id).is_ok_and(|s| s == Store::Gog))
+    }
+
     pub fn overview_complete(&self) -> bool {
-        self.library.iter().all(|g| self.overview_checked(&g.id))
+        self.gog_games().all(|g| self.overview_checked(&g.id))
     }
 
     /// Progress of reading achievements and cloud saves from GOG, while anything is missing.
     pub fn overview_status(&self) -> Option<String> {
-        let total = self.library.len();
-        let read = *self
+        let (read, total) = *self
             .lists
             .overview_read
             .borrow_mut()
             .get_or_insert_with(|| {
-                self.library
-                    .iter()
+                let read = self
+                    .gog_games()
                     .filter(|g| self.overview_checked(&g.id))
-                    .count()
+                    .count();
+                (read, self.gog_games().count())
             });
         if self.overview_busy {
             Some(format!("Reading GOG data… {read}/{total} games"))
@@ -287,8 +299,7 @@ impl App {
             return Task::none();
         }
         let ids: Vec<String> = self
-            .library
-            .iter()
+            .gog_games()
             .filter(|g| all || !self.overview_checked(&g.id))
             .map(|g| g.id.clone())
             .collect();
@@ -401,7 +412,12 @@ impl App {
         };
         let user_id = account.user_id.clone();
         let mut missing = Vec::new();
-        for game in &self.library {
+        // Steam's covers are the client's, or come from Steam's servers (`App::download_covers`).
+        let gog = self
+            .library
+            .iter()
+            .filter(|g| store::of(&g.id).is_ok_and(|s| s == Store::Gog));
+        for game in gog {
             if self.covers.contains_key(&game.id) {
                 continue;
             }
@@ -595,8 +611,9 @@ pub struct Lists {
     library: RefCell<Option<(ListKey, Rc<[usize]>)>>,
     /// For the library's length: each game's place, and its unlocked and total achievements.
     pub achievements: RefCell<Option<(usize, AchievementsList)>>,
-    /// How many games GOG's data was read for, shown while some are missing.
-    overview_read: RefCell<Option<usize>>,
+    /// How many of GOG's games their data was read for, and how many there are, shown while some
+    /// are missing.
+    overview_read: RefCell<Option<(usize, usize)>>,
 }
 
 type ListKey = (String, Shelf, Filters, Sort, usize);

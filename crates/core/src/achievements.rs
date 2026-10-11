@@ -61,6 +61,7 @@ pub async fn product_token(
     tokens: &Tokens,
     game_id: &str,
 ) -> Result<(String, Secret)> {
+    crate::paths::check_game_id(game_id)?;
     let (client_id, secret) = game_client(http, tokens, game_id).await?;
     let token = auth::game_access_token(http, tokens, &client_id, &secret).await?;
     Ok((client_id, token))

@@ -15,13 +15,15 @@ fn url(user_id: &str, game_id: &str) -> String {
     format!("https://gameplay.gog.com/games/{game_id}/users/{user_id}/sessions")
 }
 
-/// Minutes of play GOG recorded for a game, from every launcher that reports sessions.
+/// Minutes of play GOG recorded for a game, from every launcher that reports sessions. A game of
+/// another store is refused: GOG does not learn of it.
 pub async fn total_minutes(http: &Client, tokens: &Tokens, game_id: &str) -> Result<u64> {
     #[derive(Deserialize)]
     struct Sessions {
         #[serde(default)]
         time_sum: u64,
     }
+    crate::paths::check_game_id(game_id)?;
     let s: Sessions = http::json(
         http.get(url(&tokens.user_id, game_id))
             .bearer_auth(tokens.access_token.expose()),

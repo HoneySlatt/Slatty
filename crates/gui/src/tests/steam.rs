@@ -237,6 +237,25 @@ fn a_steam_game_shows_as_running_while_steam_runs_it() {
     assert!(render(&app).find("Play").is_ok());
 }
 
+/// GOG is asked about GOG's games alone: Steam's never count as games GOG could not describe.
+#[test]
+fn steam_games_are_not_gogs_to_read() {
+    let mut app = library_app();
+    for g in &app.library {
+        app.overview.insert(
+            g.id.clone(),
+            slatty_core::overview::GameOverview {
+                checked: true,
+                ..Default::default()
+            },
+        );
+    }
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    assert!(app.overview_complete(), "nothing left to read from GOG");
+    assert_eq!(app.overview_status(), None);
+}
+
 /// A Steam game's page plays, installs, verifies and uninstalls through Steam, and says it runs
 /// through Steam rather than offering GOG's cloud and achievements.
 #[test]
