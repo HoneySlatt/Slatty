@@ -572,9 +572,9 @@ slatty proton share on                 # list the downloaded builds in Steam and
 
 ## Settings
 
-The interface's **Settings** tab lists its parts on the left (Account, Library, Installs,
+The interface's **Settings** tab lists its parts on the left (Account, Library, Steam, Installs,
 Runners, Appearance, Notifications, Privacy, Advanced, About); choosing one brings it to the top, and the list follows the page as it
-scrolls. **Account** shows who is signed in, with
+scrolls. **Steam** is described in [Steam games](#steam-games). **Account** shows who is signed in, with
 Log out, and Forget account, which asks first, then does what `slatty auth logout --forget` does
 (see [Signing in](#signing-in)). **Library** shows how many games you own and when the list was refreshed, with Refresh
 library, and the size of the covers. **Installs** holds:
@@ -669,6 +669,12 @@ GOG ticket of its own, and Comet's holds game client identifiers.
 | The first launch fails while creating the prefix | `~/.local/state/slatty/logs/prefix-<id>.log` |
 | A game misbehaves since it runs isolated (missing files, settings not found) | `slatty isolation <id> --off`, and tell us which game. |
 | "bubblewrap (bwrap) is needed to run a game isolated", or an isolated game does not start | Install bubblewrap (Flatpak needs it too). `slatty doctor` says whether it can start a sandbox, and one inside another, as an isolated game needs; where it cannot, the launch says why. On Ubuntu, see [below](#ubuntu-and-apparmor). `slatty isolation <id> --off` runs the game without isolation, and without its protection. |
+| Achievements are not reported | `~/.local/state/slatty/logs/comet.log`. `slatty doctor` must find `GalaxyCommunication.exe`; the launch output says whether the Galaxy service was registered. |
+| A cloud conflict blocks the launch | `slatty cloud diff <id>`, then `slatty cloud sync <id> --prefer local` or `--prefer remote`. |
+| The session was interrupted (crash, power loss) | The next launch reports it. Check `slatty cloud status <id>` before playing. |
+| The window looks wrong or slow after a graphics driver change | It starts with Vulkan alone once Vulkan was found to drive the graphics card, and goes back to every backend by itself after one start if Vulkan stops working. To choose yourself, start it with `WGPU_BACKEND=vulkan`, `gl` or `vulkan,gl`. |
+| Something went wrong without an explanation | Start `slatty` or `slatty-gui` with `SLATTY_LOG=warn` to print warnings on the terminal, such as a binary patch that could not be used. |
+| "another operation on this game is running" | An install, update, repair, uninstall, cloud sync or game session of that game is still running, maybe in another SlattyLauncher window or terminal, or the game itself still runs after SlattyLauncher was closed. Wait for it to finish. |
 
 ### Ubuntu and AppArmor
 
@@ -711,9 +717,3 @@ launches say so. Choose one of these, from the most to the least protective, the
 
 These steps come from Ubuntu's AppArmor profiles and from what umu, Lutris and Heroic users found;
 they have not been tried with SlattyLauncher on Ubuntu yet.
-| Achievements are not reported | `~/.local/state/slatty/logs/comet.log`. `slatty doctor` must find `GalaxyCommunication.exe`; the launch output says whether the Galaxy service was registered. |
-| A cloud conflict blocks the launch | `slatty cloud diff <id>`, then `slatty cloud sync <id> --prefer local` or `--prefer remote`. |
-| The session was interrupted (crash, power loss) | The next launch reports it. Check `slatty cloud status <id>` before playing. |
-| The window looks wrong or slow after a graphics driver change | It starts with Vulkan alone once Vulkan was found to drive the graphics card, and goes back to every backend by itself after one start if Vulkan stops working. To choose yourself, start it with `WGPU_BACKEND=vulkan`, `gl` or `vulkan,gl`. |
-| Something went wrong without an explanation | Start `slatty` or `slatty-gui` with `SLATTY_LOG=warn` to print warnings on the terminal, such as a binary patch that could not be used. |
-| "another operation on this game is running" | An install, update, repair, uninstall, cloud sync or game session of that game is still running, maybe in another SlattyLauncher window or terminal, or the game itself still runs after SlattyLauncher was closed. Wait for it to finish. |

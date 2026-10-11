@@ -55,8 +55,15 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   redistributables.
 - **Galaxy dummy service.** Comet's `GalaxyCommunication` service registered in each prefix, for
   games whose Galaxy SDK needs it to report achievements.
+- **Steam games in the library** (off until turned on). The account signed in to the Steam
+  client, its games, their names and images, read from the client's own files; Play, Install,
+  Verify and Uninstall handed to the client. No GOG account needed for them.
 
 ## Planned
+
+- **More of Steam.** Play time and last played, a game running, achievements and Steam's
+  downloads, read from the client's files; one card for a game owned on both GOG and Steam, GOG's
+  first; images and data Steam's client has not saved, from Steam's servers once turned on.
 
 - **Gamepad navigation.** A couch mode.
 - **Translations of the interface.** It is in English for now.
