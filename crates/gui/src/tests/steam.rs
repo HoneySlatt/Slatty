@@ -472,10 +472,19 @@ fn a_game_owned_on_both_shows_once_as_gogs() {
     app.library[1].title = "[FAKE] Portal".into();
     app.gog_titles.insert("2".into(), "[FAKE] Portal".into());
     app.steam.on = true;
-    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let mut library = steam_library();
+    library.covers.insert(
+        "steam-620".into(),
+        std::env::temp_dir().join("[FAKE]-620.jpg"),
+    );
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(library))));
     assert_eq!(app.library.len(), 14, "{:?}", ids(&app));
     assert_eq!(app.steam_twin("1"), Some("steam-440"));
     assert_eq!(app.steam_twin("2"), Some("steam-620"));
+    assert!(
+        app.cover("steam-620").is_some(),
+        "for what Steam downloads of it"
+    );
 
     let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
         440, 1, true, None,

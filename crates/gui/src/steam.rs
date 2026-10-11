@@ -417,11 +417,10 @@ impl App {
                     .filter(|g| !twinned.contains(&g.id))
                     .cloned(),
             );
+            // Those of games shown as their GOG twin too: Steam's downloads of them show it.
             for (id, cover) in &self.steam.covers {
-                if !twinned.contains(id) {
-                    self.covers
-                        .insert(id.clone(), iced::widget::image::Handle::from_path(cover));
-                }
+                self.covers
+                    .insert(id.clone(), iced::widget::image::Handle::from_path(cover));
             }
             self.steam.twins = twins;
         }
