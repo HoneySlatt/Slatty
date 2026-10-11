@@ -421,6 +421,15 @@ fn a_game_owned_on_both_shows_once_as_gogs() {
         Some(("steam-620".into(), Action::Install))
     );
 
+    // Signed out of GOG, the Steam games show on their own again.
+    let mut signed_out = library_app();
+    signed_out.library[0].steam = vec![440];
+    signed_out.steam.on = true;
+    let _ = signed_out.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    signed_out.logged_out();
+    assert_eq!(ids(&signed_out), ["steam-440", "steam-620"]);
+    assert!(signed_out.steam_twin("1").is_none());
+
     // Turned off, Steam's games go and GOG's stay as they are.
     let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
     assert!(app.steam_twin("1").is_none() && !app.is_installed("1"));
