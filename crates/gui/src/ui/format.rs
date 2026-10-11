@@ -196,6 +196,12 @@ fn describe_cloud(prefix: &str, s: &CloudSummary) -> String {
             s.left_out.join(", ")
         );
     }
+    if !s.unreachable.is_empty() {
+        out += &format!(
+            "; GOG's cloud not reached, local saves kept as they are: {}",
+            s.unreachable.join(", ")
+        );
+    }
     out
 }
 

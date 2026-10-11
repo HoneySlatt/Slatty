@@ -107,11 +107,15 @@ impl App {
                 "Cloud saves not uploaded".to_string(),
                 format!("{title}: {why}"),
             ),
-            PlayEvent::CloudUploaded(summary) if !summary.is_clean() => (
-                Kind::Cloud,
-                "Cloud saves not uploaded".to_string(),
-                format!("{title}: see Cloud saves on its page."),
-            ),
+            PlayEvent::CloudUploaded(summary)
+                if !summary.is_clean() || !summary.unreachable.is_empty() =>
+            {
+                (
+                    Kind::Cloud,
+                    "Cloud saves not uploaded".to_string(),
+                    format!("{title}: see Cloud saves on its page."),
+                )
+            }
             _ => return Task::none(),
         };
         self.notify(kind, Some(game_id), heading, body)

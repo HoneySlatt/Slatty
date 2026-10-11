@@ -103,9 +103,11 @@ Modification dates are never used to decide.
 ## Around a game session
 
 1. **Before launch:** sync. Downloads and uploads that do not conflict are applied. A conflict or an
-   error stops the launch. If the cloud cannot be reached, the game starts with local saves.
+   error stops the launch. If the cloud cannot be reached (offline, a dropped connection, a server
+   error or too many requests, for the whole game or one of its locations), the game starts with
+   local saves, and the session says which locations were not synced.
 2. **After the session ends** (every game process has exited): sync again, which uploads what the
-   game wrote.
+   game wrote. A location the cloud could not be reached for is told as not uploaded.
 3. **If the end of the session is uncertain** (the launcher lost track of the game), nothing is
    uploaded. The next launch reports the interrupted session.
 

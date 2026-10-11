@@ -144,6 +144,12 @@ fn print_cloud(title: &str, s: &CloudSummary) {
             shown(l)
         );
     }
+    for u in &s.unreachable {
+        println!(
+            "  GOG's cloud not reached, local saves kept as they are: {}",
+            shown(u)
+        );
+    }
     if let Some(dir) = &s.backup_dir {
         println!("  previous versions saved in {}", shown(dir.display()));
     }

@@ -31,6 +31,9 @@ pub struct CloudSummary {
     pub pending_deletions: Vec<String>,
     /// Cloud files left out (`SyncReport::skipped_remote`); they do not stop a launch.
     pub left_out: Vec<String>,
+    /// Locations GOG's cloud storage could not be reached for (`Error::is_temporary`): synced
+    /// neither way, as when the cloud cannot be reached at all, they do not stop a launch.
+    pub unreachable: Vec<String>,
     pub backup_dir: Option<PathBuf>,
 }
 
@@ -66,6 +69,7 @@ impl CloudSummary {
                         .extend(r.skipped_remote.iter().map(|p| format!("{}/{p}", o.name)));
                     s.backup_dir = s.backup_dir.take().or_else(|| r.backup_dir.clone());
                 }
+                Err(e) if e.is_temporary() => s.unreachable.push(format!("{}: {e}", o.name)),
                 Err(e) => s.problems.push(format!("{}: {e}", o.name)),
             }
         }
@@ -571,6 +575,27 @@ pub fn recover_unfinished(db: &Db, dirs: &Dirs) -> Result<Vec<session::SessionRe
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// GOG's cloud storage out of reach for a location (a dropped connection, a server error) is
+    /// not a conflict: the game starts with its local saves, as when the cloud cannot be reached
+    /// at all, and the summary says which location was not reached. A location refused for good
+    /// still stops the launch.
+    #[test]
+    fn a_cloud_out_of_reach_does_not_stop_a_launch() {
+        let failing = |status| LocationOutcome {
+            name: "saves".into(),
+            template: "<?SAVED_GAMES?>/[FAKE]".into(),
+            root: None,
+            result: Err(Error::Http {
+                context: "listing cloud saves",
+                status,
+            }),
+        };
+        let summary = CloudSummary::from_outcomes(&[failing(503)]);
+        assert!(summary.is_clean(), "{summary:?}");
+        assert_eq!(summary.unreachable.len(), 1);
+        assert!(!CloudSummary::from_outcomes(&[failing(403)]).is_clean());
+    }
 
     /// A game added by hand that still runs under its supervisor keeps its session going, as a
     /// GOG game's does.
