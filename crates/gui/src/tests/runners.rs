@@ -214,3 +214,19 @@ fn sharing_with_steam_and_heroic_is_offered_and_off_until_turned_on() {
             .is_ok()
     );
 }
+
+#[test]
+fn closing_during_a_proton_download_asks_first() {
+    let mut app = runners_page();
+    app.runners.installing = Some((
+        "[FAKE]-Proton-1".into(),
+        None,
+        tokio_util::sync::CancellationToken::new(),
+    ));
+    let _ = app.update(Message::CloseRequested);
+    let work = app.quit_confirm.clone().expect("asked first");
+    assert!(
+        work.iter().any(|w| w.contains("[FAKE]-Proton-1")),
+        "{work:?}"
+    );
+}

@@ -981,6 +981,16 @@ impl App {
                 work.push(format!("Cloud saves of {} are syncing.", self.title_of(id)));
             }
         }
+        if let Some((name, _, _)) = &self.runners.installing {
+            work.push(if self.runners.updating {
+                "Proton builds are updating. The update stops here and runs again at the next start."
+                    .into()
+            } else {
+                format!(
+                    "Downloading {name}. It stops here, and resumes when you download it again."
+                )
+            });
+        }
         if let Some(p) = self.play.as_ref().filter(|p| p.running) {
             work.push(format!(
                 "{} is running. It keeps running, but its cloud saves will not be uploaded and its play time will not be sent to GOG.",

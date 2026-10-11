@@ -147,8 +147,8 @@ Nothing an interruption leaves behind is trusted: every file already on disk is 
 against GOG's checksums before it is kept, and the game folder appears only once every file is
 verified.
 
-Closing the window while something runs (a download, an update or repair, a cloud sync, a game)
-asks first and says what would be interrupted.
+Closing the window while something runs (a download, an update or repair, a cloud sync, a game,
+a Proton download) asks first and says what would be interrupted.
 
 **Achievements** shows every game with achievements as a card (cover, unlocked count, share and
 progress bar), the most completed first, then by title as in the library. Clicking a game opens its own
