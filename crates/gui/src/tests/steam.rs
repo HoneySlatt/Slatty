@@ -223,12 +223,15 @@ fn a_steam_game_shows_as_running_while_steam_runs_it() {
         440, 1, true, None,
     )])));
     assert!(!app.watching_steam());
-    let _ = app.update(Message::Steam(SteamMsg::Ask(
-        "steam-440".into(),
-        Action::Play,
-    )));
+    let ask = Message::Steam(SteamMsg::Ask("steam-440".into(), Action::Play));
+    let _ = app.update(ask.clone());
     assert!(app.watching_steam(), "looked for once asked");
+    let _ = app.update(Message::Steam(SteamMsg::Asked(Err(
+        "[FAKE] no steam:// handler".into(),
+    ))));
+    assert!(!app.watching_steam(), "Steam was not reached");
 
+    let _ = app.update(ask);
     let _ = app.update(Message::Steam(SteamMsg::Running([440].into())));
     assert!(app.steam.starting.is_none() && app.watching_steam());
     let _ = app.update(Message::Select("steam-440".into()));

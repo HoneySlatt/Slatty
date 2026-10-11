@@ -267,7 +267,11 @@ impl App {
                 }
             }
             SteamMsg::Asked(Ok(())) => {}
-            SteamMsg::Asked(Err(e)) => self.notify_error(e),
+            // Steam was not reached: nothing is starting.
+            SteamMsg::Asked(Err(e)) => {
+                self.steam.starting = None;
+                self.notify_error(e);
+            }
             SteamMsg::WebApi(on) => {
                 self.steam.web = on;
                 if let Some(core) = &self.core
