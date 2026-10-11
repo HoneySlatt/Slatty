@@ -156,7 +156,8 @@ fn write_private(private_dir: &Path, token_file: &Path, tokens: &Tokens) -> Resu
 /// unlock there at once and sends it to GOG later. Those already unlocked when the session started
 /// (on GOG, or in the database at its first reading) are not new.
 pub struct Unlocks {
-    file: PathBuf,
+    /// `None` when an id cannot name a folder of Comet's.
+    file: Option<PathBuf>,
     connection: Option<rusqlite::Connection>,
     known: HashSet<String>,
     read_once: bool,
@@ -166,14 +167,18 @@ pub struct Unlocks {
 
 impl Unlocks {
     pub fn new(dirs: &Dirs, client_id: &str, user_id: &str, unlocked: &[Achievement]) -> Unlocks {
+        // GOG's ids are digits; a game imported from a folder brings its client id from its own
+        // `goggame-*.info`.
+        let digits = |id: &str| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit());
         let mut unlocks = Unlocks {
             // Comet adds its own folder to the XDG_DATA_HOME it is given.
-            file: dirs
-                .data
-                .join("comet/comet/gameplay")
-                .join(client_id)
-                .join(user_id)
-                .join("gameplay.db"),
+            file: (digits(client_id) && digits(user_id)).then(|| {
+                dirs.data
+                    .join("comet/comet/gameplay")
+                    .join(client_id)
+                    .join(user_id)
+                    .join("gameplay.db")
+            }),
             connection: None,
             known: unlocked
                 .iter()
@@ -206,11 +211,9 @@ impl Unlocks {
 
     fn read(&mut self) -> Option<Vec<(String, String)>> {
         if self.connection.is_none() {
-            if !self.file.is_file() {
-                return None;
-            }
+            let file = self.file.as_ref().filter(|f| f.is_file())?;
             let connection = rusqlite::Connection::open_with_flags(
-                &self.file,
+                file,
                 rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
             )
             .ok()?;
@@ -361,6 +364,32 @@ mod tests {
         assert!(unlocks.new_ones().is_empty(), "said once");
         unlock(4);
         assert_eq!(unlocks.new_ones(), ["[FAKE] d"]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A game imported from a folder brings its client id from its own `goggame-*.info`: an id
+    /// that is not GOG's digits never leads the reading to a database elsewhere.
+    #[test]
+    fn unlocks_are_never_read_from_outside_comets_folder() {
+        let root = std::env::temp_dir().join(format!("slatty-unlocks-out-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dirs = Dirs::under(&root.join("app"));
+        let planted = root.join("elsewhere/456/gameplay.db");
+        std::fs::create_dir_all(planted.parent().unwrap()).unwrap();
+        let db = rusqlite::Connection::open(&planted).unwrap();
+        db.execute_batch(
+            "CREATE TABLE achievement (id INTEGER PRIMARY KEY, key TEXT, name TEXT, unlock_time TEXT);
+             INSERT INTO achievement VALUES (1, 'a', '[FAKE] a', NULL);",
+        )
+        .unwrap();
+        let client_id = root.join("elsewhere").display().to_string();
+        let mut unlocks = Unlocks::new(&dirs, &client_id, "456", &[]);
+        db.execute(
+            "UPDATE achievement SET unlock_time = '2026-10-10T11:00:00+00:00'",
+            [],
+        )
+        .unwrap();
+        assert!(unlocks.new_ones().is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 
