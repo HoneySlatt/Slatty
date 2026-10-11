@@ -531,6 +531,15 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   **Running**: every two seconds meanwhile, SlattyLauncher looks for the client's `reaper` process
   of that game among your processes (it reads the name of each, and the arguments of the
   client's `reaper` alone). Steam cannot be asked to stop a game: close it in the game.
+- **Steam Web API**, off until turned on in Settings → Steam, fills in what the Steam client has
+  not saved on this computer: the account's games it has not described yet (they show without
+  their systems, so the Windows and Linux filters leave them out), the play time and last session
+  of games never played here, and the achievements of games it keeps none of (asked when shown;
+  how common each is comes with them). It needs your own key, created on
+  [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey): paste it in **Web API
+  key**; it goes to the system keyring and is never shown again. The key and your Steam id go to
+  `api.steampowered.com` in each request's address, as the API takes them. A profile whose game
+  details are private may get nothing back.
 - **Achievements** show in the Achievements tab with GOG's games, and on the game's page, as the
   Steam client keeps them for the account (`appcache/stats`): those of a game whose page was shown
   in Steam or that was played on this computer. How common each is shows for the few the client
@@ -689,6 +698,7 @@ corners and the page transition. See [theming](theming.md).
 |---|---|
 | System keyring, entry `slatty-launcher` / `gog:<user id>` | Session tokens |
 | System keyring, entry `slatty-launcher` / `key:steamgriddb` | Your SteamGridDB API key, once saved |
+| System keyring, entry `slatty-launcher` / `key:steam-web-api` | Your Steam Web API key, once saved |
 | `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings, the titles you gave games and the games you hid |
 | `~/.local/share/slatty/prefixes/<id>/` | Wine prefixes of installed games (most saves live here) |
 | `~/.local/share/slatty/protons/<name>/` | Proton builds downloaded from GitHub |

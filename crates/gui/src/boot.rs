@@ -41,6 +41,10 @@ pub struct Boot {
     pub steam_found: Option<String>,
     pub steam_games: bool,
     pub steam_images: bool,
+    /// Whether Steam's Web API is asked, and whether its key is in the keyring (only read once
+    /// turned on).
+    pub steam_web_api: bool,
+    pub steam_web_key: Option<bool>,
     pub proton: Option<PathBuf>,
     /// Whether Proton builds may be downloaded from GitHub, and those already downloaded.
     pub proton_downloads: bool,
@@ -171,6 +175,12 @@ async fn boot() -> Result<Boot, String> {
     let manual_achievements = slatty_core::settings::manual_achievements(&db).map_err(err)?;
     let steam_games = slatty_core::settings::steam_games(&db).map_err(err)?;
     let steam_images = slatty_core::settings::steam_images(&db).map_err(err)?;
+    let steam_web_api = slatty_core::settings::steam_web_api(&db).map_err(err)?;
+    let steam_web_key = if steam_web_api {
+        crate::steam::web_key_saved().await.ok()
+    } else {
+        None
+    };
     // Steam's own small file in the home folder; its library folders are read later.
     let steam_found = std::env::var_os("HOME")
         .and_then(|home| slatty_core::steam::local::find(std::path::Path::new(&home)))
@@ -258,6 +268,8 @@ async fn boot() -> Result<Boot, String> {
         steam_found,
         steam_games,
         steam_images,
+        steam_web_api,
+        steam_web_key,
         favorites,
         playtime,
         overview,

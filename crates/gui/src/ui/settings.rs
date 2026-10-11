@@ -643,11 +643,75 @@ impl App {
             .into(),
             None,
         );
-        if self.steam.on {
-            vec![games, images]
-        } else {
-            vec![games]
+        let web = setting(
+            wide,
+            "Steam Web API",
+            column![
+                toggler(self.steam.web)
+                    .on_toggle(|on| Message::Steam(SteamMsg::WebApi(on)))
+                    .size(22),
+                note(
+                    "Fills in what the Steam client has not saved on this computer: games it has \
+                     not described yet, the play time of those never played here, and the \
+                     achievements of games it keeps none of. It needs your own Steam Web API \
+                     key, which goes to Steam's Web API (api.steampowered.com) with your Steam id \
+                     in each request.",
+                ),
+            ]
+            .spacing(8)
+            .into(),
+            None,
+        );
+        if !self.steam.on {
+            return vec![games];
         }
+        let mut rows = vec![games, images, web];
+        if self.steam.web {
+            rows.push(self.steam_web_key_row(wide));
+        }
+        rows
+    }
+
+    /// The key to Steam's Web API: typed once, then kept in the keyring and never shown.
+    fn steam_web_key_row(&self, wide: bool) -> Element<'_, Message> {
+        use crate::steam::SteamMsg;
+        let msg = |m| Message::Steam(m);
+        let (control, after): (Element<'_, Message>, Element<'_, Message>) =
+            if self.steam.web_key == Some(true) {
+                (
+                    text("Saved in the system keyring").size(14).into(),
+                    button(text("Remove").size(14))
+                        .padding([8, 14])
+                        .on_press(msg(SteamMsg::RemoveWebKey))
+                        .style(theme::tonal)
+                        .into(),
+                )
+            } else {
+                let typed = !self.steam.web_key_input.trim().is_empty();
+                (
+                    column![
+                        text_input("Paste your Steam Web API key", &self.steam.web_key_input)
+                            .secure(true)
+                            .on_input(|v| Message::Steam(SteamMsg::WebKeyInput(v)))
+                            .on_submit(msg(SteamMsg::SaveWebKey))
+                            .style(theme::field)
+                            .font(theme::font())
+                            .padding([8, 12]),
+                        button(text("Create a key on steamcommunity.com").size(14))
+                            .padding(0)
+                            .on_press(msg(SteamMsg::OpenWebKeyPage))
+                            .style(theme::link),
+                    ]
+                    .spacing(8)
+                    .into(),
+                    button(text("Save").size(14))
+                        .padding([8, 14])
+                        .on_press_maybe(typed.then(|| msg(SteamMsg::SaveWebKey)))
+                        .style(theme::tonal)
+                        .into(),
+                )
+            };
+        setting(wide, "Web API key", control, Some(after))
     }
 
     fn account_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {

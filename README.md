@@ -95,8 +95,8 @@ The [user guide](docs/user-guide.md) covers every command.
 - No telemetry. Besides GOG, what is contacted is listed host by host in
   [SECURITY.md](SECURITY.md#what-leaves-your-computer), with the setting that controls it. Third
   parties are off until you turn them on (umu's online database, GitHub for Proton builds,
-  SteamGridDB, Steam's image servers); umu itself asks Valve whether its runtime is current at
-  each launch.
+  SteamGridDB, Steam's image servers and Web API); umu itself asks Valve whether its runtime is
+  current at each launch.
 - Windows games run isolated from your files by default, in umu's container inside bubblewrap:
   they see their own folder and a home of their own, cannot change the runtime or Proton build
   other games use, and cannot reach your other programs. Isolation is not a boundary against a

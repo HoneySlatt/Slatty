@@ -2,6 +2,7 @@ use slatty_core::library::{LibraryCache, MetadataSource};
 use slatty_core::steam::client::Action;
 use slatty_core::steam::library::SteamLibrary;
 use slatty_core::steam::local::{Installed, Played, SteamUser, Update};
+use slatty_core::steam::web::OwnedGame;
 
 use super::*;
 use crate::steam::SteamMsg;
@@ -467,6 +468,74 @@ fn steam_files_that_cannot_be_read_are_told_and_slow_folders_not_asked_twice() {
     assert!(!app.steam.reading_installed);
     let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));
     assert!(app.steam.reading_installed, "read again at the next focus");
+}
+
+/// Steam's Web API is off until turned on, and its key, once typed, is never shown; the games it
+/// names that the client has not described join the library, with the play time of those never
+/// played here, and go with it.
+#[test]
+fn steams_web_api_fills_in_once_turned_on_and_its_games_go_with_it() {
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    app.steam.on = true;
+    app.steam.found = Some("[FAKE] Player".into());
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    app.page = Page::Settings;
+    app.window = Size::new(1440.0, 2600.0);
+    {
+        let mut ui = render_window(&app);
+        assert!(ui.find("Steam Web API").is_ok() && ui.find("Web API key").is_err());
+    }
+    let _ = app.update(Message::Steam(SteamMsg::WebApi(true)));
+    assert!(slatty_core::settings::steam_web_api(&db).unwrap());
+    let _ = app.update(Message::Steam(SteamMsg::WebKey(Ok(false))));
+    let _ = app.update(Message::Steam(SteamMsg::WebKeyInput("[FAKE]KEY123".into())));
+    {
+        let mut ui = render_window(&app);
+        let all = texts(&mut ui);
+        assert!(all.iter().any(|t| t == "Web API key"), "{all:?}");
+        assert!(
+            !all.iter().any(|t| t.contains("[FAKE]KEY123")),
+            "typed, never shown"
+        );
+    }
+    let _ = app.update(Message::Steam(SteamMsg::WebKey(Ok(true))));
+    assert!(
+        render_window(&app)
+            .find("Saved in the system keyring")
+            .is_ok()
+    );
+    assert!(app.asks_steam_web());
+
+    let owned = |app_id, name: &str, minutes| OwnedGame {
+        app_id,
+        name: name.into(),
+        minutes,
+        last_played: 0,
+    };
+    let games = vec![
+        owned(70, "[FAKE] Life", 30),
+        owned(440, "[FAKE] Fortress", 900),
+    ];
+    let _ = app.update(Message::Steam(SteamMsg::Owned(
+        76561198000000009,
+        Ok(games.clone()),
+    )));
+    assert!(!ids(&app).contains(&"steam-70"), "another account's");
+    let _ = app.update(Message::Steam(SteamMsg::Owned(
+        76561198000000002,
+        Ok(games),
+    )));
+    assert!(ids(&app).contains(&"steam-70"));
+    assert_eq!(app.played_seconds("steam-70"), 30 * 60, "never played here");
+    assert_eq!(
+        app.played_seconds("steam-440"),
+        754 * 60,
+        "the client's own record stays"
+    );
+
+    let _ = app.update(Message::Steam(SteamMsg::WebApi(false)));
+    assert!(!ids(&app).contains(&"steam-70") && ids(&app).contains(&"steam-440"));
 }
 
 /// GOG is asked about GOG's games alone: Steam's never count as games GOG could not describe.

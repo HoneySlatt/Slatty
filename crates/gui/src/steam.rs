@@ -9,6 +9,7 @@ use slatty_core::library::LibraryGame;
 use slatty_core::steam::client::{self, Action};
 use slatty_core::steam::library::SteamLibrary;
 use slatty_core::steam::local::{self, Installed, Played};
+use slatty_core::steam::web::{self, OwnedGame};
 use slatty_core::store::{self, Store};
 
 use crate::notify::Kind;
@@ -36,6 +37,12 @@ pub struct SteamView {
     pub on: bool,
     /// Whether the images the client has not saved come from Steam's image servers.
     pub images: bool,
+    /// Whether Steam's Web API fills in what the client has not saved, whether its key is in the
+    /// keyring (once asked), the key being typed, and the games it added.
+    pub web: bool,
+    pub web_key: Option<bool>,
+    pub web_key_input: String,
+    pub from_web: std::collections::HashSet<String>,
     /// The Steam id of the account whose games show.
     pub account: Option<u64>,
     /// Why the client's list of apps could not be read, which leaves no game to show.
@@ -82,6 +89,16 @@ pub enum SteamMsg {
     Look,
     /// The games Steam runs, by app id.
     Running(BTreeSet<u32>),
+    /// Whether Steam's Web API fills in what the client has not saved.
+    WebApi(bool),
+    WebKeyInput(String),
+    SaveWebKey,
+    RemoveWebKey,
+    /// Whether a Web API key is in the keyring, after reading, saving or removing it.
+    WebKey(Result<bool, String>),
+    OpenWebKeyPage,
+    /// The account's games as the Web API lists them, with the account's Steam id.
+    Owned(u64, Result<Vec<OwnedGame>, String>),
     /// Asks the Steam client to act on a game.
     Ask(String, Action),
     /// The desktop could not hand the request to Steam.
@@ -129,6 +146,7 @@ impl App {
                 self.steam.covers = library.covers;
                 self.steam.played = library.played;
                 self.steam.unreadable = library.unreadable;
+                self.steam.from_web.clear();
                 let apps = self
                     .steam
                     .games
@@ -140,6 +158,7 @@ impl App {
                     self.read_steam_installed(),
                     self.download_covers(),
                     count_achievements(apps),
+                    self.fetch_owned(),
                 ]);
             }
             SteamMsg::Loaded(_) => {}
@@ -199,7 +218,13 @@ impl App {
             {
                 return load(self.steam.images);
             }
-            SteamMsg::Played(Some((_, played))) if self.steam.on => self.steam.played = played,
+            SteamMsg::Played(Some((_, mut played))) if self.steam.on => {
+                // What the Web API gave for games never played here stays.
+                for (id, before) in std::mem::take(&mut self.steam.played) {
+                    played.entry(id).or_insert(before);
+                }
+                self.steam.played = played;
+            }
             SteamMsg::Played(_) => {}
             SteamMsg::Counted(Some((account, counts))) if self.steam.account == Some(account) => {
                 self.steam.achievements = counts;
@@ -237,6 +262,78 @@ impl App {
             }
             SteamMsg::Asked(Ok(())) => {}
             SteamMsg::Asked(Err(e)) => self.notify_error(e),
+            SteamMsg::WebApi(on) => {
+                self.steam.web = on;
+                if let Some(core) = &self.core
+                    && let Err(e) = slatty_core::settings::set_steam_web_api(&core.db, on)
+                {
+                    self.notify_error(e.to_string());
+                }
+                if !on {
+                    self.drop_web_games();
+                } else if self.steam.web_key.is_none() {
+                    return Task::perform(web_key_saved(), |r| Message::Steam(SteamMsg::WebKey(r)));
+                } else {
+                    return self.fetch_owned();
+                }
+            }
+            SteamMsg::WebKeyInput(v) => self.steam.web_key_input = v,
+            SteamMsg::SaveWebKey => {
+                let key = std::mem::take(&mut self.steam.web_key_input);
+                let key = key.trim();
+                if key.is_empty() {
+                    return Task::none();
+                }
+                let key = slatty_core::secret::Secret::new(key);
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            slatty_core::credentials::save_key(web::KEY, &key)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .map(|()| true)
+                        .map_err(|e| e.to_string())
+                    },
+                    |r| Message::Steam(SteamMsg::WebKey(r)),
+                );
+            }
+            SteamMsg::RemoveWebKey => {
+                return Task::perform(
+                    async {
+                        tokio::task::spawn_blocking(|| {
+                            slatty_core::credentials::delete_key(web::KEY)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .map(|()| false)
+                        .map_err(|e| e.to_string())
+                    },
+                    |r| Message::Steam(SteamMsg::WebKey(r)),
+                );
+            }
+            SteamMsg::WebKey(Ok(saved)) => {
+                self.steam.web_key = Some(saved);
+                if !saved {
+                    self.drop_web_games();
+                }
+                return self.fetch_owned();
+            }
+            SteamMsg::WebKey(Err(e)) => self.notify_error(e),
+            SteamMsg::OpenWebKeyPage => {
+                if slatty_core::auth::open_in_browser(&web::key_page()).is_err() {
+                    self.notify_error(format!("Open {} in your browser.", web::KEY_PAGE));
+                }
+            }
+            SteamMsg::Owned(account, Ok(games))
+                if self.asks_steam_web() && self.steam.account == Some(account) =>
+            {
+                return self.add_web_games(games);
+            }
+            SteamMsg::Owned(_, Err(e)) if self.asks_steam_web() => {
+                self.notify_error(format!("Steam's Web API did not answer: {e}"));
+            }
+            SteamMsg::Owned(..) => {}
         }
         Task::none()
     }
@@ -273,6 +370,59 @@ impl App {
             self.steam.twins = twins;
         }
         self.apply_customs();
+    }
+
+    /// Whether Steam's Web API is to be asked: turned on, with a key saved, for Steam's games.
+    pub fn asks_steam_web(&self) -> bool {
+        self.steam.on && self.steam.web && self.steam.web_key == Some(true)
+    }
+
+    /// Asks the Web API for the account's games, once it is to be asked.
+    fn fetch_owned(&self) -> Task<Message> {
+        let (Some(core), Some(account)) = (self.core.clone(), self.steam.account) else {
+            return Task::none();
+        };
+        if !self.asks_steam_web() {
+            return Task::none();
+        }
+        Task::perform(
+            async move {
+                let key = web_key().await?;
+                web::owned_games(&core.http, &key, account)
+                    .await
+                    .map_err(|e| e.to_string())
+            },
+            move |games| Message::Steam(SteamMsg::Owned(account, games)),
+        )
+    }
+
+    /// Adds the account's games the client has not described yet, and the play time of those
+    /// never played on this computer.
+    fn add_web_games(&mut self, games: Vec<OwnedGame>) -> Task<Message> {
+        let known: std::collections::HashSet<String> =
+            self.steam.games.iter().map(|g| g.id.clone()).collect();
+        for game in games {
+            let shown = slatty_core::steam::library::web_game(&game, self.steam.images);
+            if game.minutes > 0 || game.last_played > 0 {
+                self.steam.played.entry(shown.id.clone()).or_insert(Played {
+                    minutes: game.minutes,
+                    last_played: game.last_played,
+                });
+            }
+            if !known.contains(&shown.id) {
+                self.steam.from_web.insert(shown.id.clone());
+                self.steam.games.push(shown);
+            }
+        }
+        self.merge_steam();
+        self.download_covers()
+    }
+
+    /// Takes out the games the Web API added.
+    fn drop_web_games(&mut self) {
+        let from_web = std::mem::take(&mut self.steam.from_web);
+        self.steam.games.retain(|g| !from_web.contains(&g.id));
+        self.merge_steam();
     }
 
     /// The Steam game a GOG game of the library also is, owned on both.
@@ -420,6 +570,24 @@ impl App {
     }
 }
 
+/// Whether a Steam Web API key is in the keyring, read off the interface thread.
+pub async fn web_key_saved() -> Result<bool, String> {
+    tokio::task::spawn_blocking(|| slatty_core::credentials::load_key(web::KEY))
+        .await
+        .map_err(|e| e.to_string())?
+        .map(|key| key.is_some())
+        .map_err(|e| e.to_string())
+}
+
+/// The Steam Web API key, from the keyring.
+async fn web_key() -> Result<slatty_core::secret::Secret, String> {
+    tokio::task::spawn_blocking(|| slatty_core::credentials::load_key(web::KEY))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Add your Steam Web API key in Settings → Steam.".to_string())
+}
+
 /// Reads the play times of the account signed in to Steam.
 fn read_played() -> Task<Message> {
     Task::perform(
@@ -461,12 +629,19 @@ fn count_achievements(apps: Vec<u32>) -> Task<Message> {
 
 /// The achievements of a Steam game, read from the Steam client's files; with `icons`, named on
 /// Steam's image servers.
-pub fn load_achievements(game_id: String, icons: bool) -> Task<Message> {
+/// The achievements of a Steam game, read from the Steam client's files, else, with `web` (the
+/// HTTP client and the account's Steam id, once the Web API is to be asked), from Steam's Web
+/// API; with `icons`, named on Steam's image servers.
+pub fn load_achievements(
+    game_id: String,
+    icons: bool,
+    web: Option<(slatty_core::http::HttpClient, u64)>,
+) -> Task<Message> {
     let id = game_id.clone();
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || {
-                let app = store::steam_app(&id)?;
+            let app = store::steam_app(&id).ok_or("not a Steam game")?;
+            let here = tokio::task::spawn_blocking(move || {
                 let home = std::env::var_os("HOME").map(std::path::PathBuf::from)?;
                 let steam = local::find(&home)?;
                 let user = local::signed_in_user(&steam)?;
@@ -474,12 +649,22 @@ pub fn load_achievements(game_id: String, icons: bool) -> Task<Message> {
             })
             .await
             .ok()
-            .flatten()
-            .ok_or_else(|| {
-                "Steam keeps no achievements of this game on this computer: it saves them once \
-                 the game's page was shown in Steam, or the game played."
-                    .to_string()
-            })
+            .flatten();
+            match (here, web) {
+                (Some(list), _) => Ok(list),
+                (None, Some((http, account))) => {
+                    let key = web_key().await?;
+                    web::achievements(&http, &key, account, app, icons)
+                        .await
+                        .map_err(|e| e.to_string())
+                }
+                (None, None) => Err(
+                    "Steam keeps no achievements of this game on this computer: it saves them \
+                     once the game's page was shown in Steam, or the game played. Steam's Web API \
+                     (Settings → Steam) can tell them."
+                        .to_string(),
+                ),
+            }
         },
         move |list| Message::Achievements(game_id, list),
     )

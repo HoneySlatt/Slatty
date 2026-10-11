@@ -28,7 +28,11 @@ impl App {
         // A Steam game's are read from the Steam client's files, without any GOG account.
         if self.steam_game(&game_id).is_some() {
             self.achievements.insert(game_id.clone(), Loadable::Loading);
-            return crate::steam::load_achievements(game_id, self.steam.images);
+            let web = self
+                .asks_steam_web()
+                .then(|| Some((self.core.as_ref()?.http.clone(), self.steam.account?)))
+                .flatten();
+            return crate::steam::load_achievements(game_id, self.steam.images, web);
         }
         let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
             return Task::none();

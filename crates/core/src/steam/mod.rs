@@ -8,3 +8,4 @@ pub mod local;
 pub mod running;
 pub mod stats;
 pub mod vdf;
+pub mod web;

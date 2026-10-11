@@ -28,7 +28,8 @@ The first public version.
   and played, installed, verified and uninstalled through the client; no GOG account needed for
   them. GOG is recommended where you have the choice. Their play time, last session and
   achievements are Steam's own records, and a game Steam runs shows as running. Images the client
-  has not saved come from Steam's image servers once turned on.
+  has not saved come from Steam's image servers once turned on, and Steam's Web API, with your own
+  key, fills in games and achievements the client has not saved once turned on.
 - Command line (`slatty`) and interface (`slatty-gui`) on the same core.
 
 ### Security and privacy

@@ -207,6 +207,31 @@ fn server_url(app_id: u32, common: &Vdf, asset: &str, legacy: &str) -> String {
     )
 }
 
+/// A game of the account the client has not described yet, as Steam's Web API names it
+/// (`web::owned_games`); with `from_servers`, its images named on Steam's image servers. Its
+/// systems are not known.
+pub fn web_game(game: &super::web::OwnedGame, from_servers: bool) -> LibraryGame {
+    let server = |legacy: &str| {
+        from_servers.then(|| {
+            format!(
+                "{IMAGE_SERVER}store_item_assets/steam/apps/{}/{legacy}",
+                game.app_id
+            )
+        })
+    };
+    LibraryGame {
+        id: crate::store::steam_id(game.app_id),
+        title: game.name.clone(),
+        cover: server("library_600x900.jpg"),
+        icon: None,
+        background: server("library_hero.jpg"),
+        logo: server("logo.png"),
+        os: Vec::new(),
+        metadata: MetadataSource::Product,
+        steam: Vec::new(),
+    }
+}
+
 /// Whether `url` is an image of Steam's image servers, which `image` downloads.
 pub fn is_server_image(url: &str) -> bool {
     url.starts_with(IMAGE_SERVER)
@@ -421,6 +446,30 @@ mod tests {
         );
         assert!(url("library_hero", "library_hero.jpg").ends_with("/570/library_hero.jpg"));
         assert!(url("library_logo", "logo.png").ends_with("/570/logo.png"));
+    }
+
+    #[test]
+    fn a_game_named_by_the_web_api_shows_with_images_from_steam_only_once_turned_on() {
+        let game = crate::steam::web::OwnedGame {
+            app_id: 90,
+            name: "[FAKE] Never played".into(),
+            minutes: 0,
+            last_played: 0,
+        };
+        let shown = web_game(&game, false);
+        assert_eq!(
+            (shown.id.as_str(), shown.title.as_str()),
+            ("steam-90", "[FAKE] Never played")
+        );
+        assert!(shown.cover.is_none() && shown.background.is_none() && shown.logo.is_none());
+        let shown = web_game(&game, true);
+        assert_eq!(
+            shown.cover.as_deref(),
+            Some(
+                "https://shared.steamstatic.com/store_item_assets/steam/apps/90/library_600x900.jpg"
+            )
+        );
+        assert!(shown.logo.as_deref().is_some_and(is_server_image));
     }
 
     #[tokio::test]

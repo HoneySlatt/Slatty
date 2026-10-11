@@ -28,6 +28,7 @@ const AUTO_UPDATE: &str = "auto_update";
 const VULKAN_ONLY: &str = "vulkan_only";
 const STEAM_GAMES: &str = "steam_games";
 const STEAM_IMAGES: &str = "steam_images";
+const STEAM_WEB_API: &str = "steam_web_api";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -201,6 +202,17 @@ pub fn steam_images(db: &Db) -> Result<bool> {
 
 pub fn set_steam_images(db: &Db, on: bool) -> Result<()> {
     db.set_setting(STEAM_IMAGES, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether Steam's Web API is asked, with the user's own key, for what the Steam client has not
+/// saved: games it has not described yet, achievements of games it keeps none of. Off until
+/// turned on.
+pub fn steam_web_api(db: &Db) -> Result<bool> {
+    Ok(db.setting(STEAM_WEB_API)?.as_deref() == Some("on"))
+}
+
+pub fn set_steam_web_api(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(STEAM_WEB_API, Some(if on { "on" } else { "off" }))
 }
 
 /// Whether the interface starts its graphics with Vulkan alone: found, at the last start, to be
@@ -458,6 +470,9 @@ mod tests {
         assert!(!steam_images(&db).unwrap(), "Steam's servers stay unasked");
         set_steam_images(&db, true).unwrap();
         assert!(steam_images(&db).unwrap());
+        assert!(!steam_web_api(&db).unwrap(), "nor its Web API");
+        set_steam_web_api(&db, true).unwrap();
+        assert!(steam_web_api(&db).unwrap());
     }
 
     #[test]

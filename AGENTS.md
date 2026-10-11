@@ -94,8 +94,8 @@ These act on a real person's account, disk or system. Ask the human first, every
 - Turn `reqwest` errors into `Error::network(context, e)`, which strips the URL: some GOG
   endpoints carry tokens in the query string.
 - Besides GOG and the download servers it names, SlattyLauncher itself contacts only umu's game
-  database, GitHub (Proton builds), SteamGridDB and Steam's image servers, each off until turned
-  on. The programs it
+  database, GitHub (Proton builds), SteamGridDB, Steam's image servers and Steam's Web API, each
+  off until turned on. The programs it
   starts contact others (umu asks Valve about its runtime, Comet talks to GOG): a change that adds
   such traffic counts too. A new outgoing request to another host needs a switch in Settings, off
   until turned on, and an entry in SECURITY.md ("What leaves your computer").
