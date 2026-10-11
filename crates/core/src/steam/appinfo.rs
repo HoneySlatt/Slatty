@@ -79,8 +79,9 @@ pub(crate) fn keyvalues(data: &[u8]) -> Result<Vdf> {
 fn string_table(data: &[u8], offset: usize) -> Result<Vec<String>> {
     let mut at = Cursor { data, pos: offset };
     let count = at.u32()? as usize;
-    // Each string takes at least its terminating zero.
-    if count > data.len() {
+    // Each string takes at least its terminating zero in the file, and a `String` once read, empty
+    // or not: bounded like the rest of what the file decodes into.
+    if count > data.len() || count > DECODED / std::mem::size_of::<String>() {
         return Err(bad("string table"));
     }
     (0..count)
@@ -255,6 +256,16 @@ impl<'a> Cursor<'a> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    /// A string table of millions of empty keys would take two dozen times its size once read:
+    /// what it may take is bounded like the rest of what a file decodes into.
+    #[test]
+    fn a_string_table_of_millions_of_empty_keys_is_refused() {
+        let count: u32 = 12_000_000;
+        let mut data = count.to_le_bytes().to_vec();
+        data.resize(4 + count as usize, 0);
+        assert!(string_table(&data, 0).is_err());
+    }
 
     /// Builds an appinfo.vdf of version 41 holding `apps` (app id, name, type, platforms).
     pub(crate) fn fake_appinfo(apps: &[(u32, &str, &str, &str)]) -> Vec<u8> {
