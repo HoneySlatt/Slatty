@@ -16,6 +16,7 @@ fn steam_game(app: u32, title: &str) -> LibraryGame {
         logo: None,
         os: vec!["windows".into()],
         metadata: MetadataSource::Product,
+        steam: Vec::new(),
     }
 }
 
@@ -374,6 +375,55 @@ fn a_download_steam_makes_shows_until_it_is_done() {
     )])));
     assert_eq!(toasted(&app).len(), 1, "told once");
     assert!(!app.watching_steam_downloads());
+}
+
+/// A game owned on GOG and on Steam shows once, as GOG's: matched by the Steam app GOG's database
+/// names, else by title; its page offers the Steam build through Steam, it counts as installed
+/// when either is, and its play time adds both stores' sessions.
+#[test]
+fn a_game_owned_on_both_shows_once_as_gogs() {
+    let mut app = library_app();
+    app.library[0].steam = vec![440];
+    app.library[1].title = "[FAKE] Portal".into();
+    app.gog_titles.insert("2".into(), "[FAKE] Portal".into());
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    assert_eq!(app.library.len(), 14, "{:?}", ids(&app));
+    assert_eq!(app.steam_twin("1"), Some("steam-440"));
+    assert_eq!(app.steam_twin("2"), Some("steam-620"));
+
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        440, 1, true, None,
+    )])));
+    assert!(app.is_installed("1"), "installed through Steam");
+    let _ = app.update(Message::PlaytimesFetched(vec![("1".into(), 60)]));
+    assert_eq!(app.played_seconds("1"), (60 + 754) * 60);
+    assert_eq!(app.last_played("1"), Some(1_791_590_000));
+
+    let asked = |app: &mut App, id: &str, label: &str| {
+        let _ = app.update(Message::Select(id.into()));
+        let mut ui = render(app);
+        assert!(ui.find("Also in your Steam library").is_ok());
+        ui.click(label).unwrap();
+        let messages: Vec<Message> = ui.into_messages().collect();
+        messages.into_iter().find_map(|m| match m {
+            Message::Steam(SteamMsg::Ask(game, action)) => Some((game, action)),
+            _ => None,
+        })
+    };
+    assert_eq!(
+        asked(&mut app, "1", "Play the Steam version"),
+        Some(("steam-440".into(), Action::Play))
+    );
+    assert_eq!(
+        asked(&mut app, "2", "Install the Steam version"),
+        Some(("steam-620".into(), Action::Install))
+    );
+
+    // Turned off, Steam's games go and GOG's stay as they are.
+    let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
+    assert!(app.steam_twin("1").is_none() && !app.is_installed("1"));
+    assert_eq!(app.library.len(), 14);
 }
 
 /// GOG is asked about GOG's games alone: Steam's never count as games GOG could not describe.

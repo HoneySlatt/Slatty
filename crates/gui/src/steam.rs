@@ -43,6 +43,8 @@ pub struct SteamView {
     pub covers: HashMap<String, std::path::PathBuf>,
     /// The games Steam installed, by game id, once its library folders are read.
     pub installed: HashMap<String, Installed>,
+    /// The Steam game each GOG game of the library also is, by GOG id: it shows as GOG's alone.
+    pub twins: HashMap<String, String>,
     /// When what Steam downloads last changed: its manifests are read until it stays the same.
     pub download_moved: Option<Instant>,
     /// How long each game was played and when last, as Steam records it, by game id.
@@ -239,14 +241,37 @@ impl App {
         self.library
             .retain(|g| store::of(&g.id).is_ok_and(|s| s == Store::Gog));
         self.covers.retain(|id, _| store::steam_app(id).is_none());
+        self.steam.twins.clear();
         if self.steam.on {
-            self.library.extend(self.steam.games.iter().cloned());
+            // A game owned on both shows once, as GOG's: matched with GOG's own titles, not the
+            // ones the user gave.
+            let gog = self.library.iter().map(|g| {
+                let title = self.gog_titles.get(&g.id).unwrap_or(&g.title);
+                (g.id.as_str(), title.as_str(), g.steam.as_slice())
+            });
+            let twins = slatty_core::steam::library::twins(gog, &self.steam.games);
+            let twinned: std::collections::HashSet<&String> = twins.values().collect();
+            self.library.extend(
+                self.steam
+                    .games
+                    .iter()
+                    .filter(|g| !twinned.contains(&g.id))
+                    .cloned(),
+            );
             for (id, cover) in &self.steam.covers {
-                self.covers
-                    .insert(id.clone(), iced::widget::image::Handle::from_path(cover));
+                if !twinned.contains(id) {
+                    self.covers
+                        .insert(id.clone(), iced::widget::image::Handle::from_path(cover));
+                }
             }
+            self.steam.twins = twins;
         }
         self.apply_customs();
+    }
+
+    /// The Steam game a GOG game of the library also is, owned on both.
+    pub fn steam_twin(&self, game_id: &str) -> Option<&str> {
+        self.steam.twins.get(game_id).map(String::as_str)
     }
 
     /// Downloads from Steam's image servers the covers the client has not saved: only named once
@@ -283,21 +308,29 @@ impl App {
 
     /// Whether a game is installed, by SlattyLauncher or by Steam.
     pub fn is_installed(&self, game_id: &str) -> bool {
-        self.installs.contains_key(game_id) || self.steam.installed.contains_key(game_id)
+        self.installs.contains_key(game_id)
+            || self.steam.installed.contains_key(game_id)
+            || self
+                .steam_twin(game_id)
+                .is_some_and(|twin| self.steam.installed.contains_key(twin))
     }
 
     /// When a game was last played: as Steam records it for a Steam game, else from the sessions
     /// SlattyLauncher followed (GOG does not tell).
     pub fn last_played(&self, game_id: &str) -> Option<i64> {
-        if store::steam_app(game_id).is_some() {
-            return self
-                .steam
+        let on_steam = |id: &str| {
+            self.steam
                 .played
-                .get(game_id)
+                .get(id)
                 .map(|p| p.last_played)
-                .filter(|t| *t > 0);
+                .filter(|t| *t > 0)
+        };
+        if store::steam_app(game_id).is_some() {
+            return on_steam(game_id);
         }
-        self.playtime.get(game_id).map(|p| p.last_played)
+        // Owned on both: the latest of either.
+        let here = self.playtime.get(game_id).map(|p| p.last_played);
+        here.max(self.steam_twin(game_id).and_then(on_steam))
     }
 
     /// Unlocked and total achievements of a game: GOG's, or Steam's for a Steam game.

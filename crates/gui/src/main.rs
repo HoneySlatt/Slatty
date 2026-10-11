@@ -1004,6 +1004,11 @@ impl App {
             .find(|g| g.id == game_id)
             .map(|g| g.title.clone())
             .or_else(|| self.installs.get(game_id).map(|i| i.title.clone()))
+            // A Steam game shown as its GOG twin.
+            .or_else(|| {
+                let steam = self.steam.games.iter().find(|g| g.id == game_id)?;
+                Some(steam.title.clone())
+            })
             .unwrap_or_else(|| game_id.to_string())
     }
 

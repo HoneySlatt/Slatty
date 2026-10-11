@@ -38,6 +38,10 @@ pub struct LibraryGame {
     pub logo: Option<String>,
     pub os: Vec<String>,
     pub metadata: MetadataSource,
+    /// The Steam app ids GOG's database gives for the same game (its releases on Steam), so that a
+    /// game owned on both shows once.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub steam: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,6 +176,18 @@ fn from_gamesdb(id: &str, v: &Value) -> Option<LibraryGame> {
                 .collect()
         })
         .unwrap_or_default();
+    // The game's releases on every store GOG knows; a Steam release's id is its app id (others,
+    // such as `bundle_<id>`, are not apps).
+    let steam = v["game"]["releases"]
+        .as_array()
+        .map(|releases| {
+            releases
+                .iter()
+                .filter(|r| r["platform_id"] == "steam")
+                .filter_map(|r| r["external_id"].as_str()?.parse().ok())
+                .collect()
+        })
+        .unwrap_or_default();
     Some(LibraryGame {
         id: id.to_string(),
         title,
@@ -181,6 +197,7 @@ fn from_gamesdb(id: &str, v: &Value) -> Option<LibraryGame> {
         logo: image("logo", "png"),
         os,
         metadata: MetadataSource::Gamesdb,
+        steam,
     })
 }
 
@@ -203,6 +220,7 @@ async fn from_product(http: &Client, id: &str) -> LibraryGame {
         background: None,
         logo: None,
         os: Vec::new(),
+        steam: Vec::new(),
     }
 }
 
@@ -411,13 +429,28 @@ mod tests {
             "supported_operating_systems": [{"slug": "windows"}],
             "game": {
                 "visible_in_library": true,
-                "vertical_cover": {"url_format": "https://img/abc{formatter}.{ext}"}
+                "vertical_cover": {"url_format": "https://img/abc{formatter}.{ext}"},
+                "releases": [
+                    {"platform_id": "gog", "external_id": "1000000001"},
+                    {"platform_id": "steam", "external_id": "440"},
+                    {"platform_id": "steam", "external_id": "bundle_1234"},
+                    {"platform_id": "epic", "external_id": "999"},
+                    {"platform_id": "steam", "external_id": "441"}
+                ]
             }
         });
         let g = from_gamesdb("1000000001", &v).unwrap();
         assert_eq!(g.title, "[FAKE] Game");
         assert_eq!(g.cover.as_deref(), Some("https://img/abc.jpg"));
         assert_eq!(g.os, vec!["windows"]);
+        assert_eq!(g.steam, [440, 441], "its Steam apps, from GOG's database");
+        let cached = serde_json::to_string(&g).unwrap();
+        let back: LibraryGame = serde_json::from_str(&cached).unwrap();
+        assert_eq!(back.steam, [440, 441]);
+        let mut old: Value = serde_json::from_str(&cached).unwrap();
+        old.as_object_mut().unwrap().remove("steam");
+        let back: LibraryGame = serde_json::from_value(old).unwrap();
+        assert!(back.steam.is_empty(), "a cache made before reads as none");
     }
 
     #[test]
@@ -442,6 +475,7 @@ mod tests {
             logo: None,
             os: Vec::new(),
             metadata: MetadataSource::Gamesdb,
+            steam: Vec::new(),
         }
     }
 
@@ -547,6 +581,7 @@ mod tests {
                 Vec::new()
             },
             metadata,
+            steam: Vec::new(),
         };
         save_cache(
             &dirs,

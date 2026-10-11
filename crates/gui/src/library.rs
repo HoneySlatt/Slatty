@@ -227,15 +227,24 @@ impl App {
         ))
     }
 
-    /// Seconds played, as GOG records them, or Steam for a Steam game.
+    /// Seconds played, as GOG records them, or Steam for a Steam game; both for a game owned on
+    /// both (their sessions are not the same ones).
     pub fn played_seconds(&self, game_id: &str) -> i64 {
-        if let Some(played) = self.steam.played.get(game_id) {
-            return played.minutes as i64 * 60;
+        let on_steam = |id: &str| {
+            self.steam
+                .played
+                .get(id)
+                .map_or(0, |p| p.minutes as i64 * 60)
+        };
+        if store::steam_app(game_id).is_some() {
+            return on_steam(game_id);
         }
-        self.overview
+        let on_gog = self
+            .overview
             .get(game_id)
             .and_then(|o| o.playtime_minutes)
-            .map_or(0, |m| m as i64 * 60)
+            .map_or(0, |m| m as i64 * 60);
+        on_gog + self.steam_twin(game_id).map_or(0, on_steam)
     }
 
     pub fn save_overview(&mut self) {

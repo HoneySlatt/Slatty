@@ -49,6 +49,7 @@ fn fake_game(id: &str, title: &str) -> LibraryGame {
         logo: None,
         os: vec!["windows".into()],
         metadata: MetadataSource::Missing,
+        steam: Vec::new(),
     }
 }
 

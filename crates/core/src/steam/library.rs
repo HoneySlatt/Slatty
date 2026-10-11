@@ -103,9 +103,62 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
                 .map(String::from)
                 .collect(),
             metadata: MetadataSource::Product,
+            steam: Vec::new(),
         });
     }
     Some(library)
+}
+
+/// The Steam game each GOG game is, by GOG id, among `gog` (id, title, Steam app ids GOG's
+/// database gives) and `steam`: first by those app ids, then, for a GOG game GOG's database gives
+/// none for, by title, written alike once kept to letters and digits, lower-cased. A GOG game
+/// whose Steam apps are all elsewhere is not matched by title, nor a title two Steam games share;
+/// each Steam game goes to one GOG game.
+pub fn twins<'a>(
+    gog: impl IntoIterator<Item = (&'a str, &'a str, &'a [u32])>,
+    steam: &'a [LibraryGame],
+) -> HashMap<String, String> {
+    let alike = |title: &str| -> String {
+        title
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    let by_app: HashMap<u32, &str> = steam
+        .iter()
+        .filter_map(|g| Some((crate::store::steam_app(&g.id)?, g.id.as_str())))
+        .collect();
+    // None for a title two of the Steam games share.
+    let mut by_title: HashMap<String, Option<&str>> = HashMap::new();
+    for g in steam {
+        by_title
+            .entry(alike(&g.title))
+            .and_modify(|seen| *seen = None)
+            .or_insert(Some(g.id.as_str()));
+    }
+    let mut taken = HashSet::new();
+    let mut twins = HashMap::new();
+    let mut by_name = Vec::new();
+    for (id, title, apps) in gog {
+        if apps.is_empty() {
+            by_name.push((id, title));
+        } else if let Some(steam_id) = apps.iter().find_map(|app| by_app.get(app))
+            && taken.insert(*steam_id)
+        {
+            twins.insert(id.to_string(), steam_id.to_string());
+        }
+    }
+    for (id, title) in by_name {
+        let name = alike(title);
+        if let Some(Some(steam_id)) = by_title.get(&name)
+            && !name.is_empty()
+            && taken.insert(*steam_id)
+        {
+            twins.insert(id.to_string(), steam_id.to_string());
+        }
+    }
+    twins
 }
 
 /// How long the games of the account signed in to Steam were played and when last, by game id,
@@ -268,6 +321,51 @@ mod tests {
                 .flatten()
                 .all(|url| is_server_image(url))
         }));
+    }
+
+    #[test]
+    fn a_game_owned_on_gog_and_steam_is_matched_once() {
+        let steam_game = |app: u32, title: &str| LibraryGame {
+            id: crate::store::steam_id(app),
+            title: title.into(),
+            cover: None,
+            icon: None,
+            background: None,
+            logo: None,
+            os: Vec::new(),
+            metadata: MetadataSource::Product,
+            steam: Vec::new(),
+        };
+        let steam = [
+            steam_game(10, "[FAKE] Another Name On Steam"),
+            steam_game(20, "[FAKE] The Witcher 3: Wild Hunt"),
+            steam_game(30, "[FAKE] Shared Name"),
+            steam_game(31, "[FAKE] Shared  name"),
+            steam_game(40, "[FAKE] Elsewhere"),
+            steam_game(50, "[FAKE] Claimed"),
+        ];
+        let gog: [(&str, &str, &[u32]); 7] = [
+            // GOG's database names the Steam app: matched whatever the titles.
+            ("1", "[FAKE] Its GOG Name", &[9, 10]),
+            ("2", "[FAKE] the witcher® 3 – WILD HUNT™", &[]),
+            ("3", "[FAKE] Shared Name", &[]),
+            ("4", "[FAKE] Elsewhere", &[99]),
+            // A title that would claim what an app id claims, and a second GOG game alike.
+            ("5", "[FAKE] Claimed", &[]),
+            ("6", "[FAKE] Other", &[50]),
+            ("7", "[FAKE] The Witcher 3 Wild Hunt", &[]),
+        ];
+        let twins = twins(gog, &steam);
+        let mut found: Vec<(&str, &str)> = twins
+            .iter()
+            .map(|(g, s)| (g.as_str(), s.as_str()))
+            .collect();
+        found.sort();
+        assert_eq!(
+            found,
+            [("1", "steam-10"), ("2", "steam-20"), ("6", "steam-50")],
+            "a title two Steam games share, and one whose Steam apps are elsewhere, stay apart"
+        );
     }
 
     #[test]

@@ -100,7 +100,8 @@ is not installed) and the favorite button over it; below, three cards give play 
 session, cloud save status, and achievement progress with the latest unlocks. Play time is the
 total GOG records, so it includes GOG Galaxy and other launchers that report sessions. "Last played"
 only knows sessions started by SlattyLauncher: GOG does not expose that date. A Steam game's page
-gives Steam's own play time and last session instead (see [Steam games](#steam-games)). The tools
+gives Steam's own play time and last session instead, and a game owned on both adds them (see
+[Steam games](#steam-games)). The tools
 open in panels:
 
 | Where | Panel |
@@ -540,6 +541,13 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
 - **GOG is the better choice where you have it.** GOG's games run isolated from your files, need no
   client running, and their saves and achievements reach GOG without one: SlattyLauncher
   recommends their GOG build for your privacy and security.
+- **A game you own on both** shows once, as its GOG game: matched by the Steam release GOG's
+  database gives for it (read with the library: a library refreshed before this version matches
+  after **Refresh library**), else by a title written alike (case, spaces and punctuation aside).
+  Its page offers **Play the Steam version**, or **Install the Steam version**, through Steam,
+  under the GOG build's own buttons; it counts as installed when either is; its play time adds
+  the sessions of both, and its last session is the latest of either. Its achievements and cloud
+  saves are GOG's.
 - Steam's games can be renamed, illustrated, hidden and marked as favorites like GOG's. A game the
   Steam client has no details of yet (some recently added games) does not show until it has.
 

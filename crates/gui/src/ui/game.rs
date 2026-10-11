@@ -710,8 +710,12 @@ impl App {
             .align_y(Alignment::Center)
             .into();
         }
+        let twin = self.steam_twin(&g.id).map(|twin| self.steam_twin_row(twin));
         let Some(install) = self.installs.get(&g.id) else {
-            return Space::new().into();
+            return match twin {
+                Some(twin) => row![space().width(Length::Fill), twin].into(),
+                None => Space::new().into(),
+            };
         };
         let content = match self.records.get(&g.id) {
             Some(r) => row![
@@ -724,7 +728,45 @@ impl App {
             ],
             None => row![item(Icon::Settings, runner_label(install))],
         };
-        content.spacing(18).align_y(Alignment::Center).into()
+        content
+            .push(twin.map(|twin| row![space().width(Length::Fill), twin]))
+            .spacing(18)
+            .align_y(Alignment::Center)
+            .into()
+    }
+
+    /// A GOG game also in the Steam library: its Steam build can be played or installed through
+    /// Steam, the GOG build staying the one the page is about.
+    fn steam_twin_row<'a>(&'a self, twin: &'a str) -> Element<'a, Message> {
+        use crate::steam::SteamMsg;
+        use slatty_core::steam::client::Action;
+        let installed = self.steam.installed.get(twin);
+        let (label, action) = match installed {
+            _ if self.steam.running.contains(twin) => ("Running in Steam".to_string(), None),
+            Some(i) if i.update.is_some_and(|u| u.started) => (
+                steam_download(i.update.as_ref().expect("just checked")),
+                None,
+            ),
+            Some(i) if i.ready => ("Play the Steam version".to_string(), Some(Action::Play)),
+            Some(_) => ("Queued in Steam".to_string(), None),
+            None => (
+                "Install the Steam version".to_string(),
+                Some(Action::Install),
+            ),
+        };
+        row![
+            icon(Icon::Globe, 18.0, tokens().muted),
+            text("Also in your Steam library")
+                .size(14)
+                .color(tokens().muted),
+            button(text(label).size(14))
+                .padding([6, 12])
+                .on_press_maybe(action.map(|a| Message::Steam(SteamMsg::Ask(twin.to_string(), a))))
+                .style(theme::link),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center)
+        .into()
     }
 }
 
