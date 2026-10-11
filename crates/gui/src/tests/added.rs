@@ -300,3 +300,29 @@ fn a_windows_installer_runs_before_the_program_is_picked() {
     let _ = app.update(Message::Add(AddMsg::Cancel));
     assert!(app.add_game.is_none());
 }
+
+/// Once an installer ran, a click beside the dialog leaves it open, and the library under it: only
+/// Cancel throws away what the installer installed.
+#[test]
+fn a_click_beside_the_dialog_keeps_what_an_installer_installed() {
+    use crate::add::AddMsg;
+    let beside = iced::Point::new(100.0, 450.0);
+    let mut app = library_app();
+    let _ = app.update(Message::Add(AddMsg::Open));
+    {
+        let mut ui = render(&app);
+        ui.point_at(beside);
+        let _ = ui.simulate(iced_test::simulator::click());
+        assert!(
+            ui.into_messages()
+                .any(|m| matches!(m, Message::Add(AddMsg::Cancel))),
+            "nothing to lose yet"
+        );
+    }
+    app.add_game.as_mut().unwrap().installed_by = Some("local-2".into());
+    let mut ui = render(&app);
+    ui.point_at(beside);
+    let _ = ui.simulate(iced_test::simulator::click());
+    let messages: Vec<Message> = ui.into_messages().collect();
+    assert!(messages.is_empty(), "{messages:?}");
+}

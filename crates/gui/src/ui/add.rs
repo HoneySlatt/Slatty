@@ -213,17 +213,16 @@ impl App {
             .padding(Padding::new(26.0).right(12.0))
             .max_width(640)
             .style(theme::card);
-        stack![
-            page,
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(theme::backdrop)
-            )
-            .on_press(msg(AddMsg::Cancel)),
-            center(opaque(dialog)),
-        ]
-        .into()
+        let backdrop = container(Space::new())
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(theme::backdrop);
+        // Once an installer ran, closing throws away what it installed: not on a click beside.
+        let backdrop: Element<'_, Message> = if d.busy || d.installed_by.is_some() {
+            opaque(backdrop)
+        } else {
+            mouse_area(backdrop).on_press(msg(AddMsg::Cancel)).into()
+        };
+        stack![page, backdrop, center(opaque(dialog))].into()
     }
 }
