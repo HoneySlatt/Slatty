@@ -1,5 +1,5 @@
 use std::net::TcpListener;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::paths::Dirs;
 
@@ -23,7 +23,7 @@ fn find_in(path: &std::ffi::OsStr, program: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// Whether bubblewrap, which every isolated launch runs in, is there and can start a sandbox.
+/// Whether bubblewrap, which every isolated launch runs in, is there and can hold one.
 fn bubblewrap(bwrap: Option<PathBuf>) -> Check {
     let name = "bubblewrap";
     let Some(bwrap) = bwrap else {
@@ -33,26 +33,61 @@ fn bubblewrap(bwrap: Option<PathBuf>) -> Check {
             detail: "`bwrap` not found in PATH: isolated games cannot start".into(),
         };
     };
-    let started = std::process::Command::new(&bwrap)
-        .args(["--dev-bind", "/", "/", "true"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success());
-    Check {
-        name,
-        ok: started,
-        detail: if started {
-            bwrap.display().to_string()
-        } else {
-            format!(
-                "{} cannot start a sandbox (user namespaces not allowed?): isolated games cannot \
-                 start",
-                bwrap.display()
-            )
+    match sandbox_problem(&bwrap) {
+        None => Check {
+            name,
+            ok: true,
+            detail: bwrap.display().to_string(),
+        },
+        Some(problem) => Check {
+            name,
+            ok: false,
+            detail: format!("{}: {problem}", bwrap.display()),
         },
     }
+}
+
+/// Why `bwrap` cannot hold an isolated game here, if it cannot: it must start a sandbox, and
+/// another inside it, as umu's own container starts inside SlattyLauncher's. About 5 ms.
+pub fn sandbox_problem(bwrap: &Path) -> Option<String> {
+    let restricted =
+        std::fs::read_to_string("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+            .is_ok_and(|v| v.trim() == "1");
+    sandbox_problem_with(bwrap, restricted)
+}
+
+fn sandbox_problem_with(bwrap: &Path, apparmor_restricted: bool) -> Option<String> {
+    let starts = |inner: &[&std::ffi::OsStr]| {
+        std::process::Command::new(bwrap)
+            .args(["--dev-bind", "/", "/"])
+            .args(inner)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    let see = "see \"Ubuntu and AppArmor\" in the user guide's Troubleshooting";
+    if !starts(&["true".as_ref()]) {
+        return Some(if apparmor_restricted {
+            format!(
+                "bubblewrap cannot start a sandbox: this system (Ubuntu 23.10 and later) lets only \
+                 programs with an AppArmor profile start one, and bubblewrap has none; umu cannot \
+                 start Windows games without it either, isolated or not ({see})"
+            )
+        } else {
+            "bubblewrap cannot start a sandbox (are user namespaces turned off?)".into()
+        });
+    }
+    let inner = ["--dev-bind", "/", "/", "true"].map(std::ffi::OsStr::new);
+    if !starts(&[&[bwrap.as_os_str()], &inner[..]].concat()) {
+        return Some(format!(
+            "bubblewrap cannot start a sandbox inside another, which an isolated game needs (umu's \
+             container starts inside SlattyLauncher's); an AppArmor profile, such as Ubuntu's \
+             bwrap-userns-restrict, can forbid it ({see})"
+        ));
+    }
+    None
 }
 
 pub fn comet_port_free() -> bool {
@@ -154,5 +189,47 @@ mod tests {
         assert!(!bubblewrap(None).ok);
         assert!(bubblewrap(find_in_path("true")).ok);
         assert!(!bubblewrap(find_in_path("false")).ok);
+    }
+
+    /// Ubuntu 23.10 and later let only programs with an AppArmor profile start a sandbox; Ubuntu's
+    /// profile for bubblewrap may still forbid one inside another, which an isolated game needs.
+    /// Each case says why, rather than the game failing as it starts.
+    #[test]
+    fn a_sandbox_that_cannot_start_says_why() {
+        let dir = std::env::temp_dir().join(format!("slatty-bwrap-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // Starts what follows `--dev-bind / /`, unless already inside itself.
+        let nested_refused = dir.join("bwrap");
+        std::fs::write(
+            &nested_refused,
+            "#!/bin/sh\n[ -n \"$FAKE_BWRAP_IN\" ] && exit 1\nshift 3\nFAKE_BWRAP_IN=1 exec \"$@\"\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(
+            &nested_refused,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+        let ok = find_in_path("true").unwrap();
+        let refused = find_in_path("false").unwrap();
+
+        assert_eq!(sandbox_problem_with(&ok, true), None);
+        assert!(
+            sandbox_problem_with(&refused, true)
+                .unwrap()
+                .contains("AppArmor profile")
+        );
+        assert!(
+            !sandbox_problem_with(&refused, false)
+                .unwrap()
+                .contains("AppArmor")
+        );
+        assert!(
+            sandbox_problem_with(&nested_refused, false)
+                .unwrap()
+                .contains("inside another")
+        );
+        assert!(!bubblewrap(Some(nested_refused)).ok);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

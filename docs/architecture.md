@@ -284,6 +284,14 @@ umu cannot update a runtime it sees read-only, so isolated launches set `UMU_RUN
 and `runner::refresh_runtimes` runs umu once a day before one, outside bubblewrap, through the
 same runtime tool: umu's `UMU_NO_PROTON` would ask GitHub for umu's Proton releases first.
 
+Before each isolated launch, `runner::sandbox` tries bubblewrap (`doctor::sandbox_problem`, about
+5 ms): a sandbox, then one inside it, as pressure-vessel's starts inside ours. On Ubuntu 23.10 and
+later only programs with an AppArmor profile may start one (`kernel.apparmor_restrict_unprivileged_userns`),
+and Ubuntu's profile for bubblewrap strips privileges from what runs inside, which may stop the
+second. Either way the launch is refused with the reason and the user guide's way out, never run
+without isolation instead. The result is not kept: a profile installed meanwhile counts at the
+next launch.
+
 umu shares, writable, the whole filesystem a game is on (its "game drive": the first mount point
 above `STEAM_COMPAT_INSTALL_PATH`, which it otherwise takes from the program's folder). With `/home`
 or a library disk mounted on its own, that is all of it. An isolated game is therefore started

@@ -544,14 +544,28 @@ fn check_shared(install: &Install, args: &[String], cwd: &Path) -> Result<()> {
 /// pressure-vessel writes as a game starts (its copy of the runtime in `var`, its `.ref` locks)
 /// stays writable; umu leaves the runtime as it is meanwhile (`UMU_RUNTIME_UPDATE=0`, see
 /// `refresh_runtimes`).
+/// The bubblewrap an isolated game runs in, once tried: a system where it cannot hold one (no
+/// AppArmor profile on Ubuntu) says why before the launch, rather than the game failing as it
+/// starts. Never a launch without isolation instead.
+fn sandbox(bwrap: Option<PathBuf>) -> Result<PathBuf> {
+    let bwrap = bwrap.ok_or_else(|| {
+        Error::NotFound("bubblewrap (bwrap) is needed to run a game isolated".into())
+    })?;
+    match crate::doctor::sandbox_problem(&bwrap) {
+        None => Ok(bwrap),
+        Some(problem) => Err(Error::Refused(format!(
+            "{problem}. Isolation can be turned off for this game in its settings, at the cost of \
+             the protection it gives"
+        ))),
+    }
+}
+
 fn read_only_tools(
     umu: PathBuf,
     args: Vec<String>,
     proton: Option<&Path>,
 ) -> Result<(PathBuf, Vec<String>)> {
-    let bwrap = find_in_path("bwrap").ok_or_else(|| {
-        Error::NotFound("bubblewrap (bwrap) is needed to run a game isolated".into())
-    })?;
+    let bwrap = sandbox(find_in_path("bwrap"))?;
     let mut out: Vec<String> = ["--dev-bind", "/", "/"].map(String::from).to_vec();
     let mut bind = |how: &str, path: &Path| {
         let path = path.display().to_string();
@@ -715,6 +729,18 @@ fn path_list(paths: &[PathBuf]) -> Result<String> {
 mod tests {
     use super::*;
     use crate::install::Platform;
+
+    /// An isolated launch where bubblewrap cannot hold the game is refused with the reason, never
+    /// run without isolation; `false` stands in for a bubblewrap AppArmor stops.
+    #[test]
+    fn isolation_refuses_a_bubblewrap_that_cannot_hold_the_game() {
+        assert!(matches!(sandbox(None), Err(Error::NotFound(_))));
+        let refused = sandbox(find_in_path("false")).unwrap_err();
+        assert!(matches!(refused, Error::Refused(_)));
+        assert!(refused.to_string().contains("Isolation can be turned off"));
+        let ok = find_in_path("true").unwrap();
+        assert_eq!(sandbox(Some(ok.clone())).unwrap(), ok);
+    }
 
     #[test]
     fn umu_gets_the_games_id_or_the_unknown_one() {

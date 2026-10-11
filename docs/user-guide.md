@@ -637,7 +637,49 @@ Comet's log may contain game client identifiers; review it before sharing.
 | A game does not start | `~/.local/state/slatty/logs/game-<id>.log`. `slatty launch-spec <id>` shows the exact command. |
 | The first launch fails while creating the prefix | `~/.local/state/slatty/logs/prefix-<id>.log` |
 | A game misbehaves since it runs isolated (missing files, settings not found) | `slatty isolation <id> --off`, and tell us which game. |
-| "bubblewrap (bwrap) is needed to run a game isolated", or an isolated game does not start | Install bubblewrap (Flatpak needs it too). `slatty doctor` says whether it can start a sandbox; where user namespaces are not allowed it cannot, and `slatty isolation <id> --off` runs the game without isolation. |
+| "bubblewrap (bwrap) is needed to run a game isolated", or an isolated game does not start | Install bubblewrap (Flatpak needs it too). `slatty doctor` says whether it can start a sandbox, and one inside another, as an isolated game needs; where it cannot, the launch says why. On Ubuntu, see [below](#ubuntu-and-apparmor). `slatty isolation <id> --off` runs the game without isolation, and without its protection. |
+
+### Ubuntu and AppArmor
+
+Since Ubuntu 23.10 (24.04 LTS included), a program may start a sandbox only if an AppArmor
+profile allows it, and bubblewrap has none on Ubuntu 24.04 as installed. umu needs bubblewrap for
+every Windows game, isolated or not, as Heroic and Lutris do; an isolated game also needs it to
+start a sandbox inside another. Until bubblewrap has a profile, `slatty doctor` reports it and
+launches say so. Choose one of these, from the most to the least protective, then check with
+`slatty doctor`:
+
+1. **Ubuntu's own profile for bubblewrap**, the one umu's Ubuntu package uses. It lets bubblewrap
+   start a sandbox, but the programs inside it cannot get privileges. On Ubuntu 25.04 and later it
+   is installed and active already; on 24.04:
+
+   ```sh
+   sudo apt install apparmor-profiles
+   sudo install -m 644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/
+   sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+   ```
+
+   Windows games then start. Isolated games may not, if the profile keeps the sandbox inside
+   another from starting: `slatty doctor` tells. Turn isolation off for them, or use the next
+   choice.
+2. **A profile with no restriction for bubblewrap**: it and the programs it starts may create user
+   namespaces, as before Ubuntu 23.10. Save this as `/etc/apparmor.d/bwrap`, then run
+   `sudo apparmor_parser -r /etc/apparmor.d/bwrap`:
+
+   ```
+   abi <abi/4.0>,
+   include <tunables/global>
+
+   profile bwrap /usr/bin/bwrap flags=(unconfined) {
+     userns,
+     include if exists <local/bwrap>
+   }
+   ```
+3. **Turning the restriction off for the whole system**
+   (`kernel.apparmor_restrict_unprivileged_userns = 0` in a file of `/etc/sysctl.d/`). Every
+   program may then create user namespaces again: not recommended.
+
+These steps come from Ubuntu's AppArmor profiles and from what umu, Lutris and Heroic users found;
+they have not been tried with SlattyLauncher on Ubuntu yet.
 | Achievements are not reported | `~/.local/state/slatty/logs/comet.log`. `slatty doctor` must find `GalaxyCommunication.exe`; the launch output says whether the Galaxy service was registered. |
 | A cloud conflict blocks the launch | `slatty cloud diff <id>`, then `slatty cloud sync <id> --prefer local` or `--prefer remote`. |
 | The session was interrupted (crash, power loss) | The next launch reports it. Check `slatty cloud status <id>` before playing. |

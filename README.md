@@ -49,7 +49,9 @@ See [docs/roadmap.md](docs/roadmap.md).
   (Proton Experimental, stable, Hotfix) downloaded by Steam in any of its libraries, one umu
   downloaded, or one SlattyLauncher downloads from GitHub (Settings → Runners).
 - [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`), able to start a sandbox, for
-  games run isolated from your files (Windows games, by default). Flatpak needs it too.
+  games run isolated from your files (Windows games, by default). Flatpak needs it too. On Ubuntu
+  23.10 and later it needs an AppArmor profile first, for umu as well
+  ([how](docs/user-guide.md#ubuntu-and-apparmor)).
 - [Comet](https://github.com/imLinguin/comet) for achievements.
 - Comet's `GalaxyCommunication.exe` dummy service, which some games need to report achievements.
 - An XDG desktop portal with a file chooser (xdg-desktop-portal-gtk, -gnome, -kde…) and libdbus

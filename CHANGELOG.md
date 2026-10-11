@@ -46,5 +46,8 @@ Reviewed before publication. Among what changed:
 - **Forget account** deletes what is kept of an account on the computer; saves stay.
 - [SECURITY.md](SECURITY.md) lists everything that leaves the computer, and how to report a
   vulnerability privately.
+- Where bubblewrap cannot hold an isolated game (Ubuntu 23.10 and later without an AppArmor
+  profile for it), the launch is refused with the reason and the way out, never run without
+  isolation; `slatty doctor` checks it too.
 
 Known limits are listed in [SECURITY.md](SECURITY.md) and [docs/compatibility.md](docs/compatibility.md).
