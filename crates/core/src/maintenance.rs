@@ -47,6 +47,18 @@ fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, 
     Ok((install, record))
 }
 
+/// Refuses a game whose folder is gone: on a network share not mounted or a drive unplugged, the
+/// whole game would be downloaded again onto the empty mount point.
+fn folder_present(install: &Install) -> Result<()> {
+    if install.path.is_dir() {
+        return Ok(());
+    }
+    Err(Error::NotFound(format!(
+        "{} is missing: is its drive mounted?",
+        install.path.display()
+    )))
+}
+
 /// Copies the `users` folder of a prefix about to be deleted, where most saves live, to the
 /// backups, on the disk before anything is deleted; where it went, when there was one.
 pub(crate) fn back_up_prefix(dirs: &Dirs, game_id: &str, prefix: &Path) -> Result<Option<PathBuf>> {
@@ -173,6 +185,7 @@ pub async fn check(
 ) -> Result<installer::Checked> {
     let _busy = crate::lock::game(dirs, game_id)?;
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
+    folder_present(&install)?;
     if update_pending(db, game_id)?.is_some() {
         return Err(Error::Refused(
             "an update is unfinished; run the update again first".into(),
@@ -388,6 +401,7 @@ pub async fn reconfigure(
 ) -> Result<UpdateReport> {
     let _busy = crate::lock::game(dirs, game_id)?;
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
+    folder_present(&install)?;
     let pending = InstallJob::load(db, game_id)?.filter(InstallJob::is_update);
     let (build, language, dlcs) = match (&pending, &change) {
         (Some(j), _) => (Some(j.build_id.clone()), j.language.clone(), j.dlcs.clone()),
@@ -869,6 +883,57 @@ mod tests {
         assert!(env.game().join("Game.exe").exists());
         assert!(prefix.join("drive_c").exists());
         assert!(Install::get(&env.db, "1").unwrap().is_some());
+    }
+
+    /// A game folder gone (its network share not mounted, its drive unplugged) is not filled
+    /// again where it was: verify, repair, an update or a content change would download the whole
+    /// game onto the empty mount point, or leave it marked mid-update. Nothing is asked of GOG
+    /// either (here, an address that cannot answer).
+    #[tokio::test]
+    async fn a_game_whose_folder_is_gone_is_neither_checked_nor_updated() {
+        let env = Env::new("gone", true);
+        std::fs::remove_dir_all(env.game()).unwrap();
+        let http = Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+            .build()
+            .unwrap();
+        let tokens = Tokens {
+            user_id: "1".into(),
+            access_token: crate::secret::Secret::new("[FAKE]"),
+            refresh_token: crate::secret::Secret::new("[FAKE]"),
+            expires_at: i64::MAX,
+        };
+        let missing = |e: &Error| matches!(e, Error::NotFound(m) if m.contains("mounted"));
+        for repair in [false, true] {
+            let checked = check(
+                &env.db,
+                &env.dirs,
+                &http,
+                &tokens,
+                "1",
+                repair,
+                &|_| {},
+                CancellationToken::new(),
+            )
+            .await;
+            assert!(checked.as_ref().is_err_and(missing), "{:?}", checked.err());
+        }
+        for change in [Change::Update, Change::Language("fr-FR".into())] {
+            let updated = reconfigure(
+                &env.db,
+                &env.dirs,
+                &http,
+                &tokens,
+                "1",
+                change,
+                &|_| {},
+                CancellationToken::new(),
+            )
+            .await;
+            assert!(updated.as_ref().is_err_and(missing), "{:?}", updated.err());
+        }
+        assert!(!env.game().exists());
+        assert!(InstallJob::load(&env.db, "1").unwrap().is_none());
     }
 
     /// Only the game's own prefix is ever deleted: a runner naming the folder of every prefix,

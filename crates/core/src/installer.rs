@@ -111,6 +111,21 @@ pub async fn install(
             req.dlcs.clone(),
         ),
     };
+    // The folder a started download was going into is gone, its network share not mounted or its
+    // drive unplugged: starting again would fill the empty mount point instead.
+    if let Some(j) = job.as_ref().filter(|j| !j.is_queued())
+        && !root.is_dir()
+    {
+        InstallJob {
+            state: FAILED.into(),
+            ..j.clone()
+        }
+        .save(db)?;
+        return Err(Error::NotFound(format!(
+            "{} is missing: is its drive mounted?",
+            root.display()
+        )));
+    }
     let plan = plan_for(
         http,
         tokens,

@@ -1049,6 +1049,67 @@ async fn planning_a_game_not_from_gog_asks_gog_nothing() {
     }
 }
 
+/// A download resumed while its library folder is gone (a network share not mounted yet) is not
+/// started again on the empty mount point: it stops as failed, asking GOG nothing.
+#[tokio::test]
+async fn a_download_whose_folder_is_gone_is_not_resumed_elsewhere() {
+    let root = std::env::temp_dir().join(format!("slatty-gone-root-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let dirs = Dirs::under(&root.join("app"));
+    let db = Db::in_memory().unwrap();
+    let library = root.join("nas/GOG");
+    InstallJob {
+        game_id: "1".into(),
+        build_id: "b".into(),
+        language: "en-US".into(),
+        root: library.clone(),
+        directory: "Game".into(),
+        state: DOWNLOADING.into(),
+        dlcs: vec![],
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    let http = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+        .build()
+        .unwrap();
+    let tokens = Tokens {
+        user_id: "1".into(),
+        access_token: crate::secret::Secret::new("[FAKE]"),
+        refresh_token: crate::secret::Secret::new("[FAKE]"),
+        expires_at: i64::MAX,
+    };
+    let request = InstallRequest {
+        game_id: "1".into(),
+        language: None,
+        build: None,
+        platform: Platform::Windows,
+        root: root.join("elsewhere"),
+        proton: "/p".into(),
+        dlcs: DlcSelection::AllOwned,
+        restart: false,
+    };
+    let result = install(
+        &db,
+        &dirs,
+        &http,
+        &tokens,
+        request,
+        |_| {},
+        CancellationToken::new(),
+    )
+    .await;
+    assert!(
+        matches!(&result, Err(Error::NotFound(m)) if m.contains("mounted")),
+        "{:?}",
+        result.err()
+    );
+    assert!(!library.exists());
+    assert_eq!(InstallJob::load(&db, "1").unwrap().unwrap().state, FAILED);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn a_build_without_language_packs_can_be_planned_again() {
     let m = meta(vec![depot("1", &["*"], 100)]);
