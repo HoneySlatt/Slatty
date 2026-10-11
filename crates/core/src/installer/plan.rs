@@ -205,6 +205,7 @@ pub async fn plan_for(
     build_id: Option<&str>,
     dlcs: &DlcSelection,
 ) -> Result<InstallPlan> {
+    crate::paths::check_game_id(game_id)?;
     if platform == Platform::Linux {
         return plan_linux(http, tokens, game_id, language, build_id, dlcs).await;
     }

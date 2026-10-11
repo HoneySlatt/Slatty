@@ -1015,6 +1015,40 @@ fn discarding_an_install_whose_folder_was_published_is_refused() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// GOG never learns of a Steam game or of a game added by hand: planning one refuses it before
+/// anything is sent (here, to an address that cannot answer).
+#[tokio::test]
+async fn planning_a_game_not_from_gog_asks_gog_nothing() {
+    let http = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+        .build()
+        .unwrap();
+    let tokens = Tokens {
+        user_id: "1".into(),
+        access_token: crate::secret::Secret::new("[FAKE]"),
+        refresh_token: crate::secret::Secret::new("[FAKE]"),
+        expires_at: i64::MAX,
+    };
+    for id in ["steam-440", "local-1"] {
+        for platform in [Platform::Windows, Platform::Linux] {
+            let planned = plan_for(
+                &http,
+                &tokens,
+                id,
+                platform,
+                None,
+                None,
+                &DlcSelection::AllOwned,
+            )
+            .await;
+            assert!(
+                matches!(planned, Err(Error::Refused(_))),
+                "{id} {platform:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn a_build_without_language_packs_can_be_planned_again() {
     let m = meta(vec![depot("1", &["*"], 100)]);
