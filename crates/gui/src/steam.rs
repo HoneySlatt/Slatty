@@ -126,7 +126,7 @@ impl App {
         match msg {
             SteamMsg::Switch(on) => {
                 self.steam.on = on;
-                self.allow_steam_images();
+                self.allow_steam_requests();
                 self.login_open = false;
                 if let Some(core) = &self.core
                     && let Err(e) = slatty_core::settings::set_steam_games(&core.db, on)
@@ -147,12 +147,12 @@ impl App {
                     web_allowed: self.steam.web_allowed.clone(),
                     ..Default::default()
                 };
-                self.allow_steam_images();
+                self.allow_steam_requests();
                 self.merge_steam();
             }
             SteamMsg::Images(on) => {
                 self.steam.images = on;
-                self.allow_steam_images();
+                self.allow_steam_requests();
                 if let Some(core) = &self.core
                     && let Err(e) = slatty_core::settings::set_steam_images(&core.db, on)
                 {
@@ -318,7 +318,7 @@ impl App {
             }
             SteamMsg::WebApi(on) => {
                 self.steam.web = on;
-                self.allow_steam_images();
+                self.allow_steam_requests();
                 if let Some(core) = &self.core
                     && let Err(e) = slatty_core::settings::set_steam_web_api(&core.db, on)
                 {
@@ -369,7 +369,7 @@ impl App {
             }
             SteamMsg::WebKey(Ok(saved)) => {
                 self.steam.web_key = Some(saved);
-                self.allow_steam_images();
+                self.allow_steam_requests();
                 if !saved {
                     self.drop_web_games();
                 }
@@ -538,7 +538,7 @@ impl App {
 
     /// Tells requests waiting their turn, or yet to start, whether Steam's image servers and Web
     /// API may be asked: Steam's games on, and their switches.
-    pub fn allow_steam_images(&self) {
+    pub fn allow_steam_requests(&self) {
         use std::sync::atomic::Ordering::Relaxed;
         let images = self.steam.on && self.steam.images;
         self.steam.images_allowed.store(images, Relaxed);
