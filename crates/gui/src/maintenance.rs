@@ -209,9 +209,19 @@ impl App {
                 view.busy = true;
                 view.confirm_uninstall = false;
                 let id = game_id.clone();
+                // A game added by hand leaves the library; its files are the user's.
+                let added = slatty_core::store::is_local(&game_id);
                 return Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
+                            if added {
+                                return slatty_core::added::remove(
+                                    &core.db,
+                                    &core.dirs,
+                                    &id,
+                                    delete_prefix,
+                                );
+                            }
                             slatty_core::maintenance::uninstall(
                                 &core.db,
                                 &core.dirs,
@@ -223,7 +233,10 @@ impl App {
                         .map_err(err)?
                         .map_err(err)
                         .map(|r| {
-                            let mut lines = vec![format!("{} file(s) deleted.", r.removed_files)];
+                            let mut lines = Vec::new();
+                            if !added {
+                                lines.push(format!("{} file(s) deleted.", r.removed_files));
+                            }
                             if !r.kept.is_empty() {
                                 lines.push(format!(
                                     "{} file(s) not installed by slatty kept in the game folder.",
@@ -249,10 +262,22 @@ impl App {
                 self.panel = None;
                 self.cloud.remove(&game_id);
                 self.maintenance.remove(&game_id);
-                self.notice = Some(crate::Notice {
-                    error: false,
-                    text: format!("Uninstalled. {}", lines.join(" ")),
-                });
+                let text = if slatty_core::store::is_local(&game_id) {
+                    // Gone from the library with what was made of it; back to the library.
+                    self.customs.remove(&game_id);
+                    self.playtime.remove(&game_id);
+                    if self.selected.as_deref() == Some(game_id.as_str()) {
+                        self.selected = None;
+                    }
+                    self.merge_steam();
+                    format!(
+                        "Removed from the library; its files are untouched. {}",
+                        lines.join(" ")
+                    )
+                } else {
+                    format!("Uninstalled. {}", lines.join(" "))
+                };
+                self.notice = Some(crate::Notice { error: false, text });
             }
             MaintenanceMsg::Uninstalled(game_id, Err(e)) => {
                 let view = self.maintenance.entry(game_id).or_default();
@@ -339,6 +364,8 @@ impl App {
                     |m| m,
                 );
             }
+            // A game added by hand has no versions, languages or DLC to choose from GOG.
+            MaintenanceMsg::LoadContent(game_id) if slatty_core::store::is_local(&game_id) => {}
             MaintenanceMsg::LoadContent(game_id) => {
                 let view = self.maintenance.entry(game_id.clone()).or_default();
                 view.busy = true;

@@ -786,6 +786,8 @@ impl App {
                 if let Some(cache) = boot.library {
                     return Task::batch(tasks.into_iter().chain([self.set_library(cache)]));
                 }
+                // Without GOG's library, the games added by hand still show.
+                self.merge_steam();
                 return Task::batch(tasks);
             }
             Message::Booted(Err(e)) => self.fatal = Some(e),

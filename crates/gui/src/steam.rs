@@ -395,10 +395,18 @@ impl App {
     }
 
     /// Puts Steam's games in the library beside GOG's, with their covers, or takes them out once
-    /// turned off.
+    /// turned off; and those added by hand, from their installs.
     pub fn merge_steam(&mut self) {
         self.library
             .retain(|g| store::of(&g.id).is_ok_and(|s| s == Store::Gog));
+        let mut added: Vec<LibraryGame> = self
+            .installs
+            .values()
+            .filter(|i| store::is_local(&i.game_id))
+            .map(slatty_core::added::library_game)
+            .collect();
+        added.sort_by(|a, b| a.id.cmp(&b.id));
+        self.library.extend(added);
         self.covers.retain(|id, _| store::steam_app(id).is_none());
         self.steam.twins.clear();
         if self.steam.on {

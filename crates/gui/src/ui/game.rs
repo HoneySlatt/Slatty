@@ -66,9 +66,26 @@ impl App {
         // On a narrow page (a small window, a drawer beside it) play time and the last session get
         // the room their values need, without their icons.
         let steam = self.steam_game(&g.id).is_some();
+        let added = slatty_core::store::is_local(&g.id);
         let cards = container(responsive(move |size| {
             let narrow = size.width < NARROW_CARDS;
             let (stats, achievements) = if narrow { (11, 8) } else { (10, 9) };
+            // Neither cloud saves nor achievements: what it is in their place.
+            if added {
+                return row![
+                    container(self.stats(g, narrow))
+                        .padding([0, 18])
+                        .align_y(Alignment::Center)
+                        .width(Length::FillPortion(stats))
+                        .height(CARD_HEIGHT)
+                        .style(theme::block),
+                    container(self.added_card(g))
+                        .width(Length::FillPortion(7 + achievements))
+                        .height(CARD_HEIGHT),
+                ]
+                .spacing(14)
+                .into();
+            }
             if steam {
                 return row![
                     container(self.stats(g, narrow))
@@ -655,6 +672,61 @@ impl App {
     /// What a Steam game's page says of Steam, in place of GOG's cloud and achievements cards.
     /// What runs a Steam game, in a few words as the cloud card says its state; the reason the
     /// GOG build is the safer choice on hover. Its icon goes when a drawer narrows the card.
+    /// What a game added by hand is: the user's files, isolated or not, and nothing of GOG's.
+    fn added_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let isolated = self.installs.get(&g.id).is_some_and(|i| i.isolated);
+        let card = responsive(move |size| {
+            let content = row![]
+                .push((size.width >= 240.0).then(|| {
+                    container(icon(Icon::Folder, 22.0, tokens().text))
+                        .center(40)
+                        .style(theme::circle)
+                }))
+                .push(
+                    column![
+                        text("Added by hand")
+                            .size(15)
+                            .font(semibold())
+                            .wrapping(Wrapping::None),
+                        text(if isolated {
+                            "Isolated from your files"
+                        } else {
+                            "Not isolated from your files"
+                        })
+                        .size(14)
+                        .color(tokens().muted)
+                        .width(Length::Fill),
+                    ]
+                    .spacing(4)
+                    .width(Length::Fill),
+                )
+                .spacing(14)
+                .align_y(Alignment::Center);
+            container(content).center_y(Length::Fill).into()
+        });
+        let why = container(
+            text(
+                "Its files are yours: removing it from the library leaves them. It has no cloud \
+                 saves or achievements, and GOG is not told of it: its play time stays on this \
+                 computer.",
+            )
+            .size(13),
+        )
+        .padding([4, 10])
+        .max_width(360)
+        .style(theme::block);
+        tooltip(
+            container(card)
+                .padding([0, 18])
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(theme::block),
+            why,
+            tooltip::Position::Top,
+        )
+        .into()
+    }
+
     fn steam_card(&self) -> Element<'_, Message> {
         let card = responsive(move |size| {
             let content = row![]

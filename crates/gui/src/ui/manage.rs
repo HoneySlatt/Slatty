@@ -29,6 +29,9 @@ impl App {
         let view = self.maintenance.get(&g.id);
         let busy = self.maintenance_busy(&g.id);
         let id = || g.id.clone();
+        if slatty_core::store::is_local(&g.id) {
+            return self.manage_added(g, view.is_some_and(|v| v.confirm_uninstall), busy);
+        }
         let action = |ic, label, msg: MaintenanceMsg| {
             action_row(ic, label, (!busy).then(|| Message::Maintenance(msg)), false)
         };
@@ -106,6 +109,81 @@ impl App {
                             MaintenanceMsg::Uninstall(id(), true),
                             theme::danger,
                         ))
+                        .push(choice(
+                            "Cancel",
+                            MaintenanceMsg::CancelUninstall(id()),
+                            theme::tonal,
+                        ))
+                        .spacing(10),
+                )
+                .padding(16)
+                .width(Length::Fill)
+                .style(inner),
+            );
+        }
+        col.into()
+    }
+
+    /// A game added by hand: nothing to verify or update from GOG, only taking it out of the
+    /// library, its files left where they are.
+    fn manage_added<'a>(
+        &'a self,
+        g: &'a LibraryGame,
+        confirm: bool,
+        busy: bool,
+    ) -> Element<'a, Message> {
+        let id = || g.id.clone();
+        let mut col = column![action_row(
+            Icon::Trash,
+            "Remove from library…",
+            (!busy).then(|| Message::Maintenance(MaintenanceMsg::AskUninstall(id()))),
+            true,
+        )]
+        .spacing(12);
+        if let Some(v) = self.maintenance.get(&g.id) {
+            col = col.extend(v.lines.iter().map(|l| note(l.as_str())));
+        }
+        if confirm && !busy {
+            let choice =
+                |label,
+                 msg: MaintenanceMsg,
+                 style: fn(&iced::Theme, button::Status) -> button::Style| {
+                    button(container(text(label).size(14)).center_x(Length::Fill))
+                        .padding([12, 0])
+                        .width(Length::Fill)
+                        .on_press(Message::Maintenance(msg))
+                        .style(style)
+                };
+            let prefix = self
+                .installs
+                .get(&g.id)
+                .is_some_and(|i| i.runner.prefix().is_some());
+            let mut confirm = Column::new()
+                .push(note(if prefix {
+                    "Its files stay where they are: they are yours. The Wine prefix \
+                     SlattyLauncher made for it holds most of its saves."
+                } else {
+                    "Its files stay where they are: they are yours."
+                }))
+                .push(choice(
+                    if prefix {
+                        "Remove, keep the prefix"
+                    } else {
+                        "Remove from library"
+                    },
+                    MaintenanceMsg::Uninstall(id(), false),
+                    theme::danger,
+                ));
+            if prefix {
+                confirm = confirm.push(choice(
+                    "Also delete the prefix (backed up)",
+                    MaintenanceMsg::Uninstall(id(), true),
+                    theme::danger,
+                ));
+            }
+            col = col.push(
+                container(
+                    confirm
                         .push(choice(
                             "Cancel",
                             MaintenanceMsg::CancelUninstall(id()),

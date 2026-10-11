@@ -240,6 +240,10 @@ impl App {
         if store::steam_app(game_id).is_some() {
             return on_steam(game_id);
         }
+        // GOG is not told of a game added by hand: the sessions played here.
+        if store::is_local(game_id) {
+            return self.playtime.get(game_id).map_or(0, |p| p.seconds);
+        }
         let on_gog = self
             .overview
             .get(game_id)

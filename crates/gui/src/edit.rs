@@ -395,19 +395,27 @@ impl App {
                 .and_then(|c| c.title.clone())
                 .or_else(|| self.gog_titles.get(&g.id).cloned())
                 .or_else(|| steam.get(g.id.as_str()).map(|t| t.to_string()))
+                .or_else(|| {
+                    let added = self.installs.get(&g.id)?;
+                    slatty_core::store::is_local(&g.id).then(|| added.title.clone())
+                })
             {
                 g.title = title;
             }
         }
     }
 
-    /// A game's title as its store gives it, GOG's or Steam's.
+    /// A game's title as its store gives it, GOG's or Steam's, or as it was added by hand.
     fn store_title(&self, game_id: &str) -> &str {
         self.gog_titles
             .get(game_id)
             .or_else(|| {
                 let steam = self.steam.games.iter().find(|g| g.id == game_id)?;
                 Some(&steam.title)
+            })
+            .or_else(|| {
+                let added = self.installs.get(game_id)?;
+                slatty_core::store::is_local(game_id).then_some(&added.title)
             })
             .map_or("", String::as_str)
     }

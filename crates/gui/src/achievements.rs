@@ -41,6 +41,10 @@ impl App {
                 .flatten();
             return crate::steam::load_achievements(game_id, self.steam.images, account, web);
         }
+        // A game added by hand has none, and GOG is not told of it.
+        if slatty_core::store::is_local(&game_id) {
+            return Task::none();
+        }
         let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
             return Task::none();
         };

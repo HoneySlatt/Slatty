@@ -144,26 +144,31 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
 /// edits give them some) and never matched with a Steam game.
 pub fn library(db: &Db) -> Result<Vec<crate::library::LibraryGame>> {
     Ok(Install::list(db)?
-        .into_iter()
+        .iter()
         .filter(|i| crate::store::is_local(&i.game_id))
-        .map(|i| crate::library::LibraryGame {
-            id: i.game_id,
-            title: i.title,
-            cover: None,
-            icon: None,
-            background: None,
-            logo: None,
-            os: vec![
-                match i.platform {
-                    Platform::Windows => "windows",
-                    Platform::Linux => "linux",
-                }
-                .into(),
-            ],
-            metadata: crate::library::MetadataSource::Missing,
-            steam: Some(Vec::new()),
-        })
+        .map(library_game)
         .collect())
+}
+
+/// A game added by hand as the library lists it.
+pub fn library_game(install: &Install) -> crate::library::LibraryGame {
+    crate::library::LibraryGame {
+        id: install.game_id.clone(),
+        title: install.title.clone(),
+        cover: None,
+        icon: None,
+        background: None,
+        logo: None,
+        os: vec![
+            match install.platform {
+                Platform::Windows => "windows",
+                Platform::Linux => "linux",
+            }
+            .into(),
+        ],
+        metadata: crate::library::MetadataSource::Missing,
+        steam: Some(Vec::new()),
+    }
 }
 
 /// Takes a game added by hand out of the library. Its folder is left as it is: its files are the

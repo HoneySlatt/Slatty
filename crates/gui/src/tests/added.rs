@@ -1,0 +1,123 @@
+use super::*;
+use crate::cloud::CloudRequest;
+use crate::edit::EditMsg;
+
+/// The library with a Linux game added by hand.
+fn added_app() -> App {
+    let mut app = library_app();
+    app.installs.insert(
+        "local-1".into(),
+        Install {
+            umu_id: None,
+            game_id: "local-1".into(),
+            title: "[FAKE] Mine".into(),
+            platform: Platform::Linux,
+            path: PathBuf::from("/games/Mine"),
+            client_id: None,
+            runner: Runner::Native,
+            isolated: false,
+        },
+    );
+    app.merge_steam();
+    app
+}
+
+/// A game added by hand shows beside GOG's, with its own play time, and nothing about it is asked
+/// of GOG: no achievements, cloud saves, versions or languages.
+#[test]
+fn a_game_added_by_hand_shows_in_the_library_and_asks_gog_nothing() {
+    let mut app = added_app();
+    assert!(
+        app.library
+            .iter()
+            .any(|g| g.id == "local-1" && g.title == "[FAKE] Mine")
+    );
+    app.playtime.insert(
+        "local-1".into(),
+        Playtime {
+            seconds: 3600,
+            last_played: 1_791_500_000,
+        },
+    );
+    assert_eq!(app.played_seconds("local-1"), 3600);
+
+    let _ = app.update(Message::Select("local-1".into()));
+    settle(&mut app);
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Added by hand").is_ok());
+        snapshot(&mut ui, "added-game");
+    }
+    let _ = app.update(Message::LoadAchievements("local-1".into()));
+    assert!(!app.achievements.contains_key("local-1"));
+    let _ = app.update(Message::Cloud("local-1".into(), CloudRequest::Check));
+    assert!(!app.cloud.contains_key("local-1"));
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::LoadContent(
+        "local-1".into(),
+    )));
+    assert!(!app.maintenance.contains_key("local-1"));
+}
+
+/// Signed out of GOG, or never signed in, the games added by hand still show.
+#[test]
+fn games_added_by_hand_show_without_a_gog_account() {
+    let mut app = added_app();
+    app.logged_out();
+    assert_eq!(
+        app.library
+            .iter()
+            .map(|g| g.id.as_str())
+            .collect::<Vec<_>>(),
+        ["local-1"]
+    );
+    assert!(
+        render(&app).find("[FAKE] Mine").is_ok(),
+        "not the sign-in page"
+    );
+}
+
+/// Its title is the one it was added with until the user renames it, and comes back with Reset.
+#[test]
+fn a_game_added_by_hand_gets_its_own_title_back_with_reset() {
+    let mut app = added_app();
+    let _ = app.update(Message::Edit(EditMsg::Open("local-1".into())));
+    let _ = app.update(Message::Edit(EditMsg::Title("[FAKE] Renamed".into())));
+    let _ = app.update(Message::Edit(EditMsg::Reset));
+    assert_eq!(app.edit.as_ref().unwrap().title, "[FAKE] Mine");
+}
+
+/// Removing one asks first, says its files stay, and takes it out of the library.
+#[test]
+fn removing_a_game_added_by_hand_asks_first() {
+    let mut app = added_app();
+    open(&mut app, "local-1", Some(Panel::Manage));
+    let mut ui = render(&app);
+    assert!(
+        ui.find("Verify files").is_err(),
+        "nothing of GOG's to verify"
+    );
+    ui.click("Remove from library…").unwrap();
+    for m in ui.into_messages().collect::<Vec<_>>() {
+        let _ = app.update(m);
+    }
+    let mut ui = render(&app);
+    assert!(
+        ui.find("Its files stay where they are: they are yours.")
+            .is_ok()
+    );
+    assert!(
+        ui.find("Also delete the prefix (backed up)").is_err(),
+        "a Linux game has no prefix"
+    );
+    ui.click("Remove from library").unwrap();
+    assert!(ui.into_messages().any(
+        |m| matches!(m, Message::Maintenance(MaintenanceMsg::Uninstall(id, false)) if id == "local-1")
+    ));
+
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Uninstalled(
+        "local-1".into(),
+        Ok(Vec::new()),
+    )));
+    assert!(app.library.iter().all(|g| g.id != "local-1"));
+    assert_eq!(app.selected, None);
+}

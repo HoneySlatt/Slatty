@@ -43,11 +43,17 @@ impl App {
                 .padding(40)
                 .into();
         }
-        // Steam's games show without GOG; GOG's sign-in stays one click away in Settings.
+        // Steam's games and those added by hand show without GOG; GOG's sign-in stays one click
+        // away in Settings.
+        let added = self
+            .installs
+            .keys()
+            .any(|id| slatty_core::store::is_local(id));
         let username = match (&self.account, &self.steam.found) {
             (Some(account), _) if !self.login_open => account.username.as_str(),
             (None, Some(name)) if self.steam.on && !self.login_open => name.as_str(),
             (None, None) if self.steam.on && !self.login_open => "Steam",
+            (None, _) if added && !self.login_open => "",
             _ => return self.with_notice(self.login_view()),
         };
         let body: Element<'_, Message> = match self.selected_game() {

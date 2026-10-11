@@ -72,6 +72,10 @@ pub enum CloudRequest {
 
 impl App {
     pub fn request_cloud(&mut self, game_id: String, request: CloudRequest) -> Task<Message> {
+        // A game added by hand has no cloud saves, and GOG is not told of it.
+        if slatty_core::store::is_local(&game_id) {
+            return Task::none();
+        }
         let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
             return Task::none();
         };

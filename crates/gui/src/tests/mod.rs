@@ -259,6 +259,7 @@ fn ready_to_install(app: &mut App, id: &str) {
 }
 
 mod achievements;
+mod added;
 mod cloud;
 mod downloads;
 mod edit;

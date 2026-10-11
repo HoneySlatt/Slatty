@@ -69,10 +69,12 @@ impl App {
         }
         // A native build runs without Proton.
         let native = install.runner == Runner::Native;
+        let added = slatty_core::store::is_local(&g.id);
         sections.push(section(
             Icon::SlidersHorizontal,
             if native { "Platform" } else { "Proton" },
             match &install.runner {
+                Runner::Native if added => text(runner_label(install)).size(15).into(),
                 Runner::Native => column![
                     text(runner_label(install)).size(15),
                     note("GOG keeps no cloud saves for Linux builds, and they do not report achievements."),
@@ -103,6 +105,8 @@ impl App {
         let view = self.maintenance.get(&g.id);
         let busy = self.maintenance_busy(&g.id);
         match view.and_then(|v| v.content.as_ref()) {
+            // Versions, languages and DLC are GOG's.
+            _ if added => {}
             Some(c) => {
                 sections.push(section(
                     Icon::RefreshCw,
