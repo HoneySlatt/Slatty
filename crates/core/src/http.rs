@@ -10,12 +10,15 @@ pub type HttpClient = Client;
 pub const USER_AGENT: &str = concat!("SlattyLauncher/", env!("CARGO_PKG_VERSION"));
 
 /// A connection silent for 30 seconds is given up; a slow one never is, whatever it carries: a
-/// file of a Linux installer comes in a single request, and may take many minutes.
+/// file of a Linux installer comes in a single request, and may take many minutes. A redirect does
+/// not name the address it came from, whose query can hold a secret (a refresh token, a signed
+/// download link).
 pub fn client() -> Result<Client> {
     Client::builder()
         .user_agent(USER_AGENT)
         .connect_timeout(Duration::from_secs(10))
         .read_timeout(Duration::from_secs(30))
+        .referer(false)
         .build()
         .map_err(|e| Error::network("building the HTTP client", e))
 }
@@ -152,6 +155,38 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.bytes().await.unwrap().len(), SECONDS);
+    }
+
+    /// Some GOG addresses carry a secret in their query (the token endpoint's refresh token, signed
+    /// download links): a redirect must not hand it to the next server as the page it came from.
+    #[tokio::test]
+    async fn a_redirect_does_not_tell_the_next_server_where_it_came_from() {
+        let next = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let next_addr = next.local_addr().unwrap();
+        let seen = tokio::spawn(async move {
+            let (mut socket, _) = next.accept().await.unwrap();
+            let mut buf = vec![0u8; 4096];
+            let n = socket.read(&mut buf).await.unwrap();
+            socket.write_all(OK.as_bytes()).await.unwrap();
+            String::from_utf8_lossy(&buf[..n]).to_lowercase()
+        });
+        let moved: &'static str = Box::leak(
+            format!(
+                "HTTP/1.1 302 Found\r\nlocation: http://{next_addr}/\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+            )
+            .into_boxed_str(),
+        );
+        let url = serve(vec![moved]).await;
+        let _: serde_json::Value = json(
+            client()
+                .unwrap()
+                .get(format!("{url}?refresh_token=FAKE-REFRESH")),
+            "testing",
+        )
+        .await
+        .unwrap();
+        let request = seen.await.unwrap();
+        assert!(!request.contains("referer"), "{request}");
     }
 
     #[test]
