@@ -49,9 +49,10 @@ const DONE_CODES: [i32; 4] = [0, 1638, 1641, 3010];
 /// for good would otherwise run at every launch.
 pub const SETUP_RUNS: u32 = 3;
 
-/// Whether a step exited as done; one that did not exit by itself failed.
+/// Whether a step exited as done; one that did not exit by itself failed. Through Wine the exit
+/// status keeps only the low byte of the code: 3010 arrives as 194.
 fn done(code: Option<i32>) -> bool {
-    code.is_some_and(|c| DONE_CODES.contains(&c))
+    code.is_some_and(|c| DONE_CODES.iter().any(|d| *d == c || d & 0xff == c))
 }
 
 /// Notes how a run of the setup went. A run with a failed step leaves the setup pending, so it
@@ -445,6 +446,8 @@ mod tests {
     #[test]
     fn a_failed_setup_runs_again_a_few_times() {
         assert!(done(Some(0)) && done(Some(3010)) && done(Some(1638)) && done(Some(1641)));
+        // As the exit status of umu-run, after Proton and Wine.
+        assert!(done(Some(3010 & 0xff)) && done(Some(1638 & 0xff)) && done(Some(1641 & 0xff)));
         assert!(!done(Some(1)) && !done(None));
 
         let mut r = record();

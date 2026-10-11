@@ -201,7 +201,8 @@ supervisor, so each one has really finished before the next starts. The build is
 set up. Updates, language and DLC changes clear that mark.
 
 A step fails when it exits with a code other than 0 or the Windows Installer codes that mean done
-(1638: a newer version is installed; 1641 and 3010: a restart is asked for). A run with a failed
+(1638: a newer version is installed; 1641 and 3010: a restart is asked for). Through Wine, the
+exit status keeps only the low byte of a code, so 102, 105 and 194 count as these. A run with a failed
 step leaves the build not set up, so the whole setup runs again at the next launch, up to
 `setup::SETUP_RUNS` (3) runs for that build (`InstallRecord::setup_failures`): a step that fails
 for good is then left as it is, rather than slowing every launch; `slatty setup --force` still
