@@ -479,6 +479,51 @@ async fn a_download_link_address_outside_gog_is_not_sent_the_token() {
     assert!(!seen.await.unwrap().contains("fake-access"));
 }
 
+/// A file inflating to more than the installer's directory says is stopped there, before it
+/// fills the disk the space check counted with the size it was given.
+#[tokio::test]
+async fn a_file_inflating_past_its_stated_size_is_stopped_there() {
+    let zeros = vec![0u8; 8 << 20];
+    let bytes = installer(
+        b"#!/bin/sh\n",
+        &[File {
+            name: "data/noarch/zeros.bin",
+            data: &zeros,
+            mode: 0o100644,
+            deflate: true,
+        }],
+        false,
+    );
+    let source = Fake::new(vec![bytes]);
+    let mut set = LinuxSet::new(&[Part {
+        installer: installer_of("1"),
+        entries: read_entries(&source, 0).await.unwrap(),
+    }])
+    .unwrap();
+    set.files[0].entry.size = 16;
+    let root = temp("inflating");
+    let most = Mutex::new(0);
+    let progress = |p: Progress| {
+        let mut most = most.lock().unwrap();
+        *most = (*most).max(p.bytes_done);
+    };
+    let r = LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &progress,
+        free_space: &plenty,
+    }
+    .run(&set, &root.join(".p"), &root.join("Game"))
+    .await;
+    assert!(r.is_err());
+    assert!(
+        *most.lock().unwrap() <= 16,
+        "{} written",
+        most.lock().unwrap()
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// A game writes its folder: a folder of links it replaced with a link out of it never leads a
 /// repair to delete or link anything there.
 #[tokio::test]

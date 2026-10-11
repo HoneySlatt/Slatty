@@ -716,6 +716,7 @@ impl<S: Source> LinuxDownload<'_, S> {
             out: std::io::BufWriter::with_capacity(BATCH, out),
             crc: flate2::Crc::new(),
             written: 0,
+            limit: e.size,
         };
         let mut inflate = Some(if e.method == zip::DEFLATED {
             Inflate::Deflated(flate2::write::DeflateDecoder::new(sink))
@@ -878,10 +879,16 @@ struct Sink {
     out: std::io::BufWriter<std::fs::File>,
     crc: flate2::Crc,
     written: u64,
+    /// The size the installer's directory gives: a file inflating past it is stopped there, as
+    /// the space check counted that size.
+    limit: u64,
 }
 
 impl Write for Sink {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.written + buf.len() as u64 > self.limit {
+            return Err(std::io::Error::other("larger than the installer says"));
+        }
         self.out.write_all(buf)?;
         self.crc.update(buf);
         self.written += buf.len() as u64;
