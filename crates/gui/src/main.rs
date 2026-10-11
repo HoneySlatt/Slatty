@@ -278,6 +278,8 @@ pub struct App {
     pub updates: updates::AutoUpdates,
     /// Work that closing the window would interrupt, waiting for the user's choice.
     pub quit_confirm: Option<Vec<String>>,
+    /// Whether to forget the signed-in account, waiting for the user's choice (Settings).
+    pub forget_confirm: bool,
     pub interrupted: Vec<(String, Interrupted)>,
     /// Installs waiting for the current download, in order.
     pub queue: Vec<String>,
@@ -376,6 +378,7 @@ impl Default for App {
             runners: runners::RunnersView::default(),
             updates: updates::AutoUpdates::default(),
             quit_confirm: None,
+            forget_confirm: false,
             interrupted: Vec::new(),
             queue: Vec::new(),
             drag: None,
@@ -411,6 +414,9 @@ pub enum Message {
     SubmitLogin,
     LoggedIn(Result<(AccountInfo, Option<LibraryCache>), String>),
     Logout,
+    AskForget,
+    CancelForget,
+    ConfirmForget,
     LoggedOut(Result<(), String>),
     SyncLibrary,
     GridScrolled(iced::widget::scrollable::Viewport),
@@ -737,7 +743,13 @@ impl App {
             Message::Pasted(None) => self.notify_error("The clipboard is empty.".into()),
             Message::SubmitLogin => return self.submit_login(),
             Message::LoggedIn(result) => return self.logged_in(result),
-            Message::Logout => return self.logout(),
+            Message::Logout => return self.logout(false),
+            Message::AskForget => self.forget_confirm = true,
+            Message::CancelForget => self.forget_confirm = false,
+            Message::ConfirmForget => {
+                self.forget_confirm = false;
+                return self.logout(true);
+            }
             Message::LoggedOut(Ok(())) => self.logged_out(),
             Message::LoggedOut(Err(e)) => self.notify_error(e),
             Message::SyncLibrary => return self.sync_library(),
@@ -900,6 +912,9 @@ impl App {
     /// Escape: closes the panel, else the game page, else the per-game achievements page.
     fn go_back(&mut self) {
         if self.quit_confirm.take().is_some() {
+            return;
+        }
+        if std::mem::take(&mut self.forget_confirm) {
             return;
         }
         if self.launch_prompt.take().is_some() {

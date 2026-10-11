@@ -110,6 +110,12 @@ impl App {
                     .as_ref()
                     .map(|work| quit_dialog(empty(), work)),
             )
+            .push(
+                self.account
+                    .as_ref()
+                    .filter(|_| self.forget_confirm)
+                    .map(|a| forget_dialog(empty(), &a.username)),
+            )
             .push((!self.toasts.is_empty()).then(|| self.toasts()));
         pointer::right_clicks(layers, |at| Message::Edit(EditMsg::At(at))).into()
     }
@@ -316,6 +322,50 @@ fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a
                 .style(theme::backdrop)
         )
         .on_press(Message::CancelQuit),
+        center(opaque(dialog)),
+    ]
+    .into()
+}
+
+/// Asks before deleting what SlattyLauncher keeps of the signed-in account.
+fn forget_dialog<'a>(page: Element<'a, Message>, name: &str) -> Element<'a, Message> {
+    let paragraph = |s: &'a str| text(s).size(14).color(tokens().muted);
+    let dialog = container(
+        column![
+            text(format!("Forget {name}?")).size(24).font(bold()),
+            paragraph(
+                "SlattyLauncher signs out, then deletes what it keeps of this account on this \
+                 computer: play history, play time not yet sent to GOG included, cloud sync \
+                 history, the library cache and the achievement records of Comet."
+            ),
+            paragraph("Games, their saves and prefixes, and save backups are kept."),
+            row![
+                space().width(Length::Fill),
+                button(text("Cancel").size(14))
+                    .padding([10, 18])
+                    .on_press(Message::CancelForget)
+                    .style(theme::tonal),
+                button(text("Forget account").size(14))
+                    .padding([10, 18])
+                    .on_press(Message::ConfirmForget)
+                    .style(theme::danger),
+            ]
+            .spacing(10),
+        ]
+        .spacing(18),
+    )
+    .padding(26)
+    .max_width(560)
+    .style(theme::card);
+    stack![
+        page,
+        mouse_area(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(theme::backdrop)
+        )
+        .on_press(Message::CancelForget),
         center(opaque(dialog)),
     ]
     .into()

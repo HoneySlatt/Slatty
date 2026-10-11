@@ -176,6 +176,44 @@ impl Account {
             .expect("keyring task panicked")?;
         db.set_setting(ACTIVE_USER, None)
     }
+
+    /// Signs out, then deletes what SlattyLauncher keeps of the account (`forget_data`).
+    pub async fn forget(self, db: &Db, dirs: &Dirs) -> Result<()> {
+        let user_id = self.info.user_id.clone();
+        self.logout(db, dirs).await?;
+        forget_data(db, dirs, &user_id)
+    }
+}
+
+/// Deletes what SlattyLauncher keeps of an account: its name, its play sessions (those not yet
+/// sent to GOG included), its cloud sync history, its library cache (covers, key art, avatar) and
+/// Comet's record of its achievements. Saves are never deleted: the games, their prefixes and own
+/// homes, and the save backups stay.
+pub fn forget_data(db: &Db, dirs: &Dirs, user_id: &str) -> Result<()> {
+    // It names the folders deleted below.
+    crate::paths::check_user_id(user_id)?;
+    for table in ["sessions", "sync_baseline", "sync_roots", "accounts"] {
+        db.conn().execute(
+            &format!("DELETE FROM {table} WHERE user_id = ?1"),
+            [user_id],
+        )?;
+    }
+    let remove = |dir: &std::path::Path| match std::fs::remove_dir_all(dir) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            Err(Error::io(format!("delete {}", dir.display()), e))
+        }
+        _ => Ok(()),
+    };
+    remove(&dirs.account_cache(user_id))?;
+    // Comet keeps a database per game client and account.
+    let comet = dirs.data.join("comet/comet/gameplay");
+    for client in std::fs::read_dir(&comet).into_iter().flatten().flatten() {
+        remove(&client.path().join(user_id))?;
+    }
+    for lock in ["auth", "playtime"] {
+        let _ = std::fs::remove_file(dirs.locks().join(format!("{lock}-{user_id}.lock")));
+    }
+    Ok(())
 }
 
 /// Valid tokens for the account `current` belongs to: the keyring copy when another process
@@ -260,6 +298,64 @@ mod tests {
             Account::load_for(&db, &dirs, "old").await,
             Err(Error::NotLoggedIn)
         ));
+    }
+
+    /// Forgetting an account deletes what the launcher keeps of it, and nothing of another account
+    /// or of the games: saves, prefixes, the games' own homes and the save backups stay.
+    #[test]
+    fn forgetting_an_account_deletes_its_data_and_never_saves() {
+        let root = std::env::temp_dir().join(format!("slatty-forget-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        db.conn()
+            .execute_batch(
+                "INSERT INTO accounts VALUES ('111', '[FAKE] First', 0), ('222', '[FAKE] Second', 0);
+                 INSERT INTO sessions (game_id, user_id, started_at, state) VALUES
+                   ('1', '111', 10, 'ended'), ('1', '222', 20, 'ended');
+                 INSERT INTO sync_roots (user_id, game_id, location, root) VALUES
+                   ('111', '1', 'saves', '/r'), ('222', '1', 'saves', '/r');",
+            )
+            .unwrap();
+        let files = |id: &str| {
+            [
+                dirs.account_cache(id).join("library.json"),
+                dirs.data
+                    .join(format!("comet/comet/gameplay/9/{id}/gameplay.db")),
+                dirs.backups(id, "1")
+                    .join("20261011-000000/saves/local/a.sav"),
+            ]
+        };
+        let kept = [
+            dirs.data.join("prefixes/1/drive_c/users/steamuser/save"),
+            dirs.data.join("homes/1/save"),
+        ];
+        for file in files("111").iter().chain(&files("222")).chain(&kept) {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, "[FAKE]").unwrap();
+        }
+        forget_data(&db, &dirs, "111").unwrap();
+        let rows = |table: &str, id: &str| -> i64 {
+            db.conn()
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {table} WHERE user_id = ?1"),
+                    [id],
+                    |r| r.get(0),
+                )
+                .unwrap()
+        };
+        for table in ["accounts", "sessions", "sync_roots"] {
+            assert_eq!((rows(table, "111"), rows(table, "222")), (0, 1), "{table}");
+        }
+        let [cache, comet, backup] = files("111");
+        assert!(!cache.exists() && !comet.exists());
+        assert!(backup.exists(), "save backups are never deleted");
+        assert!(files("222").iter().chain(&kept).all(|f| f.exists()));
+        assert!(matches!(
+            forget_data(&db, &dirs, ".."),
+            Err(Error::Refused(_))
+        ));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

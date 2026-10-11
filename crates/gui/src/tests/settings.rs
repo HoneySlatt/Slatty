@@ -25,6 +25,30 @@ fn settings_page_holds_account_library_and_install_options() {
 }
 
 #[test]
+fn forgetting_the_account_asks_first() {
+    let mut app = library_app();
+    app.page = Page::Settings;
+    let mut ui = render(&app);
+    ui.click("Forget account").unwrap();
+    for m in ui.into_messages() {
+        let _ = app.update(m);
+    }
+    let mut ui = render(&app);
+    assert!(ui.find("Forget testeur?").is_ok());
+    snapshot(&mut ui, "forget-account");
+    ui.click("Cancel").unwrap();
+    for m in ui.into_messages() {
+        let _ = app.update(m);
+    }
+    assert!(!app.forget_confirm);
+    assert!(app.account.is_some(), "nothing forgotten");
+
+    let _ = app.update(Message::AskForget);
+    app.go_back();
+    assert!(!app.forget_confirm, "Escape closes it too");
+}
+
+#[test]
 fn default_installation_path_is_browsed_or_typed_without_a_save_button() {
     use crate::settings::SettingsMsg;
     let mut app = library_app();

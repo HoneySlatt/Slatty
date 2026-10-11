@@ -41,6 +41,14 @@ your system keyring, never in a plain file.
 | `slatty auth status` | Shows the account and when the current access token expires |
 | `slatty auth refresh` | Renews the session now (it is renewed automatically when needed) |
 | `slatty auth logout` | Removes the tokens from the keyring; cached data and saves stay |
+| `slatty auth logout --forget` | Also deletes what SlattyLauncher keeps of the account (below) |
+
+Forgetting an account deletes, for that account only: its name, its play history (play time not
+yet sent to GOG included), its cloud sync history, its library cache (covers, images, avatar) and
+Comet's achievement records. Games, saves, prefixes, the home folders of isolated games and save
+backups are never deleted, nor are the logs and the cloud copies made by `slatty cloud diff`. If
+you sign in with the account again, the first cloud sync has no history to rely on: it compares
+contents, adopts identical files and reports different ones as conflicts.
 
 ## Library
 
@@ -521,7 +529,8 @@ slatty proton share on                 # list the downloaded builds in Steam and
 The interface's **Settings** tab lists its parts on the left (Account, Library, Installs,
 Runners, Appearance, Notifications, Privacy, Advanced, About); choosing one brings it to the top, and the list follows the page as it
 scrolls. **Account** shows who is signed in, with
-Log out. **Library** shows how many games you own and when the list was refreshed, with Refresh
+Log out, and Forget account, which asks first, then does what `slatty auth logout --forget` does
+(see [Signing in](#signing-in)). **Library** shows how many games you own and when the list was refreshed, with Refresh
 library, and the size of the covers. **Installs** holds:
 
 - **Default installation path:** where new games are installed unless the Install panel says

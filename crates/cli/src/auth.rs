@@ -22,7 +22,12 @@ pub enum AuthCommand {
     /// Experiment: check whether refreshing rotates the refresh token
     ProbeRotation,
     /// Forget the stored tokens of the active account
-    Logout,
+    Logout {
+        /// Also delete the account's play history, cloud sync history, library cache and Comet's
+        /// achievement records; games, saves, prefixes and save backups are kept
+        #[arg(long)]
+        forget: bool,
+    },
 }
 
 pub async fn run(ctx: &Ctx, cmd: AuthCommand) -> Result<()> {
@@ -48,11 +53,21 @@ pub async fn run(ctx: &Ctx, cmd: AuthCommand) -> Result<()> {
             );
             Ok(())
         }
-        AuthCommand::Logout => {
+        AuthCommand::Logout { forget: false } => {
             let account = Account::load(&ctx.db, &ctx.dirs).await?;
             let name = account.info.username.clone();
             account.logout(&ctx.db, &ctx.dirs).await?;
             println!("Logged out {name}. Local cache and saves are kept.");
+            Ok(())
+        }
+        AuthCommand::Logout { forget: true } => {
+            let account = Account::load(&ctx.db, &ctx.dirs).await?;
+            let name = account.info.username.clone();
+            account.forget(&ctx.db, &ctx.dirs).await?;
+            println!(
+                "Logged out {name} and deleted its data on this computer. Games, saves, prefixes \
+                 and save backups are kept."
+            );
             Ok(())
         }
     }

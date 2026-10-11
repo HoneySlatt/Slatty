@@ -559,12 +559,23 @@ fn switch<'a>(on: bool, msg: fn(bool) -> SettingsMsg, what: &'static str) -> Ele
 impl App {
     fn account_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         let name = self.account.as_ref().map(|a| a.username.as_str());
-        vec![setting(
-            wide,
-            "Signed in as",
-            text(name.unwrap_or_default()).size(15).into(),
-            Some(action("Log out", Message::Logout)),
-        )]
+        vec![
+            setting(
+                wide,
+                "Signed in as",
+                text(name.unwrap_or_default()).size(15).into(),
+                Some(action("Log out", Message::Logout)),
+            ),
+            setting(
+                wide,
+                "Forget",
+                note(
+                    "Signs out and deletes what SlattyLauncher keeps of this account on this \
+                     computer. Games and saves stay.",
+                ),
+                Some(action("Forget account", Message::AskForget)),
+            ),
+        ]
     }
 
     fn library_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
