@@ -560,6 +560,17 @@ fn sandbox(bwrap: Option<PathBuf>) -> Result<PathBuf> {
     }
 }
 
+/// bubblewrap's arguments mounting `path` over itself, by where it leads: bubblewrap cannot mount
+/// over a link, which a `<project>-latest` build is. The build stays read-only through the link.
+fn bind(out: &mut Vec<String>, how: &str, path: &Path) -> Result<()> {
+    let real = path
+        .canonicalize()
+        .map_err(|e| Error::io(format!("resolve {}", path.display()), e))?;
+    let real = real.display().to_string();
+    out.extend([how.to_string(), real.clone(), real]);
+    Ok(())
+}
+
 fn read_only_tools(
     umu: PathBuf,
     args: Vec<String>,
@@ -567,15 +578,11 @@ fn read_only_tools(
 ) -> Result<(PathBuf, Vec<String>)> {
     let bwrap = sandbox(find_in_path("bwrap"))?;
     let mut out: Vec<String> = ["--dev-bind", "/", "/"].map(String::from).to_vec();
-    let mut bind = |how: &str, path: &Path| {
-        let path = path.display().to_string();
-        out.extend([how.to_string(), path.clone(), path]);
-    };
     for runtime in runtimes() {
-        bind("--ro-bind", &runtime);
+        bind(&mut out, "--ro-bind", &runtime)?;
         let var = runtime.join("var");
         crate::paths::ensure_dir(&var)?;
-        bind("--bind", &var);
+        bind(&mut out, "--bind", &var)?;
         for platform in std::fs::read_dir(&runtime).into_iter().flatten().flatten() {
             let files = platform.path().join("files");
             if files.is_dir() {
@@ -584,12 +591,12 @@ fn read_only_tools(
                     std::fs::File::create(&lock)
                         .map_err(|e| Error::io(format!("create {}", lock.display()), e))?;
                 }
-                bind("--bind", &lock);
+                bind(&mut out, "--bind", &lock)?;
             }
         }
     }
     if let Some(proton) = proton {
-        bind("--ro-bind", proton);
+        bind(&mut out, "--ro-bind", proton)?;
     }
     out.push("--".into());
     out.push(umu.display().to_string());
@@ -729,6 +736,22 @@ fn path_list(paths: &[PathBuf]) -> Result<String> {
 mod tests {
     use super::*;
     use crate::install::Platform;
+
+    /// A game set to a `<project>-latest` build closed at once when isolated: bubblewrap cannot
+    /// mount over a link ("Can't mount on symlink destination"). The build it leads to is mounted.
+    #[test]
+    fn a_latest_link_is_mounted_where_it_leads() {
+        let dir = std::env::temp_dir().join(format!("slatty-bind-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("GE-Proton11-7")).unwrap();
+        std::os::unix::fs::symlink("GE-Proton11-7", dir.join("GE-Proton-latest")).unwrap();
+        let mut out = Vec::new();
+        bind(&mut out, "--ro-bind", &dir.join("GE-Proton-latest")).unwrap();
+        let real = dir.join("GE-Proton11-7").canonicalize().unwrap();
+        let real = real.to_str().unwrap();
+        assert_eq!(out, ["--ro-bind", real, real]);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     /// An isolated launch where bubblewrap cannot hold the game is refused with the reason, never
     /// run without isolation; `false` stands in for a bubblewrap AppArmor stops.
