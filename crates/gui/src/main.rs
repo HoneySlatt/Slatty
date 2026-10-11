@@ -353,7 +353,7 @@ impl Default for App {
             maintenance: HashMap::new(),
             library_root: String::new(),
             default_platform: Platform::Windows,
-            umu_lookup: true,
+            umu_lookup: false,
             report_playtime: true,
             game_achievements: true,
             isolate_new_games: true,

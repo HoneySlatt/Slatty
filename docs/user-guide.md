@@ -232,12 +232,14 @@ command line starts the one chosen, or the game itself.
 
 A launch goes through these steps:
 
-1. On the first launch, SlattyLauncher looks the game up in umu's public database, as Heroic does,
-   and keeps the answer. umu then applies the fixes its community wrote for that game (protonfixes),
-   to the game only, not to its setup programs; a game the database does not list runs without
-   them. Only the GOG product id is sent. If the
-   database cannot be reached, the game starts without fixes and the lookup is tried again next
-   time.
+1. SlattyLauncher looks the game up in umu's database, as Heroic does, in the copy that comes with
+   its Proton build (UMU-Proton, GE-Proton and Proton-CachyOS carry one; Valve's builds apply no
+   fixes): nothing leaves the computer. umu then applies the fixes its community wrote for that
+   game (protonfixes), to the game only, not to its setup programs; a game the database does not
+   list runs without them. With **Settings → Privacy → Proton fixes online** turned on (off by
+   default), a game the copy does not list is looked up in umu's public database at its first
+   launch, and the answer kept: only the GOG product id is sent. If that database cannot be
+   reached, the game starts without fixes and the lookup is tried again next time.
    On the first launch of a fresh install, the Wine prefix is created (`wineboot`), so that save
    folders exist.
    The post-install setup that GOG Galaxy performs runs once per installed build: GOG's script

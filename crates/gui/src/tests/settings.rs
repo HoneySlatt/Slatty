@@ -268,7 +268,13 @@ fn what_leaves_the_computer_can_be_turned_off() {
     let mut app = library_app();
     app.page = Page::Settings;
     let db = app.core.as_ref().unwrap().db.clone();
-    assert!(app.umu_lookup && app.report_playtime, "on until turned off");
+    assert!(
+        !app.umu_lookup,
+        "umu's database online: off until turned on"
+    );
+    assert!(app.report_playtime, "on until turned off");
+    let _ = app.update(Message::Settings(SettingsMsg::UmuLookup(true)));
+    assert!(app.umu_lookup && slatty_core::settings::umu_lookup(&db).unwrap());
     let _ = app.update(Message::Settings(SettingsMsg::UmuLookup(false)));
     let _ = app.update(Message::Settings(SettingsMsg::ReportPlaytime(false)));
     let _ = app.update(Message::Settings(SettingsMsg::GameAchievements(false)));

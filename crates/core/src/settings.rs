@@ -63,10 +63,11 @@ pub fn set_default_platform(db: &Db, platform: Platform) -> Result<()> {
     db.set_setting(DEFAULT_PLATFORM, Some(value))
 }
 
-/// Whether a game's GOG id may be sent to umu's public database, at its first launch, to pick
-/// its Proton fixes. On until turned off.
+/// Whether a game's GOG id may be sent to umu's public database online, at its first launch, to
+/// pick its Proton fixes when the Proton build's own copy of the database does not list it. Off
+/// until turned on.
 pub fn umu_lookup(db: &Db) -> Result<bool> {
-    Ok(db.setting(UMU_LOOKUP)?.as_deref() != Some("off"))
+    Ok(db.setting(UMU_LOOKUP)?.as_deref() == Some("on"))
 }
 
 pub fn set_umu_lookup(db: &Db, on: bool) -> Result<()> {

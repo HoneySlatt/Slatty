@@ -213,12 +213,13 @@ impl App {
         vec![
             setting(
                 wide,
-                "Proton fixes",
+                "Proton fixes online",
                 switch(
                     self.umu_lookup,
                     SettingsMsg::UmuLookup,
-                    "At a game's first launch, sends its GOG id to umu's public database to pick \
-                     its community fixes.",
+                    "A game's community fixes are found in the copy of umu's database that comes \
+                     with its Proton build. When it is not listed there, this asks umu's public \
+                     database online at the game's first launch, sending its GOG id.",
                 ),
                 None,
             ),
