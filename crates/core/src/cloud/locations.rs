@@ -43,6 +43,18 @@ fn parse(v: &Value, client_id: &str) -> Result<Option<Vec<SaveLocation>>> {
     Ok(Some(locations))
 }
 
+/// The folder a location syncs. Its name, from GOG's answer, names its backup folder and its
+/// files in the cloud: anything but one plain name (`..`, a path) is refused, never joined.
+pub fn root_of(location: &SaveLocation, install: &Install) -> Result<PathBuf> {
+    let name = location.name.as_str();
+    if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', '\0']) {
+        return Err(Error::Unsupported(format!(
+            "a save location named {name:?} was left out: not a plain name"
+        )));
+    }
+    resolve(&location.location, install)
+}
+
 /// Maps a GOG location template to a folder inside the game's Wine prefix.
 pub fn resolve(template: &str, install: &Install) -> Result<PathBuf> {
     if install.platform != Platform::Windows {
@@ -179,6 +191,30 @@ mod tests {
                 proton: "/p".into(),
                 prefix: root.join("pfx"),
             },
+        }
+    }
+
+    /// A location's name names its backup folder and its files in the cloud: one that is no plain
+    /// name (`..`, a path, an absolute one) is left out, never followed out of the backups.
+    #[test]
+    fn a_location_named_like_a_path_is_left_out() {
+        let root = std::env::temp_dir().join(format!("slatty-loc-name-{}", std::process::id()));
+        let install = install(&root);
+        let at = |name: &str| SaveLocation {
+            name: name.into(),
+            location: "<?INSTALL?>/saves".into(),
+        };
+        assert!(root_of(&at("saves"), &install).is_ok());
+        for name in [
+            "..",
+            "../../../../escape",
+            "/home/[FAKE]/x",
+            "a/b",
+            "a\\b",
+            "",
+            ".",
+        ] {
+            assert!(root_of(&at(name), &install).is_err(), "{name:?}");
         }
     }
 

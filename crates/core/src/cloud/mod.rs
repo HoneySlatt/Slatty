@@ -37,7 +37,7 @@ pub async fn open(http: &Client, tokens: &Tokens, install: &Install) -> Result<O
     let locations = locations
         .into_iter()
         .map(|l| {
-            let root = locations::resolve(&l.location, install);
+            let root = locations::root_of(&l, install);
             (l, root)
         })
         .collect();

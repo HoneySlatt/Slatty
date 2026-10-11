@@ -91,7 +91,8 @@ Modification dates are never used to decide.
   actually transferred. An upload the cloud listing could not confirm gets no history; the next
   sync finds the same content on both sides and adopts it.
 - **Cloud paths cannot escape the save folder.** A cloud file name containing `..` or an absolute
-  path is left out and reported.
+  path is left out and reported. So is a whole location whose name, which names its backup folder
+  and its files in the cloud, is not a plain name (`..`, a path).
 - **Case-only duplicates are left out.** `Save.dat` and `save.dat` are one file on Windows, so a
   pair of them in the cloud is reported instead of being synchronised, and the local file of that
   name is left alone too (neither uploaded over one of them nor deleted).
