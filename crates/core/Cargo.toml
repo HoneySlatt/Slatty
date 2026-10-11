@@ -1,9 +1,12 @@
 [package]
 name = "slatty-core"
+description = "SlattyLauncher's behaviour, shared by its command line and its interface"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
 
 [dependencies]
 thiserror.workspace = true

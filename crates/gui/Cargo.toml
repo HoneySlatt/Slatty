@@ -1,9 +1,12 @@
 [package]
 name = "slatty-gui"
+description = "SlattyLauncher, a native GOG launcher for Linux"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
 
 [[bin]]
 name = "slatty-gui"
