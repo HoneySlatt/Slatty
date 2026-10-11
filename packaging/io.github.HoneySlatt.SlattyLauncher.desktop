@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=SlattyLauncher
+GenericName=Game launcher
+Comment=Install and play your GOG games
+Exec=slatty-gui
+Icon=io.github.HoneySlatt.SlattyLauncher
+Terminal=false
+Categories=Game;
+Keywords=GOG;Galaxy;Proton;games;launcher;
+StartupNotify=true
