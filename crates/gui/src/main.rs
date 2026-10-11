@@ -357,7 +357,7 @@ impl Default for App {
             default_platform: Platform::Windows,
             umu_lookup: false,
             report_playtime: true,
-            game_achievements: true,
+            game_achievements: false,
             isolate_new_games: true,
             manual_achievements: false,
             steamgriddb: false,

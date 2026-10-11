@@ -95,9 +95,10 @@ pub fn set_isolate_new_games(db: &Db, on: bool) -> Result<()> {
 }
 
 /// Whether Comet is started while a game that uses GOG's Galaxy runs, so achievements unlocked in
-/// the game reach GOG. On until turned off.
+/// the game reach GOG. Off until turned on: while it runs, any program on the computer can get the
+/// account's access token from Comet.
 pub fn game_achievements(db: &Db) -> Result<bool> {
-    Ok(db.setting(GAME_ACHIEVEMENTS)?.as_deref() != Some("off"))
+    Ok(db.setting(GAME_ACHIEVEMENTS)?.as_deref() == Some("on"))
 }
 
 pub fn set_game_achievements(db: &Db, on: bool) -> Result<()> {

@@ -297,6 +297,12 @@ fn what_leaves_the_computer_can_be_turned_off() {
         "umu's database online: off until turned on"
     );
     assert!(app.report_playtime, "on until turned off");
+    assert!(
+        !app.game_achievements && !slatty_core::settings::game_achievements(&db).unwrap(),
+        "Comet, which hands the access token to any local program: off until turned on"
+    );
+    let _ = app.update(Message::Settings(SettingsMsg::GameAchievements(true)));
+    assert!(app.game_achievements && slatty_core::settings::game_achievements(&db).unwrap());
     let _ = app.update(Message::Settings(SettingsMsg::UmuLookup(true)));
     assert!(app.umu_lookup && slatty_core::settings::umu_lookup(&db).unwrap());
     let _ = app.update(Message::Settings(SettingsMsg::UmuLookup(false)));

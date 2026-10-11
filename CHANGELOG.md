@@ -35,7 +35,9 @@ Reviewed before publication. Among what changed:
   size before memory is taken.
 - The account's token goes only to GOG's own addresses, never leaves in a `Referer`, and stays out
   of Comet's log. Comet gets it through a folder of the user's alone, is taken as ready only when
-  it runs as the user, and stops with the launcher even when the launcher is killed.
+  it runs as the user, and stops with the launcher even when the launcher is killed. Comet only
+  runs once **Achievements in game** is turned on: while it runs, any local program can get the
+  access token from it.
 - Isolated games can no longer change umu's runtime, the Proton build or the runtime tool other
   games run through, nor see or signal the user's other programs.
 - umu's database is read from the Proton build's own copy; asking umu's server is off until

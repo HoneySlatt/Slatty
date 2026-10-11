@@ -266,7 +266,7 @@ A launch goes through these steps:
    first launch this is where your saves from GOG's cloud arrive, right after the prefix is
    created and before the game starts.
 3. Comet starts, so the game can report achievements: only for a game that ships GOG's Galaxy SDK
-   (`Galaxy64.dll` and the like), and unless **Achievements in game** is off in Settings → Privacy.
+   (`Galaxy64.dll` and the like), and once **Achievements in game** is on in Settings → Privacy.
    Before the first session, Comet's dummy
    `GalaxyCommunication` service is registered in the prefix; some games need it to reach Comet.
 4. The game runs. SlattyLauncher waits until **every** game process has exited, not only the
@@ -584,7 +584,7 @@ downloaded, with **Delete**.
 - **Proton fixes online**, off until turned on: a game that the copy of umu's database in its
   Proton build does not list is looked up in umu's public database at its first launch, sending
   its GOG id; off, such a game runs without fixes.
-- **Achievements in game**, on until turned off: Comet runs while a game that uses GOG's Galaxy
+- **Achievements in game**, off until turned on: Comet runs while a game that uses GOG's Galaxy
   runs. While it runs, it keeps a connection to GOG open for your account, and any program on
   this computer can get your GOG access token from it (see
   [SECURITY.md](../SECURITY.md#comet)). Off, unlocks made in games are not reported; unlocking by

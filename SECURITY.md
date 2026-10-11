@@ -60,7 +60,7 @@ account), and a game you run without isolation (it runs as you).
 ### Comet
 
 [Comet](https://github.com/imLinguin/comet) is the program that lets a game report achievements as
-you play (**Achievements in game**, Settings → Privacy, on by default). SlattyLauncher starts it
+you play (**Achievements in game**, Settings → Privacy, off until you turn it on). SlattyLauncher starts it
 only for a Windows game that ships GOG's Galaxy SDK, for the length of the session, and stops it
 when the game ends, or when the launcher itself is closed or killed.
 
@@ -71,9 +71,9 @@ when the game ends, or when the launcher itself is closed or killed.
   listens on 127.0.0.1:9977 and answers a token request from anything that connects, without
   asking who it is: your other programs, an isolated game, a Flatpak with network access, other
   users of the computer. An access token works for about an hour, and Comet keeps a fresh one as
-  long as it runs. This is how Comet works, and SlattyLauncher cannot change it. Turn
-  **Achievements in game** off to avoid it; unlocking by hand (Settings → Advanced) does not need
-  Comet.
+  long as it runs. This is how Comet works, and SlattyLauncher cannot change it: that is why
+  **Achievements in game** is off until you turn it on. Unlocking by hand (Settings → Advanced)
+  does not need Comet.
 - Comet talks to GOG for your account on its own (see the next section).
 - Comet's log (`~/.local/state/slatty/logs/comet.log`) is written without the messages in which
   Comet can include your refresh token.
@@ -87,7 +87,7 @@ No telemetry, no crash reports, no usage statistics.
 | GOG: `auth.gog.com`, `embed.gog.com`, `users.gog.com`, `galaxy-library.gog.com`, `gamesdb.gog.com`, `api.gog.com`, `content-system.gog.com`, `remote-config.gog.com`, `cloudstorage.gog.com`, `gameplay.gog.com`, and the download and image servers GOG's answers name | What each feature needs: sign-in, your library, your avatar, game downloads, cloud saves, achievements | When you use the feature | — |
 | GOG, `content-system.gog.com` | The installed games whose new builds are looked for | At start, at sign-in and every six hours | Update games automatically, Settings → Installs (on) |
 | GOG, `gameplay.gog.com` | Each play session (game, start, length), as Galaxy sends them; sessions played while off are never sent later | After a session | Play time on GOG, Settings → Privacy (on) |
-| GOG, through Comet: `auth.gog.com`; `gameplay.gog.com` (achievements, statistics, leaderboards, with your system's language); `notifications-pusher.gog.com` (a live connection signed in with your token and subscribed to your friends, presence, chat, library and notification topics); `cfg.gog.com` and the servers it names (Galaxy's "peer" component, downloaded into Comet's folder) | Whether GOG then shows you online, or playing, to your friends has not been checked | While a game that ships Galaxy's SDK runs | Achievements in game, Settings → Privacy (on) |
+| GOG, through Comet: `auth.gog.com`; `gameplay.gog.com` (achievements, statistics, leaderboards, with your system's language); `notifications-pusher.gog.com` (a live connection signed in with your token and subscribed to your friends, presence, chat, library and notification topics); `cfg.gog.com` and the servers it names (Galaxy's "peer" component, downloaded into Comet's folder) | Whether GOG then shows you online, or playing, to your friends has not been checked | While a game that ships Galaxy's SDK runs | Achievements in game, Settings → Privacy (off) |
 | Valve, `repo.steampowered.com`, through umu-launcher | Which version of the Steam Linux Runtime is current; the runtime itself on first use and when it changes | At each launch through umu (Windows games, and Linux games run in umu's container); for isolated games the update itself is made at most once a day, just before a launch | — |
 | umu's game database, `umu.openwinecomponents.org` | A game's GOG product id | At its first launch, only when its Proton build's own copy of umu's database does not list it | Proton fixes online, Settings → Privacy (off) |
 | Whatever the game's Proton fix downloads from: winetricks' sources (Microsoft and others), GitHub Pages, `download.amd.com`, Google Drive | Requests for the files that fix installs | When a game that has such a fix starts (fixes come with the Proton build) | — |

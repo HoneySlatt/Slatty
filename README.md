@@ -98,8 +98,8 @@ The [user guide](docs/user-guide.md) covers every command.
   other games use, and cannot reach your other programs. Isolation is not a boundary against a
   program written to break out; [SECURITY.md](SECURITY.md#games-and-isolation) says what it leaves
   open.
-- While a game reports achievements through Comet (on by default), any program on this computer
-  can get your GOG access token from Comet; turn **Achievements in game** off to avoid it.
+- Achievements unlocked in games are reported through Comet only once you turn **Achievements in
+  game** on: while Comet runs, any program on this computer can get your GOG access token from it.
 - Saves are never replaced or deleted without a copy, and a cloud conflict never resolves itself
   ([how](docs/cloud-saves.md)).
 
