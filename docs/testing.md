@@ -98,7 +98,7 @@ profile:
   itself; `dd if=<file> iflag=nocache count=0` drops the covers from the disk cache for a cold
   start.
 
-Reference, 2026-10-10 (Ryzen 7 5800X, Radeon RX 6800, niri at 3840×2160, 240 Hz, scale 1.5):
+Reference, 2026-10-10 (Ryzen 7 5800X, Radeon RX 6900 XT, niri at 3840×2160, 240 Hz, scale 1.5):
 
 | | Result |
 |---|---|
