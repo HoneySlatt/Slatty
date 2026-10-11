@@ -1,7 +1,5 @@
-use std::io::Read;
 use std::path::PathBuf;
 
-use flate2::read::ZlibDecoder;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -152,7 +150,7 @@ pub async fn game_client(
         Error::Unsupported("this game has no Galaxy build, hence no Galaxy client".into())
     })?;
     let raw = http::bytes(http.get(link.as_str()), "fetching build metadata").await?;
-    let meta: Value = decode_meta(&raw)?;
+    let meta: Value = crate::galaxy::decode_zlib_json(&raw, "build metadata")?;
     match (meta["clientId"].as_str(), meta["clientSecret"].as_str()) {
         (Some(id), Some(secret)) => Ok((id.to_string(), Secret::new(secret))),
         _ => Err(Error::parse(
@@ -160,15 +158,6 @@ pub async fn game_client(
             "no Galaxy client credentials",
         )),
     }
-}
-
-fn decode_meta(raw: &[u8]) -> Result<Value> {
-    let mut text = Vec::new();
-    match ZlibDecoder::new(raw).read_to_end(&mut text) {
-        Ok(_) => serde_json::from_slice(&text),
-        Err(_) => serde_json::from_slice(raw),
-    }
-    .map_err(|e| Error::parse("build metadata", e))
 }
 
 #[cfg(test)]

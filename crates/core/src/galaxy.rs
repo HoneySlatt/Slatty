@@ -138,16 +138,23 @@ pub fn galaxy_path(hash: &str) -> String {
     }
 }
 
+/// The largest a manifest or build metadata inflates to: far above a game of 100,000 files.
+const MAX_MANIFEST: u64 = if cfg!(test) { 1 << 20 } else { 512 << 20 };
+
+/// JSON that GOG sends compressed with zlib, or not.
 pub fn decode_zlib_json<T: serde::de::DeserializeOwned>(
     raw: &[u8],
     context: &'static str,
 ) -> Result<T> {
     let mut text = Vec::new();
-    match ZlibDecoder::new(raw).read_to_end(&mut text) {
-        Ok(_) => serde_json::from_slice(&text),
-        Err(_) => serde_json::from_slice(raw),
+    match ZlibDecoder::new(raw)
+        .take(MAX_MANIFEST + 1)
+        .read_to_end(&mut text)
+    {
+        Ok(n) if n as u64 > MAX_MANIFEST => Err(Error::parse(context, "larger than expected")),
+        Ok(_) => serde_json::from_slice(&text).map_err(|e| Error::parse(context, e)),
+        Err(_) => serde_json::from_slice(raw).map_err(|e| Error::parse(context, e)),
     }
-    .map_err(|e| Error::parse(context, e))
 }
 
 pub fn parse_depot_items(raw: &[u8]) -> Result<Vec<DepotItem>> {
@@ -590,6 +597,27 @@ impl ContentSource for GogContent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A manifest is inflated in memory: a few kilobytes of zlib inflating to more than any
+    /// manifest is refused rather than read to the end.
+    #[test]
+    fn a_manifest_inflating_beyond_any_real_one_is_refused() {
+        use std::io::Write;
+        let mut padded = b"[".to_vec();
+        padded.resize((MAX_MANIFEST + 2) as usize, b' ');
+        padded.push(b']');
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+        z.write_all(&padded).unwrap();
+        let raw = z.finish().unwrap();
+        assert!(raw.len() < 64 << 10);
+        let r = decode_zlib_json::<Vec<u8>>(&raw, "testing");
+        assert!(matches!(r, Err(Error::Parse { .. })), "{r:?}");
+        assert_eq!(
+            decode_zlib_json::<Vec<u8>>(b"[1, 2]", "testing").unwrap(),
+            [1, 2],
+            "not compressed"
+        );
+    }
 
     #[test]
     fn galaxy_path_splits_hash() {
