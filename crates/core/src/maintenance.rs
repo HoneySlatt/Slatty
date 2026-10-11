@@ -314,12 +314,16 @@ pub async fn content_options(
 }
 
 fn installed_build_gone(e: Error) -> Error {
-    match e {
-        Error::NotFound(m) if m.contains("no longer offered") => {
-            Error::Refused("the installed build is no longer offered; update the game first".into())
-        }
-        other => other,
+    if no_longer_offered(&e) {
+        Error::Refused("the installed build is no longer offered; update the game first".into())
+    } else {
+        e
     }
+}
+
+/// Whether a plan failed because GOG no longer offers the build it was asked for.
+fn no_longer_offered(e: &Error) -> bool {
+    matches!(e, Error::NotFound(m) if m.contains("no longer offered"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -383,16 +387,26 @@ pub async fn reconfigure(
             d.clone(),
         ),
     };
-    let plan = installer::plan_for(
-        http,
-        tokens,
-        game_id,
-        install.platform,
-        Some(&language),
-        build.as_deref(),
-        &DlcSelection::Only(dlcs),
-    )
-    .await
+    let (selection, language) = (&DlcSelection::Only(dlcs), language.as_str());
+    let plan_on = |build: Option<String>| async move {
+        installer::plan_for(
+            http,
+            tokens,
+            game_id,
+            install.platform,
+            Some(language),
+            build.as_deref(),
+            selection,
+        )
+        .await
+    };
+    let plan = match plan_on(build).await {
+        // An unfinished change whose build GOG no longer offers (it lists one Linux installer at
+        // a time) is finished on the newest build: it brings every file to it, whatever their
+        // state. Otherwise the game could be neither played, repaired nor updated.
+        Err(e) if pending.is_some() && no_longer_offered(&e) => plan_on(None).await,
+        planned => planned,
+    }
     .map_err(installed_build_gone)?;
     let mut selected = plan.selected_dlcs();
     selected.sort();
