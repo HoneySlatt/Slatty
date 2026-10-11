@@ -363,7 +363,7 @@ impl App {
     }
 
     /// Why GOG offers nothing to install for a game not installed, once known.
-    fn not_installable(&self, game_id: &str) -> Option<NotInstallable> {
+    pub(super) fn not_installable(&self, game_id: &str) -> Option<NotInstallable> {
         if self.installs.contains_key(game_id) {
             return None;
         }

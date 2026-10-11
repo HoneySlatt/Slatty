@@ -117,7 +117,8 @@ panels:
 
 Some products GOG lists in your library have nothing to install, such as a pack whose games are
 in your library on their own. Their page shows **Not installable** instead of Install, with the
-reason, once GOG has said so (one request to GOG's public product data, when the page opens).
+reason, once GOG has said so (one request to GOG's public product data, when the page opens);
+from then on their cover offers no install either, and its settings button opens the page.
 
 Once started, a download shows on the game page itself, with its progress, its percentage and its
 network speed over the last seconds. Sizes and speeds read as in Steam: sizes in decimal megabytes

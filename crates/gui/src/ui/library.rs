@@ -285,6 +285,7 @@ impl App {
             .on_press(Message::Select(g.id.clone()))
             .style(theme::plain);
         let installed = self.installs.contains_key(&g.id);
+        let installable = self.not_installable(&g.id).is_none();
         let action = if self.steam_game(&g.id).is_some() {
             use crate::steam::SteamMsg;
             use slatty_core::steam::client::Action;
@@ -309,13 +310,16 @@ impl App {
         } else {
             button(icon(Icon::Download, 16.0, tokens().on_accent))
                 .padding([8, 14])
-                .on_press(Message::OpenDialog(g.id.clone(), Panel::Install))
+                .on_press_maybe(
+                    installable.then(|| Message::OpenDialog(g.id.clone(), Panel::Install)),
+                )
                 .style(theme::primary)
         };
-        // Steam keeps a Steam game's settings: its page says what can be asked of Steam.
+        // Steam keeps a Steam game's settings: its page says what can be asked of Steam. A product
+        // GOG offers nothing to install for has none: its page says why.
         let settings = button(icon(Icon::SlidersHorizontal, 16.0, tokens().text))
             .padding(8)
-            .on_press(if self.steam_game(&g.id).is_some() {
+            .on_press(if self.steam_game(&g.id).is_some() || !installable {
                 Message::Select(g.id.clone())
             } else {
                 Message::OpenDialog(

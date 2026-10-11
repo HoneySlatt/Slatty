@@ -103,6 +103,46 @@ fn without_a_gog_account_nothing_offers_a_refresh() {
     assert!(ui.into_messages().next().is_none());
 }
 
+/// A cover leads to no install dialog for a product GOG offers nothing to install for, once known:
+/// its settings open its page, which says why.
+#[test]
+fn a_cover_offers_no_install_for_a_product_gog_does_not_offer() {
+    use iced_test::selector::Candidate;
+    let install_dialogs = |app: &App| {
+        let mut ui = render(app);
+        // The title shows twice: on the placeholder, and over it with the buttons below.
+        let mut titles = Vec::new();
+        let _ = ui.find(|candidate: Candidate<'_>| -> Option<()> {
+            if let Candidate::Text {
+                content: "[FAKE] Game 5",
+                bounds,
+                ..
+            } = candidate
+            {
+                titles.push(bounds);
+            }
+            None
+        });
+        let over = titles
+            .into_iter()
+            .max_by(|a, b| a.y.total_cmp(&b.y))
+            .unwrap();
+        let buttons = over.y + over.height + 20.0;
+        for i in 0..40 {
+            ui.point_at(iced::Point::new(over.x - 10.0 + i as f32 * 5.0, buttons));
+            let _ = ui.simulate(iced_test::simulator::click());
+        }
+        ui.into_messages()
+            .filter(|m| matches!(m, Message::OpenDialog(id, Panel::Install) if id == "5"))
+            .count()
+    };
+    let mut app = library_app();
+    assert!(install_dialogs(&app) > 0, "until GOG has answered");
+    app.installability
+        .insert("5".into(), Some(slatty_core::library::NotInstallable::Pack));
+    assert_eq!(install_dialogs(&app), 0);
+}
+
 #[test]
 fn login_screen_offers_browser_login_without_password_field() {
     let app = App {
