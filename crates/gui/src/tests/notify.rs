@@ -60,6 +60,23 @@ fn a_download_says_when_it_starts_and_ends_in_a_card() {
     assert!(app.toasts.is_empty(), "gone once its time is over");
 }
 
+/// A card is taken away by one wait of its own, not by a tick every half second while it shows,
+/// each tick a view, a layout and a frame: 12 for a card shown its six seconds.
+#[test]
+fn a_card_goes_after_one_wait_of_its_own() {
+    let mut app = library_app();
+    let task = app.notify(Kind::Downloads, Some("5"), "Download complete", "[FAKE]");
+    assert_eq!(task.units(), 1, "its wait");
+    assert_eq!(app.toasts.len(), 1);
+    let ticks = format!("{:?}", app.subscription());
+    let none = format!("{:?}", {
+        let mut quiet = library_app();
+        quiet.toasts.clear();
+        quiet.subscription()
+    });
+    assert_eq!(ticks, none, "no tick while it shows");
+}
+
 /// The page a card opens goes back to the library where it was scrolled.
 #[test]
 fn a_game_opened_from_a_card_goes_back_to_where_the_library_was() {

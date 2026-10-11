@@ -630,13 +630,6 @@ impl App {
         } else {
             Subscription::none()
         };
-        // Cards in the window's corner go once their time is over.
-        let toasts = if self.toasts.is_empty() {
-            Subscription::none()
-        } else {
-            iced::time::every(std::time::Duration::from_millis(500))
-                .map(|now| Message::Notify(notify::NotifyMsg::Expire(now)))
-        };
         let steam_games = if self.watching_steam() {
             iced::time::every(steam::LOOK_EVERY).map(|_| Message::Steam(steam::SteamMsg::Look))
         } else {
@@ -652,7 +645,6 @@ impl App {
             frames,
             update_checks,
             downloads,
-            toasts,
             steam_games,
             steam_downloads,
             iced::window::events().filter_map(focus_message),

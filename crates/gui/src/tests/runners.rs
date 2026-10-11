@@ -55,11 +55,15 @@ fn turning_github_off_stops_a_download_and_a_stopped_update_lists_the_builds_aga
         "its Stop button is gone with the rest"
     );
 
-    // An update stopped or failed may have installed and pruned some builds first.
-    for result in [Err(None), Err(Some("GitHub did not answer".into()))] {
+    // An update stopped or failed may have installed and pruned some builds first; one that
+    // failed says why in a card, which goes after a wait of its own.
+    for (result, units) in [
+        (Err(None), 1),
+        (Err(Some("GitHub did not answer".into())), 2),
+    ] {
         app.runners.updating = true;
         let task = app.update_runners(RunnersMsg::Updated(result));
-        assert_eq!(task.units(), 1, "the Proton menus are listed again");
+        assert_eq!(task.units(), units, "the Proton menus are listed again");
     }
 }
 

@@ -127,7 +127,10 @@ impl App {
             if self.toasts.len() > AT_ONCE {
                 self.toasts.remove(0);
             }
-            return Task::none();
+            // One wait of its own rather than a tick while cards show, each a frame.
+            return Task::perform(async { tokio::time::sleep(SHOWN_FOR).await }, |()| {
+                Message::Notify(NotifyMsg::Expire(Instant::now()))
+            });
         }
         let image = game.and_then(|id| self.cover_file(id));
         Task::future(async move {
