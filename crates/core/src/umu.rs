@@ -119,8 +119,8 @@ mod tests {
     #[test]
     fn listed_games_get_their_id_and_others_the_unknown_one() {
         assert_eq!(
-            parse(&json!([{"title": "Cyberpunk 2077", "umu_id": "umu-1091500"}])),
-            "umu-1091500"
+            parse(&json!([{"title": "[FAKE] Game", "umu_id": "umu-1000000"}])),
+            "umu-1000000"
         );
         assert_eq!(parse(&json!([])), UNKNOWN);
         assert_eq!(parse(&json!({"error": "no such game"})), UNKNOWN);

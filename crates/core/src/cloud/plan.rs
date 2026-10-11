@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn missing_local_root_brings_the_cloud_back() {
-        // Hollow Knight after a reinstall: the new prefix has no save folder, the history remains.
+        // A game after a reinstall: the new prefix has no save folder, the history remains.
         let p = run(
             &[],
             false,

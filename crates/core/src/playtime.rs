@@ -184,7 +184,7 @@ mod tests {
                 "INSERT INTO sessions (id, game_id, user_id, started_at, ended_at, state, reported) VALUES
                    (1, '../../users/x', 'me', 1000, 1600, 'ended', 0),
                    (2, '1?a=b', 'me', 2000, 2600, 'ended', 0),
-                   (3, '1456487183', 'me', 3000, 3600, 'ended', 0);",
+                   (3, '1000000001', 'me', 3000, 3600, 'ended', 0);",
             )
             .unwrap();
         let pending = unreported(&db, "me").unwrap();

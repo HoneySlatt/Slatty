@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn parses_remote_config() {
         let v = json!({"content": {"Windows": {"cloudStorage": {"enabled": true,
-            "locations": [{"name": "saves", "location": "<?SAVED_GAMES?>/id Software/DOOM/base"}]}}}});
+            "locations": [{"name": "saves", "location": "<?SAVED_GAMES?>/[FAKE] Studio/Game/base"}]}}}});
         assert_eq!(parse(&v, "c").unwrap().unwrap()[0].name, "saves");
         let off =
             json!({"content": {"Windows": {"cloudStorage": {"enabled": false, "locations": []}}}});
@@ -259,11 +259,11 @@ mod tests {
         let root = std::env::temp_dir().join(format!("slatty-loc-empty-{}", std::process::id()));
         assert_eq!(
             resolve(
-                "<?APPLICATION_DATA_LOCAL_LOW?>/Team Cherry/Hollow Knight",
+                "<?APPLICATION_DATA_LOCAL_LOW?>/[FAKE] Studio/Game",
                 &install(&root)
             )
             .unwrap(),
-            root.join("pfx/drive_c/users/steamuser/AppData/LocalLow/Team Cherry/Hollow Knight")
+            root.join("pfx/drive_c/users/steamuser/AppData/LocalLow/[FAKE] Studio/Game")
         );
         assert!(!root.exists(), "nothing is created");
     }

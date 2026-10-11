@@ -415,7 +415,7 @@ fn an_installer_in_several_parts_leaves_the_rest_installable() {
 
 #[test]
 fn reads_the_linux_installers_of_a_game_and_its_dlc() {
-    let raw = br#"{"id":1308320804,"title":"Hollow Knight","downloads":{"installers":[
+    let raw = br#"{"id":1000000001,"title":"[FAKE] Game","downloads":{"installers":[
         {"id":"installer_windows_en","os":"windows","language":"en","version":"1.5","files":[{"id":"a","downlink":"w"}]},
         {"id":"installer_linux_en","os":"linux","language":"en","version":"1.5.12620","files":[{"id":"en3installer0","downlink":"https://api.gog.com/x"}]}]},
         "expanded_dlcs":[
@@ -424,9 +424,9 @@ fn reads_the_linux_installers_of_a_game_and_its_dlc() {
             {"os":"linux","language":"fr","version":null,"files":[{"downlink":"f"}]},
             {"os":"linux","language":"en","version":"2","files":[{"downlink":"e"}]}]}}]}"#;
     let offer = parse_offer(raw).unwrap();
-    assert_eq!(offer.title, "Hollow Knight");
+    assert_eq!(offer.title, "[FAKE] Game");
     assert_eq!(offer.installers.len(), 1);
-    assert_eq!(offer.installers[0].product_id, "1308320804");
+    assert_eq!(offer.installers[0].product_id, "1000000001");
     assert_eq!(offer.installers[0].version, "1.5.12620");
     assert_eq!(
         offer.dlcs.len(),

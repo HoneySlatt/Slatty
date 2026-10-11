@@ -438,7 +438,7 @@ fn folder_name(title: &str) -> String {
 mod tests {
     #[test]
     fn folder_names_drop_what_file_systems_mind() {
-        assert_eq!(super::folder_name("Hollow Knight"), "Hollow Knight");
+        assert_eq!(super::folder_name("Some Game"), "Some Game");
         assert_eq!(
             super::folder_name("The Witcher 3: Wild Hunt"),
             "The Witcher 3 Wild Hunt"

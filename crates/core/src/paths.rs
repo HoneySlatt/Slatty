@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn game_ids_unsafe_in_a_file_name_are_refused() {
-        assert!(check_game_id("1456487183").is_ok());
+        assert!(check_game_id("1000000001").is_ok());
         for id in ["", "..", "../1", "1/2", "1.2", "-1", "4 4", "é"] {
             assert!(
                 matches!(check_game_id(id), Err(Error::Refused(_))),

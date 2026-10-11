@@ -406,15 +406,15 @@ mod tests {
     fn maps_gamesdb_release() {
         let v = json!({
             "type": "game",
-            "title": {"*": " Tomb Raider "},
+            "title": {"*": " [FAKE] Game "},
             "supported_operating_systems": [{"slug": "windows"}],
             "game": {
                 "visible_in_library": true,
                 "vertical_cover": {"url_format": "https://img/abc{formatter}.{ext}"}
             }
         });
-        let g = from_gamesdb("1724969043", &v).unwrap();
-        assert_eq!(g.title, "Tomb Raider");
+        let g = from_gamesdb("1000000001", &v).unwrap();
+        assert_eq!(g.title, "[FAKE] Game");
         assert_eq!(g.cover.as_deref(), Some("https://img/abc.jpg"));
         assert_eq!(g.os, vec!["windows"]);
     }

@@ -469,11 +469,11 @@ mod tests {
         let home = std::env::temp_dir().join(format!("slatty-protons-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         let steam = home.join(".local/share/Steam");
-        let nas = home.join("games/SteamLibrary");
+        let library = home.join("games/SteamLibrary");
         build(&steam.join("compatibilitytools.d/GE-Proton"));
         build(&steam.join("steamapps/common/Proton - Experimental"));
-        build(&nas.join("steamapps/common/Proton 10.0"));
-        std::fs::create_dir_all(nas.join("steamapps/common/Some Game")).unwrap();
+        build(&library.join("steamapps/common/Proton 10.0"));
+        std::fs::create_dir_all(library.join("steamapps/common/Some Game")).unwrap();
         build(&home.join(".local/share/umu/compatibilitytools/GE-Proton"));
         build(&home.join(".local/share/umu/compatibilitytools/UMU-Proton-10.0-4"));
         std::fs::write(
@@ -481,7 +481,7 @@ mod tests {
             format!(
                 "\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{}\"\n\t}}\n\t\"1\"\n\t{{\n\t\t\"path\"\t\t\"{}\"\n\t}}\n}}\n",
                 steam.display(),
-                nas.display()
+                library.display()
             ),
         )
         .unwrap();

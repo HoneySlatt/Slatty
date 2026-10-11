@@ -680,7 +680,7 @@ mod tests {
     fn umu_gets_the_games_id_or_the_unknown_one() {
         let dirs = Dirs::under(Path::new("/nonexistent"));
         let mut install = Install {
-            game_id: "1423049311".into(),
+            game_id: "1000000002".into(),
             title: "[FAKE] Game".into(),
             platform: Platform::Windows,
             path: "/games/Game".into(),
@@ -710,7 +710,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("slatty-isolated-{}", std::process::id()));
         let dirs = Dirs::under(&root);
         let mut install = Install {
-            game_id: "1423049311".into(),
+            game_id: "1000000002".into(),
             title: "[FAKE] Game".into(),
             platform: Platform::Windows,
             path: "/games/Game Remastered".into(),
@@ -720,7 +720,7 @@ mod tests {
             isolated: true,
         };
         let env = umu_env(&dirs, &install, Path::new("/proton"), Path::new("/prefix")).unwrap();
-        let home = dirs.data.join("homes/1423049311");
+        let home = dirs.data.join("homes/1000000002");
         let home_str = home.to_str().unwrap();
         assert_eq!(value(&env, "PRESSURE_VESSEL_HOME"), Some(home_str));
         assert!(home.is_dir(), "made ready for the container");
@@ -732,7 +732,7 @@ mod tests {
         for shared in [
             umu_data(),
             crate::setup::redist_dir(&dirs),
-            crate::installer::support_dir(&dirs, "1423049311"),
+            crate::installer::support_dir(&dirs, "1000000002"),
         ] {
             assert!(read_only.contains(shared.to_str().unwrap()), "{read_only}");
         }
@@ -804,7 +804,7 @@ mod tests {
     #[test]
     fn valve_builds_get_steam_client_library_links_in_the_game_home() {
         assert!(valve_proton(Path::new(
-            "/mnt/share/SteamLibrary/steamapps/common/Proton - Experimental"
+            "/mnt/games/SteamLibrary/steamapps/common/Proton - Experimental"
         )));
         assert!(!valve_proton(Path::new(
             "/home/u/.local/share/Steam/compatibilitytools.d/GE-Proton11-7"
@@ -900,8 +900,8 @@ mod tests {
     #[test]
     fn programs_are_named_so_that_umu_shares_nothing_more() {
         assert_eq!(
-            windows_path(Path::new("/mnt/share/Games/Game/bin/game.exe")),
-            "Z:\\NAS\\Games\\Game\\bin\\game.exe"
+            windows_path(Path::new("/mnt/games/Game/bin/game.exe")),
+            "Z:\\mnt\\games\\Game\\bin\\game.exe"
         );
         let dir = std::env::temp_dir().join(format!("slatty-interp-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
