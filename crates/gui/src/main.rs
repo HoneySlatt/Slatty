@@ -527,7 +527,7 @@ fn key_message(event: keyboard::Event) -> Option<Message> {
 
 impl Message {
     /// Whether the message leaves the games the Library and Achievements tabs list as they were:
-    /// those that come many times a second.
+    /// those that come many times a second, and others that change none of them.
     fn keeps_lists(&self) -> bool {
         if let Message::AccountResult(_, message) = self {
             return message.keeps_lists();
@@ -539,6 +539,7 @@ impl Message {
                 | Message::Frame(_)
                 | Message::WindowResized(_)
                 | Message::Cover(..)
+                | Message::Steam(steam::SteamMsg::Cover(..))
                 | Message::CachedCovers(_)
                 | Message::Image(..)
                 | Message::Key(_)
@@ -561,6 +562,29 @@ impl Message {
                 )
                 | Message::Runners(runners::RunnersMsg::Listed(..))
                 | Message::Updates(updates::UpdatesMsg::Checked(..))
+                // Typing in a dialog (a title is saved by `EditMsg::Save`, not here), a right
+                // click, a dialog, the filter bar or a notice opened or closed.
+                | Message::Edit(
+                    edit::EditMsg::Title(_)
+                        | edit::EditMsg::SortTitle(_)
+                        | edit::EditMsg::PickerQuery(_)
+                        | edit::EditMsg::Menu(_)
+                        | edit::EditMsg::At(_)
+                )
+                | Message::Add(
+                    add::AddMsg::Title(_)
+                        | add::AddMsg::Program(_)
+                        | add::AddMsg::Args(_)
+                        | add::AddMsg::Folder(_)
+                        | add::AddMsg::Installer(_)
+                        | add::AddMsg::Into(_)
+                )
+                | Message::Install(InstallMsg::RootInput(..) | InstallMsg::FreeSpace(..))
+                | Message::Avatar(_)
+                | Message::ToggleFilters
+                | Message::OpenDialog(..)
+                | Message::CloseDialog
+                | Message::DismissNotice
         )
     }
 }

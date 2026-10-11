@@ -143,6 +143,48 @@ fn a_cover_offers_no_install_for_a_product_gog_does_not_offer() {
     assert_eq!(install_dialogs(&app), 0);
 }
 
+/// What changes no list (Steam's covers arriving, typing in a dialog, a right click, a dialog
+/// opened) keeps the lists made, each made again in about 2 ms at 11,000 games; a title saved
+/// does not.
+#[test]
+fn messages_that_change_no_list_keep_the_lists() {
+    use crate::add::AddMsg;
+    use crate::edit::EditMsg;
+    use crate::steam::SteamMsg;
+    let kept = |app: &mut App, message: Message| {
+        let _ = app.games_by_achievements();
+        let _ = app.update(message);
+        app.lists.achievements.borrow().is_some()
+    };
+    let mut app = library_app();
+    for message in [
+        Message::Steam(SteamMsg::Cover("steam-440".into(), None)),
+        Message::Edit(EditMsg::Menu("4".into())),
+        Message::Edit(EditMsg::At(iced::Point::new(10.0, 10.0))),
+        Message::Edit(EditMsg::Title("[FAKE] Typed".into())),
+        Message::Edit(EditMsg::SortTitle("[FAKE] Typed".into())),
+        Message::Edit(EditMsg::PickerQuery("[FAKE] Typed".into())),
+        Message::Add(AddMsg::Title("[FAKE] Typed".into())),
+        Message::Add(AddMsg::Program("/games/[FAKE]".into())),
+        Message::Add(AddMsg::Args("--[FAKE]".into())),
+        Message::Add(AddMsg::Folder("/games".into())),
+        Message::Add(AddMsg::Installer("/downloads/[FAKE]".into())),
+        Message::Add(AddMsg::Into("/games".into())),
+        Message::Install(InstallMsg::RootInput("5".into(), "/games/[FAKE]".into())),
+        Message::Install(InstallMsg::FreeSpace("5".into(), "/games".into(), Some(1))),
+        Message::Avatar(None),
+        Message::ToggleFilters,
+        Message::OpenDialog("5".into(), Panel::Install),
+        Message::CloseDialog,
+        Message::DismissNotice,
+    ] {
+        let name = format!("{message:?}");
+        assert!(kept(&mut app, message), "{name}");
+    }
+    let _ = app.update(Message::Edit(EditMsg::Open("4".into())));
+    assert!(!kept(&mut app, Message::Edit(EditMsg::Save)));
+}
+
 #[test]
 fn login_screen_offers_browser_login_without_password_field() {
     let app = App {
