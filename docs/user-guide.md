@@ -472,7 +472,8 @@ slatty uninstall <game-id> --delete-prefix
 - It deletes only the files it installed. Anything else in the game folder is kept and listed:
   saves stored there, mods, configuration files.
 - The Wine prefix, where most saves live, is kept unless you pass `--delete-prefix`. Even then, its
-  `users` folder is copied to `~/.local/share/slatty/backups/prefixes/` first.
+  `users` folder is copied to `~/.local/share/slatty/backups/prefixes/` first, and only the prefix
+  SlattyLauncher made for that game (`prefixes/<game-id>`) is ever deleted.
 
 The interface offers the same actions in the game's Manage panel (⋮).
 

@@ -113,11 +113,13 @@ pub fn uninstall(
     let _busy = crate::lock::game(dirs, game_id)?;
     let (install, record) = installed_by_slatty(db, dirs, game_id)?;
     let prefix = install.runner.prefix().filter(|_| delete_prefix);
+    // Exactly the prefix made for this game: a path below the prefixes folder can also name the
+    // folder of every prefix, another game's, or climb out with `..`.
     if let Some(p) = prefix
-        && !p.starts_with(dirs.data.join("prefixes"))
+        && p != dirs.data.join("prefixes").join(game_id)
     {
         return Err(Error::Refused(format!(
-            "{} was not created by slatty; nothing was deleted",
+            "{} is not the prefix slatty made for this game; nothing was deleted",
             p.display()
         )));
     }
@@ -867,6 +869,36 @@ mod tests {
         assert!(env.game().join("Game.exe").exists());
         assert!(prefix.join("drive_c").exists());
         assert!(Install::get(&env.db, "1").unwrap().is_some());
+    }
+
+    /// Only the game's own prefix is ever deleted: a runner naming the folder of every prefix,
+    /// another game's prefix or a path climbing out of one (a game imported with such a
+    /// `--prefix`) is refused before anything is deleted.
+    #[test]
+    fn only_the_games_own_prefix_is_deleted() {
+        let env = Env::new("other-prefix", true);
+        let other = env.dirs.data.join("prefixes/2/drive_c/users/steamuser");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("save.dat"), b"other save").unwrap();
+        for prefix in ["prefixes", "prefixes/2", "prefixes/1/.."] {
+            let mut install = Install::get(&env.db, "1").unwrap().unwrap();
+            install.runner = Runner::Umu {
+                proton: "/p".into(),
+                prefix: env.dirs.data.join(prefix),
+            };
+            install.save(&env.db).unwrap();
+            let result = uninstall(&env.db, &env.dirs, "1", true);
+            assert!(
+                matches!(result, Err(Error::Refused(_))),
+                "{prefix}: {result:?}"
+            );
+            assert_eq!(
+                std::fs::read(other.join("save.dat")).unwrap(),
+                b"other save",
+                "{prefix}"
+            );
+            assert!(env.game().join("Game.exe").exists(), "{prefix}");
+        }
     }
 
     #[test]
