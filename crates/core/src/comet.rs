@@ -37,8 +37,7 @@ impl Comet {
                 "XDG_RUNTIME_DIR is not set; refusing to write tokens to disk".into(),
             )
         })?;
-        let private_dir = runtime.join(format!("comet-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&private_dir);
+        let private_dir = private_dir(runtime)?;
         let token_file = private_dir.join("cache/lutris/.gog.token");
         write_private(&private_dir, &token_file, tokens)?;
 
@@ -125,6 +124,49 @@ impl Drop for Comet {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.private_dir);
     }
+}
+
+/// The folder of this process's handoff, made anew in `runtime` (`$XDG_RUNTIME_DIR/slatty`). The
+/// tokens go there, so the folders on the way must be the user's alone: some sessions point
+/// `XDG_RUNTIME_DIR` at a folder others can write. Handoffs of launchers no longer running (killed
+/// while Comet started) are removed on the way.
+fn private_dir(runtime: &Path) -> Result<PathBuf> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    // The process's own entry belongs to the user it runs as.
+    let me = std::fs::metadata("/proc/self").map(|m| m.uid()).ok();
+    let theirs = |p: &Path| {
+        !std::fs::symlink_metadata(p)
+            .is_ok_and(|m| m.is_dir() && Some(m.uid()) == me && m.mode() & 0o077 == 0)
+    };
+    let refused = || {
+        Error::Refused(
+            "XDG_RUNTIME_DIR is not a folder of yours alone; refusing to write tokens there".into(),
+        )
+    };
+    if runtime.parent().is_none_or(theirs) {
+        return Err(refused());
+    }
+    match std::fs::DirBuilder::new().mode(0o700).create(runtime) {
+        Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => {
+            return Err(Error::io(format!("create {}", runtime.display()), e));
+        }
+        _ if theirs(runtime) => return Err(refused()),
+        _ => {}
+    }
+    for entry in std::fs::read_dir(runtime).into_iter().flatten().flatten() {
+        let name = entry.file_name();
+        let pid = name.to_str().and_then(|n| n.strip_prefix("comet-"));
+        if pid.is_some_and(|p| p.parse::<u32>().is_ok() && !Path::new("/proc").join(p).exists()) {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+    let dir = runtime.join(format!("comet-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&dir)
+        .map_err(|e| Error::io(format!("create {}", dir.display()), e))?;
+    Ok(dir)
 }
 
 fn write_private(private_dir: &Path, token_file: &Path, tokens: &Tokens) -> Result<()> {
@@ -282,6 +324,49 @@ mod tests {
 
     use super::*;
     use crate::secret::Secret;
+
+    /// The tokens go through `$XDG_RUNTIME_DIR`, which some sessions point at a folder others can
+    /// write: there, anyone could plant the handoff's folders beforehand and swap what Comet reads.
+    #[test]
+    fn a_runtime_folder_others_can_open_is_refused() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("slatty-comet-shared-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        for (mode, refused) in [(0o777, true), (0o755, true), (0o700, false)] {
+            std::fs::set_permissions(&root, std::fs::Permissions::from_mode(mode)).unwrap();
+            let r = private_dir(&root.join("slatty"));
+            assert_eq!(
+                matches!(r, Err(Error::Refused(_))),
+                refused,
+                "{mode:o}: {r:?}"
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A launcher killed while Comet started left the tokens in its handoff folder: the next
+    /// Comet start removes those of processes no longer running.
+    #[test]
+    fn handoffs_left_by_a_killed_launcher_are_removed() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("slatty-comet-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let runtime = root.join("slatty");
+        // Above the kernel's highest process id: never running.
+        let stale = runtime.join("comet-4194305/cache/lutris");
+        std::fs::create_dir_all(&stale).unwrap();
+        std::fs::write(stale.join(".gog.token"), "[FAKE]").unwrap();
+        std::fs::create_dir_all(runtime.join("other")).unwrap();
+        for dir in [&root, &runtime] {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let mine = private_dir(&runtime).unwrap();
+        assert!(mine.is_dir());
+        assert!(!runtime.join("comet-4194305").exists());
+        assert!(runtime.join("other").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn token_file_is_private() {

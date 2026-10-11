@@ -9,7 +9,7 @@ use slatty_core::secret::Secret;
 #[ignore]
 async fn comet_gets_tokens_without_argv_and_cleans_up() {
     let root = std::env::temp_dir().join(format!("slatty-comet-it-{}", std::process::id()));
-    let dirs = Dirs::under(&root);
+    let dirs = private_dirs(&root);
     let tokens = Tokens {
         user_id: "1234".into(),
         access_token: Secret::new("FAKE-ACCESS-TOKEN-xyz"),
@@ -56,7 +56,7 @@ async fn comet_gets_tokens_without_argv_and_cleans_up() {
 async fn comets_log_never_holds_the_refresh_token() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let root = std::env::temp_dir().join(format!("slatty-comet-log-{}", std::process::id()));
-    let dirs = Dirs::under(&root);
+    let dirs = private_dirs(&root);
     let tokens = Tokens {
         user_id: "1234".into(),
         access_token: Secret::new("FAKE-ACCESS-TOKEN-xyz"),
@@ -104,6 +104,14 @@ fn auth_info_request(client_id: &str, client_secret: &str) -> Vec<u8> {
     out.extend(header);
     out.extend(request);
     out
+}
+
+/// Folders under `root`, which stands for `XDG_RUNTIME_DIR` too and is therefore the user's alone.
+fn private_dirs(root: &std::path::Path) -> Dirs {
+    use std::os::unix::fs::DirBuilderExt;
+    let _ = std::fs::remove_dir_all(root);
+    std::fs::DirBuilder::new().mode(0o700).create(root).unwrap();
+    Dirs::under(root)
 }
 
 fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
