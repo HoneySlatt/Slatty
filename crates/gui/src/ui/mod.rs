@@ -274,7 +274,7 @@ impl App {
             .as_ref()
             .and_then(|u| self.images.get(u))
             .cloned();
-        let account = button(avatar(picture, initial, 34.0))
+        let account = button(avatar(picture, initial, 34.0, self.account.is_some()))
             .padding(0)
             .on_press(Message::ShowPage(Page::Settings))
             .style(theme::plain);

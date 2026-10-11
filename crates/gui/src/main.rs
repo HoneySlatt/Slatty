@@ -280,7 +280,8 @@ pub struct App {
     pub runners: runners::RunnersView,
     /// Steam's games beside GOG's (Settings → Steam).
     pub steam: steam::SteamView,
-    /// GOG's sign-in asked for from Settings, while Steam's games show without GOG.
+    /// GOG's sign-in asked for from Settings, while Steam's games or those added by hand show
+    /// without GOG.
     pub login_open: bool,
     /// Games updated without asking (Settings → Installs).
     pub updates: updates::AutoUpdates,
@@ -483,7 +484,8 @@ pub enum Message {
     Settings(SettingsMsg),
     Runners(runners::RunnersMsg),
     Steam(steam::SteamMsg),
-    /// Shows GOG's sign-in, or goes back from it, while Steam's games show without GOG.
+    /// Shows GOG's sign-in, or goes back from it, while Steam's games or those added by hand show
+    /// without GOG.
     ShowLogin(bool),
     Updates(updates::UpdatesMsg),
     DismissNotice,
@@ -972,8 +974,12 @@ impl App {
         Task::none()
     }
 
-    /// Escape: closes the panel, else the game page, else the per-game achievements page.
+    /// Escape: closes GOG's sign-in opened from Settings, the panel, else the game page, else the
+    /// per-game achievements page.
     fn go_back(&mut self) {
+        if std::mem::take(&mut self.login_open) {
+            return;
+        }
         if self.quit_confirm.take().is_some() {
             return;
         }

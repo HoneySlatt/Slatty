@@ -168,27 +168,26 @@ impl App {
             .spacing(8),
         ]
         .push(self.steam.found.is_some().then(|| {
-            let (label, msg) = if self.steam.on {
-                ("Back to the library", Message::ShowLogin(false))
-            } else {
-                (
-                    "Use my Steam games without GOG",
-                    Message::Steam(crate::steam::SteamMsg::Switch(true)),
-                )
-            };
-            column![
-                note(
-                    "Steam is installed here: its games can show in the library too, read from the \
-                     Steam client's files and run by the client. GOG's games run isolated from \
-                     your files and need no client: where you have the choice, GOG is the better \
-                     one for your privacy and security."
-                ),
-                button(text(label))
+            column![note(
+                "Steam is installed here: its games can show in the library too, read from the \
+                 Steam client's files and run by the client. GOG's games run isolated from \
+                 your files and need no client: where you have the choice, GOG is the better \
+                 one for your privacy and security."
+            )]
+            .push((!self.steam.on).then(|| {
+                button(text("Use my Steam games without GOG"))
                     .padding([10, 16])
-                    .on_press(msg)
-                    .style(theme::tonal),
-            ]
+                    .on_press(Message::Steam(crate::steam::SteamMsg::Switch(true)))
+                    .style(theme::tonal)
+            }))
             .spacing(10)
+        }))
+        // Opened from Settings, while the library shows games without GOG.
+        .push(self.login_open.then(|| {
+            button(text("Back to the library"))
+                .padding([10, 16])
+                .on_press(Message::ShowLogin(false))
+                .style(theme::tonal)
         }))
         .spacing(18)
         .max_width(720);
@@ -720,10 +719,19 @@ impl App {
 
     fn account_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         if self.account.is_none() {
+            let added = self
+                .installs
+                .keys()
+                .any(|id| slatty_core::store::is_local(id));
+            let shown = match (self.steam.on, added) {
+                (true, true) => "your Steam games and the games added by hand",
+                (true, false) => "your Steam games",
+                _ => "the games added by hand",
+            };
             return vec![setting(
                 wide,
                 "GOG",
-                note("Not signed in: only your Steam games show."),
+                note(format!("Not signed in: only {shown} show.")),
                 Some(action("Sign in to GOG", Message::ShowLogin(true))),
             )];
         }

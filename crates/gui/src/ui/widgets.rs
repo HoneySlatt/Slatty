@@ -74,11 +74,12 @@ pub fn vertical_rule<'a>(height: f32) -> Element<'a, Message> {
         .into()
 }
 
-/// The account picture (or its initial) with the signed-in dot.
+/// The account picture (or its initial), with the signed-in dot once signed in to GOG.
 pub fn avatar<'a>(
     picture: Option<image::Handle>,
     initial: String,
     size: f32,
+    signed_in: bool,
 ) -> Element<'a, Message> {
     let face: Element<'a, Message> = match picture {
         Some(h) => image(h)
@@ -96,15 +97,16 @@ pub fn avatar<'a>(
         .width(size * 0.3)
         .height(size * 0.3)
         .style(theme::status_dot);
-    stack![
-        face,
-        container(dot)
-            .width(size)
-            .height(size)
-            .align_right(size)
-            .align_bottom(size),
-    ]
-    .into()
+    stack![face]
+        .push(signed_in.then(|| {
+            container(dot)
+                .id("signed-in")
+                .width(size)
+                .height(size)
+                .align_right(size)
+                .align_bottom(size)
+        }))
+        .into()
 }
 
 /// A titled block of the settings page or of a panel.

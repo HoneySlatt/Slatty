@@ -76,6 +76,31 @@ fn games_added_by_hand_show_without_a_gog_account() {
     );
 }
 
+/// Without Steam, GOG's sign-in opened from Settings goes back to the games added by hand, by its
+/// button or Escape; Settings says which games show without GOG.
+#[test]
+fn gogs_sign_in_from_settings_goes_back_to_the_games_added_by_hand() {
+    let mut app = added_app();
+    app.logged_out();
+    app.page = Page::Settings;
+    assert!(
+        render(&app)
+            .find("Not signed in: only the games added by hand show.")
+            .is_ok()
+    );
+    let _ = app.update(Message::ShowLogin(true));
+    let mut ui = render(&app);
+    ui.click("Back to the library").unwrap();
+    for m in ui.into_messages().collect::<Vec<_>>() {
+        let _ = app.update(m);
+    }
+    assert!(render(&app).find("Open the GOG sign-in page").is_err());
+
+    let _ = app.update(Message::ShowLogin(true));
+    app.go_back();
+    assert!(!app.login_open, "Escape goes back too");
+}
+
 /// Its title is the one it was added with until the user renames it, and comes back with Reset.
 #[test]
 fn a_game_added_by_hand_gets_its_own_title_back_with_reset() {

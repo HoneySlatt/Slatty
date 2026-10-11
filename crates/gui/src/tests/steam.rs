@@ -91,6 +91,38 @@ fn steam_games_show_without_gog_once_chosen() {
     assert!(render(&app).find("Back to the library").is_ok());
 }
 
+/// Signing in to GOG from Settings leaves the sign-in page for the library, and only then does the
+/// avatar show the signed-in dot.
+#[test]
+fn signing_in_to_gog_from_settings_leaves_the_sign_in_page() {
+    let mut app = App {
+        core: Some(core()),
+        ..Default::default()
+    };
+    app.steam.found = Some("[FAKE] Player".into());
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    assert!(
+        render(&app)
+            .find(iced_test::selector::id("signed-in"))
+            .is_err(),
+        "not signed in to GOG"
+    );
+    let _ = app.update(Message::ShowLogin(true));
+    assert!(render(&app).find("Open the GOG sign-in page").is_ok());
+
+    let _ = app.update(Message::LoggedIn(Ok((
+        AccountInfo {
+            user_id: "0".into(),
+            username: "testeur".into(),
+        },
+        None,
+    ))));
+    let mut ui = render(&app);
+    assert!(ui.find("Open the GOG sign-in page").is_err());
+    assert!(ui.find(iced_test::selector::id("signed-in")).is_ok());
+}
+
 /// GOG's and Steam's games share one library: a refresh of GOG's or signing out of GOG keeps
 /// Steam's, and turning Steam off takes them out.
 #[test]

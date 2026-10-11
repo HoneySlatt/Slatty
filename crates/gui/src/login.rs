@@ -65,6 +65,7 @@ impl App {
         }
         self.account_epoch += 1;
         self.account = Some(info);
+        self.login_open = false;
         let avatar = self.fetch_avatar();
         let updates = self.update_updates(crate::updates::UpdatesMsg::Check);
         Task::batch([
