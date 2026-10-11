@@ -909,7 +909,9 @@ pub(crate) fn unpack_tar(
         std::fs::remove_dir_all(to)
             .map_err(|e| Error::io(format!("delete {}", to.display()), e))?;
     }
-    crate::paths::ensure_dir(to)?;
+    // Made new, never taken as found: a link put there meanwhile would have every file written
+    // where it leads.
+    std::fs::create_dir(to).map_err(|e| Error::io(format!("create {}", to.display()), e))?;
     let file = std::fs::File::open(archive).map_err(|e| Error::io(context(), e))?;
     let total = file.metadata().map(|m| m.len()).unwrap_or(0);
     let read = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
