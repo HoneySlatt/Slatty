@@ -168,7 +168,9 @@ impl<S: ContentSource> Download<'_, S> {
         let checked = self.fill(set, dir, repair).await?;
         if repair {
             for d in &set.dirs {
-                crate::paths::ensure_dir(&dir.join(d))?;
+                let d = dir.join(d);
+                refuse_outside(dir, &d)?;
+                crate::paths::ensure_dir(&d)?;
             }
         }
         Ok(checked)

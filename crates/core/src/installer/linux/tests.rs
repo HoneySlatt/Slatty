@@ -443,6 +443,82 @@ fn reads_the_linux_installers_of_a_game_and_its_dlc() {
     );
 }
 
+/// A game writes its folder: a folder of links it replaced with a link out of it never leads a
+/// repair to delete or link anything there.
+#[tokio::test]
+async fn a_repair_never_makes_links_through_a_folder_the_game_replaced() {
+    let source = Fake::new(vec![game(&big()), dlc()]);
+    let set = LinuxSet::new(&parts(&source).await).unwrap();
+    let root = temp("planted-folder");
+    let target = root.join("Game");
+    let dl = LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &plenty,
+    };
+    dl.run(&set, &root.join(".p"), &target).await.unwrap();
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("libfoo.so"), b"[FAKE] user file").unwrap();
+    std::fs::remove_dir_all(target.join("game/lib")).unwrap();
+    std::os::unix::fs::symlink(&outside, target.join("game/lib")).unwrap();
+    let result = dl.check_installed(&set, &target, true).await;
+    assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
+    assert_eq!(
+        std::fs::read(outside.join("libfoo.so")).unwrap(),
+        b"[FAKE] user file"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// Nor are the installer's empty folders made there.
+#[tokio::test]
+async fn a_repair_never_makes_folders_through_a_folder_the_game_replaced() {
+    let bytes = installer(
+        b"#!/bin/sh\n",
+        &[
+            File {
+                name: "data/noarch/saves/profiles/",
+                data: b"",
+                mode: 0o40755,
+                deflate: false,
+            },
+            File {
+                name: "data/noarch/game.bin",
+                data: b"game",
+                mode: 0o100644,
+                deflate: false,
+            },
+        ],
+        false,
+    );
+    let source = Fake::new(vec![bytes]);
+    let set = LinuxSet::new(&[Part {
+        installer: installer_of("1"),
+        entries: read_entries(&source, 0).await.unwrap(),
+    }])
+    .unwrap();
+    let root = temp("planted-dirs");
+    let target = root.join("Game");
+    let dl = LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &plenty,
+    };
+    dl.run(&set, &root.join(".p"), &target).await.unwrap();
+    assert!(target.join("saves/profiles").is_dir());
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::remove_dir_all(target.join("saves")).unwrap();
+    std::os::unix::fs::symlink(&outside, target.join("saves")).unwrap();
+    let result = dl.check_installed(&set, &target, true).await;
+    assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
+    assert!(!outside.join("profiles").exists());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[tokio::test]
 async fn links_chained_out_of_the_game_are_removed_and_never_written_through() {
     let link = |name, target: &'static [u8]| File {

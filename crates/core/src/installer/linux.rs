@@ -563,7 +563,9 @@ impl<S: Source> LinuxDownload<'_, S> {
         let mut bad = bad.into_inner().unwrap();
         if download {
             for d in &set.dirs {
-                crate::paths::ensure_dir(&dir.join(d))?;
+                let d = dir.join(d);
+                refuse_outside(dir, &d)?;
+                crate::paths::ensure_dir(&d)?;
             }
             if !bad.is_empty() {
                 fsutil::sync_filesystem(dir)?;
@@ -585,6 +587,9 @@ impl<S: Source> LinuxDownload<'_, S> {
         let raw = self.read_data(link).await?;
         let target = PathBuf::from(String::from_utf8_lossy(&raw).into_owned());
         let dest = dir.join(&link.path);
+        if download {
+            refuse_outside(dir, &dest)?;
+        }
         if !stays_inside(&link.path, &target) {
             // Nor is an older copy of it kept.
             if download && std::fs::read_link(&dest).is_ok() {

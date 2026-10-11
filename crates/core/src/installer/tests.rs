@@ -183,6 +183,38 @@ async fn downloading_cannot_truncate_a_temporary_symlink_target() {
     assert_eq!(std::fs::read(outside).unwrap(), b"keep");
 }
 
+/// A game writes its folder: an empty folder of the build, under one the game replaced with a
+/// link out of it, is never made there by a repair.
+#[tokio::test]
+async fn a_repair_never_makes_folders_through_a_folder_the_game_replaced() {
+    let mut env = Env::new("planted-dirs");
+    env.source
+        .manifests
+        .get_mut("m1")
+        .unwrap()
+        .push(DepotItem::DepotDirectory {
+            path: "saves\\profiles".into(),
+        });
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    assert!(env.target().join("saves/profiles").is_dir());
+    let outside = env.root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::remove_dir_all(env.target().join("saves")).unwrap();
+    std::os::unix::fs::symlink(&outside, env.target().join("saves")).unwrap();
+    let set = collect_files(&env.source, &env.depots).await.unwrap();
+    let free_space = |_: &Path| Ok(PLENTY);
+    let result = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    }
+    .check_installed(&set, &env.target(), true)
+    .await;
+    assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
+    assert!(!outside.join("profiles").exists());
+}
+
 #[tokio::test]
 async fn installs_verified_files_and_publishes_atomically() {
     let env = Env::new("ok");
