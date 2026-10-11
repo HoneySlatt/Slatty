@@ -428,6 +428,12 @@ impl App {
         self.apply_customs();
     }
 
+    /// Whether the Steam games switch can be used: to turn them on where Steam is found, and to
+    /// turn them off always (Steam may have been uninstalled since).
+    pub fn steam_switch_usable(&self) -> bool {
+        self.steam.found.is_some() || self.steam.on
+    }
+
     /// Whether Steam's Web API is to be asked: turned on, with a key saved, for Steam's games.
     pub fn asks_steam_web(&self) -> bool {
         self.steam.on && self.steam.web && self.steam.web_key == Some(true)

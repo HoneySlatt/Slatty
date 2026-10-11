@@ -608,9 +608,7 @@ impl App {
             column![
                 toggler(self.steam.on)
                     .on_toggle_maybe(
-                        self.steam
-                            .found
-                            .is_some()
+                        self.steam_switch_usable()
                             .then_some(|on| Message::Steam(SteamMsg::Switch(on))),
                     )
                     .size(22),

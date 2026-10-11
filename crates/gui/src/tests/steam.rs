@@ -693,6 +693,22 @@ fn each_store_counts_its_own_games_in_settings() {
     );
 }
 
+/// Steam's games can be turned on only where Steam is found, but always turned off: Steam
+/// uninstalled after they were turned on leaves the switch usable.
+#[test]
+fn steam_games_can_always_be_turned_off() {
+    let mut app = library_app();
+    assert!(!app.steam_switch_usable(), "nothing to turn on");
+    app.steam.found = Some("[FAKE] Player".into());
+    assert!(app.steam_switch_usable());
+    app.steam.on = true;
+    app.steam.found = None;
+    assert!(
+        app.steam_switch_usable(),
+        "Steam gone, the switch still turns off"
+    );
+}
+
 /// GOG is asked about GOG's games alone: Steam's never count as games GOG could not describe.
 #[test]
 fn steam_games_are_not_gogs_to_read() {
