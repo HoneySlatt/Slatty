@@ -98,9 +98,11 @@ impl CloudTransport for GogCloud {
     }
 
     async fn download(&self, name: &str) -> Result<Vec<u8>> {
-        http::bytes(
+        // A save can be far larger than any other answer.
+        http::bytes_up_to(
             self.request(reqwest::Method::GET, self.url(name)),
             "downloading a cloud save",
+            4 << 30,
         )
         .await
     }

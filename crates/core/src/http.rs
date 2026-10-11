@@ -59,15 +59,25 @@ pub async fn json<T: DeserializeOwned>(req: RequestBuilder, context: &'static st
     serde_json::from_slice(&raw).map_err(|e| Error::parse(context, e))
 }
 
-/// The body of a request that only reads. A request that failed on the way (dropped connection,
-/// timeout, rate limit, server error) is sent again, after one second then two.
+/// The body of a request that only reads, up to `MAX_BODY`. A request that failed on the way
+/// (dropped connection, timeout, rate limit, server error) is sent again, after one second then
+/// two.
 pub async fn bytes(req: RequestBuilder, context: &'static str) -> Result<Vec<u8>> {
+    bytes_up_to(req, context, MAX_BODY).await
+}
+
+/// `bytes`, for an answer that may be larger than `MAX_BODY` (a cloud save).
+pub async fn bytes_up_to(
+    req: RequestBuilder,
+    context: &'static str,
+    limit: u64,
+) -> Result<Vec<u8>> {
     let mut wait = FIRST_WAIT;
     for _ in 1..ATTEMPTS {
         let Some(attempt) = req.try_clone() else {
             break;
         };
-        match bytes_once(attempt, context).await {
+        match bytes_once(attempt, context, limit).await {
             Err(e) if e.is_temporary() => {
                 tokio::time::sleep(wait).await;
                 wait *= 2;
@@ -75,7 +85,27 @@ pub async fn bytes(req: RequestBuilder, context: &'static str) -> Result<Vec<u8>
             done => return done,
         }
     }
-    bytes_once(req, context).await
+    bytes_once(req, context, limit).await
+}
+
+/// The largest answer read into memory: far above any JSON, manifest or image these services
+/// send. Answers are decompressed as they arrive, so the limit applies to what they inflate to.
+pub const MAX_BODY: u64 = if cfg!(test) { 1 << 20 } else { 256 << 20 };
+
+/// The body of `resp`, refused once larger than `limit`.
+pub async fn read_up_to(mut resp: Response, context: &'static str, limit: u64) -> Result<Vec<u8>> {
+    let too_large = || Error::parse(context, "the answer is larger than expected");
+    if resp.content_length().is_some_and(|n| n > limit) {
+        return Err(too_large());
+    }
+    let mut body = Vec::new();
+    while let Some(piece) = resp.chunk().await.map_err(|e| Error::network(context, e))? {
+        if (body.len() + piece.len()) as u64 > limit {
+            return Err(too_large());
+        }
+        body.extend_from_slice(&piece);
+    }
+    Ok(body)
 }
 
 const ATTEMPTS: u32 = 3;
@@ -85,10 +115,8 @@ const FIRST_WAIT: Duration = if cfg!(test) {
     Duration::from_secs(1)
 };
 
-async fn bytes_once(req: RequestBuilder, context: &'static str) -> Result<Vec<u8>> {
-    let resp = send(req, context).await?;
-    let body = resp.bytes().await.map_err(|e| Error::network(context, e))?;
-    Ok(body.to_vec())
+async fn bytes_once(req: RequestBuilder, context: &'static str, limit: u64) -> Result<Vec<u8>> {
+    read_up_to(send(req, context).await?, context, limit).await
 }
 
 #[cfg(test)]
@@ -209,6 +237,34 @@ mod tests {
                 matches!(gog_only(refused), Err(Error::Refused(_))),
                 "{refused}"
             );
+        }
+    }
+
+    /// An answer is read into memory whole: one larger than any these services send, plain or
+    /// inflated from a few kilobytes of gzip, is refused instead of filling the memory.
+    #[tokio::test]
+    async fn an_endless_answer_is_refused() {
+        use std::io::Write;
+        let large = vec![b' '; (MAX_BODY + 1) as usize];
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+        gz.write_all(&large).unwrap();
+        let compressed = gz.finish().unwrap();
+        for (encoding, body) in [("identity", large.clone()), ("gzip", compressed)] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buf = [0u8; 4096];
+                let _ = socket.read(&mut buf).await;
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-encoding: {encoding}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = socket.write_all(head.as_bytes()).await;
+                let _ = socket.write_all(&body).await;
+            });
+            let r = bytes(client().unwrap().get(format!("http://{addr}/")), "testing").await;
+            assert!(matches!(r, Err(Error::Parse { .. })), "{encoding}: {r:?}");
         }
     }
 
