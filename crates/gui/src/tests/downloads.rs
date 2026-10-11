@@ -19,6 +19,24 @@ fn a_queue_change_cancels_the_drag_before_the_next_render() {
     assert!(app.queue.is_empty());
 }
 
+/// A game GOG could not be reached for, back at the head of the queue, cancels a drag: the row held
+/// would no longer be the one dropped.
+#[test]
+fn a_game_back_at_the_head_of_the_queue_cancels_the_drag() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    app.queue = vec!["5".into(), "6".into(), "7".into()];
+    app.auto_resume = Some("4".into());
+    let _ = app.update(Message::Downloads(DownloadsMsg::Grab(2)));
+    let _ = app.update(Message::Downloads(DownloadsMsg::Drag(0.0)));
+    let _ = app.update(Message::Install(InstallMsg::Unreachable(
+        "4".into(),
+        "[FAKE] network error".into(),
+    )));
+    let _ = app.update(Message::Downloads(DownloadsMsg::Drop));
+    assert_eq!(app.queue, ["4", "5", "6", "7"]);
+}
+
 /// A game the command line is installing or updating is not queued over it: its job (folder,
 /// build, an update half applied) is left as it is.
 #[test]

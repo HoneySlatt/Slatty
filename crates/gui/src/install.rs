@@ -245,6 +245,7 @@ impl App {
                     .iter()
                     .any(|(id, k)| *id == game_id && *k == crate::Interrupted::Download);
                 if !cut_off {
+                    self.drag = None;
                     self.queue.insert(0, game_id);
                     self.save_queue();
                 }
