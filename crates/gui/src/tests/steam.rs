@@ -394,7 +394,19 @@ fn a_download_steam_makes_shows_until_it_is_done() {
         false,
         Some(downloading),
     )])));
-    assert!(app.watching_steam_downloads());
+    assert_eq!(
+        app.steam_downloads_every(),
+        Some(crate::steam::DOWNLOAD_EVERY)
+    );
+    // Unchanged for a while: read less often while the window is in front, not at all behind.
+    let moved = app.steam.download_moved;
+    app.steam.download_moved =
+        Some(std::time::Instant::now() - std::time::Duration::from_secs(600));
+    assert!(app.steam_downloads_every() > Some(crate::steam::DOWNLOAD_EVERY));
+    app.unfocused = true;
+    assert_eq!(app.steam_downloads_every(), None);
+    app.unfocused = false;
+    app.steam.download_moved = moved;
     let _ = app.update(Message::Select("steam-620".into()));
     assert!(render(&app).find("Downloading 25 %").is_ok());
     app.selected = None;
@@ -425,7 +437,7 @@ fn a_download_steam_makes_shows_until_it_is_done() {
         )]
         .into(),
     )));
-    assert!(!app.watching_steam_downloads(), "Steam's to resume");
+    assert_eq!(app.steam_downloads_every(), None, "Steam's to resume");
     assert!(toasted(&app).is_empty());
     let _ = app.update(Message::Steam(SteamMsg::Downloads(
         [("steam-620".into(), Some(installed(620, 4_000, true, None)))].into(),
@@ -436,7 +448,18 @@ fn a_download_steam_makes_shows_until_it_is_done() {
         620, 4_000, true, None,
     )])));
     assert_eq!(toasted(&app).len(), 1, "told once");
-    assert!(!app.watching_steam_downloads());
+    // A slow read of every library folder, begun before the end, lands after it.
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        620,
+        0,
+        false,
+        Some(downloading),
+    )])));
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        [("steam-620".into(), Some(installed(620, 4_000, true, None)))].into(),
+    )));
+    assert_eq!(toasted(&app).len(), 1, "still told once");
+    assert_eq!(app.steam_downloads_every(), None);
 }
 
 /// A game owned on GOG and on Steam shows once, as GOG's: matched by the Steam app GOG's database

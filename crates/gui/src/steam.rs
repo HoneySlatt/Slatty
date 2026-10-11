@@ -22,9 +22,13 @@ const START_WAIT: Duration = Duration::from_secs(300);
 
 /// How often the manifest of a game Steam downloads is read, while one does.
 pub const DOWNLOAD_EVERY: Duration = Duration::from_secs(5);
-/// Downloads whose manifests stayed the same this long are no longer read (Steam closed, or
-/// waiting for another one): the window having the focus again reads them anew.
+/// Downloads whose manifests stayed the same this long are read less often (Steam closed, or
+/// waiting for another one), and no longer while the window is in the background.
 const STILL_FOR: Duration = Duration::from_secs(120);
+const STALLED_EVERY: Duration = Duration::from_secs(30);
+/// A download told done is not told again this soon: a slow read of every library folder,
+/// begun before it ended, can land after one that saw it end.
+const TOLD_FOR: Duration = Duration::from_secs(600);
 
 /// Unlocked and total achievements of each game that has any, by game id.
 pub type Counts = HashMap<String, (usize, usize)>;
@@ -59,6 +63,8 @@ pub struct SteamView {
     pub twins: HashMap<String, String>,
     /// When what Steam downloads last changed: its manifests are read until it stays the same.
     pub download_moved: Option<Instant>,
+    /// When each download Steam made was told done.
+    pub told: HashMap<String, Instant>,
     /// Whether the library folders are being read.
     pub reading_installed: bool,
     /// How long each game was played and when last, as Steam records it, by game id.
@@ -583,7 +589,14 @@ impl App {
             }
             match now {
                 Some(game) => {
-                    if before.is_some_and(|u| u.started) && after.is_none() && game.ready {
+                    let done = before.is_some_and(|u| u.started) && after.is_none() && game.ready;
+                    let told_lately = self
+                        .steam
+                        .told
+                        .get(&id)
+                        .is_some_and(|t| t.elapsed() < TOLD_FOR);
+                    if done && !told_lately {
+                        self.steam.told.insert(id.clone(), Instant::now());
                         told.push(id.clone());
                     }
                     self.steam.installed.insert(id, game);
@@ -602,19 +615,26 @@ impl App {
         }))
     }
 
-    /// Whether the manifests of the games Steam downloads are to be read: one downloads, and
-    /// changed lately.
-    pub fn watching_steam_downloads(&self) -> bool {
-        self.steam.on
-            && self
-                .steam
-                .download_moved
-                .is_some_and(|t| t.elapsed() < STILL_FOR)
+    /// How often the manifests of the games Steam downloads are read: every few seconds while one
+    /// downloads and changed lately; less often once it stays the same while the window is in
+    /// front, someone may be watching it; not at all otherwise (Steam closed, or the window in
+    /// the background: its focus reads them again).
+    pub fn steam_downloads_every(&self) -> Option<Duration> {
+        let downloading = self.steam.on
             && self
                 .steam
                 .installed
                 .values()
-                .any(|g| g.update.is_some_and(|u| u.started && !u.paused))
+                .any(|g| g.update.is_some_and(|u| u.started && !u.paused));
+        let moved = self
+            .steam
+            .download_moved
+            .is_some_and(|t| t.elapsed() < STILL_FOR);
+        match (downloading, moved) {
+            (false, _) => None,
+            (true, true) => Some(DOWNLOAD_EVERY),
+            (true, false) => (!self.unfocused).then_some(STALLED_EVERY),
+        }
     }
 
     /// Whether the games Steam runs are to be looked at: one was asked for, or runs.

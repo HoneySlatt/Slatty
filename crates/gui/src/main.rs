@@ -608,11 +608,11 @@ impl App {
         } else {
             Subscription::none()
         };
-        let steam_downloads = if self.watching_steam_downloads() {
-            iced::time::every(steam::DOWNLOAD_EVERY)
-                .map(|_| Message::Steam(steam::SteamMsg::ReadDownloads))
-        } else {
-            Subscription::none()
+        let steam_downloads = match self.steam_downloads_every() {
+            Some(every) => {
+                iced::time::every(every).map(|_| Message::Steam(steam::SteamMsg::ReadDownloads))
+            }
+            None => Subscription::none(),
         };
         Subscription::batch([
             frames,

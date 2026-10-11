@@ -2,6 +2,7 @@
 //! the games of that account, and those installed.
 
 use std::collections::HashMap;
+use std::io::ErrorKind::NotFound;
 use std::path::{Path, PathBuf};
 
 use super::vdf::{self, Vdf};
@@ -224,11 +225,16 @@ pub fn installed(steam: &Steam) -> Vec<Installed> {
 }
 
 /// `game` read again from its own manifest, the one file Steam changes as it downloads: cheaper
-/// than every library folder, which can be network drives. None once Steam removed it.
+/// than every library folder, which can be network drives. None once Steam removed it; as it was
+/// while its manifest cannot be read (being written, a drive gone for a moment).
 pub fn read_again(game: &Installed) -> Option<Installed> {
     let apps = game.dir.parent()?.parent()?;
     let path = apps.join(format!("appmanifest_{}.acf", game.app_id));
-    read(&path).and_then(|m| manifest(apps, &m))
+    match read(&path).and_then(|m| manifest(apps, &m)) {
+        Some(again) => Some(again),
+        None if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == NotFound) => None,
+        None => Some(game.clone()),
+    }
 }
 
 fn manifest(apps: &Path, vdf: &Vdf) -> Option<Installed> {
@@ -426,6 +432,12 @@ pub(crate) mod tests {
         let done = state(4, 4000).unwrap();
         assert!(done.ready && done.update.is_none());
         assert_eq!(state(1026, 9000).unwrap().update.unwrap().done, 4000);
+        std::fs::write(&manifest, r#""AppState" { "appid" "70" "#).unwrap();
+        assert_eq!(
+            read_again(life).as_ref(),
+            Some(life),
+            "half written: as it was"
+        );
         std::fs::remove_file(&manifest).unwrap();
         assert_eq!(read_again(life), None, "uninstalled");
     }
