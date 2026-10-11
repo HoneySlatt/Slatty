@@ -718,16 +718,8 @@ fn read_only_tools(
         let var = runtime.join("var");
         crate::paths::ensure_dir(&var)?;
         bind(&mut out, "--bind", &var)?;
-        for platform in std::fs::read_dir(&runtime).into_iter().flatten().flatten() {
-            let files = platform.path().join("files");
-            if files.is_dir() {
-                let lock = files.join(".ref");
-                if !lock.exists() {
-                    std::fs::File::create(&lock)
-                        .map_err(|e| Error::io(format!("create {}", lock.display()), e))?;
-                }
-                bind(&mut out, "--bind", &lock)?;
-            }
+        for lock in ref_locks(&runtime)? {
+            bind(&mut out, "--bind", &lock)?;
         }
     }
     if let Some(proton) = proton {
@@ -741,6 +733,36 @@ fn read_only_tools(
     out.push(umu.display().to_string());
     out.extend(args);
     Ok((bwrap, out))
+}
+
+/// The `.ref` lock files pressure-vessel takes in the platform folders of `runtime`, made when
+/// missing. In its real folders alone: `var`, which an isolated game can write, could hold a link
+/// at `files/.ref`, and this runs outside any sandbox; a lock that is a link is not shared either.
+fn ref_locks(runtime: &Path) -> Result<Vec<PathBuf>> {
+    let mut locks = Vec::new();
+    for platform in std::fs::read_dir(runtime).into_iter().flatten().flatten() {
+        if platform.file_name() == "var" || !platform.file_type().is_ok_and(|t| t.is_dir()) {
+            continue;
+        }
+        let files = platform.path().join("files");
+        if !std::fs::symlink_metadata(&files).is_ok_and(|m| m.is_dir()) {
+            continue;
+        }
+        let lock = files.join(".ref");
+        match std::fs::symlink_metadata(&lock) {
+            Ok(m) if m.is_file() => {}
+            Ok(_) => continue,
+            Err(_) => {
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&lock)
+                    .map_err(|e| Error::io(format!("create {}", lock.display()), e))?;
+            }
+        }
+        locks.push(lock);
+    }
+    Ok(locks)
 }
 
 /// Steam's app ids of the runtimes umu keeps, by folder (umu 1.4's `RUNTIME_VERSIONS`).
@@ -1314,6 +1336,28 @@ mod tests {
             isolated_home(&dirs, "1").unwrap(),
             dirs.data.join("homes/1")
         );
+    }
+
+    /// The `.ref` locks pressure-vessel takes in a runtime are made in its real platform folders
+    /// alone: never in `var`, which an isolated game writes, through a link it put there (the file
+    /// would be made where the link leads, outside any sandbox), nor shared when one is a link.
+    #[test]
+    fn the_runtimes_locks_are_made_in_its_own_folders_only() {
+        let root = std::env::temp_dir().join(format!("slatty-ref-locks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let runtime = root.join("steamrt3");
+        std::fs::create_dir_all(runtime.join("sniper_platform_0.1/files")).unwrap();
+        std::fs::create_dir_all(runtime.join("var/files")).unwrap();
+        std::fs::create_dir_all(root.join("outside")).unwrap();
+        std::os::unix::fs::symlink(root.join("outside/x"), runtime.join("var/files/.ref")).unwrap();
+        std::fs::create_dir_all(runtime.join("linked/files")).unwrap();
+        std::os::unix::fs::symlink(root.join("outside/y"), runtime.join("linked/files/.ref"))
+            .unwrap();
+        let locks = ref_locks(&runtime).unwrap();
+        assert_eq!(locks, [runtime.join("sniper_platform_0.1/files/.ref")]);
+        assert!(locks[0].is_file());
+        assert!(!root.join("outside/x").exists() && !root.join("outside/y").exists());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     /// pressure-vessel looks at `$HOME/.steam`, here the game's own home, which the game writes,
