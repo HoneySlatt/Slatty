@@ -125,6 +125,10 @@ show game titles and achievement names on a lock screen.
   game folder, and an update or uninstall that would delete through one deletes nothing. Temporary
   files get names never used before and never follow a link already there. These checks do not
   guard against another program changing the folders at the same moment.
+- **Games added by hand.** Their files are yours: removing one from the library never deletes
+  them, only, when asked, the Wine prefix SlattyLauncher made for it, its saves copied first. A
+  folder holding your home folder, or the whole disk, cannot be a game's folder, as an isolated
+  game can write in its folder. GOG is never told of them, nor is umu's database asked about them.
 - **Sizes.** Limits apply before memory or disk is taken: network answers (256 MiB), manifests once
   inflated (512 MiB), download chunks (64 MiB), a game's own `goggame-*.info` and `start.sh`
   (16 MiB), each Linux installer entry (the size its installer gives), a library listing (10,000

@@ -156,12 +156,15 @@ pub async fn play(
         runner::refresh_runtimes(db, dirs).await;
     }
     // GOG keeps no cloud saves for Linux builds, and they lack the Galaxy SDK that Comet talks to.
+    // A game added by hand is not GOG's at all: GOG is not asked anything about it.
     let native = install.platform == Platform::Linux;
-    let cloud = req.cloud && !native;
+    let added = crate::store::is_local(&install.game_id);
+    let cloud = req.cloud && !native && !added;
     // Comet acts for the account and listens on this computer while it runs: only for a game that
     // can talk to it, and only if allowed in Settings.
     let use_comet = req.comet
         && !native
+        && !added
         && crate::settings::game_achievements(db)?
         && crate::comet::uses_galaxy(dirs, &install);
 
@@ -346,7 +349,9 @@ pub async fn play(
         }
     }
 
-    if outcome.clean {
+    // Sessions of GOG's games waiting to be sent go with the next one of those: GOG does not learn
+    // when a game added by hand was played.
+    if outcome.clean && !added {
         match report_playtime(db, dirs, http, user_id.as_deref()).await {
             Ok(0) => {}
             Ok(minutes) => emit(PlayEvent::PlaytimeReported(minutes)),

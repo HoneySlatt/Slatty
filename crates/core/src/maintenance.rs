@@ -47,6 +47,31 @@ fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, 
     Ok((install, record))
 }
 
+/// Copies the `users` folder of a prefix about to be deleted, where most saves live, to the
+/// backups, on the disk before anything is deleted; where it went, when there was one.
+pub(crate) fn back_up_prefix(dirs: &Dirs, game_id: &str, prefix: &Path) -> Result<Option<PathBuf>> {
+    let users = prefix.join("drive_c/users");
+    if !users.is_dir() {
+        return Ok(None);
+    }
+    // A game writes its prefix: a link there would have the backup copy where it leads.
+    if !installer::leads_inside(prefix, &users) {
+        return Err(Error::Refused(format!(
+            "{} leads out of the prefix through a link; nothing was deleted",
+            users.display()
+        )));
+    }
+    let backup = dirs
+        .data
+        .join("backups/prefixes")
+        .join(game_id)
+        .join(Utc::now().format("%Y%m%d-%H%M%S").to_string());
+    copy_dir(&users, &backup)?;
+    // On the disk before anything is deleted: a power cut must not leave neither.
+    crate::fsutil::sync_filesystem(&backup)?;
+    Ok(Some(backup))
+}
+
 /// Removes the files slatty installed and keeps everything else. The Wine prefix (where most
 /// saves live) is deleted only on request, after its `users` folder is copied to the backups.
 pub fn uninstall(
@@ -80,25 +105,7 @@ pub fn uninstall(
     }
     // The saves in the prefix are copied first too: a backup that fails deletes nothing.
     if let Some(prefix) = prefix {
-        let users = prefix.join("drive_c/users");
-        // A game writes its prefix: a link there would have the backup copy where it leads.
-        if users.is_dir() && !installer::leads_inside(prefix, &users) {
-            return Err(Error::Refused(format!(
-                "{} leads out of the prefix through a link; nothing was deleted",
-                users.display()
-            )));
-        }
-        if users.is_dir() {
-            let backup = dirs
-                .data
-                .join("backups/prefixes")
-                .join(game_id)
-                .join(Utc::now().format("%Y%m%d-%H%M%S").to_string());
-            copy_dir(&users, &backup)?;
-            // On the disk before anything is deleted: a power cut must not leave neither.
-            crate::fsutil::sync_filesystem(&backup)?;
-            report.prefix_backup = Some(backup);
-        }
+        report.prefix_backup = back_up_prefix(dirs, game_id, prefix)?;
     }
     for rel in files {
         let path = root.join(rel);

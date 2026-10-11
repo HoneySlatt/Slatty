@@ -89,7 +89,8 @@ pub async fn resolve(db: &Db, http: &Client, install: &mut Install) {
     let Runner::Umu { proton, .. } = &install.runner else {
         return;
     };
-    if install.umu_id.is_some() {
+    // umu's database knows games by their store's id: one added by hand has none to look up.
+    if install.umu_id.is_some() || crate::paths::check_game_id(&install.game_id).is_err() {
         return;
     }
     if let Some(id) = in_proton(proton, &install.game_id) {
@@ -209,6 +210,13 @@ mod tests {
             .proxy(reqwest::Proxy::all(format!("http://{}", proxy.local_addr().unwrap())).unwrap())
             .build()
             .unwrap();
+        resolve(&db, &http, &mut install).await;
+        assert_eq!(install.umu_id, None);
+        assert!(proxy.accept().is_err(), "no request made");
+
+        // Turned on, a game added by hand is still not looked up: it has no store id.
+        crate::settings::set_umu_lookup(&db, true).unwrap();
+        install.game_id = "local-1".into();
         resolve(&db, &http, &mut install).await;
         assert_eq!(install.umu_id, None);
         assert!(proxy.accept().is_err(), "no request made");

@@ -37,12 +37,20 @@ pub struct LaunchSpec {
 /// How to start a game: as `choice` (one of its `launch_options`) when given and still offered,
 /// else as its main task.
 pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Result<LaunchSpec> {
+    let added = crate::store::is_local(&install.game_id);
     match (&install.platform, &install.runner) {
         (Platform::Linux, Runner::Native) => {
-            let script = install.path.join("start.sh");
-            if !script.is_file() {
-                return Err(Error::NotFound(format!("{} is missing", script.display())));
-            }
+            // GOG's builds start through their script; a game added by hand, through the program
+            // or script the user picked.
+            let (script, extra, cwd) = if added {
+                crate::added::launch_task(dirs, install)?
+            } else {
+                let script = install.path.join("start.sh");
+                if !script.is_file() {
+                    return Err(Error::NotFound(format!("{} is missing", script.display())));
+                }
+                (script, Vec::new(), install.path.clone())
+            };
             // Only umu's container isolates. Elsewhere on NixOS, which keeps neither `/bin/bash`
             // (which GOG's scripts ask for) nor the libraries games load (OpenGL, sound) where
             // they look, games run in a usual Linux layout.
@@ -68,6 +76,11 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
                 _ => None,
             };
             let (mut program, mut args, mut env) = native_command(&script, wrapper);
+            // An AppImage mounts itself through FUSE, which neither the container nor every system
+            // offers: it unpacks itself instead.
+            if added && crate::added::is_appimage(&script) {
+                env.push(("APPIMAGE_EXTRACT_AND_RUN".into(), "1".into()));
+            }
             if install.isolated {
                 env.extend(isolation_env(dirs, install, None)?);
                 // Without one, umu takes `~/Games/umu/<id>` or the user's `$WINEPREFIX` as the
@@ -76,22 +89,34 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
                     "WINEPREFIX".into(),
                     isolated_home(dirs, &install.game_id)?.display().to_string(),
                 ));
-                // Given a file, umu would share the whole filesystem it is on: the script goes to
-                // its interpreter, which umu looks for inside the container.
-                args.insert(0, interpreter_name(&script)?);
-                check_shared(install, &args, &install.path)?;
+                // Given a file, umu would share the whole filesystem it is on: a script goes to
+                // its interpreter, which umu looks for inside the container, and a program to a
+                // shell that starts it.
+                if crate::added::is_program(&script) {
+                    args.splice(0..0, ["sh", "-c", "exec \"$0\" \"$@\""].map(String::from));
+                } else {
+                    args.insert(0, interpreter_name(&script)?);
+                }
+                args.extend(extra);
+                check_shared(install, &args, &cwd)?;
                 env.push(("UMU_RUNTIME_UPDATE".into(), "0".into()));
                 (program, args) = read_only_tools(program, args, tool.as_deref())?;
+            } else {
+                args.extend(extra);
             }
             Ok(LaunchSpec {
                 program,
                 args,
-                cwd: install.path.clone(),
+                cwd,
                 env,
             })
         }
         (Platform::Windows, Runner::Umu { .. } | Runner::Wine { .. }) => {
-            let (exe, args, cwd) = windows_task(install, choice)?;
+            let (exe, args, cwd) = if added {
+                crate::added::launch_task(dirs, install)?
+            } else {
+                windows_task(install, choice)?
+            };
             windows_spec(dirs, install, prepend(exe, args), cwd, true)
         }
         (platform, runner) => Err(Error::Unsupported(format!(
@@ -345,8 +370,11 @@ fn umu_env(
         ("WINEPREFIX".into(), prefix.display().to_string()),
         ("PROTONPATH".into(), proton.display().to_string()),
         ("GAMEID".into(), game_id),
-        ("STORE".into(), "gog".into()),
     ];
+    // Where umu looks the game up for its fixes; a game added by hand is from no store.
+    if !crate::store::is_local(&install.game_id) {
+        env.push(("STORE".into(), "gog".into()));
+    }
     // Given this, umu would share the whole filesystem the game is on (`/home`, a library disk),
     // writable: an isolated game's folder is shared on its own instead. Proton's fixes then find
     // the game from its working directory.

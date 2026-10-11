@@ -184,3 +184,73 @@ async fn a_game_left_running_keeps_the_game_busy() {
     assert_eq!(play::recover_unfinished(&db, &dirs).unwrap().len(), 1);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// A game added by hand starts the program picked, with its arguments, in its working directory,
+/// and its session counts in the local play time; nothing is asked over the network.
+#[tokio::test]
+async fn a_game_added_by_hand_plays_as_its_user_said() {
+    without_wrappers();
+    let root = std::env::temp_dir().join(format!("slatty-play-added-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let game = root.join("[FAKE] Game");
+    std::fs::create_dir_all(game.join("data")).unwrap();
+    let program = game.join("run.sh");
+    std::fs::write(&program, "#!/bin/sh\necho \"$PWD $*\" > \"$0.out\"\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let dirs = Dirs::under(&root.join("app"));
+    let db = Db::open(&dirs.db_file()).unwrap();
+    let install = slatty_core::added::add(
+        &db,
+        &dirs,
+        slatty_core::added::NewGame {
+            title: "[FAKE] Game".into(),
+            program: program.clone(),
+            args: vec!["--level".into(), "2".into()],
+            working_dir: Some(game.join("data")),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    // Every request would go through this proxy.
+    let proxy = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    proxy.set_nonblocking(true).unwrap();
+    let http = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all(format!("http://{}", proxy.local_addr().unwrap())).unwrap())
+        .build()
+        .unwrap();
+    let events = Mutex::new(Vec::new());
+    let (_stop_tx, stop_rx) = tokio::sync::mpsc::unbounded_channel();
+    let request = PlayRequest {
+        game_id: install.game_id.clone(),
+        cloud: true,
+        comet: true,
+        supervisor: env!("CARGO_BIN_EXE_slatty").into(),
+    };
+    play::play(
+        &db,
+        &dirs,
+        &http,
+        request,
+        |e| events.lock().unwrap().push(e),
+        stop_rx,
+    )
+    .await
+    .unwrap();
+    let real = game.canonicalize().unwrap();
+    assert_eq!(
+        std::fs::read_to_string(real.join("run.sh.out")).unwrap(),
+        format!("{} --level 2\n", real.join("data").display())
+    );
+    let events = events.into_inner().unwrap();
+    assert!(
+        matches!(events.last(), Some(PlayEvent::Ended { clean: true, .. })),
+        "{events:?}"
+    );
+    assert!(proxy.accept().is_err(), "nothing asked over the network");
+    assert!(
+        slatty_core::session::playtime(&db, None)
+            .unwrap()
+            .contains_key(&install.game_id)
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}

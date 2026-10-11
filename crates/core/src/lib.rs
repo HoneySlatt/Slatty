@@ -1,5 +1,6 @@
 pub mod account;
 pub mod achievements;
+pub mod added;
 pub mod auth;
 pub mod cloud;
 pub mod comet;
