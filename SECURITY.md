@@ -95,7 +95,7 @@ No telemetry, no crash reports, no usage statistics.
 | GitHub: `api.github.com`, `github.com`, `release-assets.githubusercontent.com` | Which project's releases are asked for, without any account | When you list or download Proton builds; at start, at most once a day, for the builds games follow as `<project>-latest` | Proton downloads, Settings → Runners (off); Keep up to date (off) |
 | SteamGridDB: `www.steamgriddb.com` and its image servers | The name you search, and your SteamGridDB API key in a header | When you search in Edit game | SteamGridDB, Settings → Advanced (off) |
 | Valve, `api.steampowered.com` (Steam's Web API) | Your Steam Web API key and your Steam id, in the address as the API takes them; the app ids of the games whose achievements are asked for. How common a game's achievements are is asked without the key | As Steam's games load (the account's games), and when a Steam game's achievements show while the Steam client keeps none of them | Steam Web API, Settings → Steam (off) |
-| Valve, `shared.steamstatic.com` (Steam's image servers) | The Steam app ids of the images asked for, without any account | When a Steam game's cover, background or logo is missing from the Steam client's own image cache, and when a Steam game's achievements show their icons; each image is downloaded once | Images from Steam, Settings → Steam (off) |
+| Valve, `shared.steamstatic.com` (Steam's image servers) | The Steam app ids of the images asked for, without any account | When a Steam game's cover, background or logo is missing from the Steam client's own image cache, and when a Steam game's achievements show their icons; an image is kept once downloaded, one that failed is asked for again later | Images from Steam, Settings → Steam (off) |
 
 Every request names SlattyLauncher and its version in its `User-Agent`, except those to GOG's
 cloud storage, which send Galaxy's, as heroic-gogdl does. Desktop notifications (Settings →
@@ -191,15 +191,21 @@ on one without (ext4), the runtime's files, about 750 MB, are written at each la
 - Anything able to reach 127.0.0.1:9977 while Comet runs (see [Comet](#comet)).
 - A game that is not isolated, and a program written to break out of the container.
 - Steam's games and the Steam client (once **Steam games** is on, Settings → Steam): SlattyLauncher
-  only reads Steam's files and never writes them, and asks Steam's servers nothing unless
-  **Images from Steam** or **Steam Web API** is on, but the games are run by the Steam client, with its own access to
-  your files, network and account, and cannot be isolated. Prefer a game's GOG build where you
-  have the choice. GOG is never asked about a Steam game, so it does not learn which ones you
-  have. Of the files it reads, `localconfig.vdf` also holds the client's download
-  tokens and your friends' names: only each game's play time and last session are kept from it.
-  The client's settings and sign-in files (`config/config.vdf`, `local.vdf`, `ssfn*`,
-  `registry.vdf`) are never read. To tell a Steam game runs, the names of your processes are
-  read, and the arguments of the client's `reaper` processes alone.
+  only reads Steam's files, and asks Steam's servers nothing unless **Images from Steam** or
+  **Steam Web API** is on, but the games are run by the Steam client, with its own access to your
+  files, network and account, and cannot be isolated. Prefer a game's GOG build where you have
+  the choice. GOG is never asked about a Steam game, so it does not learn which ones you have.
+  Of the files it reads, `localconfig.vdf` also holds the client's download tokens and your
+  friends' names: only each game's play time and last session are kept from it. The client's
+  settings and sign-in files (`config/config.vdf`, `local.vdf`, `ssfn*`, `registry.vdf`) are
+  never read, nor its cached images through a link. To tell a Steam game runs, the names of your
+  processes are read, and the arguments of the client's `reaper` processes alone. Steam's files
+  are only read as regular files of bounded size. Whatever the switch, two are read at every
+  start: `config/loginusers.vdf`, for the name of the account signed in to Steam (Settings →
+  Steam names it), and `steamapps/libraryfolders.vdf`, for Valve's Proton builds in Steam's
+  libraries. The only writes into Steam's folders are those of **Share with Steam and Heroic**
+  (Settings → Runners, off until turned on): links to the Proton builds SlattyLauncher downloaded,
+  in `compatibilitytools.d`.
 - GOG's servers, the GitHub account of a Proton project or umu's database turned malicious: their
   data is checked for shape, size and paths, not for intent.
 - Someone watching your network: connections use TLS, but which hosts you contact, and when, can
