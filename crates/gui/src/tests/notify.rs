@@ -100,6 +100,43 @@ fn achievements_unlocked_are_said_when_the_game_ends() {
     );
 }
 
+/// Saves left out of the upload after a game (a conflict, a file refused or failing) are told like
+/// an upload skipped as a whole; a clean upload is not.
+#[test]
+fn saves_left_out_of_the_upload_after_a_game_are_told() {
+    use slatty_core::play::CloudSummary;
+    let mut app = library_app();
+    let (stop, _rx) = tokio::sync::mpsc::unbounded_channel();
+    app.play = Some(PlayState {
+        game_id: "3".into(),
+        log: Vec::new(),
+        stop,
+        running: true,
+        told: Vec::new(),
+    });
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::CloudUploaded(
+        CloudSummary {
+            uploaded: 2,
+            ..Default::default()
+        },
+    ))));
+    assert!(app.toasts.is_empty(), "all uploaded");
+    let _ = app.update(Message::Playing(PlayMsg::Event(PlayEvent::CloudUploaded(
+        CloudSummary {
+            uploaded: 1,
+            conflicts: vec!["saves/[FAKE] slot1.sav (BothChanged)".into()],
+            ..Default::default()
+        },
+    ))));
+    assert_eq!(
+        toasted(&app),
+        [(
+            "Cloud saves not uploaded".to_string(),
+            "[FAKE] Game 3: see Cloud saves on its page.".to_string()
+        )]
+    );
+}
+
 /// With Comet, an achievement is told as the game unlocks it, and not again once GOG has it; one
 /// only GOG reports at the end is still told then.
 #[test]
