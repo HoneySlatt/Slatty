@@ -78,20 +78,17 @@ impl App {
         ])
     }
 
-    /// Signs out; `forget` also deletes what is kept of the account (`Account::forget`).
+    /// Signs out; `forget` also deletes what is kept of the account (`Account::sign_out`).
     pub fn logout(&mut self, forget: bool) -> Task<Message> {
         let Some(core) = self.core.clone() else {
             return Task::none();
         };
         Task::perform(
             async move {
-                let account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
-                if forget {
-                    account.forget(&core.db, &core.dirs).await
-                } else {
-                    account.logout(&core.db, &core.dirs).await
-                }
-                .map_err(err)
+                Account::sign_out(&core.db, &core.dirs, forget)
+                    .await
+                    .map(drop)
+                    .map_err(err)
             },
             Message::LoggedOut,
         )

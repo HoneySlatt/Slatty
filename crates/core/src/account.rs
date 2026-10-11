@@ -166,22 +166,33 @@ impl Account {
         })
     }
 
-    pub async fn logout(self, db: &Db, dirs: &Dirs) -> Result<()> {
-        let user_id = self.info.user_id.clone();
+    /// Signs out the account signed in, and with `forget` deletes what SlattyLauncher keeps of it
+    /// (`forget_data`); the account signed out. Its tokens are not needed: an account whose keyring
+    /// entry is gone is signed out all the same.
+    pub async fn sign_out(db: &Db, dirs: &Dirs, forget: bool) -> Result<AccountInfo> {
+        Self::sign_out_with(db, dirs, forget, |user_id| credentials::delete(&user_id)).await
+    }
+
+    async fn sign_out_with(
+        db: &Db,
+        dirs: &Dirs,
+        forget: bool,
+        delete: impl FnOnce(String) -> Result<()> + Send + 'static,
+    ) -> Result<AccountInfo> {
+        let info = Self::active(db)?.ok_or(Error::NotLoggedIn)?;
+        let user_id = info.user_id.clone();
         // A refresh running now would store its tokens after they are deleted.
         let lock_path = dirs.locks().join(format!("auth-{user_id}.lock"));
         let _lock = lock::acquire(&lock_path, Duration::from_secs(30)).await?;
-        tokio::task::spawn_blocking(move || credentials::delete(&user_id))
+        let id = user_id.clone();
+        tokio::task::spawn_blocking(move || delete(id))
             .await
             .expect("keyring task panicked")?;
-        db.set_setting(ACTIVE_USER, None)
-    }
-
-    /// Signs out, then deletes what SlattyLauncher keeps of the account (`forget_data`).
-    pub async fn forget(self, db: &Db, dirs: &Dirs) -> Result<()> {
-        let user_id = self.info.user_id.clone();
-        self.logout(db, dirs).await?;
-        forget_data(db, dirs, &user_id)
+        db.set_setting(ACTIVE_USER, None)?;
+        if forget {
+            forget_data(db, dirs, &user_id)?;
+        }
+        Ok(info)
     }
 }
 
@@ -280,6 +291,41 @@ async fn fetch_username(http: &Client, tokens: &Tokens) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Signing out needs no token: an account whose keyring entry is gone (a keyring reset, the
+    /// entry deleted by hand, a restored data folder) is still signed out, and forgotten when
+    /// asked, rather than refused as "not logged in" for good.
+    #[tokio::test]
+    async fn an_account_whose_tokens_are_gone_can_still_be_signed_out() {
+        let root = std::env::temp_dir().join(format!("slatty-sign-out-{}", std::process::id()));
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        db.conn()
+            .execute_batch(
+                "INSERT INTO accounts VALUES ('111', '[FAKE] First', 0);
+                 INSERT INTO sessions (game_id, user_id, started_at, state) VALUES
+                   ('1', '111', 10, 'ended');",
+            )
+            .unwrap();
+        db.set_setting(ACTIVE_USER, Some("111")).unwrap();
+        let deleted = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = deleted.clone();
+        let info = Account::sign_out_with(&db, &dirs, true, move |id| {
+            seen.lock().unwrap().push(id);
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert_eq!(info.user_id, "111");
+        assert!(Account::active(&db).unwrap().is_none());
+        assert_eq!(*deleted.lock().unwrap(), ["111"]);
+        let sessions: i64 = db
+            .conn()
+            .query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(sessions, 0, "forgotten");
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     #[tokio::test]
     async fn account_work_refuses_a_switch_before_accessing_credentials() {

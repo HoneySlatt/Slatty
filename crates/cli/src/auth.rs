@@ -54,16 +54,12 @@ pub async fn run(ctx: &Ctx, cmd: AuthCommand) -> Result<()> {
             Ok(())
         }
         AuthCommand::Logout { forget: false } => {
-            let account = Account::load(&ctx.db, &ctx.dirs).await?;
-            let name = account.info.username.clone();
-            account.logout(&ctx.db, &ctx.dirs).await?;
+            let name = Account::sign_out(&ctx.db, &ctx.dirs, false).await?.username;
             println!("Logged out {name}. Local cache and saves are kept.");
             Ok(())
         }
         AuthCommand::Logout { forget: true } => {
-            let account = Account::load(&ctx.db, &ctx.dirs).await?;
-            let name = account.info.username.clone();
-            account.forget(&ctx.db, &ctx.dirs).await?;
+            let name = Account::sign_out(&ctx.db, &ctx.dirs, true).await?.username;
             println!(
                 "Logged out {name} and deleted its data on this computer. Games, saves, prefixes \
                  and save backups are kept."
