@@ -386,12 +386,13 @@ pub struct Playtime {
 }
 
 /// Play time per game, from the sessions SlattyLauncher supervised for the account `user_id` (or
-/// with none signed in): another account's play history is its own.
+/// with none signed in): another account's play history is its own. A game added by hand is no
+/// account's: its sessions count whoever was signed in.
 pub fn playtime(db: &Db, user_id: Option<&str>) -> Result<HashMap<String, Playtime>> {
     let conn = db.conn();
     let mut stmt = conn.prepare(
         "SELECT game_id, SUM(COALESCE(ended_at - started_at, 0)), MAX(COALESCE(ended_at, started_at))
-         FROM sessions WHERE user_id IS ?1 GROUP BY game_id",
+         FROM sessions WHERE user_id IS ?1 OR game_id LIKE 'local-%' GROUP BY game_id",
     )?;
     let rows = stmt.query_map([user_id], |r| {
         Ok((
@@ -428,6 +429,31 @@ mod tests {
             }
         );
         assert_eq!(p["2"].seconds, 30);
+    }
+
+    /// A game added by hand is no GOG account's: its play time shows whatever account is signed
+    /// in, or none, and forgetting an account keeps it, sessions recorded under an account before
+    /// included.
+    #[test]
+    fn the_play_time_of_a_game_added_by_hand_is_no_accounts() {
+        let db = Db::in_memory().unwrap();
+        db.conn()
+            .execute_batch(
+                "INSERT INTO sessions (game_id, user_id, started_at, ended_at, state) VALUES
+                   ('local-1', '111', 0, 3600, 'ended'), ('1', '111', 0, 60, 'ended');",
+            )
+            .unwrap();
+        for user in [Some("222"), None] {
+            let p = playtime(&db, user).unwrap();
+            assert_eq!(p.get("local-1").map(|p| p.seconds), Some(3600), "{user:?}");
+            assert!(!p.contains_key("1"), "the account's own");
+        }
+        let root = std::env::temp_dir().join(format!("slatty-local-time-{}", std::process::id()));
+        let dirs = crate::paths::Dirs::under(&root);
+        crate::account::forget_data(&db, &dirs, "111").unwrap();
+        let p = playtime(&db, None).unwrap();
+        assert_eq!(p.get("local-1").map(|p| p.seconds), Some(3600));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     /// A session lasts what was played, measured without the wall clock: a night of suspend, or

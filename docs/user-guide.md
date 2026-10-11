@@ -46,7 +46,7 @@ your system keyring, never in a plain file.
 | `slatty auth logout --forget` | Also deletes what SlattyLauncher keeps of the account (below) |
 
 Forgetting an account deletes, for that account only: its name, its play history (play time not
-yet sent to GOG included), its cloud sync history, its library cache (covers, images, avatar) and
+yet sent to GOG included; that of games added by hand, no account's, stays), its cloud sync history, its library cache (covers, images, avatar) and
 Comet's achievement records. Games, saves, prefixes, the home folders of isolated games and save
 backups are never deleted, nor are the logs and the cloud copies made by `slatty cloud diff`. If
 you sign in with the account again, the first cloud sync has no history to rely on: it compares

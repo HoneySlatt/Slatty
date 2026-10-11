@@ -120,7 +120,12 @@ impl App {
         // Steam's games stay, without GOG's: their covers come back from Steam's files.
         self.merge_steam();
         self.overview.clear();
-        self.playtime.clear();
+        // What was played signed out, games added by hand's whoever was signed in.
+        self.playtime = self
+            .core
+            .as_ref()
+            .and_then(|core| slatty_core::session::playtime(&core.db, None).ok())
+            .unwrap_or_default();
         self.selected = None;
         self.panel = None;
         self.page = Page::Library;

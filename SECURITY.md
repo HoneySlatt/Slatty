@@ -53,8 +53,9 @@ account), and a game you run without isolation (it runs as you).
 - **Signing out** deletes the tokens from the keyring. Work still running keeps its copy in memory
   until it ends, and never writes it back. **Forget account** (Settings → Account, or
   `slatty auth logout --forget`) also deletes what SlattyLauncher keeps of the account: its name,
-  play history, cloud sync history, library cache and Comet's achievement records. Games, saves,
-  prefixes and save backups are never deleted.
+  play history (that of games added by hand, no account's, stays), cloud sync history, library
+  cache and Comet's achievement records. Games, saves, prefixes and save backups are never
+  deleted.
 - **Account changes.** Work started for one account never uses another's tokens: after a switch,
   its requests are refused and its late results dropped.
 

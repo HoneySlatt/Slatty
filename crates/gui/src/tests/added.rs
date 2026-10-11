@@ -22,6 +22,24 @@ fn added_app() -> App {
     app
 }
 
+/// The play time of a game added by hand is no GOG account's: it stays when GOG's sign-in ends.
+#[test]
+fn signing_out_of_gog_keeps_the_play_time_of_a_game_added_by_hand() {
+    let mut app = added_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    db.conn()
+        .execute(
+            "INSERT INTO sessions (game_id, user_id, started_at, ended_at, state)
+             VALUES ('local-1', '0', 0, 3600, 'ended')",
+            [],
+        )
+        .unwrap();
+    app.playtime = slatty_core::session::playtime(&db, Some("0")).unwrap();
+    assert_eq!(app.played_seconds("local-1"), 3600);
+    app.logged_out();
+    assert_eq!(app.played_seconds("local-1"), 3600);
+}
+
 /// A game added by hand shows beside GOG's, with its own play time, and nothing about it is asked
 /// of GOG: no achievements, cloud saves, versions or languages.
 #[test]

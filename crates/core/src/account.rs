@@ -192,7 +192,12 @@ impl Account {
 pub fn forget_data(db: &Db, dirs: &Dirs, user_id: &str) -> Result<()> {
     // It names the folders deleted below.
     crate::paths::check_user_id(user_id)?;
-    for table in ["sessions", "sync_baseline", "sync_roots", "accounts"] {
+    // The sessions of games added by hand stay: they are no account's (`session::playtime`).
+    db.conn().execute(
+        "DELETE FROM sessions WHERE user_id = ?1 AND game_id NOT LIKE 'local-%'",
+        [user_id],
+    )?;
+    for table in ["sync_baseline", "sync_roots", "accounts"] {
         db.conn().execute(
             &format!("DELETE FROM {table} WHERE user_id = ?1"),
             [user_id],
