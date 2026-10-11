@@ -183,7 +183,12 @@ pub fn commands(
             ]);
             out.push(SetupCommand {
                 label: format!("GOG setup ({})", product.name),
-                program: resolve_relative(&paths.support.join(&product.product_id), exe)?,
+                program: resolve_relative(
+                    &paths
+                        .support
+                        .join(crate::installer::safe_relative(&product.product_id)?),
+                    exe,
+                )?,
                 args,
             });
         }
@@ -605,6 +610,25 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// A DLC's id from the build metadata names the folder its setup program is run from.
+    #[test]
+    fn a_product_id_that_climbs_out_of_the_support_folder_is_refused() {
+        let (game, support, redist) = paths();
+        let mut m = meta(false, Some("setup.exe"));
+        m.products[1].product_id = "../../../etc".into();
+        let mut r = record();
+        r.dlcs = vec!["../../../etc".into()];
+        let paths = SetupPaths {
+            game: &game,
+            support: &support,
+            redist: &redist,
+        };
+        assert!(matches!(
+            commands(&m, &[], &r, &paths),
+            Err(Error::Refused(_))
+        ));
     }
 
     #[test]
