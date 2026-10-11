@@ -317,13 +317,8 @@ impl App {
                 }
             }
             SettingsMsg::EditTheme => {
-                let opened = std::process::Command::new("xdg-open")
-                    .arg(theme::file(&core.dirs.config))
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn();
-                if let Err(e) = opened {
+                let file = theme::file(&core.dirs.config);
+                if let Err(e) = slatty_core::auth::open_with_desktop(file.as_os_str()) {
                     self.notify_error(format!("Could not open the theme file: {e}"));
                 }
             }

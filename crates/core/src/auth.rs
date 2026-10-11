@@ -53,13 +53,28 @@ impl TryFrom<TokenResponse> for Tokens {
 
 /// Opens the system browser without letting it write into our terminal.
 pub fn open_in_browser(url: &Url) -> std::io::Result<()> {
-    std::process::Command::new("xdg-open")
-        .arg(url.as_str())
+    open_with_desktop(url.as_str().as_ref())
+}
+
+/// Opens an address or a file with the program the desktop chooses (`xdg-open`), without letting
+/// it write into our terminal.
+pub fn open_with_desktop(target: &std::ffi::OsStr) -> std::io::Result<()> {
+    let mut command = std::process::Command::new("xdg-open");
+    command
+        .arg(target)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map(drop)
+        .stderr(std::process::Stdio::null());
+    spawn_reaped(&mut command).map(drop)
+}
+
+/// Starts `command` and reaps it once it exits, rather than leaving it a zombie for as long as
+/// the launcher runs. Its process id.
+fn spawn_reaped(command: &mut std::process::Command) -> std::io::Result<u32> {
+    let mut child = command.spawn()?;
+    let pid = child.id();
+    std::thread::spawn(move || child.wait());
+    Ok(pid)
 }
 
 pub fn login_url() -> Url {
@@ -240,5 +255,17 @@ mod tests {
         );
         assert!(extract_code("my password").is_err());
         assert!(extract_code("").is_err());
+    }
+
+    /// `xdg-open` itself would open a page on the desktop running the tests: `true` stands in.
+    #[test]
+    fn an_opener_is_not_left_a_zombie() {
+        let pid = spawn_reaped(&mut std::process::Command::new("true")).unwrap();
+        let proc = std::path::PathBuf::from(format!("/proc/{pid}"));
+        let gone = (0..500).any(|_| {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            !proc.exists()
+        });
+        assert!(gone, "still a zombie after 5 s");
     }
 }
