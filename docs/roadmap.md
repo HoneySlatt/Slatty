@@ -65,7 +65,9 @@ There are no dates. Each milestone ends with results checked against GOG and rec
   by default; the switches are in Game settings and Settings → Privacy. Checked with the container
   and with Hollow Knight, Firewatch and Cyberpunk 2077 (graphics, sound, gamepad, cloud saves,
   Proton's fixes; see [compatibility](compatibility.md)). The D-Bus session and system buses are
-  kept out. Left: an achievement through Comet, a game with a Proton fix of its own, a Linux game.
+  kept out; since 2026-10-11 the tools games run through are read-only to them and the user's
+  processes hidden, checked with the container but not yet with a real game. Left: an achievement
+  through Comet, a game with a Proton fix of its own, a Linux game.
 - **Packaging.** A Nix package (bringing `steam-run-free` for native games), then other
   distributions.
 - **Windows host support.** The core avoids Linux-only assumptions outside the session supervisor
@@ -74,3 +76,5 @@ There are no dates. Each milestone ends with results checked against GOG and rec
 ## Out of scope
 
 Store purchases, friends and chat, multiplayer services, an in-game overlay, mods, plugins.
+SlattyLauncher has no friends or chat feature; Comet, which it starts for achievements, still
+subscribes to those topics on GOG for the account (see [SECURITY.md](../SECURITY.md#comet)).

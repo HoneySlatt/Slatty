@@ -267,7 +267,22 @@ environment (`runner::isolation_env`) to share less:
   (`wrap-setup.c`, `known_required_env`), the first into the shared home folder, whatever the
   other settings say. umu takes `STEAM_COMPAT_INSTALL_PATH` from the environment too;
 - for a Linux game, `WINEPREFIX` set to the game's home: without one umu takes `~/Games/umu/<id>`
-  (or the user's `$WINEPREFIX`), and the container shares it as `STEAM_COMPAT_DATA_PATH`.
+  (or the user's `$WINEPREFIX`), and the container shares it as `STEAM_COMPAT_DATA_PATH`;
+- `PRESSURE_VESSEL_SHARE_PID=0`: the container gets a process namespace of its own, so the game
+  sees and signals only its own processes, not the user's other programs.
+
+umu shares the tools a game runs through with its container, writable: its runtime, the Proton
+build, and for a Linux game the runtime tool it goes through. A game that changed them would run
+its code in other games, isolated or not. An isolated launch therefore runs umu inside bubblewrap
+(`runner::read_only_tools`): the system as it is (`--dev-bind / /`), with umu's runtimes, the
+Proton build and SlattyLauncher's own runtime tool (`runner::runtime_tool`, written again before
+each launch) bound read-only over themselves. Each runtime's `var/`, where pressure-vessel copies
+the runtime, and the `.ref` lock files it takes in the runtime stay writable. pressure-vessel then
+cannot hard-link the runtime across the read-only mount (EXDEV) and copies it: reflinked on btrfs
+or XFS (an isolated launch took 2.3 s instead of 1.4 s), written in full on ext4 (about 750 MB).
+umu cannot update a runtime it sees read-only, so isolated launches set `UMU_RUNTIME_UPDATE=0`,
+and `runner::refresh_runtimes` runs umu once a day before one, outside bubblewrap, through the
+same runtime tool: umu's `UMU_NO_PROTON` would ask GitHub for umu's Proton releases first.
 
 umu shares, writable, the whole filesystem a game is on (its "game drive": the first mount point
 above `STEAM_COMPAT_INSTALL_PATH`, which it otherwise takes from the program's folder). With `/home`
