@@ -86,9 +86,12 @@ impl Comet {
                     "Comet exited during startup ({status}); see comet.log"
                 )));
             }
+            // Another user of the computer could take the port between the check that it is free
+            // and Comet's start, and the game would talk to them: Comet then fails to start.
             if tokio::net::TcpStream::connect(("127.0.0.1", PORT))
                 .await
                 .is_ok()
+                && std::fs::read_to_string("/proc/net/tcp").is_ok_and(|t| listening_as_me(&t))
             {
                 return Ok(());
             }
@@ -124,6 +127,23 @@ impl Drop for Comet {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.private_dir);
     }
+}
+
+/// Whether, in the kernel's table of TCP sockets (`/proc/net/tcp`), Comet's port on 127.0.0.1 is
+/// listened on by the user this process runs as.
+fn listening_as_me(table: &str) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let me = std::fs::metadata("/proc/self").map(|m| m.uid().to_string());
+    let address = format!("0100007F:{PORT:04X}");
+    table.lines().skip(1).any(|line| {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        // Local address, state (0A: listening) and owner.
+        fields.get(1) == Some(&address.as_str())
+            && fields.get(3) == Some(&"0A")
+            && me
+                .as_ref()
+                .is_ok_and(|me| fields.get(7) == Some(&me.as_str()))
+    })
 }
 
 /// The folder of this process's handoff, made anew in `runtime` (`$XDG_RUNTIME_DIR/slatty`). The
@@ -343,6 +363,23 @@ mod tests {
             );
         }
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Comet's port taken by another user is not Comet: the game would talk to them.
+    #[test]
+    fn only_a_listener_of_this_user_is_taken_for_comet() {
+        use std::os::unix::fs::MetadataExt;
+        let me = std::fs::metadata("/proc/self").unwrap().uid();
+        let table = |uid: u32, state: &str| {
+            format!(
+                "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n\
+                 \x20  0: 0100007F:26F9 00000000:0000 {state} 00000000:00000000 00:00000000 00000000 {uid:>5}        0 4242 1 0000000000000000 100 0 0 10 0\n"
+            )
+        };
+        assert!(listening_as_me(&table(me, "0A")));
+        assert!(!listening_as_me(&table(me + 1, "0A")), "another user");
+        assert!(!listening_as_me(&table(me, "01")), "not listening");
+        assert!(!listening_as_me(&table(me, "0A").replace("26F9", "26FA")));
     }
 
     /// A launcher killed while Comet started left the tokens in its handoff folder: the next
