@@ -32,7 +32,7 @@ pub fn start_run(path: &Path) {
 
 /// Deletes the logs of an uninstalled game, with their kept runs.
 pub fn remove_game(dirs: &Dirs, game_id: &str) -> Result<()> {
-    crate::paths::check_game_id(game_id)?;
+    crate::paths::check_owned_id(game_id)?;
     for kind in PER_GAME {
         let log = of_game(dirs, kind, game_id);
         let _ = std::fs::remove_file(&log);

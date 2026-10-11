@@ -421,7 +421,7 @@ fn steam_sdk_links(home: &Path, libs: &[PathBuf; 2]) -> Result<()> {
 /// Where an isolated game finds a home folder of its own, in place of the user's. It holds what
 /// the game writes there, Linux games' saves among them.
 pub fn isolated_home(dirs: &Dirs, game_id: &str) -> Result<PathBuf> {
-    crate::paths::check_game_id(game_id)?;
+    crate::paths::check_owned_id(game_id)?;
     Ok(dirs.data.join("homes").join(game_id))
 }
 

@@ -553,7 +553,7 @@ async fn achievements_now(
 pub fn recover_unfinished(db: &Db, dirs: &Dirs) -> Result<Vec<session::SessionRecord>> {
     let mut unfinished = session::unfinished(db)?;
     unfinished.retain(|s| {
-        crate::paths::check_game_id(&s.game_id).is_err()
+        crate::paths::check_owned_id(&s.game_id).is_err()
             || crate::lock::try_acquire(&crate::lock::session(dirs, &s.game_id))
                 .is_ok_and(|free| free.is_some())
     });
@@ -566,6 +566,23 @@ pub fn recover_unfinished(db: &Db, dirs: &Dirs) -> Result<Vec<session::SessionRe
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A game added by hand that still runs under its supervisor keeps its session going, as a
+    /// GOG game's does.
+    #[test]
+    fn a_game_added_by_hand_that_still_runs_is_not_interrupted() {
+        let root = std::env::temp_dir().join(format!("slatty-play-local-{}", std::process::id()));
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        session::record_start(&db, "local-1", None).unwrap();
+        let held = crate::lock::try_acquire(&crate::lock::session(&dirs, "local-1"))
+            .unwrap()
+            .unwrap();
+        assert!(recover_unfinished(&db, &dirs).unwrap().is_empty());
+        drop(held);
+        assert_eq!(recover_unfinished(&db, &dirs).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     /// With play time reporting off, a session is kept from GOG as it ends: a launcher closed or
     /// crashed during the steps after the game (Comet's stop, the cloud) left it to be sent later.

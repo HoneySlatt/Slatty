@@ -75,12 +75,24 @@ pub fn ensure_dir(path: &Path) -> Result<()> {
 }
 
 /// Refuses a game id that could not safely name a file or go into an address: GOG's ids are
-/// letters and digits.
+/// letters and digits. Every request to GOG about a game checks it, so that a game of another
+/// store, or added by hand, is never named to GOG.
 pub fn check_game_id(game_id: &str) -> Result<()> {
     if game_id.is_empty() || !game_id.bytes().all(|b| b.is_ascii_alphanumeric()) {
         return Err(Error::Refused(format!("unexpected game id `{game_id}`")));
     }
     Ok(())
+}
+
+/// Refuses a game id SlattyLauncher may not name its own files after (records, prefixes, homes,
+/// logs): GOG's, or a game added by hand. A Steam game's files are Steam's.
+pub fn check_owned_id(game_id: &str) -> Result<()> {
+    match crate::store::of(game_id)? {
+        crate::store::Store::Gog | crate::store::Store::Local => Ok(()),
+        crate::store::Store::Steam => Err(Error::Refused(format!(
+            "{game_id} is Steam's: Steam installs and removes it"
+        ))),
+    }
 }
 
 /// Refuses an account id that could not safely name a folder, a lock or a keyring entry: GOG's

@@ -186,11 +186,17 @@ mod tests {
                 "INSERT INTO sessions (id, game_id, user_id, started_at, ended_at, state, reported) VALUES
                    (1, '../../users/x', 'me', 1000, 1600, 'ended', 0),
                    (2, '1?a=b', 'me', 2000, 2600, 'ended', 0),
-                   (3, '1000000001', 'me', 3000, 3600, 'ended', 0);",
+                   (3, '1000000001', 'me', 3000, 3600, 'ended', 0),
+                   (4, 'local-1', 'me', 4000, 4600, 'ended', 0),
+                   (5, 'steam-440', 'me', 5000, 5600, 'ended', 0);",
             )
             .unwrap();
         let pending = unreported(&db, "me").unwrap();
-        assert_eq!(pending.iter().map(|s| s.id).collect::<Vec<_>>(), [3]);
+        assert_eq!(
+            pending.iter().map(|s| s.id).collect::<Vec<_>>(),
+            [3],
+            "nor one of a game GOG does not sell"
+        );
     }
 
     /// A session GOG refuses for good does not hold back the ones after it, and is not sent again;
