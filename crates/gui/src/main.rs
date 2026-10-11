@@ -59,6 +59,7 @@ fn main() -> iced::Result {
         .with_env_filter(tracing_subscriber::EnvFilter::from_env("SLATTY_LOG"))
         .with_writer(std::io::stderr)
         .init();
+    boot::start();
     // Before the first frame, so the window never shows another look first.
     if let Ok(dirs) = Dirs::from_system() {
         let db = Db::open(&dirs.db_file()).ok();
@@ -505,7 +506,10 @@ impl App {
     fn boot() -> (Self, Task<Message>) {
         (
             App::default(),
-            Task::perform(async { boot::boot().await.map(Box::new) }, Message::Booted),
+            Task::perform(
+                async { boot::started().await.map(Box::new) },
+                Message::Booted,
+            ),
         )
     }
 

@@ -49,7 +49,9 @@ core functions. Long operations report progress through callbacks or typed event
 
 The interface follows Iced's state, message, update and view split. `main.rs` holds the
 application state, the `Message` enum and navigation; `update` only dispatches. `boot.rs` reads
-everything the first page needs, off the interface thread, and nothing from game folders or Steam
+everything the first page needs, on a thread of its own begun as the program starts (`boot::start`),
+while the window and the graphics driver are set up (about 100 ms) rather than after, and nothing
+from game folders or Steam
 libraries, which can sit on a network drive taking seconds to wake up: how each game starts
 (`App::read_launch_options`, which a Play pressed before waits for) and the Proton builds found
 there (`runners::list`) are read once the library shows, as after an install or an update. Each

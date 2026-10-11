@@ -73,7 +73,36 @@ fn hold_interface(dirs: &Dirs) -> Result<FileLock, String> {
         .ok_or_else(|| "SlattyLauncher is already open.".to_string())
 }
 
-pub async fn boot() -> Result<Boot, String> {
+/// The start-up read, begun by `start` before the window opens.
+static STARTED: std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<Result<Boot, String>>>> =
+    std::sync::Mutex::new(None);
+
+/// Begins reading what the first page needs on a thread of its own, at once: the window and the
+/// graphics driver take about a hundred milliseconds to set up, which this read no longer waits
+/// for.
+pub fn start() {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    *STARTED.lock().unwrap_or_else(|e| e.into_inner()) = Some(rx);
+    std::thread::spawn(move || {
+        let result = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(err)
+            .and_then(|runtime| runtime.block_on(boot()));
+        let _ = tx.send(result);
+    });
+}
+
+/// What `start` read, once it has; read here if it was not started.
+pub async fn started() -> Result<Boot, String> {
+    let rx = STARTED.lock().unwrap_or_else(|e| e.into_inner()).take();
+    match rx {
+        Some(rx) => rx.await.unwrap_or_else(|_| Err("start-up stopped".into())),
+        None => boot().await,
+    }
+}
+
+async fn boot() -> Result<Boot, String> {
     let dirs = Dirs::from_system().map_err(err)?;
     dirs.keep_private().map_err(err)?;
     let _ = INSTANCE.set(hold_interface(&dirs)?);

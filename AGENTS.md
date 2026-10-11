@@ -155,8 +155,9 @@ The interface follows Iced's state / message / update / view split:
   `ui/panels.rs` (drawers and library dialogs) and `ui/format.rs` (text shown to the user).
 - Nothing slow runs on the interface thread: use `Task::perform`, `tokio::task::spawn_blocking`
   for file and CPU work, and `work::progress_stream` for progress (throttled to four updates a
-  second). `boot.rs` reads everything the first page needs, off the interface thread, and nothing
-  from game folders or Steam libraries: they can be on a network drive still waking up.
+  second). `boot.rs` reads everything the first page needs on a thread begun as the program starts,
+  while the window and graphics driver are set up, and nothing from game folders or Steam
+  libraries: they can be on a network drive still waking up.
 - **Views never name a colour.** Every colour, radius and motion value comes from
   `theme::tokens()`, and widget styles are functions in `theme.rs`. A new token goes into
   `Tokens`, the theme file format and docs/theming.md.
