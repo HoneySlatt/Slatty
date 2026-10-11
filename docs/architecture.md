@@ -346,8 +346,17 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
 
 - **Tokens.** SlattyLauncher passes them through Comet's Lutris importer: a 0600 file in a private
   directory under `$XDG_RUNTIME_DIR`, removed as soon as Comet listens. They never appear in process
-  arguments.
-- **Shutdown.** Comet is stopped with SIGINT, so pending requests can finish.
+  arguments. `$XDG_RUNTIME_DIR` must belong to the user and be closed to others
+  (`comet::private_dir`), and the folders left by a launcher killed meanwhile are removed. Comet
+  is taken as ready only once a listener of the user's own holds the port (`/proc/net/tcp`), not
+  another user's.
+- **Exposure.** Comet hands the account's access token to anything that connects to its port and
+  asks (its overlay service), and its log would hold the refresh token after a failed token
+  request at its default level: `COMET_LOG` keeps that module's messages out.
+- **Shutdown.** Comet is stopped with SIGINT, so pending requests can finish: when the game ends,
+  when the launcher drops it, and when the launcher dies, through `PR_SET_PDEATHSIG` set by the
+  thread that starts it. It runs in a process group of its own, so a Ctrl+C in the terminal
+  reaches the launcher only.
 - **Unlocks as they come.** Comet records an unlock in its own SQLite database at once
   (`<data>/comet/comet/gameplay/<client id>/<user id>/gameplay.db`, Comet adding its folder to the
   `XDG_DATA_HOME` it is given) and sends it to GOG later. During the session `comet::Unlocks` opens
