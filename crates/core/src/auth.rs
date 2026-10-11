@@ -37,14 +37,17 @@ struct TokenResponse {
     user_id: String,
 }
 
-impl From<TokenResponse> for Tokens {
-    fn from(r: TokenResponse) -> Self {
-        Self {
+impl TryFrom<TokenResponse> for Tokens {
+    type Error = Error;
+
+    fn try_from(r: TokenResponse) -> Result<Self> {
+        crate::paths::check_user_id(&r.user_id)?;
+        Ok(Self {
             user_id: r.user_id,
             access_token: r.access_token,
             refresh_token: r.refresh_token,
             expires_at: Utc::now().timestamp() + r.expires_in,
-        }
+        })
     }
 }
 
@@ -123,7 +126,7 @@ pub async fn exchange_code(http: &Client, code: &Secret) -> Result<Tokens> {
         }) => Err(Error::InvalidLoginInput(
             "GOG rejected the code (expired, already used or mistyped)",
         )),
-        other => other.map(Tokens::from),
+        other => other.and_then(Tokens::try_from),
     }
 }
 
@@ -136,7 +139,7 @@ pub async fn refresh(http: &Client, tokens: &Tokens) -> Result<Tokens> {
     ]);
     token_request(req, "refreshing the session")
         .await
-        .map(Tokens::from)
+        .and_then(Tokens::try_from)
 }
 
 /// Token scoped to a game's own Galaxy client, used by cloud storage.
@@ -199,6 +202,31 @@ mod tests {
             extract_code("AbC-123_xyzXYZ0987654").unwrap().expose(),
             "AbC-123_xyzXYZ0987654"
         );
+    }
+
+    /// The account's id names its cache folder, its save backups, its lock and its keyring entry:
+    /// GOG's ids are digits, and anything else in a token answer is refused.
+    #[test]
+    fn a_token_answer_for_an_odd_account_id_is_refused() {
+        let answer = |id: &str| -> TokenResponse {
+            serde_json::from_value(serde_json::json!({
+                "access_token": "[FAKE] access",
+                "refresh_token": "[FAKE] refresh",
+                "expires_in": 3600,
+                "user_id": id,
+            }))
+            .unwrap()
+        };
+        assert_eq!(
+            Tokens::try_from(answer("1234567890")).unwrap().user_id,
+            "1234567890"
+        );
+        for id in ["", "../x", "/home/x", "1#/../..", "12 34"] {
+            assert!(
+                matches!(Tokens::try_from(answer(id)), Err(Error::Refused(_))),
+                "{id:?}"
+            );
+        }
     }
 
     #[test]

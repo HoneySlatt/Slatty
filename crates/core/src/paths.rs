@@ -83,6 +83,15 @@ pub fn check_game_id(game_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Refuses an account id that could not safely name a folder, a lock or a keyring entry: GOG's
+/// user ids are digits.
+pub fn check_user_id(user_id: &str) -> Result<()> {
+    if user_id.is_empty() || !user_id.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(Error::Refused(format!("unexpected account id `{user_id}`")));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::PermissionsExt;
