@@ -244,6 +244,67 @@ async fn a_wrong_result_leaves_the_file_untouched() {
     assert!(env.leftovers().is_empty(), "{:?}", env.leftovers());
 }
 
+/// A game writes its own folder: links it plants at the names a patch is staged under, or in
+/// place of a folder a patched file goes into, never lead the patch out of the game folder.
+#[tokio::test]
+async fn links_planted_by_the_game_never_lead_a_patch_out_of_its_folder() {
+    let mut env = Env::new("planted");
+    let outside = env.root.with_file_name(format!(
+        "slatty-patch-planted-outside-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&outside);
+    std::fs::create_dir_all(&outside).unwrap();
+    for name in ["slatty-patch", "slatty-delta"] {
+        std::fs::write(outside.join(name), b"[FAKE] user file").unwrap();
+        std::os::unix::fs::symlink(
+            outside.join(name),
+            env.root.join(format!("Data/level1.{name}")),
+        )
+        .unwrap();
+    }
+    let patched = env.apply().await;
+    assert_eq!(patched.files, [PathBuf::from("Data/level1")]);
+    assert_eq!(env.file(), env.new);
+    for name in ["slatty-patch", "slatty-delta"] {
+        let kept = std::fs::read(outside.join(name)).unwrap() == b"[FAKE] user file";
+        assert!(kept, "{name} was written through the link");
+    }
+
+    // The new build moves the file into a folder the game replaced with a link.
+    std::fs::write(env.root.join("Data/level1"), &env.old).unwrap();
+    env.patch.target = "Moved\\level1".into();
+    env.set.files[0].0 = PathBuf::from("Moved/level1");
+    std::os::unix::fs::symlink(&outside, env.root.join("Moved")).unwrap();
+    let patched = env.apply().await;
+    assert!(patched.files.is_empty());
+    assert!(!outside.join("level1").exists());
+    std::fs::remove_dir_all(outside).unwrap();
+}
+
+/// A pipe a game left where a patched file was would make reading it wait for a writer forever,
+/// holding the game's lock.
+#[tokio::test]
+async fn a_pipe_in_place_of_a_patched_file_is_passed_over() {
+    use std::os::unix::fs::OpenOptionsExt;
+    let env = Env::new("pipe");
+    let file = env.root.join("Data/level1");
+    std::fs::remove_file(&file).unwrap();
+    nix::unistd::mkfifo(&file, nix::sys::stat::Mode::S_IRWXU).unwrap();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), env.apply()).await;
+    // Lets a reader stuck on the pipe go, so the test ends either way.
+    let _ = std::fs::OpenOptions::new()
+        .write(true)
+        .custom_flags(nix::fcntl::OFlag::O_NONBLOCK.bits())
+        .open(&file);
+    assert!(
+        result
+            .expect("the update waited on the pipe")
+            .files
+            .is_empty()
+    );
+}
+
 #[tokio::test]
 async fn a_corrupted_delta_chunk_leaves_the_file_untouched() {
     let mut env = Env::new("corrupt");

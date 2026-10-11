@@ -235,8 +235,7 @@ pub fn apply(source: &Path, delta: &Path, target: &Path, md5_target: &str) -> Re
         .len();
     let partial = partial_path(target);
     let result = (|| {
-        let out = std::fs::File::create(&partial)
-            .map_err(|e| Error::io(format!("create {}", partial.display()), e))?;
+        let out = fsutil::restart_staging(&partial)?;
         let mut writer = HashingWriter {
             inner: BufWriter::new(out),
             hasher: Md5::new(),
@@ -298,8 +297,7 @@ pub async fn download_delta<S: ContentSource>(
     dest: &Path,
 ) -> Result<()> {
     let store = galaxy::patch_store(&patch.product_id);
-    let mut out = std::fs::File::create(dest)
-        .map_err(|e| Error::io(format!("create {}", dest.display()), e))?;
+    let mut out = fsutil::restart_staging(dest)?;
     for c in &patch.chunks {
         let raw = source.chunk(&store, &c.compressed_md5).await?;
         let c = c.clone();
@@ -368,6 +366,14 @@ pub async fn apply_all<S: ContentSource>(
             continue;
         };
         let (src, dst) = (dir.join(src), dir.join(dst));
+        // The game writes its folder: a link there must not lead the patch out of it, and a pipe
+        // in place of the old file would never be read to its end.
+        if installer::refuse_outside(dir, &src).is_err()
+            || installer::refuse_outside(dir, &dst).is_err()
+            || !std::fs::symlink_metadata(&src).is_ok_and(|m| m.is_file())
+        {
+            continue;
+        }
         let md5 = tokio::task::spawn_blocking({
             let src = src.clone();
             move || file_md5(&src)
