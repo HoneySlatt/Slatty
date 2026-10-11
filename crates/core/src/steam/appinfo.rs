@@ -24,7 +24,7 @@ fn bad(what: &str) -> Error {
 
 /// The KeyValues of each app of `wanted` the file knows, by app id.
 pub fn read(path: &Path, wanted: &HashSet<u32>) -> Result<HashMap<u32, Vdf>> {
-    let file = std::fs::File::open(path).map_err(|e| Error::io("open appinfo.vdf", e))?;
+    let file = super::open(path).map_err(|e| Error::io("open appinfo.vdf", e))?;
     let mut data = Vec::new();
     std::io::Read::read_to_end(&mut std::io::Read::take(file, MAX_FILE), &mut data)
         .map_err(|e| Error::io("read appinfo.vdf", e))?;

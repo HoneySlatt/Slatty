@@ -112,7 +112,7 @@ fn library_cache(steam: &Steam, user: &SteamUser, app_id: u32) -> Option<serde_j
         .join(user.account_id().to_string())
         .join("config/librarycache")
         .join(format!("{app_id}.json"));
-    let file = std::fs::File::open(path).ok()?;
+    let file = super::open(&path).ok()?;
     let mut bytes = Vec::new();
     std::io::Read::read_to_end(&mut std::io::Read::take(file, MAX_CACHE_FILE), &mut bytes).ok()?;
     let all: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
@@ -176,7 +176,7 @@ fn date(seconds: i64) -> String {
 }
 
 fn read(path: &Path) -> Option<Vdf> {
-    let file = std::fs::File::open(path).ok()?;
+    let file = super::open(path).ok()?;
     let mut data = Vec::new();
     std::io::Read::read_to_end(&mut std::io::Read::take(file, MAX_FILE), &mut data).ok()?;
     super::appinfo::keyvalues(&data)

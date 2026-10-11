@@ -77,7 +77,7 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
         let here = |asset: &str, legacy: &str| {
             cached_asset(&folder, common, asset).or_else(|| {
                 let path = folder.join(legacy);
-                path.is_file().then_some(path)
+                cached_image(&path).then_some(path)
             })
         };
         let server = |asset: &str, legacy: &str| {
@@ -276,7 +276,16 @@ fn cached_asset(folder: &Path, common: &Vdf, asset: &str) -> Option<PathBuf> {
                 .all(|c| matches!(c, Component::Normal(_)))
         })
         .map(|rel| folder.join(rel))
-        .find(|path| path.is_file())
+        .find(|path| cached_image(path))
+}
+
+/// Whether `path` is an image file the client cached: a file of its own, not a link (which could
+/// lead to any file, the client's settings among them), and of an image's size.
+fn cached_image(path: &Path) -> bool {
+    /// The client's images are a few MB at most.
+    const MAX_IMAGE: u64 = 32 << 20;
+    path.symlink_metadata()
+        .is_ok_and(|m| m.is_file() && m.len() <= MAX_IMAGE)
 }
 
 #[cfg(test)]
@@ -495,10 +504,14 @@ mod tests {
         std::fs::create_dir_all(dir.join("app/abc")).unwrap();
         std::fs::write(dir.join("app/abc/library_capsule.jpg"), b"jpg").unwrap();
         std::fs::write(dir.join("outside.jpg"), b"jpg").unwrap();
+        // A link named as an image, leading to another file (the client's settings, say).
+        std::fs::write(dir.join("config.vdf"), b"[FAKE] settings").unwrap();
+        std::os::unix::fs::symlink(dir.join("config.vdf"), dir.join("app/abc/logo.png")).unwrap();
         let common = crate::steam::vdf::parse(
             r#""library_assets_full" {
                 "library_capsule" { "image" { "schinese" "../outside.jpg" "english" "abc/library_capsule.jpg" } }
                 "library_hero" { "image" { "english" "../outside.jpg" } }
+                "library_logo" { "image" { "english" "abc/logo.png" } }
             }"#,
         )
         .unwrap();
@@ -508,7 +521,26 @@ mod tests {
             Some(folder.join("abc/library_capsule.jpg"))
         );
         assert_eq!(cached_asset(&folder, &common, "library_hero"), None);
-        assert_eq!(cached_asset(&folder, &common, "library_logo"), None);
+        assert_eq!(
+            cached_asset(&folder, &common, "library_logo"),
+            None,
+            "a link"
+        );
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A pipe in place of one of the client's files holds nothing up.
+    #[test]
+    fn a_pipe_among_steams_files_is_passed_over() {
+        let fake = FakeSteam::new("fifo");
+        let pipe = fake.steam.root.join("steamapps/appmanifest_999.acf");
+        nix::unistd::mkfifo(&pipe, nix::sys::stat::Mode::S_IRWXU).unwrap();
+        let steam = fake.steam.clone();
+        let (sent, got) = std::sync::mpsc::channel();
+        std::thread::spawn(move || sent.send(local::installed(&steam)).unwrap());
+        let installed = got
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("not held by the pipe");
+        assert!(installed.iter().all(|g| g.app_id != 999));
     }
 }

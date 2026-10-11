@@ -262,7 +262,7 @@ fn safe_name(name: &str) -> bool {
 
 /// A text file of Steam's, if it is one.
 fn read(path: &Path) -> Option<Vdf> {
-    let file = std::fs::File::open(path).ok()?;
+    let file = super::open(path).ok()?;
     let mut text = String::new();
     std::io::Read::read_to_string(&mut std::io::Read::take(file, MAX_TEXT_FILE), &mut text).ok()?;
     vdf::parse(&text).ok()
