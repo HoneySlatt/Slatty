@@ -140,6 +140,12 @@ impl App {
                 }
             }
             SteamMsg::Loaded(Some(library)) if self.steam.on => {
+                // Another account signed in to Steam: the achievements read were the other's.
+                if self.steam.account.is_some_and(|a| a != library.user.id64) {
+                    self.achievements
+                        .retain(|id, _| store::steam_app(id).is_none());
+                    self.steam.achievements.clear();
+                }
                 self.steam.found = Some(library.user.name.clone());
                 self.steam.account = Some(library.user.id64);
                 self.steam.games = library.games;

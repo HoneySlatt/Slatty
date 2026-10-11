@@ -317,6 +317,13 @@ fn steam_achievements_show_with_gogs_and_are_never_changed_by_hand() {
         }],
     ));
     assert!(app.pending_change.is_none(), "never asked of Steam");
+
+    // Another account signed in to Steam meanwhile: the first one's achievements go.
+    let mut other = steam_library();
+    other.user.id64 = 76561198000000009;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(other))));
+    assert!(!app.achievements.contains_key("steam-440"));
+    assert!(app.steam.achievements.is_empty());
 }
 
 /// An install Steam makes shows on the game's page and in the Downloads tab, its manifest read
