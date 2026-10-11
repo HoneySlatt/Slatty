@@ -167,7 +167,8 @@ pub async fn play(
 
     if let Some(init) = runner::prefix_init_spec(dirs, &install)? {
         emit(PlayEvent::PreparingPrefix);
-        let log = dirs.logs().join(format!("prefix-{}.log", install.game_id));
+        let log = crate::logs::of_game(dirs, "prefix", &install.game_id);
+        crate::logs::start_run(&log);
         let busy = crate::lock::session(dirs, &install.game_id);
         let outcome = SessionHandle::start(&req.supervisor, &init, &log, Some(&busy))
             .await?
@@ -393,7 +394,8 @@ async fn run_session(
     stop: &mut UnboundedReceiver<()>,
     mut unlocks: Option<&mut comet::Unlocks>,
 ) -> Result<SessionOutcome> {
-    let log = dirs.logs().join(format!("game-{}.log", req.game_id));
+    let log = crate::logs::of_game(dirs, "game", &req.game_id);
+    crate::logs::start_run(&log);
     let busy = crate::lock::session(dirs, &req.game_id);
     let mut handle = SessionHandle::start(&req.supervisor, spec, &log, Some(&busy)).await?;
     match handle.next_event().await? {

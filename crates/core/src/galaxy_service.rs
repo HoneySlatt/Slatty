@@ -67,9 +67,8 @@ pub async fn ensure(dirs: &Dirs, install: &Install, exe: &Path, supervisor: &Pat
     if install.isolated {
         crate::installer::refuse_outside(prefix, &dest)?;
     }
-    let log = dirs
-        .logs()
-        .join(format!("galaxy-service-{}.log", install.game_id));
+    let log = crate::logs::of_game(dirs, "galaxy-service", &install.game_id);
+    crate::logs::start_run(&log);
     for args in commands() {
         let label = args[..2].join(" ");
         let spec = runner::windows_command(dirs, install, args, install.path.clone())?;

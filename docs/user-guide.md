@@ -283,7 +283,8 @@ or Stop game in the interface), it keeps the game from starting. Options:
 - `--no-cloud` skips step 2 and step 5's upload;
 - `--no-comet` runs without achievements.
 
-Game output goes to `~/.local/state/slatty/logs/game-<id>.log`.
+Game output goes to `~/.local/state/slatty/logs/game-<id>.log`, one session per file: the two
+sessions before are kept as `game-<id>.log.1` and `.log.2`.
 
 ### Isolation from your files
 
@@ -627,9 +628,10 @@ corners and the page transition. See [theming](theming.md).
 | `~/.local/share/slatty/diagnostics/` | Cloud copies downloaded by `slatty cloud diff` |
 | `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | Comet's data and configuration |
 | `~/.cache/slatty/<user id>/` | Library and covers; safe to delete |
-| `~/.local/state/slatty/logs/` | Game, prefix creation, setup, Galaxy service and Comet logs |
+| `~/.local/state/slatty/logs/` | Game, prefix creation, setup, Galaxy service and Comet logs: the last run of each and the two before (`.1`, `.2`); a game's go when it is uninstalled |
 
-Comet's log may contain game client identifiers; review it before sharing.
+Read a log before sharing it: a game's log holds whatever the game printed, which can include a
+GOG ticket of its own, and Comet's holds game client identifiers.
 
 ## Troubleshooting
 

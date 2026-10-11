@@ -17,6 +17,7 @@ pub mod install;
 pub mod installer;
 pub mod library;
 pub mod lock;
+pub mod logs;
 pub mod maintenance;
 pub mod overview;
 pub mod patches;

@@ -360,7 +360,8 @@ pub(crate) async fn run_held(
         redist: &redist,
     };
     let commands = commands(&meta, &needed, &record, &paths)?;
-    let log = dirs.logs().join(format!("setup-{}.log", install.game_id));
+    let log = crate::logs::of_game(dirs, "setup", &install.game_id);
+    crate::logs::start_run(&log);
     let mut failed = false;
     for command in &commands {
         emit(SetupEvent::Running(command.label.clone()));

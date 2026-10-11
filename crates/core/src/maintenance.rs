@@ -134,6 +134,7 @@ pub fn uninstall(
     crate::settings::set_held_back(db, game_id, false)?;
     let _ = std::fs::remove_file(InstallRecord::file(dirs, game_id));
     let _ = std::fs::remove_dir_all(installer::support_dir(dirs, game_id));
+    crate::logs::remove_game(dirs, game_id)?;
     Ok(report)
 }
 
@@ -903,6 +904,19 @@ mod tests {
         crate::settings::set_held_back(&env.db, "1", true).unwrap();
         uninstall(&env.db, &env.dirs, "1", false).unwrap();
         assert!(!crate::settings::held_back(&env.db, "1").unwrap());
+    }
+
+    /// A game's logs hold what it printed: they go with it.
+    #[test]
+    fn an_uninstalled_game_leaves_no_log() {
+        let env = Env::new("logs", true);
+        std::fs::create_dir_all(env.dirs.logs()).unwrap();
+        let log = crate::logs::of_game(&env.dirs, "game", "1");
+        std::fs::write(&log, b"[FAKE] ticket").unwrap();
+        crate::logs::start_run(&log);
+        std::fs::write(crate::logs::of_game(&env.dirs, "setup", "1"), b"setup").unwrap();
+        uninstall(&env.db, &env.dirs, "1", false).unwrap();
+        assert_eq!(std::fs::read_dir(env.dirs.logs()).unwrap().count(), 0);
     }
 
     #[test]

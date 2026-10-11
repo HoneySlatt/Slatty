@@ -43,6 +43,7 @@ impl Comet {
 
         let log_path = dirs.logs().join("comet.log");
         crate::paths::ensure_dir(&dirs.logs())?;
+        crate::logs::start_run(&log_path);
         let log = std::fs::OpenOptions::new()
             .create(true)
             .append(true)

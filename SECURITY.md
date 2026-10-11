@@ -107,9 +107,11 @@ show game titles and achievement names on a lock screen.
 - **Backups are kept.** Before a save is replaced or deleted, locally or in the cloud, a copy is
   written to `~/.local/share/slatty/backups/` and flushed to the disk. SlattyLauncher never deletes
   backups; they hold your saves.
-- **Logs are kept** in `~/.local/state/slatty/logs/` until you delete them. A game's log records
+- **Logs** in `~/.local/state/slatty/logs/` hold the last run of each program the launcher starts
+  and the two before (`.1`, `.2`); a game's logs go when it is uninstalled. A game's log records
   whatever the game prints, which can include identifiers or tickets of its own (one game printed a
-  GOG ticket there). Read a log before sharing it.
+  GOG ticket there). Read a log before sharing it. Comet's log from versions before 0.1.0 can hold
+  your refresh token: delete it, and sign out and in again if you ever shared it.
 - **Core dumps.** If SlattyLauncher crashes and your system keeps core dumps (systemd-coredump does
   on many distributions), the dump can hold your session tokens.
 

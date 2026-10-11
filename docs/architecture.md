@@ -44,6 +44,7 @@ core functions. Long operations report progress through callbacks or typed event
 | `custom` | Titles, sorting titles, covers and backgrounds the user chose, and the games they hid, apart from GOG's data; chosen or downloaded images are copied into the data folder |
 | `steamgriddb` | SteamGridDB, once turned on: games searched by name, their grids (covers) and heroes (backgrounds), images downloaded from its servers only; the user's API key in a header |
 | `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
+| `logs` | Logs of the programs the launcher starts: each run starts its own (`start_run`, before the first command of a launch, a prefix creation, a setup, a Galaxy service registration, a Comet), the two runs before kept as `.1` and `.2`; the session supervisor appends the commands of one run to it. A game's logs go with its uninstall: they hold what it printed |
 
 ## Interface modules
 
