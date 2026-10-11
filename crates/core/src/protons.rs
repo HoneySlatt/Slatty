@@ -176,6 +176,50 @@ fn point_latest(dirs: &Dirs, source: Source, name: &str) -> Result<()> {
     })
 }
 
+/// Makes the links in Steam's `compatibilitytools.d` match the downloaded builds and the Share
+/// with Steam and Heroic setting: one link per build while it is on, none once it is off. Only
+/// links leading into the downloaded builds' folder are ever made or removed there; a name
+/// already taken is left alone. Nothing to do without a native Steam.
+pub fn sync_shared(db: &Db, dirs: &Dirs) -> Result<()> {
+    let Some(shared) = crate::settings::shared_protons_dir() else {
+        return Ok(());
+    };
+    // A download or removal running calls this itself once done.
+    let Some(_lock) = crate::lock::try_acquire(&lock_file(dirs))? else {
+        return Ok(());
+    };
+    sync_shared_in(dirs, &shared, crate::settings::share_protons(db)?)
+}
+
+fn sync_shared_in(dirs: &Dirs, shared: &Path, on: bool) -> Result<()> {
+    let root = dir(dirs);
+    let ours: Vec<PathBuf> = std::fs::read_dir(shared)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| std::fs::read_link(p).is_ok_and(|t| t.starts_with(&root)))
+        .collect();
+    let io = |what: &str, p: &Path, e| Error::io(format!("{what} {}", p.display()), e);
+    for link in &ours {
+        if !on || !link.join("proton").is_file() {
+            std::fs::remove_file(link).map_err(|e| io("unlink", link, e))?;
+        }
+    }
+    if !on {
+        return Ok(());
+    }
+    crate::paths::ensure_dir(shared)?;
+    for build in installed(dirs) {
+        let link = shared.join(build.file_name().unwrap_or_default());
+        if std::fs::symlink_metadata(&link).is_ok() {
+            continue;
+        }
+        std::os::unix::fs::symlink(&build, &link).map_err(|e| io("link", &link, e))?;
+    }
+    Ok(())
+}
+
 /// Gives each project that has downloaded builds but no `-latest` link one, to its newest build:
 /// builds downloaded before the links existed, or a link left leading to a build deleted by hand.
 pub fn link_newest(dirs: &Dirs) -> Result<()> {

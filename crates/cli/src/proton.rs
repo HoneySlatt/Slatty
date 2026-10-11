@@ -36,6 +36,12 @@ pub enum ProtonCommand {
     },
     /// Download the newest build of each project games follow as <project>-latest, now
     Update,
+    /// Link the downloaded builds into Steam's compatibilitytools.d, where Steam and Heroic
+    /// list them (off until turned on)
+    Share {
+        #[arg(value_enum)]
+        state: State,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -63,6 +69,7 @@ impl From<SourceArg> for Source {
 
 pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
     protons::link_newest(&ctx.dirs)?;
+    protons::sync_shared(&ctx.db, &ctx.dirs)?;
     match cmd {
         ProtonCommand::List => {
             for build in settings::proton_candidates(&ctx.dirs) {
@@ -106,10 +113,12 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
             let path =
                 protons::install(&ctx.http, &ctx.dirs, &release, progress, &stop_on_ctrl_c())
                     .await?;
+            protons::sync_shared(&ctx.db, &ctx.dirs)?;
             println!("Installed in {}", path.display());
         }
         ProtonCommand::Remove { name } => {
             protons::remove(&ctx.db, &ctx.dirs, &protons::dir(&ctx.dirs).join(&name))?;
+            protons::sync_shared(&ctx.db, &ctx.dirs)?;
             println!("Deleted {name}");
         }
         ProtonCommand::Updates { state } => {
@@ -144,6 +153,7 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
                 &stop_on_ctrl_c(),
             )
             .await?;
+            protons::sync_shared(&ctx.db, &ctx.dirs)?;
             if updated.installed.is_empty() && updated.failed.is_empty() {
                 println!("Up to date");
             }
@@ -156,6 +166,19 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
             if !updated.failed.is_empty() {
                 anyhow::bail!("{} project(s) could not be updated", updated.failed.len());
             }
+        }
+        ProtonCommand::Share { state } => {
+            let on = matches!(state, State::On);
+            settings::set_share_protons(&ctx.db, on)?;
+            protons::sync_shared(&ctx.db, &ctx.dirs)?;
+            println!(
+                "Downloaded Proton builds are {}",
+                if on {
+                    "linked into Steam's compatibilitytools.d"
+                } else {
+                    "no longer linked into Steam's compatibilitytools.d"
+                }
+            );
         }
     }
     Ok(())

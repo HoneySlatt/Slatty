@@ -474,6 +474,7 @@ slatty proton list
 slatty proton remove GE-Proton11-7-x86_64
 slatty proton updates on               # keep <project>-latest up to date, once a day at start
 slatty proton update                   # or now
+slatty proton share on                 # list the downloaded builds in Steam and Heroic
 ```
 
 - Each archive is checked against the SHA-512 sum its release publishes before it is opened, then
@@ -499,6 +500,12 @@ slatty proton update                   # or now
 - A build is kept until you delete it, even once a newer one is out, unless an update deletes it as
   above. Deleting one is refused while a game or the default Proton uses it, or while games follow
   the `-latest` link that leads to it.
+- **Share with Steam and Heroic** (Settings → Runners, or `slatty proton share on`), off until
+  turned on, links each downloaded build into `~/.local/share/Steam/compatibilitytools.d`, where
+  Steam and Heroic list custom builds (Steam after a restart). Only the builds themselves are
+  shared, by their numbered names, not the `-latest` links; a name already there is left alone.
+  The links follow the builds (a download adds one, a deletion removes one) and go when the
+  setting is turned off. Steam installed as a Flatpak cannot see them.
 - Valve's own builds (Proton Experimental, stable, Hotfix) need Steam's client library: an
   isolated game run with one is given `steamclient.so` from Steam's `linux64` and `linux32`
   folders, read-only, and nothing else of Steam. The other builds run without it.

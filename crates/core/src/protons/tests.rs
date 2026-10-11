@@ -1030,3 +1030,57 @@ fn unpacking_a_large_build() {
     assert!(root.join("build/proton").is_file());
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn shared_links_follow_the_downloaded_builds_and_the_setting() {
+    let root = root("shared");
+    let dirs = Dirs::under(&root);
+    let shared = root.join("compatibilitytools.d");
+    let ge = fake_build(&dirs, "GE-Proton11-7-x86_64");
+    let cachy = fake_build(&dirs, "proton-cachyos-11.0-20261005-slr-x86_64_v3");
+    std::os::unix::fs::symlink("GE-Proton11-7-x86_64", latest_link(&dirs, Source::GeProton))
+        .unwrap();
+    // What the user put there: a build of their own, a link elsewhere, and a name a build has.
+    std::fs::create_dir_all(shared.join("Other/proton")).unwrap();
+    std::os::unix::fs::symlink("/elsewhere", shared.join("Elsewhere")).unwrap();
+    std::fs::create_dir_all(shared.join("proton-cachyos-11.0-20261005-slr-x86_64_v3")).unwrap();
+
+    sync_shared_in(&dirs, &shared, true).unwrap();
+    assert_eq!(
+        std::fs::read_link(shared.join("GE-Proton11-7-x86_64")).unwrap(),
+        ge
+    );
+    assert!(!shared.join("GE-Proton-latest").exists(), "builds only");
+    assert!(
+        shared
+            .join("proton-cachyos-11.0-20261005-slr-x86_64_v3")
+            .is_dir()
+    );
+    assert!(
+        !shared
+            .join("proton-cachyos-11.0-20261005-slr-x86_64_v3")
+            .is_symlink(),
+        "a name already taken is left alone"
+    );
+    sync_shared_in(&dirs, &shared, true).unwrap();
+
+    // A build deleted (by hand or by an update) loses its link; the others stay.
+    std::fs::remove_dir_all(&ge).unwrap();
+    std::fs::remove_dir_all(shared.join("proton-cachyos-11.0-20261005-slr-x86_64_v3")).unwrap();
+    sync_shared_in(&dirs, &shared, true).unwrap();
+    assert!(!shared.join("GE-Proton11-7-x86_64").is_symlink());
+    assert_eq!(
+        std::fs::read_link(shared.join("proton-cachyos-11.0-20261005-slr-x86_64_v3")).unwrap(),
+        cachy
+    );
+
+    sync_shared_in(&dirs, &shared, false).unwrap();
+    let left: Vec<String> = std::fs::read_dir(&shared)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    let mut left = left;
+    left.sort();
+    assert_eq!(left, ["Elsewhere", "Other"], "only our links go");
+    std::fs::remove_dir_all(root).unwrap();
+}

@@ -22,6 +22,7 @@ const ISOLATE_NEW_GAMES: &str = "isolate_new_games";
 const PROTON_DOWNLOADS: &str = "proton_downloads";
 const PROTON_UPDATES: &str = "proton_updates";
 const PROTON_CHECKED_AT: &str = "proton_checked_at";
+const SHARE_PROTONS: &str = "share_protons";
 const AUTO_UPDATE: &str = "auto_update";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
@@ -135,6 +136,16 @@ pub fn proton_updates(db: &Db) -> Result<bool> {
 
 pub fn set_proton_updates(db: &Db, on: bool) -> Result<()> {
     db.set_setting(PROTON_UPDATES, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether the downloaded Proton builds are linked into Steam's `compatibilitytools.d`, where
+/// Steam and Heroic find them. Off until turned on.
+pub fn share_protons(db: &Db) -> Result<bool> {
+    Ok(db.setting(SHARE_PROTONS)?.as_deref() == Some("on"))
+}
+
+pub fn set_share_protons(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(SHARE_PROTONS, Some(if on { "on" } else { "off" }))
 }
 
 /// When GitHub was last asked for newer Proton builds, in seconds since the epoch.

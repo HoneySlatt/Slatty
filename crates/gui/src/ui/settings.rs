@@ -439,6 +439,23 @@ impl App {
                 rows.push(self.release_row(wide, *source, release));
             }
         }
+        rows.push(setting(
+            wide,
+            "Share with Steam and Heroic",
+            column![
+                toggler(r.shared)
+                    .on_toggle(move |on| msg(RunnersMsg::Share(on)))
+                    .size(22),
+                note(
+                    "Links each downloaded build into Steam's compatibilitytools.d, where Steam \
+                     and Heroic list it. Only the build itself is shared; the links go when it \
+                     is turned off or a build is deleted.",
+                ),
+            ]
+            .spacing(8)
+            .into(),
+            None,
+        ));
         if !r.downloaded.is_empty() {
             let builds = r.downloaded.iter().map(|path| {
                 let name = path.file_name().unwrap_or_default().to_string_lossy();

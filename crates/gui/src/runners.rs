@@ -16,6 +16,9 @@ pub struct RunnersView {
     pub downloads: bool,
     /// Whether the builds games follow as `-latest` are updated at start, off until turned on.
     pub updates: bool,
+    /// Whether the downloaded builds are linked into Steam's `compatibilitytools.d`, off until
+    /// turned on.
+    pub shared: bool,
     pub checking: bool,
     pub updating: bool,
     /// The newest build of each project, once asked for.
@@ -37,6 +40,7 @@ pub enum RunnersMsg {
     /// `Err(None)` when the download was stopped.
     Installed(Result<PathBuf, Option<String>>),
     Updates(bool),
+    Share(bool),
     /// Downloads the newest build of each project games follow as `-latest`.
     Update,
     /// The builds an update installed and, for each project it could not update, why;
@@ -129,6 +133,14 @@ impl App {
             RunnersMsg::Updates(on) => {
                 view.updates = on;
                 if let Err(e) = slatty_core::settings::set_proton_updates(&core.db, on) {
+                    self.notify_error(e.to_string());
+                }
+            }
+            RunnersMsg::Share(on) => {
+                view.shared = on;
+                if let Err(e) = slatty_core::settings::set_share_protons(&core.db, on)
+                    .and_then(|()| protons::sync_shared(&core.db, &core.dirs))
+                {
                     self.notify_error(e.to_string());
                 }
             }
@@ -245,12 +257,15 @@ impl App {
     }
 }
 
-/// Lists the Proton builds again, off the interface thread: Steam libraries can be on slow drives.
+/// Lists the Proton builds again, off the interface thread: Steam libraries can be on slow
+/// drives. The links in Steam's `compatibilitytools.d` follow the builds first; one that cannot be
+/// made only leaves that build out of Steam and Heroic.
 pub fn list(core: &crate::Core) -> Task<Message> {
-    let dirs = core.dirs.clone();
+    let (db, dirs) = (core.db.clone(), core.dirs.clone());
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
+                let _ = protons::sync_shared(&db, &dirs);
                 (
                     slatty_core::settings::proton_candidates(&dirs),
                     protons::installed(&dirs),

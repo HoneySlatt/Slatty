@@ -203,3 +203,14 @@ fn followed_builds_are_kept_up_to_date_once_turned_on() {
     )))));
     assert_eq!(said(&app).0, "Proton update failed");
 }
+
+#[test]
+fn sharing_with_steam_and_heroic_is_offered_and_off_until_turned_on() {
+    let app = runners_page();
+    assert!(!app.runners.shared);
+    assert!(
+        render_window(&app)
+            .find("Share with Steam and Heroic")
+            .is_ok()
+    );
+}

@@ -656,6 +656,7 @@ impl App {
                 self.runners.downloads = boot.proton_downloads;
                 self.runners.downloaded = boot.downloaded_protons;
                 self.runners.updates = boot.proton_updates;
+                self.runners.shared = boot.proton_shared;
                 self.updates.on = boot.auto_update;
                 self.notifications =
                     notify::Switches::read(&self.core.as_ref().expect("just set").db);

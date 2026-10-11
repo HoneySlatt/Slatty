@@ -43,6 +43,8 @@ pub struct Boot {
     /// Whether followed Proton builds are kept up to date, and whether a check is due now.
     pub proton_updates: bool,
     pub proton_update_due: bool,
+    /// Whether the downloaded Proton builds are linked into Steam's `compatibilitytools.d`.
+    pub proton_shared: bool,
     /// Whether games on their newest build are updated without asking.
     pub auto_update: bool,
     pub favorites: Vec<String>,
@@ -163,6 +165,7 @@ async fn boot() -> Result<Boot, String> {
     let proton_downloads = slatty_core::settings::proton_downloads(&db).map_err(err)?;
     let downloaded_protons = slatty_core::protons::installed(&dirs);
     let proton_updates = slatty_core::settings::proton_updates(&db).map_err(err)?;
+    let proton_shared = slatty_core::settings::share_protons(&db).map_err(err)?;
     let auto_update = slatty_core::settings::auto_update(&db).map_err(err)?;
     let proton_update_due =
         slatty_core::protons::update_due(&db, chrono::Utc::now().timestamp()).map_err(err)?;
@@ -217,6 +220,7 @@ async fn boot() -> Result<Boot, String> {
         downloaded_protons,
         proton_updates,
         proton_update_due,
+        proton_shared,
         auto_update,
         default_platform,
         umu_lookup,
