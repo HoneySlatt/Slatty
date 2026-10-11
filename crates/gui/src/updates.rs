@@ -168,24 +168,17 @@ impl App {
         Task::none()
     }
 
-    /// An update ended, applied or not: the next one may start.
+    /// An update ended, applied or not: the next one may start. Said by a notification, as any
+    /// update (`MaintenanceMsg::Updated`).
     pub fn update_ended(&mut self, game_id: &str, result: &Result<String, Option<String>>) {
         if self.updates.current.as_deref() != Some(game_id) {
             return;
         }
         self.updates.current = None;
-        let title = self.title_of(game_id);
-        match result {
-            Ok(summary) => {
-                self.notice = Some(crate::Notice {
-                    error: false,
-                    text: format!("{title} updated. {summary}"),
-                });
-            }
-            Err(Some(e)) => self.notify_error(format!("{title} could not be updated: {e}")),
-            // Paused: it waits until asked, like any paused update, and the others wait for the
-            // next check rather than start in its place.
-            Err(None) => self.updates.waiting.clear(),
+        // Paused: it waits until asked, like any paused update, and the others wait for the next
+        // check rather than start in its place.
+        if let Err(None) = result {
+            self.updates.waiting.clear();
         }
     }
 }

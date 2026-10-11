@@ -8,6 +8,7 @@ mod install;
 mod library;
 mod login;
 mod maintenance;
+mod notify;
 mod play;
 mod presets;
 mod runners;
@@ -251,6 +252,12 @@ pub struct App {
     pub launch_prompt: Option<String>,
     /// A game whose Play waits for its folder to be read.
     pub launch_reading: Option<String>,
+    /// Which notifications are shown, the cards in the window's corner, and whether the window
+    /// lacks the focus (the desktop's notifications are used then).
+    pub notifications: notify::Switches,
+    pub toasts: Vec<notify::Toast>,
+    pub next_toast: u64,
+    pub unfocused: bool,
     /// Games not installed whose page was opened: `Some` when GOG offers nothing to install.
     pub installability: HashMap<String, Option<NotInstallable>>,
     pub proton: Option<PathBuf>,
@@ -348,6 +355,10 @@ impl Default for App {
             launch_choices: HashMap::new(),
             launch_prompt: None,
             launch_reading: None,
+            notifications: Default::default(),
+            toasts: Vec::new(),
+            next_toast: 0,
+            unfocused: false,
             installability: HashMap::new(),
             settings_view: settings::SettingsView::default(),
             proton: None,
@@ -436,6 +447,7 @@ pub enum Message {
     Cloud(String, CloudRequest),
     CloudDone(String, CloudRequest, Result<CloudResult, String>),
     Install(InstallMsg),
+    Notify(notify::NotifyMsg),
     Downloads(downloads::DownloadsMsg),
     Maintenance(MaintenanceMsg),
     Settings(SettingsMsg),
@@ -452,6 +464,15 @@ pub enum Message {
     WindowResized(Size),
     Frame(Instant),
     Key(keyboard::Event),
+}
+
+/// The window gaining or losing the focus, as a message; its other events send none.
+fn focus_message((_, event): (iced::window::Id, iced::window::Event)) -> Option<Message> {
+    match event {
+        iced::window::Event::Focused => Some(Message::Notify(notify::NotifyMsg::Focus(true))),
+        iced::window::Event::Unfocused => Some(Message::Notify(notify::NotifyMsg::Focus(false))),
+        _ => None,
+    }
 }
 
 /// The keys the window answers itself (Tab, Shift+Tab, Escape), as a message. The others send
@@ -493,6 +514,8 @@ impl Message {
                 // play times unless the library is sorted by them (`App::playtimes_fetched`).
                 | Message::LaunchOptions(..)
                 | Message::PlaytimesFetched(_)
+                // Notification cards come and go, and the window's focus with them.
+                | Message::Notify(_)
                 | Message::Runners(runners::RunnersMsg::Listed(..))
                 | Message::Updates(updates::UpdatesMsg::Checked(..))
         )
@@ -540,10 +563,19 @@ impl App {
         } else {
             Subscription::none()
         };
+        // Cards in the window's corner go once their time is over.
+        let toasts = if self.toasts.is_empty() {
+            Subscription::none()
+        } else {
+            iced::time::every(std::time::Duration::from_millis(500))
+                .map(|now| Message::Notify(notify::NotifyMsg::Expire(now)))
+        };
         Subscription::batch([
             frames,
             update_checks,
             downloads,
+            toasts,
+            iced::window::events().filter_map(focus_message),
             keyboard::listen().filter_map(key_message),
             iced::window::close_requests().map(|_| Message::CloseRequested),
             iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),
@@ -625,6 +657,8 @@ impl App {
                 self.runners.downloaded = boot.downloaded_protons;
                 self.runners.updates = boot.proton_updates;
                 self.updates.on = boot.auto_update;
+                self.notifications =
+                    notify::Switches::read(&self.core.as_ref().expect("just set").db);
                 let proton_update = if boot.proton_update_due {
                     self.update_runners(runners::RunnersMsg::Update)
                 } else {
@@ -824,6 +858,7 @@ impl App {
             }
             Message::Frame(now) => self.now = now,
             Message::DismissNotice => self.notice = None,
+            Message::Notify(msg) => return self.update_notify(msg),
             Message::CloseRequested => {
                 let running = self.running_work();
                 if running.is_empty() {

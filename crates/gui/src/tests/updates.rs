@@ -90,10 +90,12 @@ fn games_found_with_an_update_are_updated_one_after_the_other() {
         "3".into(),
         Ok("Now at 1.1: 2 file(s) downloaded, 0 removed.".into()),
     )));
-    assert!(
-        app.notice
-            .as_ref()
-            .is_some_and(|n| !n.error && n.text.starts_with("[FAKE] Game 3 updated."))
+    assert_eq!(
+        toasted(&app).last(),
+        Some(&(
+            "[FAKE] Game 3 updated".to_string(),
+            "Now at 1.1: 2 file(s) downloaded, 0 removed.".to_string()
+        ))
     );
     assert_eq!(app.updates.current.as_deref(), Some("5"));
     assert!(app.updates.waiting.is_empty());

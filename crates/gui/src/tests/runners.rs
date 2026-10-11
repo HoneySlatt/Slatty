@@ -175,10 +175,13 @@ fn followed_builds_are_kept_up_to_date_once_turned_on() {
         Vec::new(),
     )))));
     assert!(!app.runners.updating && app.runners.installing.is_none());
-    assert!(
-        app.notice
-            .as_ref()
-            .is_some_and(|n| !n.error && n.text == "Proton updated: GE-Proton11-7-x86_64.")
+    let said = |app: &App| toasted(app).last().cloned().unwrap_or_default();
+    assert_eq!(
+        said(&app),
+        (
+            "Proton updated".into(),
+            "GE-Proton11-7-x86_64 installed.".into()
+        )
     );
     // A project that failed is said, beside those updated.
     let _ = app.update(Message::Runners(RunnersMsg::Update));
@@ -186,16 +189,17 @@ fn followed_builds_are_kept_up_to_date_once_turned_on() {
         vec![release],
         vec!["Proton-CachyOS: no sum published".into()],
     )))));
-    assert!(app.notice.as_ref().is_some_and(|n| n.error
-        && n.text == "Proton update: Proton-CachyOS: no sum published"));
+    assert_eq!(
+        said(&app),
+        (
+            "Proton update failed".into(),
+            "Proton-CachyOS: no sum published".into()
+        )
+    );
 
     let _ = app.update(Message::Runners(RunnersMsg::Update));
     let _ = app.update(Message::Runners(RunnersMsg::Updated(Err(Some(
         "GitHub refuses more requests from this address for now; try again later".into(),
     )))));
-    assert!(
-        app.notice
-            .as_ref()
-            .is_some_and(|n| n.error && n.text.starts_with("Proton update:"))
-    );
+    assert_eq!(said(&app).0, "Proton update failed");
 }

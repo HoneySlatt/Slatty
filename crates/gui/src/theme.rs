@@ -734,6 +734,29 @@ pub fn menu(_: &Theme) -> container::Style {
     }
 }
 
+/// A notification card floating in the window's corner, like a menu; lighter under the pointer.
+pub fn toast(_: &Theme, status: button::Status) -> button::Style {
+    let t = tokens();
+    let fill = match status {
+        button::Status::Hovered | button::Status::Pressed => t.surface_high,
+        _ => t.surface,
+    };
+    button::Style {
+        background: Some(Background::Color(fill)),
+        text_color: t.text,
+        border: round(t.radius).color(t.outline).width(1.0),
+        shadow: Shadow {
+            color: Color {
+                a: 0.4,
+                ..Color::BLACK
+            },
+            offset: iced::Vector::new(0.0, 6.0),
+            blur_radius: 18.0,
+        },
+        snap: true,
+    }
+}
+
 /// An outlined box around a field (the search box).
 pub fn outlined(_: &Theme) -> container::Style {
     let t = tokens();

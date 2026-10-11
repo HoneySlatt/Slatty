@@ -109,8 +109,58 @@ impl App {
                 self.quit_confirm
                     .as_ref()
                     .map(|work| quit_dialog(empty(), work)),
-            );
+            )
+            .push((!self.toasts.is_empty()).then(|| self.toasts()));
         pointer::right_clicks(layers, |at| Message::Edit(EditMsg::At(at))).into()
+    }
+
+    /// Notification cards, in the bottom right corner over everything else; a click opens the game
+    /// a card is about. Only the cards take the pointer: the page around them stays usable.
+    fn toasts(&self) -> Element<'_, Message> {
+        let cards = self.toasts.iter().map(|t| {
+            let cover = t.game.as_deref().and_then(|id| self.cover(id)).map(|h| {
+                iced::widget::image(h)
+                    .content_fit(iced::ContentFit::Cover)
+                    .width(42)
+                    .height(56)
+                    .border_radius(tokens().cover_radius)
+            });
+            let card = row![]
+                .push(cover)
+                .push(
+                    column![
+                        text(&t.title).size(15).font(theme::semibold()),
+                        text(&t.body).size(13).color(tokens().muted),
+                    ]
+                    .spacing(3)
+                    .width(Length::Fill),
+                )
+                .push(
+                    button(icon(Icon::X, 14.0, tokens().muted))
+                        .padding(4)
+                        .on_press(Message::Notify(crate::notify::NotifyMsg::Dismiss(t.id)))
+                        .style(theme::ghost),
+                )
+                .spacing(12)
+                .align_y(Alignment::Center);
+            button(card)
+                .padding([12, 14])
+                .width(360)
+                .on_press_maybe(
+                    t.game
+                        .is_some()
+                        .then_some(Message::Notify(crate::notify::NotifyMsg::Open(t.id))),
+                )
+                .style(theme::toast)
+                .into()
+        });
+        container(Column::with_children(cards).spacing(10))
+            .padding(20)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_right(Length::Fill)
+            .align_bottom(Length::Fill)
+            .into()
     }
 
     pub(crate) fn selected_game(&self) -> Option<&LibraryGame> {

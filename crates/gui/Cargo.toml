@@ -20,6 +20,8 @@ slatty-core.workspace = true
 tokio = { workspace = true, features = ["sync", "macros"] }
 tokio-util = "0.7"
 toml = "0.9"
+# The desktop's notifications; already built for Iced and the keyring, no crate added.
+zbus = "5"
 tracing-subscriber.workspace = true
 
 [dev-dependencies]

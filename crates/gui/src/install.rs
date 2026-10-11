@@ -15,6 +15,7 @@ use slatty_core::maintenance::Change;
 use tokio_util::sync::CancellationToken;
 
 use crate::maintenance::MaintenanceMsg;
+use crate::notify::Kind;
 use crate::settings::ProtonChoice;
 use crate::work::{paused_or, progress_stream, tokens};
 use crate::{App, Core, Message, err};
@@ -134,6 +135,22 @@ pub enum InstallMsg {
 }
 
 impl App {
+    /// The downloads wait for GOG, said once as they start waiting.
+    fn wait_for_gog(&mut self, e: String) -> Task<Message> {
+        let told = if self.downloads_waiting.is_none() {
+            self.notify(
+                Kind::Downloads,
+                None,
+                "Downloads waiting for GOG",
+                format!("GOG cannot be reached ({e}). They go on by themselves once it answers."),
+            )
+        } else {
+            Task::none()
+        };
+        self.downloads_waiting = Some(e);
+        told
+    }
+
     pub fn installing(&self) -> Option<(&str, &str, Progress)> {
         self.install_views.iter().find_map(|(id, v)| match v {
             InstallView::Running {
@@ -225,7 +242,7 @@ impl App {
                     self.queue.insert(0, game_id);
                     self.save_queue();
                 }
-                self.downloads_waiting = Some(e);
+                return self.wait_for_gog(e);
             }
             InstallMsg::Retry => {
                 self.downloads_waiting = None;
@@ -270,6 +287,12 @@ impl App {
                 let cancel = CancellationToken::new();
                 let title = info.title.clone();
                 let folder = info.folder();
+                let started = self.notify(
+                    Kind::Downloads,
+                    Some(&game_id),
+                    "Download started",
+                    title.clone(),
+                );
                 self.forget_interrupted(&game_id);
                 self.install_views.insert(
                     game_id.clone(),
@@ -289,7 +312,7 @@ impl App {
                 {
                     self.panel = None;
                 }
-                return Task::run(install_stream(core, req, cancel), |m| m);
+                return Task::batch([Task::run(install_stream(core, req, cancel), |m| m), started]);
             }
             InstallMsg::Progress(game_id, p) => {
                 if let Some(InstallView::Running { progress, rate, .. }) =
@@ -427,12 +450,18 @@ impl App {
                     self.completed
                         .insert(0, (game_id.clone(), progress.bytes_total));
                 }
+                let done = self.notify(
+                    Kind::Downloads,
+                    Some(&game_id),
+                    "Download complete",
+                    format!("{} is ready to play.", self.title_of(&game_id)),
+                );
                 self.installs.insert(game_id.clone(), install);
                 let read = self.refresh_record(&game_id);
                 if self.selected.as_deref() == Some(game_id.as_str()) {
                     self.panel = None;
                 }
-                return Task::batch([read, self.start_next()]);
+                return Task::batch([read, done, self.start_next()]);
             }
             // Paused: the queue waits too.
             InstallMsg::Done(game_id, Err(None)) => {
@@ -449,11 +478,16 @@ impl App {
                     .any(|(id, k)| *id == game_id && *k == crate::Interrupted::Download)
                 {
                     self.install_views.remove(&game_id);
-                    self.downloads_waiting = Some(e);
-                    return Task::none();
+                    return self.wait_for_gog(e);
                 }
+                let failed = self.notify(
+                    Kind::Downloads,
+                    Some(&game_id),
+                    "Download failed",
+                    format!("{}: {e}", self.title_of(&game_id)),
+                );
                 self.install_views.insert(game_id, InstallView::Failed(e));
-                return self.start_next();
+                return Task::batch([failed, self.start_next()]);
             }
         }
         Task::none()

@@ -500,7 +500,7 @@ slatty proton update                   # or now
 ## Settings
 
 The interface's **Settings** tab lists its parts on the left (Account, Library, Installs,
-Runners, Appearance, Privacy, Advanced, About); choosing one brings it to the top, and the list follows the page as it
+Runners, Appearance, Notifications, Privacy, Advanced, About); choosing one brings it to the top, and the list follows the page as it
 scrolls. **Account** shows who is signed in, with
 Log out. **Library** shows how many games you own and when the list was refreshed, with Refresh
 library, and the size of the covers. **Installs** holds:
@@ -518,6 +518,15 @@ library, and the size of the covers. **Installs** holds:
 - **Update games automatically:** on until turned off; see [Updates](#updates).
 
 `slatty install --dir` and `--proton` set the same values.
+
+**Notifications** tells what happens in the background, as Steam does: a download started,
+complete, failed or waiting for GOG; a game or Proton update applied or failed; the achievements
+unlocked in a game, said when it ends (Comet sends them to GOG during the game without telling the
+launcher); cloud saves needing attention before a game or left out of the upload after it. While
+the window is in front, they show as cards in its bottom right corner for a few seconds, a click
+opening the game's page; otherwise (a game in front, the window hidden) as the desktop's own
+notifications, with the game's cover. A switch turns them all off, and one each kind; all are on
+until turned off.
 
 **Runners** holds **Proton downloads**, off until turned on (see [Proton builds](#proton-builds)).
 Once on, **Check GitHub** shows the newest build of GE-Proton, Proton-CachyOS and UMU-Proton, each

@@ -6,6 +6,7 @@ use slatty_core::play::{self, PlayEvent, PlayRequest};
 use slatty_core::session;
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::notify::Kind;
 use crate::{App, CloudRequest, Core, Message, err, ui};
 
 pub struct PlayState {
@@ -61,6 +62,36 @@ impl App {
         Task::run(play_stream(core, game_id, stop_rx), Message::Playing)
     }
 
+    /// What a session tells by a notification: the achievements unlocked (known once the game
+    /// ended), and cloud saves needing attention or left out of the upload.
+    fn play_notification(&mut self, game_id: &str, event: &PlayEvent) -> Task<Message> {
+        let title = self.title_of(game_id);
+        let (kind, heading, body) = match event {
+            PlayEvent::Unlocked(names) if names.len() == 1 => (
+                Kind::Achievements,
+                "Achievement unlocked".to_string(),
+                format!("{} · {title}", names[0]),
+            ),
+            PlayEvent::Unlocked(names) => (
+                Kind::Achievements,
+                format!("{} achievements unlocked", names.len()),
+                format!("{} · {title}", names.join(", ")),
+            ),
+            PlayEvent::Blocked(_) => (
+                Kind::Cloud,
+                "Cloud saves need attention".to_string(),
+                format!("{title} was not started: see Cloud saves on its page."),
+            ),
+            PlayEvent::CloudUploadSkipped(why) => (
+                Kind::Cloud,
+                "Cloud saves not uploaded".to_string(),
+                format!("{title}: {why}"),
+            ),
+            _ => return Task::none(),
+        };
+        self.notify(kind, Some(game_id), heading, body)
+    }
+
     /// Keeps how a game is started, for its next launches.
     pub fn choose_launch(&mut self, game_id: &str, choice: String) {
         if let Some(core) = &self.core
@@ -85,7 +116,8 @@ impl App {
         let result = match msg {
             PlayMsg::Event(event) => {
                 p.log.push(ui::format::describe_play_event(&event));
-                return Task::none();
+                let game = p.game_id.clone();
+                return self.play_notification(&game, &event);
             }
             PlayMsg::Done(result) => result,
         };

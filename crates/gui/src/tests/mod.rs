@@ -140,6 +140,14 @@ fn settle(app: &mut App) {
     let _ = app.update(Message::Frame(app.now + std::time::Duration::from_secs(1)));
 }
 
+/// The notification cards shown, as title and text.
+fn toasted(app: &App) -> Vec<(String, String)> {
+    app.toasts
+        .iter()
+        .map(|t| (t.title.clone(), t.body.clone()))
+        .collect()
+}
+
 fn titles(app: &App) -> Vec<String> {
     app.visible_games()
         .iter()
@@ -257,6 +265,7 @@ mod game_page;
 mod install;
 mod library;
 mod maintenance;
+mod notify;
 mod runners;
 mod settings;
 mod updates;

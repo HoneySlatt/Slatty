@@ -7,6 +7,7 @@ use slatty_core::installer::{DlcChoice, Progress};
 use slatty_core::maintenance::Change;
 use tokio_util::sync::CancellationToken;
 
+use crate::notify::Kind;
 use crate::ui::format::human_size;
 use crate::work::{paused_or, progress_stream, tokens};
 use crate::{App, Message, err};
@@ -416,7 +417,23 @@ impl App {
                     Ok(_) => self.forget_interrupted(&game_id),
                     Err(_) => self.sync_interrupted(&game_id),
                 }
-                let read = self.refresh_record(&game_id);
+                let title = self.title_of(&game_id);
+                let told = match &result {
+                    Ok(summary) => self.notify(
+                        Kind::Updates,
+                        Some(&game_id),
+                        format!("{title} updated"),
+                        summary.clone(),
+                    ),
+                    Err(Some(e)) => self.notify(
+                        Kind::Updates,
+                        Some(&game_id),
+                        "Update failed",
+                        format!("{title}: {e}"),
+                    ),
+                    Err(None) => Task::none(),
+                };
+                let read = Task::batch([self.refresh_record(&game_id), told]);
                 let view = self.maintenance.entry(game_id).or_default();
                 view.finish(vec![match result {
                     Ok(summary) => summary,

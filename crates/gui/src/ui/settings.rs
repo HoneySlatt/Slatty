@@ -75,6 +75,7 @@ impl App {
                 Section::Installs => self.installs_rows(wide),
                 Section::Runners => self.runners_rows(wide),
                 Section::Appearance => self.appearance_rows(wide),
+                Section::Notifications => self.notification_rows(wide),
                 Section::Privacy => self.privacy_rows(wide),
                 Section::Advanced => self.advanced_rows(wide),
                 Section::About => vec![note(format!(
@@ -172,6 +173,42 @@ impl App {
 }
 impl App {
     /// What leaves the computer besides GOG's own services, each with its switch.
+    /// The switch for every notification, then one for each kind.
+    fn notification_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
+        use crate::notify::{Kind, NotifyMsg};
+        let all = self.notifications.all;
+        let mut rows = vec![setting(
+            wide,
+            "Notifications",
+            column![
+                toggler(all)
+                    .on_toggle(|on| Message::Notify(NotifyMsg::Switch(None, on)))
+                    .size(22),
+                note(
+                    "A card in the window's corner while it is in front, the desktop's own \
+                     notification otherwise (a game in front, the window hidden).",
+                ),
+            ]
+            .spacing(8)
+            .into(),
+            None,
+        )];
+        rows.extend(Kind::ALL.map(|kind| {
+            setting(
+                wide,
+                kind.label(),
+                toggler(self.notifications.kinds[kind as usize])
+                    .on_toggle_maybe(
+                        all.then_some(move |on| Message::Notify(NotifyMsg::Switch(Some(kind), on))),
+                    )
+                    .size(22)
+                    .into(),
+                None,
+            )
+        }));
+        rows
+    }
+
     fn privacy_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         vec![
             setting(
@@ -713,6 +750,7 @@ fn section_icon(s: Section) -> Icon {
         Section::Installs => Icon::Download,
         Section::Runners => Icon::Package,
         Section::Appearance => Icon::Palette,
+        Section::Notifications => Icon::Bell,
         Section::Privacy => Icon::Shield,
         Section::Advanced => Icon::Wrench,
         Section::About => Icon::Info,

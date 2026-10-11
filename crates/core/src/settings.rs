@@ -155,6 +155,19 @@ pub fn set_auto_update(db: &Db, on: bool) -> Result<()> {
     db.set_setting(AUTO_UPDATE, Some(if on { "on" } else { "off" }))
 }
 
+/// Whether notifications of a kind (`downloads`, `updates`, `achievements`, `cloud`, or `all`, the
+/// switch for every kind) are shown: on until turned off.
+pub fn notifications(db: &Db, kind: &str) -> Result<bool> {
+    Ok(db.setting(&format!("notifications:{kind}"))?.as_deref() != Some("off"))
+}
+
+pub fn set_notifications(db: &Db, kind: &str, on: bool) -> Result<()> {
+    db.set_setting(
+        &format!("notifications:{kind}"),
+        Some(if on { "on" } else { "off" }),
+    )
+}
+
 /// Whether the user chose a build of the game older than GOG's newest: it is then not updated
 /// without asking.
 pub fn held_back(db: &Db, game_id: &str) -> Result<bool> {
@@ -338,6 +351,18 @@ fn home() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notifications_are_on_until_turned_off_kind_by_kind() {
+        let db = Db::in_memory().unwrap();
+        assert!(notifications(&db, "all").unwrap());
+        assert!(notifications(&db, "downloads").unwrap());
+        set_notifications(&db, "downloads", false).unwrap();
+        assert!(!notifications(&db, "downloads").unwrap());
+        assert!(notifications(&db, "updates").unwrap(), "the others stay on");
+        set_notifications(&db, "downloads", true).unwrap();
+        assert!(notifications(&db, "downloads").unwrap());
+    }
 
     fn build(dir: &Path) {
         std::fs::create_dir_all(dir).unwrap();

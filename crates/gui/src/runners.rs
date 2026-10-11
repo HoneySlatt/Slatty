@@ -6,6 +6,7 @@ use iced::Task;
 use slatty_core::protons::{self, Release, Source, Stage};
 use tokio_util::sync::CancellationToken;
 
+use crate::notify::Kind;
 use crate::work::{paused_or, progress_stream};
 use crate::{App, Message, err};
 
@@ -176,23 +177,36 @@ impl App {
             RunnersMsg::Updated(result) => {
                 view.updating = false;
                 view.installing = None;
-                match result {
-                    Ok((_, failed)) if !failed.is_empty() => {
-                        self.notify_error(format!("Proton update: {}", failed.join("; ")));
-                    }
-                    Ok((updated, _)) if updated.is_empty() => {}
-                    Ok((updated, _)) => {
+                let told = match result {
+                    Ok((updated, failed)) => {
                         let names: Vec<&str> = updated.iter().map(|r| r.name.as_str()).collect();
-                        self.notice = Some(crate::Notice {
-                            error: false,
-                            text: format!("Proton updated: {}.", names.join(", ")),
-                        });
+                        let installed = if names.is_empty() {
+                            Task::none()
+                        } else {
+                            self.notify(
+                                Kind::Updates,
+                                None,
+                                "Proton updated",
+                                format!("{} installed.", names.join(", ")),
+                            )
+                        };
+                        let failed = if failed.is_empty() {
+                            Task::none()
+                        } else {
+                            self.notify(
+                                Kind::Updates,
+                                None,
+                                "Proton update failed",
+                                failed.join("; "),
+                            )
+                        };
+                        Task::batch([installed, failed])
                     }
-                    Err(Some(e)) => self.notify_error(format!("Proton update: {e}")),
-                    Err(None) => {}
-                }
+                    Err(Some(e)) => self.notify(Kind::Updates, None, "Proton update failed", e),
+                    Err(None) => Task::none(),
+                };
                 // Even one stopped or failed may have installed and pruned builds before.
-                return list(&core);
+                return Task::batch([list(&core), told]);
             }
             RunnersMsg::Installed(result) => {
                 view.installing = None;

@@ -81,18 +81,20 @@ pub enum Section {
     Installs,
     Runners,
     Appearance,
+    Notifications,
     Privacy,
     Advanced,
     About,
 }
 
 impl Section {
-    pub const ALL: [Section; 8] = [
+    pub const ALL: [Section; 9] = [
         Section::Account,
         Section::Library,
         Section::Installs,
         Section::Runners,
         Section::Appearance,
+        Section::Notifications,
         Section::Privacy,
         Section::Advanced,
         Section::About,
@@ -105,6 +107,7 @@ impl Section {
             Section::Installs => "Installs",
             Section::Runners => "Runners",
             Section::Appearance => "Appearance",
+            Section::Notifications => "Notifications",
             Section::Privacy => "Privacy",
             Section::Advanced => "Advanced",
             Section::About => "About",
@@ -119,6 +122,7 @@ impl Section {
             Section::Installs => "settings-installs",
             Section::Runners => "settings-runners",
             Section::Appearance => "settings-appearance",
+            Section::Notifications => "settings-notifications",
             Section::Privacy => "settings-privacy",
             Section::Advanced => "settings-advanced",
             Section::About => "settings-about",
