@@ -26,6 +26,7 @@ const UMU_RUNTIMES_CHECKED_AT: &str = "umu_runtimes_checked_at";
 const SHARE_PROTONS: &str = "share_protons";
 const AUTO_UPDATE: &str = "auto_update";
 const VULKAN_ONLY: &str = "vulkan_only";
+const STEAM_GAMES: &str = "steam_games";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -179,6 +180,16 @@ pub fn auto_update(db: &Db) -> Result<bool> {
 
 pub fn set_auto_update(db: &Db, on: bool) -> Result<()> {
     db.set_setting(AUTO_UPDATE, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether the Steam games of the account signed in to the Steam client show in the library, read
+/// from the client's own files. Off until turned on.
+pub fn steam_games(db: &Db) -> Result<bool> {
+    Ok(db.setting(STEAM_GAMES)?.as_deref() == Some("on"))
+}
+
+pub fn set_steam_games(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(STEAM_GAMES, Some(if on { "on" } else { "off" }))
 }
 
 /// Whether the interface starts its graphics with Vulkan alone: found, at the last start, to be
@@ -425,6 +436,14 @@ mod tests {
         assert!(notifications(&db, "updates").unwrap(), "the others stay on");
         set_notifications(&db, "downloads", true).unwrap();
         assert!(notifications(&db, "downloads").unwrap());
+    }
+
+    #[test]
+    fn steam_games_show_once_turned_on() {
+        let db = Db::in_memory().unwrap();
+        assert!(!steam_games(&db).unwrap());
+        set_steam_games(&db, true).unwrap();
+        assert!(steam_games(&db).unwrap());
     }
 
     #[test]
