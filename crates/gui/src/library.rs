@@ -11,6 +11,7 @@ use iced::Task;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use slatty_core::library::{self, LibraryCache, LibraryGame};
 use slatty_core::overview::{self, GameOverview};
+use slatty_core::settings::TwinPlaytime;
 use slatty_core::store::{self, Store};
 
 use crate::work::tokens_for;
@@ -227,8 +228,8 @@ impl App {
         ))
     }
 
-    /// Seconds played, as GOG records them, or Steam for a Steam game; both for a game owned on
-    /// both (their sessions are not the same ones).
+    /// Seconds played, as GOG records them, or Steam for a Steam game; for a game owned on both,
+    /// both added up (their sessions are not the same ones) or the store preferred in Settings.
     pub fn played_seconds(&self, game_id: &str) -> i64 {
         let on_steam = |id: &str| {
             self.steam
@@ -244,7 +245,17 @@ impl App {
             .get(game_id)
             .and_then(|o| o.playtime_minutes)
             .map_or(0, |m| m as i64 * 60);
-        on_gog + self.steam_twin(game_id).map_or(0, on_steam)
+        let Some(twin) = self.steam_twin(game_id) else {
+            return on_gog;
+        };
+        let on_steam = on_steam(twin);
+        match self.twin_playtime {
+            TwinPlaytime::Both => on_gog + on_steam,
+            TwinPlaytime::PreferSteam if on_steam > 0 => on_steam,
+            TwinPlaytime::PreferGog if on_gog > 0 => on_gog,
+            // The preferred store records none.
+            _ => on_gog.max(on_steam),
+        }
     }
 
     pub fn save_overview(&mut self) {

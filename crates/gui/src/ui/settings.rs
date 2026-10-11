@@ -13,7 +13,7 @@ use crate::icons::{Icon, icon};
 use crate::runners::RunnersMsg;
 use crate::settings::{
     COVER_SIZES, CoverSize, FontChoice, PlatformChoice, ProtonChoice, SETTINGS_SCROLL, Section,
-    SettingsMsg,
+    SettingsMsg, TwinPlaytimeChoice,
 };
 use crate::theme::{self, bold, semibold, tokens};
 use crate::updates::UpdatesMsg;
@@ -763,7 +763,7 @@ impl App {
         .padding([8, 16])
         .on_press_maybe((!self.library_busy).then_some(Message::SyncLibrary))
         .style(theme::tonal);
-        vec![
+        let mut rows = vec![
             setting(
                 wide,
                 "Games",
@@ -783,7 +783,21 @@ impl App {
                 )),
                 None,
             ),
-        ]
+        ];
+        // Only Steam's games make a game owned on both.
+        if self.steam.on {
+            rows.push(setting(
+                wide,
+                "Play time on both",
+                select(pick_list(
+                    TwinPlaytimeChoice::ALL,
+                    Some(TwinPlaytimeChoice(self.twin_playtime)),
+                    |c| Message::Settings(SettingsMsg::TwinPlaytime(c)),
+                )),
+                Some(note("For a game owned on GOG and on Steam.")),
+            ));
+        }
+        rows
     }
 
     fn installs_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {

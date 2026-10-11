@@ -202,6 +202,28 @@ impl fmt::Display for PlatformChoice {
     }
 }
 
+/// The play time shown for a game owned on GOG and on Steam, named for a pick list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TwinPlaytimeChoice(pub settings::TwinPlaytime);
+
+impl TwinPlaytimeChoice {
+    pub const ALL: [TwinPlaytimeChoice; 3] = [
+        TwinPlaytimeChoice(settings::TwinPlaytime::Both),
+        TwinPlaytimeChoice(settings::TwinPlaytime::PreferSteam),
+        TwinPlaytimeChoice(settings::TwinPlaytime::PreferGog),
+    ];
+}
+
+impl fmt::Display for TwinPlaytimeChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self.0 {
+            settings::TwinPlaytime::Both => "Steam + GOG",
+            settings::TwinPlaytime::PreferSteam => "Prefer Steam",
+            settings::TwinPlaytime::PreferGog => "Prefer GOG",
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum SettingsMsg {
     RootInput(String),
@@ -223,6 +245,8 @@ pub enum SettingsMsg {
     Preset(crate::presets::Preset),
     /// Build installed when a game has both.
     Platform(PlatformChoice),
+    /// Play time shown for a game owned on GOG and on Steam.
+    TwinPlaytime(TwinPlaytimeChoice),
     /// A part of the page, chosen in its side list: shown at the top.
     Show(Section),
     /// Where that part starts, below the first one, once measured.
@@ -329,6 +353,12 @@ impl App {
             SettingsMsg::Platform(choice) => {
                 self.default_platform = choice.0;
                 if let Err(e) = settings::set_default_platform(&core.db, choice.0) {
+                    self.notify_error(e.to_string());
+                }
+            }
+            SettingsMsg::TwinPlaytime(choice) => {
+                self.twin_playtime = choice.0;
+                if let Err(e) = settings::set_twin_playtime(&core.db, choice.0) {
                     self.notify_error(e.to_string());
                 }
             }

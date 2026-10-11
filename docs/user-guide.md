@@ -100,9 +100,9 @@ is not installed) and the favorite button over it; below, three cards give play 
 session, cloud save status, and achievement progress with the latest unlocks. Play time is the
 total GOG records, so it includes GOG Galaxy and other launchers that report sessions. "Last played"
 only knows sessions started by SlattyLauncher: GOG does not expose that date. A Steam game's page
-gives Steam's own play time and last session instead, and a game owned on both adds them (see
-[Steam games](#steam-games)). The tools
-open in panels:
+gives Steam's own play time and last session instead, and a game owned on both adds them, or
+shows one store's alone once preferred (see [Steam games](#steam-games)). The tools open in
+panels:
 
 | Where | Panel |
 |---|---|
@@ -560,7 +560,9 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   is not matched, even by title: a Steam game of the same name is then another game.
   Its page offers **Play the Steam version**, or **Install the Steam version**, through Steam,
   under the GOG build's own buttons; it counts as installed when either is; its play time adds
-  the sessions of both, and its last session is the latest of either. Its achievements and cloud
+  the sessions of both, or is one store's once preferred in Settings → Library (**Play time on
+  both**: Steam + GOG, Prefer Steam or Prefer GOG; the other store's while the preferred one
+  records none), and its last session is the latest of either. Its achievements and cloud
   saves are GOG's.
 - Steam's games can be renamed, illustrated, hidden and marked as favorites like GOG's. A game the
   Steam client has no details of yet (some recently added games) does not show until it has, or
@@ -636,7 +638,9 @@ Runners, Appearance, Notifications, Privacy, Advanced, About); choosing one brin
 scrolls. **Steam** is described in [Steam games](#steam-games). **Account** shows who is signed in, with
 Log out, and Forget account, which asks first, then does what `slatty auth logout --forget` does
 (see [Signing in](#signing-in)). **Library** shows how many games you own on GOG and when the list was refreshed, with Refresh
-library, and the size of the covers. **Installs** holds:
+library, and the size of the covers; with Steam's games on, **Play time on both** says what a
+game owned on GOG and on Steam shows: both added up (the default), or one store's.
+**Installs** holds:
 
 - **Default installation path:** where new games are installed unless the Install panel says
   otherwise. Type it, or pick a folder with **Browse**; it is saved as soon as it is an absolute

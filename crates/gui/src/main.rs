@@ -242,6 +242,8 @@ pub struct App {
     pub settings_view: settings::SettingsView,
     /// Build installed when a game has both, unless changed in its install dialog.
     pub default_platform: Platform,
+    /// The play time shown for a game owned on GOG and on Steam.
+    pub twin_playtime: slatty_core::settings::TwinPlaytime,
     /// Privacy settings: a game's id to umu's database, play sessions to GOG.
     pub umu_lookup: bool,
     pub report_playtime: bool,
@@ -360,6 +362,7 @@ impl Default for App {
             maintenance: HashMap::new(),
             library_root: String::new(),
             default_platform: Platform::Windows,
+            twin_playtime: Default::default(),
             umu_lookup: false,
             report_playtime: true,
             game_achievements: false,
@@ -712,6 +715,7 @@ impl App {
                     Task::none()
                 };
                 self.default_platform = boot.default_platform;
+                self.twin_playtime = boot.twin_playtime;
                 self.umu_lookup = boot.umu_lookup;
                 self.report_playtime = boot.report_playtime;
                 self.game_achievements = boot.game_achievements;

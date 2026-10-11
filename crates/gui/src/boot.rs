@@ -28,6 +28,7 @@ pub struct Boot {
     pub interrupted: Vec<String>,
     pub library_root: PathBuf,
     pub default_platform: Platform,
+    pub twin_playtime: slatty_core::settings::TwinPlaytime,
     pub umu_lookup: bool,
     pub report_playtime: bool,
     pub game_achievements: bool,
@@ -168,6 +169,7 @@ async fn boot() -> Result<Boot, String> {
     let library_root = slatty_core::settings::library_root(&db).map_err(err)?;
     let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
     let default_platform = slatty_core::settings::default_platform(&db).map_err(err)?;
+    let twin_playtime = slatty_core::settings::twin_playtime(&db).map_err(err)?;
     let umu_lookup = slatty_core::settings::umu_lookup(&db).map_err(err)?;
     let report_playtime = slatty_core::settings::report_playtime(&db).map_err(err)?;
     let game_achievements = slatty_core::settings::game_achievements(&db).map_err(err)?;
@@ -258,6 +260,7 @@ async fn boot() -> Result<Boot, String> {
         proton_shared,
         auto_update,
         default_platform,
+        twin_playtime,
         umu_lookup,
         report_playtime,
         game_achievements,

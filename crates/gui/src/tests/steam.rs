@@ -123,8 +123,13 @@ fn images_from_steams_servers_once_turned_on() {
     app.page = Page::Settings;
     app.window = Size::new(1440.0, 2400.0);
     assert!(render_window(&app).find("Images from Steam").is_err());
+    assert!(render_window(&app).find("Play time on both").is_err());
     let _ = app.update(Message::Steam(SteamMsg::Switch(true)));
     assert!(render_window(&app).find("Images from Steam").is_ok());
+    assert!(
+        render_window(&app).find("Play time on both").is_ok(),
+        "in Settings → Library"
+    );
     assert!(!slatty_core::settings::steam_images(&db).unwrap());
     let _ = app.update(Message::Steam(SteamMsg::Images(true)));
     assert!(app.steam.images && slatty_core::settings::steam_images(&db).unwrap());
@@ -493,6 +498,33 @@ fn a_game_owned_on_both_shows_once_as_gogs() {
     let _ = app.update(Message::PlaytimesFetched(vec![("1".into(), 60)]));
     assert_eq!(app.played_seconds("1"), (60 + 754) * 60);
     assert_eq!(app.last_played("1"), Some(1_791_590_000));
+
+    // One store's play time alone, once preferred in Settings, saved.
+    let prefer = |app: &mut App, choice| {
+        use crate::settings::{SettingsMsg, TwinPlaytimeChoice};
+        let _ = app.update(Message::Settings(SettingsMsg::TwinPlaytime(
+            TwinPlaytimeChoice(choice),
+        )));
+    };
+    use slatty_core::settings::TwinPlaytime;
+    prefer(&mut app, TwinPlaytime::PreferSteam);
+    assert_eq!(app.played_seconds("1"), 754 * 60);
+    let db = app.core.as_ref().unwrap().db.clone();
+    assert_eq!(
+        slatty_core::settings::twin_playtime(&db).unwrap(),
+        TwinPlaytime::PreferSteam
+    );
+    prefer(&mut app, TwinPlaytime::PreferGog);
+    assert_eq!(app.played_seconds("1"), 60 * 60);
+    let _ = app.update(Message::PlaytimesFetched(vec![("1".into(), 0)]));
+    assert_eq!(
+        app.played_seconds("1"),
+        754 * 60,
+        "GOG records none: Steam's"
+    );
+    prefer(&mut app, TwinPlaytime::Both);
+    let _ = app.update(Message::PlaytimesFetched(vec![("1".into(), 60)]));
+    assert_eq!(app.played_seconds("1"), (60 + 754) * 60);
 
     let asked = |app: &mut App, id: &str, label: &str| {
         let _ = app.update(Message::Select(id.into()));

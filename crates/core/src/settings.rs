@@ -29,6 +29,7 @@ const VULKAN_ONLY: &str = "vulkan_only";
 const STEAM_GAMES: &str = "steam_games";
 const STEAM_IMAGES: &str = "steam_images";
 const STEAM_WEB_API: &str = "steam_web_api";
+const TWIN_PLAYTIME: &str = "twin_playtime";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -213,6 +214,36 @@ pub fn steam_web_api(db: &Db) -> Result<bool> {
 
 pub fn set_steam_web_api(db: &Db, on: bool) -> Result<()> {
     db.set_setting(STEAM_WEB_API, Some(if on { "on" } else { "off" }))
+}
+
+/// The play time shown for a game owned on GOG and on Steam.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TwinPlaytime {
+    /// GOG's and Steam's added up.
+    #[default]
+    Both,
+    /// Steam's, or GOG's while Steam records none.
+    PreferSteam,
+    /// GOG's, or Steam's while GOG records none.
+    PreferGog,
+}
+
+/// The play time shown for a game owned on both: added up until chosen.
+pub fn twin_playtime(db: &Db) -> Result<TwinPlaytime> {
+    Ok(match db.setting(TWIN_PLAYTIME)?.as_deref() {
+        Some("steam") => TwinPlaytime::PreferSteam,
+        Some("gog") => TwinPlaytime::PreferGog,
+        _ => TwinPlaytime::Both,
+    })
+}
+
+pub fn set_twin_playtime(db: &Db, choice: TwinPlaytime) -> Result<()> {
+    let value = match choice {
+        TwinPlaytime::Both => "both",
+        TwinPlaytime::PreferSteam => "steam",
+        TwinPlaytime::PreferGog => "gog",
+    };
+    db.set_setting(TWIN_PLAYTIME, Some(value))
 }
 
 /// Whether the interface starts its graphics with Vulkan alone: found, at the last start, to be
@@ -476,6 +507,20 @@ mod tests {
         assert!(!steam_web_api(&db).unwrap(), "nor its Web API");
         set_steam_web_api(&db, true).unwrap();
         assert!(steam_web_api(&db).unwrap());
+    }
+
+    #[test]
+    fn play_times_on_both_stores_add_up_until_one_is_preferred() {
+        let db = Db::in_memory().unwrap();
+        assert_eq!(twin_playtime(&db).unwrap(), TwinPlaytime::Both);
+        for choice in [
+            TwinPlaytime::PreferSteam,
+            TwinPlaytime::PreferGog,
+            TwinPlaytime::Both,
+        ] {
+            set_twin_playtime(&db, choice).unwrap();
+            assert_eq!(twin_playtime(&db).unwrap(), choice);
+        }
     }
 
     #[test]
