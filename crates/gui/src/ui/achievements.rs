@@ -218,7 +218,7 @@ impl App {
                     ]
                     .spacing(10)
                     .width(Length::Fill),
-                    self.manual_achievements
+                    self.manual_changes(&g.id)
                         .then(|| unlock_all_button(&g.id, list)),
                 ]
                 .spacing(22)
@@ -314,15 +314,18 @@ impl App {
         if shown && !a.description.is_empty() {
             details = details.push(text(&a.description).size(14).color(tokens().muted));
         }
-        details = details.push(
-            text(format!("{:.1}% of players", a.rarity))
-                .size(13)
-                .color(tokens().muted),
-        );
+        // Steam's client knows how common a few of a game's achievements are, not all.
+        if a.rarity >= 0.0 {
+            details = details.push(
+                text(format!("{:.1}% of players", a.rarity))
+                    .size(13)
+                    .color(tokens().muted),
+            );
+        }
         row![
             self.achievement_icon(url, icon_size),
             details,
-            self.manual_achievements.then(|| {
+            self.manual_changes(game_id).then(|| {
                 button(text(if done { "Clear" } else { "Unlock" }).size(14))
                     .padding([8, 18])
                     .on_press(Message::AskAchievementChange(

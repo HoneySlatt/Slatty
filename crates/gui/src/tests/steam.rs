@@ -237,6 +237,78 @@ fn a_steam_game_shows_as_running_while_steam_runs_it() {
     assert!(render(&app).find("Play").is_ok());
 }
 
+/// Steam's achievements, read from the client's files, show in the Achievements tab sorted with
+/// GOG's and on the game's page, without any GOG account; they are never unlocked or cleared by
+/// hand, and a share of players Steam does not know is not made up.
+#[test]
+fn steam_achievements_show_with_gogs_and_are_never_changed_by_hand() {
+    let mut app = library_app();
+    app.manual_achievements = true;
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    app.overview.insert(
+        "1".into(),
+        slatty_core::overview::GameOverview {
+            achievements: Some((1, 2)),
+            checked: true,
+            ..Default::default()
+        },
+    );
+    let counts = std::collections::HashMap::from([("steam-440".to_string(), (1, 3))]);
+    let _ = app.update(Message::Steam(SteamMsg::Counted(Some((
+        76561198000000009,
+        counts.clone(),
+    )))));
+    assert!(app.steam.achievements.is_empty(), "another account's");
+    let _ = app.update(Message::Steam(SteamMsg::Counted(Some((
+        76561198000000002,
+        counts,
+    )))));
+    let order: Vec<&str> = app
+        .games_by_achievements()
+        .iter()
+        .map(|(g, ..)| g.id.as_str())
+        .collect();
+    assert_eq!(
+        order,
+        ["1", "steam-440"],
+        "by share unlocked, GOG's and Steam's together"
+    );
+
+    app.account = None;
+    let _ = app.update(Message::LoadAchievements("steam-440".into()));
+    assert!(matches!(
+        app.achievements.get("steam-440"),
+        Some(crate::Loadable::Loading)
+    ));
+    let mut known = fake_achievement("Known", true);
+    known.rarity = 12.5;
+    let mut unknown = fake_achievement("Unknown", false);
+    unknown.rarity = -1.0;
+    let _ = app.update(Message::Achievements(
+        "steam-440".into(),
+        Ok(vec![known, unknown, fake_achievement("Other", false)]),
+    ));
+    assert_eq!(app.steam.achievements["steam-440"], (1, 3));
+    open(&mut app, "steam-440", Some(Panel::Achievements));
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("12.5% of players").is_ok());
+        assert!(ui.find("-1.0% of players").is_err(), "not known, not shown");
+        assert!(ui.find("Unlock").is_err() && ui.find("Clear").is_err());
+        assert!(ui.find("Unlock all").is_err());
+    }
+    let _ = app.update(Message::AskAchievementChange(
+        "steam-440".into(),
+        vec![crate::achievements::AchievementChange {
+            achievement_id: "id-Unknown".into(),
+            name: "[FAKE] Unknown".into(),
+            unlock: true,
+        }],
+    ));
+    assert!(app.pending_change.is_none(), "never asked of Steam");
+}
+
 /// GOG is asked about GOG's games alone: Steam's never count as games GOG could not describe.
 #[test]
 fn steam_games_are_not_gogs_to_read() {

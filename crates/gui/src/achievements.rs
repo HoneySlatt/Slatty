@@ -25,6 +25,11 @@ pub struct AchievementChange {
 
 impl App {
     pub fn load_achievements(&mut self, game_id: String) -> Task<Message> {
+        // A Steam game's are read from the Steam client's files, without any GOG account.
+        if self.steam_game(&game_id).is_some() {
+            self.achievements.insert(game_id.clone(), Loadable::Loading);
+            return crate::steam::load_achievements(game_id, self.steam.images);
+        }
         let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
             return Task::none();
         };
@@ -47,7 +52,7 @@ impl App {
     }
 
     pub fn ask_achievement_change(&mut self, game_id: String, changes: Vec<AchievementChange>) {
-        if !changes.is_empty() {
+        if !changes.is_empty() && self.manual_changes(&game_id) {
             self.pending_change = Some(PendingChange { game_id, changes });
         }
     }
@@ -153,8 +158,16 @@ impl App {
         }
     }
 
-    /// Keeps the cached overview in step with a freshly read achievement list.
+    /// Keeps the cached overview in step with a freshly read achievement list; a Steam game's
+    /// counts are kept apart from GOG's.
     pub fn achievements_loaded(&mut self, game_id: &str, list: &[Achievement]) {
+        if self.steam_game(game_id).is_some() {
+            match overview::counts(list) {
+                Some(counts) => self.steam.achievements.insert(game_id.to_string(), counts),
+                None => self.steam.achievements.remove(game_id),
+            };
+            return;
+        }
         let fresh = GameOverview {
             achievements: overview::counts(list),
             ..self.overview.get(game_id).copied().unwrap_or_default()
@@ -236,7 +249,7 @@ impl App {
             .iter()
             .enumerate()
             .filter_map(|(i, g)| {
-                let (done, total) = self.overview.get(&g.id)?.achievements?;
+                let (done, total) = self.achievement_counts(&g.id)?;
                 Some((i, done, total, self.sort_name(g)))
             })
             .collect();

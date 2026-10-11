@@ -78,7 +78,10 @@ impl App {
                         .height(CARD_HEIGHT)
                         .style(theme::block),
                     container(self.steam_card())
-                        .width(Length::FillPortion(7 + achievements))
+                        .width(Length::FillPortion(7))
+                        .height(CARD_HEIGHT),
+                    container(self.achievements_card(g))
+                        .width(Length::FillPortion(achievements))
                         .height(CARD_HEIGHT),
                 ]
                 .spacing(14)
@@ -653,9 +656,8 @@ impl App {
                 column![
                     text("Runs through Steam").size(16).font(semibold()),
                     text(
-                        "Steam's client plays, updates and syncs it, and it cannot run isolated \
-                         from your files. A GOG build of it would be the better choice for your \
-                         privacy."
+                        "Played, updated and synced by Steam's client, not isolated from your \
+                         files. A GOG build is the safer choice."
                     )
                     .size(13)
                     .color(tokens().muted),

@@ -17,7 +17,8 @@ pub struct Achievement {
     pub description: String,
     pub visible: bool,
     pub date_unlocked: Option<String>,
-    /// Share of GOG players who unlocked it, in percent.
+    /// Share of players who unlocked it, in percent; negative when not known (some of a Steam
+    /// game's: the client knows a few).
     #[serde(default)]
     pub rarity: f32,
     #[serde(default)]

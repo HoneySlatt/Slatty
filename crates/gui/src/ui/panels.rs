@@ -108,7 +108,7 @@ impl App {
                             .size(16)
                             .font(semibold())
                             .width(Length::Fill),
-                        self.manual_achievements
+                        self.manual_changes(&g.id)
                             .then(|| unlock_all_button(&g.id, list)),
                     ]
                     .align_y(Alignment::Center),

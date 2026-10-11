@@ -66,6 +66,14 @@ pub(crate) fn parse(data: &[u8], wanted: &HashSet<u32>) -> Result<HashMap<u32, V
     }
 }
 
+/// A file of binary KeyValues whose keys are written in place, as the client's stats files are
+/// (`appcache/stats`); refused when damaged.
+pub(crate) fn keyvalues(data: &[u8]) -> Result<Vdf> {
+    let mut at = Cursor { data, pos: 0 };
+    let entries = section(&mut at, &Keys { strings: None }, 0)?;
+    Ok(Vdf::Section(entries))
+}
+
 fn string_table(data: &[u8], offset: usize) -> Result<Vec<String>> {
     let mut at = Cursor { data, pos: offset };
     let count = at.u32()? as usize;

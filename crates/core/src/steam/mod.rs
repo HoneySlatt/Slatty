@@ -6,4 +6,5 @@ pub mod client;
 pub mod library;
 pub mod local;
 pub mod running;
+pub mod stats;
 pub mod vdf;

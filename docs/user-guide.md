@@ -503,7 +503,8 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   the client's image cache) and the games installed in each Steam library folder
   (`appmanifest_*.acf`). No Steam password or key is ever asked for.
 - **Images from Steam**, off until turned on in Settings → Steam: the covers, backgrounds and logos
-  the Steam client has not saved on this computer (games it never showed) are downloaded from
+  the Steam client has not saved on this computer (games it never showed), and the icons of
+  achievements, are downloaded from
   Steam's image servers (`shared.steamstatic.com`), without any account, and kept in
   `~/.cache/slatty/steam/`. Off, those games show without them, and nothing at all is asked of
   Steam's servers.
@@ -520,6 +521,12 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   **Running**: every two seconds meanwhile, SlattyLauncher looks for the client's `reaper` process
   of that game among your processes (it reads the name of each, and the arguments of the
   client's `reaper` alone). Steam cannot be asked to stop a game: close it in the game.
+- **Achievements** show in the Achievements tab with GOG's games, and on the game's page, as the
+  Steam client keeps them for the account (`appcache/stats`): those of a game whose page was shown
+  in Steam or that was played on this computer. How common each is shows for the few the client
+  knows. Their icons come from Steam's image servers with **Images from Steam** on; without it,
+  a trophy stands in. They are never unlocked or cleared from SlattyLauncher, even with Manual
+  achievements on.
 - **What Steam keeps.** Updates, cloud saves, achievements in game and launch options are the Steam
   client's; Steam's games cannot run isolated from your files.
 - **GOG is the better choice where you have it.** GOG's games run isolated from your files, need no

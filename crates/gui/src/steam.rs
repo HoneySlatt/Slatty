@@ -18,6 +18,9 @@ pub const LOOK_EVERY: Duration = Duration::from_secs(2);
 /// How long a game asked of Steam is looked for: Steam may update it, or ask something, first.
 const START_WAIT: Duration = Duration::from_secs(300);
 
+/// Unlocked and total achievements of each game that has any, by game id.
+pub type Counts = HashMap<String, (usize, usize)>;
+
 #[derive(Debug, Default)]
 pub struct SteamView {
     /// The name of the account signed in to Steam on this computer, when Steam is installed.
@@ -35,6 +38,7 @@ pub struct SteamView {
     pub installed: HashMap<String, Installed>,
     /// How long each game was played and when last, as Steam records it, by game id.
     pub played: HashMap<String, Played>,
+    pub achievements: Counts,
     /// The games Steam runs, by game id.
     pub running: BTreeSet<String>,
     /// A game Steam was asked to play, until it runs or `START_WAIT` passed.
@@ -53,6 +57,8 @@ pub enum SteamMsg {
     Installed(Vec<Installed>),
     /// Play times read again, with the Steam id of the account they are of.
     Played(Option<(u64, HashMap<String, Played>)>),
+    /// Unlocked and total achievements of the games that have any, with the account's Steam id.
+    Counted(Option<(u64, Counts)>),
     /// Time to look at which games Steam runs.
     Look,
     /// The games Steam runs, by app id.
@@ -103,8 +109,18 @@ impl App {
                 self.steam.games = library.games;
                 self.steam.covers = library.covers;
                 self.steam.played = library.played;
+                let apps = self
+                    .steam
+                    .games
+                    .iter()
+                    .filter_map(|g| store::steam_app(&g.id))
+                    .collect();
                 self.merge_steam();
-                return Task::batch([read_installed(), self.download_covers()]);
+                return Task::batch([
+                    read_installed(),
+                    self.download_covers(),
+                    count_achievements(apps),
+                ]);
             }
             SteamMsg::Loaded(_) => {}
             SteamMsg::Cover(id, Some(path)) if self.steam.on => {
@@ -128,6 +144,10 @@ impl App {
             }
             SteamMsg::Played(Some((_, played))) if self.steam.on => self.steam.played = played,
             SteamMsg::Played(_) => {}
+            SteamMsg::Counted(Some((account, counts))) if self.steam.account == Some(account) => {
+                self.steam.achievements = counts;
+            }
+            SteamMsg::Counted(_) => {}
             SteamMsg::Look if self.steam.on => return look(),
             SteamMsg::Look => {}
             SteamMsg::Running(apps) => {
@@ -231,6 +251,20 @@ impl App {
         self.playtime.get(game_id).map(|p| p.last_played)
     }
 
+    /// Unlocked and total achievements of a game: GOG's, or Steam's for a Steam game.
+    pub fn achievement_counts(&self, game_id: &str) -> Option<(usize, usize)> {
+        if store::steam_app(game_id).is_some() {
+            return self.steam.achievements.get(game_id).copied();
+        }
+        self.overview.get(game_id)?.achievements
+    }
+
+    /// Whether a game's achievements can be unlocked or cleared by hand: once turned on, and never
+    /// a Steam game's.
+    pub fn manual_changes(&self, game_id: &str) -> bool {
+        self.manual_achievements && store::steam_app(game_id).is_none()
+    }
+
     /// Whether the games Steam runs are to be looked at: one was asked for, or runs.
     pub fn watching_steam(&self) -> bool {
         self.steam.on && (self.steam.starting.is_some() || !self.steam.running.is_empty())
@@ -256,6 +290,55 @@ fn read_played() -> Task<Message> {
             .flatten()
         },
         |played| Message::Steam(SteamMsg::Played(played)),
+    )
+}
+
+/// Counts the achievements of `apps`, read from the Steam client's files (some tens of ms for a
+/// few hundred games): after the library shows.
+fn count_achievements(apps: Vec<u32>) -> Task<Message> {
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let home = std::env::var_os("HOME").map(std::path::PathBuf::from)?;
+                let steam = local::find(&home)?;
+                let user = local::signed_in_user(&steam)?;
+                let counts = slatty_core::steam::stats::counts(&steam, &user, &apps)
+                    .into_iter()
+                    .map(|(app, counted)| (store::steam_id(app), counted))
+                    .collect();
+                Some((user.id64, counts))
+            })
+            .await
+            .ok()
+            .flatten()
+        },
+        |counted| Message::Steam(SteamMsg::Counted(counted)),
+    )
+}
+
+/// The achievements of a Steam game, read from the Steam client's files; with `icons`, named on
+/// Steam's image servers.
+pub fn load_achievements(game_id: String, icons: bool) -> Task<Message> {
+    let id = game_id.clone();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let app = store::steam_app(&id)?;
+                let home = std::env::var_os("HOME").map(std::path::PathBuf::from)?;
+                let steam = local::find(&home)?;
+                let user = local::signed_in_user(&steam)?;
+                slatty_core::steam::stats::achievements(&steam, &user, app, icons)
+            })
+            .await
+            .ok()
+            .flatten()
+            .ok_or_else(|| {
+                "Steam keeps no achievements of this game on this computer: it saves them once \
+                 the game's page was shown in Steam, or the game played."
+                    .to_string()
+            })
+        },
+        move |list| Message::Achievements(game_id, list),
     )
 }
 

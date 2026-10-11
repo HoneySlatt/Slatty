@@ -323,12 +323,14 @@ impl App {
         let Some(core) = self.core.clone() else {
             return Task::none();
         };
+        // Those the Steam client has not saved come from Steam's image servers once turned on,
+        // whatever the GOG account; the others from GOG, for the account.
+        let steam_images = self.steam.images;
         let wanted: Vec<String> = urls
             .into_iter()
+            .filter(|u| steam_images || !slatty_core::steam::library::is_server_image(u))
             .filter(|u| !u.is_empty() && self.images_requested.insert(u.clone()))
             .collect();
-        // Those the Steam client has not saved come from Steam's image servers (only named once
-        // turned on), whatever the GOG account; the others from GOG, for the account.
         let (steam, gog): (Vec<String>, Vec<String>) = wanted
             .into_iter()
             .partition(|u| slatty_core::steam::library::is_server_image(u));
@@ -503,7 +505,7 @@ impl App {
             .filter(|(_, g)| !f.linux || g.os.iter().any(|o| o == "linux"))
             .filter(|(_, g)| {
                 let o = self.overview.get(&g.id);
-                (!f.achievements || o.is_some_and(|o| o.achievements.is_some()))
+                (!f.achievements || self.achievement_counts(&g.id).is_some())
                     && (!f.cloud_saves || o.is_some_and(|o| o.cloud_saves))
             })
             .collect();
