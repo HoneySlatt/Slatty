@@ -128,6 +128,28 @@ pub fn latest_link(dirs: &Dirs, source: Source) -> PathBuf {
     dir(dirs).join(format!("{}-latest", source.name()))
 }
 
+/// The builds among `candidates` (`settings::proton_candidates`) to offer in menus. With Keep up to
+/// date on (`updates`), a downloaded build whose project has a `-latest` link is offered through
+/// that link only, which updates follow. By name alone: menus are built at every view.
+pub fn offered(dirs: &Dirs, candidates: &[PathBuf], updates: bool) -> Vec<PathBuf> {
+    let root = dir(dirs);
+    let linked = |source: Source| candidates.contains(&latest_link(dirs, source));
+    candidates
+        .iter()
+        .filter(|p| {
+            !updates
+                || p.parent() != Some(root.as_path())
+                || Source::ALL.iter().any(|&s| **p == latest_link(dirs, s))
+                || !p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .and_then(Source::of)
+                    .is_some_and(linked)
+        })
+        .cloned()
+        .collect()
+}
+
 /// Where the `-latest` link of `source` leads, if it exists.
 fn latest_target(dirs: &Dirs, source: Source) -> Option<PathBuf> {
     std::fs::read_link(latest_link(dirs, source))

@@ -513,8 +513,11 @@ slatty proton share on                 # list the downloaded builds in Steam and
   link never goes back to an older version, even when a project publishes one last (CachyOS's
   `10.0-sunset` came out between two 11.0 builds). A link whose build was deleted by hand leads
   to the newest build left at the next start. A game already
-  running keeps the build it started with. The build before stays, to choose it by its number for a
-  game a new build breaks; older builds no game uses are deleted. A project that cannot be updated
+  running keeps the build it started with. While it is on, the Proton menus offer a downloaded
+  build through its `-latest` link only. The build before stays, for a game a new build breaks:
+  turn **Keep up to date** off for a moment to choose that build by its number for the game, then
+  on again; the game keeps it, and no update deletes a build a game uses. Older builds no game
+  uses are deleted. A project that cannot be updated
   (GitHub refusing, a release without its sum) is reported and leaves the others to be updated;
   when GitHub cannot be reached at all, the check is made again at the next start. **Update now**
   and `slatty proton update` do the same at once.

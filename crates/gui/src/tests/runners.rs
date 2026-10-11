@@ -25,6 +25,24 @@ fn runners_page() -> App {
     app
 }
 
+/// With Keep up to date on, the Proton menus offer a downloaded build through its `-latest` link
+/// only, which updates follow; turned off, every build again.
+#[test]
+fn proton_menus_offer_the_latest_link_while_builds_are_kept_up_to_date() {
+    let mut app = runners_page();
+    let dirs = app.core.as_ref().unwrap().dirs.clone();
+    let latest = slatty_core::protons::latest_link(&dirs, Source::GeProton);
+    let build = slatty_core::protons::dir(&dirs).join("GE-Proton11-7-x86_64");
+    app.proton_choices = vec![latest.clone(), build.clone()];
+    let offered =
+        |app: &App| -> Vec<PathBuf> { app.proton_offers().into_iter().map(|c| c.0).collect() };
+    assert_eq!(offered(&app), [latest.clone(), build.clone()]);
+    let _ = app.update(Message::Runners(RunnersMsg::Updates(true)));
+    assert_eq!(offered(&app), std::slice::from_ref(&latest));
+    let _ = app.update(Message::Runners(RunnersMsg::Updates(false)));
+    assert_eq!(offered(&app), [latest, build]);
+}
+
 #[test]
 fn turning_github_off_stops_a_download_and_a_stopped_update_lists_the_builds_again() {
     let mut app = runners_page();

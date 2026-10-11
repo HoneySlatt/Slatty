@@ -1114,3 +1114,38 @@ fn shared_links_follow_the_downloaded_builds_and_the_setting() {
     assert_eq!(left, ["Elsewhere", "Other"], "only our links go");
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// With Keep up to date on, a downloaded build is offered through its project's `-latest` link
+/// only, which updates follow; builds from elsewhere, and a project without a link, stay offered.
+#[test]
+fn followed_projects_are_offered_through_their_latest_link_only() {
+    let dirs = Dirs::under(Path::new("/data"));
+    let ge = dir(&dirs).join("GE-Proton11-7-x86_64");
+    let ge_latest = latest_link(&dirs, Source::GeProton);
+    let cachy = dir(&dirs).join("proton-cachyos-11.0-20261005-slr-x86_64_v3");
+    let umu = dir(&dirs).join("UMU-Proton-10.0-4");
+    let steam = PathBuf::from("/steam/steamapps/common/Proton - Experimental");
+    let all = vec![
+        ge_latest.clone(),
+        ge.clone(),
+        cachy.clone(),
+        umu.clone(),
+        steam.clone(),
+    ];
+    assert_eq!(
+        offered(&dirs, &all, false),
+        all,
+        "every build while updates are off"
+    );
+    let mut with_cachy_link = all.clone();
+    with_cachy_link.insert(2, latest_link(&dirs, Source::ProtonCachyOs));
+    assert_eq!(
+        offered(&dirs, &with_cachy_link, true),
+        [
+            ge_latest,
+            latest_link(&dirs, Source::ProtonCachyOs),
+            umu,
+            steam
+        ]
+    );
+}

@@ -621,12 +621,7 @@ impl App {
     }
 
     fn installs_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
-        let protons: Vec<ProtonChoice> = self
-            .proton_choices
-            .iter()
-            .cloned()
-            .map(ProtonChoice)
-            .collect();
+        let protons = self.proton_offers();
         let browse = button(
             row![
                 icon(Icon::FolderOpen, 16.0, tokens().text),

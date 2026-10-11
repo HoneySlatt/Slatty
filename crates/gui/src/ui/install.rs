@@ -320,11 +320,7 @@ impl App {
         let id = g.id.clone();
         let proton = windows.then(|| {
             pick_list(
-                self.proton_choices
-                    .iter()
-                    .cloned()
-                    .map(ProtonChoice)
-                    .collect::<Vec<_>>(),
+                self.proton_offers(),
                 info.proton.clone().map(ProtonChoice),
                 move |c| Message::Install(InstallMsg::Proton(id.clone(), c)),
             )

@@ -54,6 +54,18 @@ pub enum RunnersMsg {
 }
 
 impl App {
+    /// The Proton builds the menus offer: with Keep up to date on, a downloaded build only
+    /// through its project's `-latest` link (`protons::offered`).
+    pub fn proton_offers(&self) -> Vec<crate::settings::ProtonChoice> {
+        let Some(core) = &self.core else {
+            return Vec::new();
+        };
+        protons::offered(&core.dirs, &self.proton_choices, self.runners.updates)
+            .into_iter()
+            .map(crate::settings::ProtonChoice)
+            .collect()
+    }
+
     pub fn update_runners(&mut self, msg: RunnersMsg) -> Task<Message> {
         let Some(core) = self.core.clone() else {
             return Task::none();

@@ -83,11 +83,7 @@ impl App {
                     let id = g.id.clone();
                     column![
                         pick_list(
-                            self.proton_choices
-                                .iter()
-                                .cloned()
-                                .map(ProtonChoice)
-                                .collect::<Vec<_>>(),
+                            self.proton_offers(),
                             Some(ProtonChoice(proton.clone())),
                             move |c| Message::Settings(SettingsMsg::GameProton(id.clone(), c)),
                         )
