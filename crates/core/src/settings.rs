@@ -379,6 +379,11 @@ fn proton_candidates_in(downloaded: &Path, home: &Path) -> Vec<PathBuf> {
         );
     }
     places.push(home.join(".local/share/umu/compatibilitytools"));
+    // Each folder listed once: native Steam is found as itself and through `~/.steam/steam`, and
+    // its main library is named again in `libraryfolders.vdf`; each can be on a network drive,
+    // every game folder in it looked into.
+    let mut real_places = std::collections::HashSet::new();
+    places.retain(|p| real_places.insert(p.canonicalize().unwrap_or_else(|_| p.clone())));
 
     let builds_in = |place: &Path| {
         let mut builds: Vec<PathBuf> = std::fs::read_dir(place)
@@ -580,6 +585,39 @@ mod tests {
             .expect("not held by the pipe");
         assert_eq!(libraries, std::slice::from_ref(&steam));
         std::fs::remove_dir_all(steam).unwrap();
+    }
+
+    /// Times finding the Proton builds with 2,000 games installed by Steam, its main folder found
+    /// as itself and through `~/.steam/steam`: `cargo test --release -p slatty-core
+    /// finding_proton_builds_in_a_large_library -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn finding_proton_builds_in_a_large_library() {
+        let home = std::env::temp_dir().join(format!("slatty-protons-big-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let steam = home.join(".local/share/Steam");
+        for i in 0..2_000 {
+            std::fs::create_dir_all(steam.join(format!("steamapps/common/[FAKE] Game {i}")))
+                .unwrap();
+        }
+        build(&steam.join("steamapps/common/Proton - Experimental"));
+        std::fs::write(
+            steam.join("steamapps/libraryfolders.vdf"),
+            format!(
+                "\"libraryfolders\" {{ \"0\" {{ \"path\" \"{}\" }} }}",
+                steam.display()
+            ),
+        )
+        .unwrap();
+        std::fs::create_dir_all(home.join(".steam")).unwrap();
+        std::os::unix::fs::symlink(&steam, home.join(".steam/steam")).unwrap();
+        let downloaded = home.join("slatty/protons");
+        let t = std::time::Instant::now();
+        for _ in 0..10 {
+            assert_eq!(proton_candidates_in(&downloaded, &home).len(), 1);
+        }
+        println!("Proton builds found: {:?} each", t.elapsed() / 10);
+        std::fs::remove_dir_all(home).unwrap();
     }
 
     #[test]
