@@ -217,6 +217,45 @@ async fn an_isolated_linux_game_sees_nothing_of_the_home_folder() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// The user's other programs: a signal needs only the same user, so a game that sees them could
+/// stop them (an editor with unsaved work, the desktop session), and read their command lines.
+#[tokio::test]
+#[ignore]
+async fn an_isolated_game_cannot_signal_nor_read_the_users_other_programs() {
+    let (root, dirs) = fixture("signal");
+    let mut other = std::process::Command::new("sleep")
+        .arg("600")
+        .spawn()
+        .unwrap();
+    let pid = other.id();
+    let script = root.join("game/start.sh");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\ncd '{}'\n\
+             if kill -0 {pid} 2>/dev/null; then echo REACHABLE; else echo hidden; fi > out-signal\n\
+             if grep -q sleep /proc/{pid}/cmdline 2>/dev/null; then echo VISIBLE; else echo hidden; fi > out-cmdline\n",
+            root.join("game").display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let spec = runner::launch_spec(&dirs, &linux_install(&root), None).unwrap();
+    let log = root.join("game.log");
+
+    // Sharing the user's processes, the probe reaches them: the checks below mean something.
+    run(&without(&spec, &["PRESSURE_VESSEL_SHARE_PID"]), &log).await;
+    let shared = (result(&root, "out-signal"), result(&root, "out-cmdline"));
+    clear_results(&root);
+    run(&spec, &log).await;
+    let isolated = (result(&root, "out-signal"), result(&root, "out-cmdline"));
+    let _ = other.kill();
+    let _ = other.wait();
+    assert_eq!(shared, ("REACHABLE".into(), "VISIBLE".into()));
+    assert_eq!(isolated, ("hidden".into(), "hidden".into()));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// umu's runtime runs every game's container from the user's files, and the Proton build every
 /// game of that build: one an isolated game could change would run its code in other games, or
 /// in Steam's.

@@ -426,6 +426,9 @@ fn isolation_env(
         ("PRESSURE_VESSEL_HOME".into(), home.clone()),
         // The user's own environment could ask the container to share the home folder after all.
         ("PRESSURE_VESSEL_SHARE_HOME".into(), "0".into()),
+        // The user's other programs stay out of reach: seeing their process ids, a game could
+        // stop them (a signal needs only the same user) and read their command lines.
+        ("PRESSURE_VESSEL_SHARE_PID".into(), "0".into()),
         (
             "PRESSURE_VESSEL_FILESYSTEMS_RW".into(),
             path_list(std::slice::from_ref(&install.path))?,
