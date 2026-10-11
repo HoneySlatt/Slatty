@@ -138,8 +138,8 @@ pub async fn add(ctx: &Ctx, args: AddArgs) -> Result<()> {
 #[derive(Args)]
 pub struct RemoveArgs {
     game_id: String,
-    /// Also delete the Wine prefix SlattyLauncher made for it (its saves are copied to the
-    /// backups first)
+    /// Also delete the Wine prefix SlattyLauncher made for it (its saves, and a game its installer
+    /// put in it, are copied to the backups first)
     #[arg(long)]
     delete_prefix: bool,
 }
@@ -156,15 +156,29 @@ pub fn remove(ctx: &Ctx, args: RemoveArgs) -> Result<()> {
         return Ok(());
     };
     let report = added::remove(&ctx.db, &ctx.dirs, &args.game_id, args.delete_prefix)?;
-    println!(
-        "{} is no longer in the library; its files are untouched.",
-        shown(&title)
-    );
+    println!("{} is no longer in the library.", shown(&title));
+    if report.removed_files > 0 {
+        println!(
+            "{} file(s) SlattyLauncher unpacked for it were deleted.",
+            report.removed_files
+        );
+    } else if report.game_backup.is_none() {
+        println!("Its files are untouched.");
+    }
+    if !report.kept.is_empty() {
+        println!("{} other file(s) kept in its folder.", report.kept.len());
+    }
     if let Some(backup) = report.prefix_backup {
         println!("Saves of its prefix copied to {}", shown(backup.display()));
     }
     if report.prefix_removed {
         println!("Its prefix was deleted.");
+    }
+    if let Some(copy) = report.game_backup {
+        println!(
+            "The game was in its prefix and went with it; its copy is in {}",
+            shown(copy.display())
+        );
     }
     Ok(())
 }

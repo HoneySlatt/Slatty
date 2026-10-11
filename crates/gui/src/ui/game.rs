@@ -705,9 +705,9 @@ impl App {
         });
         let why = container(
             text(
-                "Its files are yours: removing it from the library leaves them. It has no cloud \
-                 saves or achievements, and GOG is not told of it: its play time stays on this \
-                 computer.",
+                "Its files are yours: removing it from the library leaves them, except those \
+                 SlattyLauncher unpacked. It has no cloud saves or achievements, and GOG is not \
+                 told of it: its play time stays on this computer.",
             )
             .size(13),
         )

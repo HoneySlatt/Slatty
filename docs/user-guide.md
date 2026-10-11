@@ -548,9 +548,11 @@ slatty remove <game-id> [--delete-prefix]
   this computer. umu's database is not asked for its fixes.
 - `slatty add` says so when the folder holds a GOG game: installed from GOG, it would have its cloud
   saves and achievements.
-- `slatty remove` takes it out of the library and never deletes its files, which are yours. With
-  `--delete-prefix`, the prefix SlattyLauncher made for it is deleted too, its saves (its `users`
-  folder, registry and `C:\ProgramData`) copied to the backups first.
+- `slatty remove` takes it out of the library and never deletes its files, which are yours,
+  except those SlattyLauncher unpacked (see above). With `--delete-prefix`, the prefix
+  SlattyLauncher made for it is deleted too, its saves (its `users` folder, registry and
+  `C:\ProgramData`), and a game its installer put in it, copied to the backups first. What was
+  deleted, kept and copied is told once done.
 
 ## Steam games
 

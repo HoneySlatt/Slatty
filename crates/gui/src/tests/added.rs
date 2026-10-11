@@ -186,10 +186,49 @@ fn removing_a_game_added_by_hand_asks_first() {
 
     let _ = app.update(Message::Maintenance(MaintenanceMsg::Uninstalled(
         "local-1".into(),
-        Ok(Vec::new()),
+        Ok(Default::default()),
     )));
     assert!(app.library.iter().all(|g| g.id != "local-1"));
     assert_eq!(app.selected, None);
+}
+
+/// Once removed, what was deleted is told: the files SlattyLauncher unpacked for it, the game its
+/// installer put in the prefix deleted, with where its copy is; then never that its files are
+/// untouched.
+#[test]
+fn removing_a_game_added_by_hand_tells_what_was_deleted() {
+    use slatty_core::maintenance::UninstallReport;
+    let notice = |report: UninstallReport| {
+        let mut app = added_app();
+        let _ = app.update(Message::Maintenance(MaintenanceMsg::Uninstalled(
+            "local-1".into(),
+            Ok(report),
+        )));
+        app.notice.unwrap().text
+    };
+    let untouched = notice(UninstallReport::default());
+    assert!(untouched.contains("untouched"), "{untouched}");
+    let unpacked = notice(UninstallReport {
+        removed_files: 3,
+        kept: vec!["save.dat".into()],
+        ..Default::default()
+    });
+    assert!(
+        unpacked.contains("3 file(s) SlattyLauncher unpacked")
+            && unpacked.contains("1 other file(s) kept")
+            && !unpacked.contains("untouched"),
+        "{unpacked}"
+    );
+    let in_prefix = notice(UninstallReport {
+        prefix_removed: true,
+        game_backup: Some("/backups/[FAKE]-game".into()),
+        ..Default::default()
+    });
+    assert!(
+        in_prefix.contains("its copy is in /backups/[FAKE]-game")
+            && !in_prefix.contains("untouched"),
+        "{in_prefix}"
+    );
 }
 
 /// The dialog takes a program, names the game after it until given a title, offers Proton for a

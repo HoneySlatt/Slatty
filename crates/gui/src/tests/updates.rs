@@ -184,7 +184,7 @@ fn a_waiting_game_the_user_changes_is_not_updated_after_all() {
     )));
     let _ = app.update(Message::Maintenance(MaintenanceMsg::Uninstalled(
         "5".into(),
-        Ok(Vec::new()),
+        Ok(Default::default()),
     )));
     assert!(app.updates.waiting.is_empty(), "{:?}", app.updates.waiting);
     game_ends(&mut app);

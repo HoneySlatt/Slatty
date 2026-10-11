@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use slatty_core::installer::{DlcChoice, Progress};
-use slatty_core::maintenance::Change;
+use slatty_core::maintenance::{Change, UninstallReport};
 use tokio_util::sync::CancellationToken;
 
 use crate::notify::Kind;
@@ -84,7 +84,7 @@ pub enum MaintenanceMsg {
     AskUninstall(String),
     CancelUninstall(String),
     Uninstall(String, bool),
-    Uninstalled(String, Result<Vec<String>, String>),
+    Uninstalled(String, Result<UninstallReport, String>),
     CheckUpdate(String),
     UpdateChecked(String, Result<Option<String>, String>),
     Apply(String, Change),
@@ -232,34 +232,19 @@ impl App {
                         .await
                         .map_err(err)?
                         .map_err(err)
-                        .map(|r| {
-                            let mut lines = Vec::new();
-                            if !added {
-                                lines.push(format!("{} file(s) deleted.", r.removed_files));
-                            }
-                            if !r.kept.is_empty() {
-                                lines.push(format!(
-                                    "{} file(s) not installed by slatty kept in the game folder.",
-                                    r.kept.len()
-                                ));
-                            }
-                            if let Some(b) = r.prefix_backup {
-                                lines.push(format!("Prefix saves backed up to {}", b.display()));
-                            }
-                            lines
-                        })
                     },
                     move |r| Message::Maintenance(MaintenanceMsg::Uninstalled(game_id, r)),
                 );
             }
-            MaintenanceMsg::Uninstalled(game_id, Ok(lines)) => {
+            MaintenanceMsg::Uninstalled(game_id, Ok(report)) => {
                 self.installs.remove(&game_id);
                 self.records.remove(&game_id);
                 self.updates.waiting.retain(|w| *w != game_id);
                 self.panel = None;
                 self.cloud.remove(&game_id);
                 self.maintenance.remove(&game_id);
-                let text = if slatty_core::store::is_local(&game_id) {
+                let added = slatty_core::store::is_local(&game_id);
+                if added {
                     // Gone from the library with what was made of it; back to the library.
                     self.customs.remove(&game_id);
                     self.playtime.remove(&game_id);
@@ -267,13 +252,8 @@ impl App {
                         self.selected = None;
                     }
                     self.merge_steam();
-                    format!(
-                        "Removed from the library; its files are untouched. {}",
-                        lines.join(" ")
-                    )
-                } else {
-                    format!("Uninstalled. {}", lines.join(" "))
-                };
+                }
+                let text = uninstall_notice(added, &report);
                 self.notice = Some(crate::Notice { error: false, text });
             }
             MaintenanceMsg::Uninstalled(game_id, Err(e)) => {
@@ -469,6 +449,42 @@ impl App {
         }
         Task::none()
     }
+}
+
+/// What an uninstall did, or the removal of a game added by hand (`added`), as its report tells.
+fn uninstall_notice(added: bool, r: &UninstallReport) -> String {
+    let mut lines = vec![if !added {
+        format!("Uninstalled. {} file(s) deleted.", r.removed_files)
+    } else if r.removed_files > 0 {
+        format!(
+            "Removed from the library with {} file(s) SlattyLauncher unpacked for it.",
+            r.removed_files
+        )
+    } else if r.game_backup.is_none() {
+        "Removed from the library; its files are untouched.".into()
+    } else {
+        "Removed from the library.".into()
+    }];
+    if !r.kept.is_empty() {
+        lines.push(if added {
+            format!("{} other file(s) kept in its folder.", r.kept.len())
+        } else {
+            format!(
+                "{} file(s) not installed by slatty kept in the game folder.",
+                r.kept.len()
+            )
+        });
+    }
+    if let Some(copy) = &r.game_backup {
+        lines.push(format!(
+            "The game was in its prefix and went with it; its copy is in {}.",
+            copy.display()
+        ));
+    }
+    if let Some(b) = &r.prefix_backup {
+        lines.push(format!("Prefix saves backed up to {}", b.display()));
+    }
+    lines.join(" ")
 }
 
 fn update_summary(r: &slatty_core::maintenance::UpdateReport) -> String {

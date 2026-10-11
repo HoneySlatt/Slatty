@@ -14,7 +14,7 @@ use crate::installer::{self, DlcSelection, Download, InstallJob, InstallRecord, 
 use crate::paths::Dirs;
 use crate::session;
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UninstallReport {
     pub removed_files: usize,
     /// Files that slatty did not install (saves, mods, configs), left in place.
@@ -22,6 +22,8 @@ pub struct UninstallReport {
     pub folder_removed: bool,
     pub prefix_backup: Option<PathBuf>,
     pub prefix_removed: bool,
+    /// Where a game added by hand, which its installer put in the prefix deleted, was copied.
+    pub game_backup: Option<PathBuf>,
 }
 
 fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, InstallRecord)> {

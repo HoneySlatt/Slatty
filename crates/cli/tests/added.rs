@@ -94,3 +94,37 @@ fn a_game_is_added_listed_and_removed_on_the_command_line() {
     assert!(!prefix.exists());
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// Removing a game its installer put in its prefix, with the prefix, says the game went with it
+/// and where its copy is, not that its files are untouched.
+#[test]
+fn removing_a_game_with_its_prefix_tells_where_the_game_was_copied() {
+    let root = std::env::temp_dir().join(format!("slatty-cli-in-prefix-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let proton = root.join("proton");
+    std::fs::create_dir_all(&proton).unwrap();
+    std::fs::write(proton.join("proton"), b"").unwrap();
+    let game = root.join("data/slatty/prefixes/local-1/drive_c/Games/[FAKE] Quest");
+    std::fs::create_dir_all(&game).unwrap();
+    std::fs::write(game.join("quest.exe"), b"MZ").unwrap();
+    // As `slatty add --installer` leaves it.
+    std::fs::create_dir_all(root.join("data/slatty/added")).unwrap();
+    std::fs::write(root.join("data/slatty/added/local-1.installer"), b"").unwrap();
+    stdout(&slatty(
+        &root,
+        &[
+            "add",
+            game.join("quest.exe").to_str().unwrap(),
+            "--title",
+            "[FAKE] Quest",
+            "--installed-by",
+            "local-1",
+            "--proton",
+            proton.to_str().unwrap(),
+        ],
+    ));
+    let removed = stdout(&slatty(&root, &["remove", "local-1", "--delete-prefix"]));
+    assert!(!removed.contains("untouched"), "{removed}");
+    assert!(removed.contains("backups/prefixes/local-1"), "{removed}");
+    std::fs::remove_dir_all(root).unwrap();
+}

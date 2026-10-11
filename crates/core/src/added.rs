@@ -687,7 +687,7 @@ pub fn remove(
                 ));
             crate::maintenance::copy_dir(&install.path, &copy)?;
             crate::fsutil::sync_filesystem(&copy)?;
-            report.prefix_backup.get_or_insert(copy);
+            report.game_backup = Some(copy);
         }
         if prefix.exists() {
             std::fs::remove_dir_all(prefix)
@@ -1412,6 +1412,7 @@ mod tests {
             .unwrap()
             .path();
         assert!(copy.join("save.dat").is_file(), "{}", copy.display());
+        assert_eq!(report.game_backup, Some(copy), "told where");
     }
 
     /// The data folder reached through a link (moved to another disk): the game an installer put

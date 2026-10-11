@@ -38,7 +38,8 @@ enum Command {
     Import(games::ImportArgs),
     /// Add a game from no store, by the program that starts it
     Add(added::AddArgs),
-    /// Take a game added by hand out of the library; its files are left untouched
+    /// Take a game added by hand out of the library; its files are left untouched, except those
+    /// SlattyLauncher unpacked
     Remove(added::RemoveArgs),
     /// List installed games and interrupted installs
     Installs,
