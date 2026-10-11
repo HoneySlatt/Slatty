@@ -343,6 +343,7 @@ pub async fn unpack(
         )));
     }
     check_folder(db, dirs, &target, None)?;
+    let game_id = next_id(db, dirs)?;
     // Made new: one already there (a link planted to have files written elsewhere, or an earlier
     // attempt) is not the folder to unpack into.
     let partial = into.join(format!(".{name}.slatty-unpack"));
@@ -354,33 +355,47 @@ pub async fn unpack(
         };
         Error::io(format!("make {}{hint}", partial.display()), e)
     })?;
-    let game_id = next_id(db, dirs)?;
-    let files = unpack_into(&archive, &partial, &target, cancel, progress).await;
-    // Nothing is resumed: what was unpacked of a failed one goes.
-    if files.is_err() {
-        let _ = std::fs::remove_dir_all(&partial);
-    }
-    // As they are now, to tell later whether the game rewrote one; what is not there was left out.
-    let files = files?
-        .into_iter()
-        .filter_map(|rel| UnpackedFile::stamp(&target, rel))
-        .collect();
-    save_unpacked(
-        dirs,
-        &game_id,
-        &Unpacked {
+    let unpacked = async {
+        let files = unpack_into(&archive, &partial, cancel, progress).await?;
+        // The list holds names as text: a file whose name is not could never be deleted with the
+        // game.
+        if let Some(odd) = files.iter().find(|f| f.to_str().is_none()) {
+            return Err(Error::Refused(format!(
+                "{} holds a file whose name is not UTF-8, {}; SlattyLauncher cannot unpack it",
+                archive.display(),
+                odd.display()
+            )));
+        }
+        // As they are now, to tell later whether the game rewrote one; what is not there was left
+        // out.
+        let files = files
+            .into_iter()
+            .filter_map(|rel| UnpackedFile::stamp(&partial, rel))
+            .collect();
+        crate::fsutil::sync_filesystem(&partial)?;
+        // Kept before the folder takes its place: never a game's folder without its list.
+        let list = Unpacked {
             folder: target.clone(),
             files,
-        },
-    )?;
-    Ok((game_id, target))
+        };
+        save_unpacked(dirs, &game_id, &list)?;
+        std::fs::rename(&partial, &target).map_err(|e| {
+            let _ = std::fs::remove_file(unpacked_file(dirs, &game_id));
+            Error::io(format!("publish {}", target.display()), e)
+        })
+    }
+    .await;
+    // Nothing is resumed: what was unpacked of a failed one goes.
+    if unpacked.is_err() {
+        let _ = std::fs::remove_dir_all(&partial);
+    }
+    unpacked.map(|()| (game_id, target))
 }
 
-/// Unpacks `archive` into `partial`, then renames it to `target`: the files it put there.
+/// Unpacks `archive` into `partial`: the files it put there.
 async fn unpack_into(
     archive: &Path,
     partial: &Path,
-    target: &Path,
     cancel: tokio_util::sync::CancellationToken,
     progress: &(dyn Fn(u64, u64) + Send + Sync),
 ) -> Result<Vec<PathBuf>> {
@@ -403,10 +418,7 @@ async fn unpack_into(
             }
         };
         unpacked.map_err(|e| Error::io("unpack", std::io::Error::other(e)))??;
-        std::fs::rename(partial, target)
-            .map_err(|e| Error::io(format!("publish {}", target.display()), e))?;
-        crate::fsutil::sync_filesystem(target)?;
-        listed_files(target)
+        listed_files(partial)
     } else {
         let source = LocalArchive(archive.to_path_buf());
         let mut root = "data/noarch/";
@@ -425,13 +437,15 @@ async fn unpack_into(
         }
         let set = LinuxSet::from_entries([entries.as_slice()], root)?;
         let report = |p: crate::installer::Progress| progress(p.bytes_done, p.bytes_total);
+        // Filled where it is, as a repair fills a game missing every file: the caller puts the
+        // folder in its place once it listed what is in it.
         LinuxDownload {
             source: &source,
             cancel,
             progress: &report,
             free_space: &crate::installer::free_space,
         }
-        .run(&set, partial, target)
+        .check_installed(&set, partial, true)
         .await?;
         set.files
             .iter()
@@ -1760,6 +1774,43 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(refused.contains("left from before"), "{refused}");
+    }
+
+    /// A tarball holding a file whose name is not UTF-8, which the list of what was unpacked
+    /// cannot hold, is refused whole: neither its folder nor a list is left, so it can be tried
+    /// again.
+    #[tokio::test]
+    async fn an_archive_whose_files_cannot_be_listed_leaves_nothing() {
+        use std::os::unix::ffi::OsStrExt;
+        let f = fake("not-utf8");
+        let mut tar = tar::Builder::new(Vec::new());
+        for name in [&b"Game/run.sh"[..], b"Game/\xff[FAKE].dat"] {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(10);
+            header.set_mode(0o755);
+            let name = std::ffi::OsStr::from_bytes(name);
+            tar.append_data(&mut header, name, &b"#!/bin/sh\n"[..])
+                .unwrap();
+        }
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        std::io::Write::write_all(&mut gz, &tar.into_inner().unwrap()).unwrap();
+        let tarball = f.root.join("[FAKE] game.tar.gz");
+        std::fs::write(&tarball, gz.finish().unwrap()).unwrap();
+        let refused = unpacked(&f, &tarball, "[FAKE] Odd")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("UTF-8"), "{refused}");
+        let left: Vec<_> = std::fs::read_dir(f.root.join("library"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name())
+            .collect();
+        assert!(left.is_empty(), "{left:?}");
+        assert!(
+            std::fs::read_dir(f.dirs.data.join("added")).map_or(true, |mut d| d.next().is_none()),
+            "no list"
+        );
     }
 
     /// A title's `:` stays out of the folder's name: an isolated game's folder is shared with its
