@@ -21,10 +21,42 @@ pub fn running(proc: &Path) -> BTreeSet<u32> {
                 .to_str()
                 .is_some_and(|n| n.bytes().all(|b| b.is_ascii_digit()))
         })
-        .filter(|e| e.metadata().is_ok_and(|m| m.uid() == me))
-        .filter(|e| std::fs::read(e.path().join("comm")).is_ok_and(|c| c.trim_ascii() == b"reaper"))
-        .filter_map(|e| app_of(&std::fs::read(e.path().join("cmdline")).ok()?))
+        .filter_map(|e| reaper_app(&e.path(), me))
         .collect()
+}
+
+/// The app id a process's folder (`/proc/<pid>`) tells, when it is one of the user's `reaper`
+/// processes. The folder is opened once and its files read through it: a process that ends
+/// meanwhile, and another one given its number, cannot be read in its place.
+fn reaper_app(process: &Path, me: u32) -> Option<u32> {
+    use nix::fcntl::{OFlag, open, openat};
+    use nix::sys::stat::{Mode, fstat};
+    let dir = open(
+        process,
+        OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC,
+        Mode::empty(),
+    )
+    .ok()?;
+    if fstat(&dir).ok()?.st_uid != me {
+        return None;
+    }
+    let read = |name: &str| {
+        let file = openat(
+            &dir,
+            name,
+            OFlag::O_RDONLY | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )
+        .ok()?;
+        let mut bytes = Vec::new();
+        let mut file = std::io::Read::take(std::fs::File::from(file), 64 << 10);
+        std::io::Read::read_to_end(&mut file, &mut bytes).ok()?;
+        Some(bytes)
+    };
+    if read("comm")?.trim_ascii() != b"reaper" {
+        return None;
+    }
+    app_of(&read("cmdline")?)
 }
 
 /// The app id of the game a `reaper` command line starts, from its arguments before `--`; what
