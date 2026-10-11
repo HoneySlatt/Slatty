@@ -399,7 +399,7 @@ async fn run_session(
                 Some(SupervisorEvent::MainExited { code }) => emit(PlayEvent::LauncherExited { code }),
                 Some(SupervisorEvent::Ended { main_code }) => break SessionOutcome { main_code, clean: true },
                 Some(SupervisorEvent::Failed { message }) => {
-                    session::record_end(db, id, &SessionOutcome { main_code: None, clean: false })?;
+                    end_session(db, id, &SessionOutcome { main_code: None, clean: false }, user_id)?;
                     return Err(Error::Refused(message));
                 }
                 Some(SupervisorEvent::Started { .. }) => {}
@@ -420,8 +420,21 @@ async fn run_session(
             }
         }
     };
-    session::record_end(db, id, &outcome)?;
+    end_session(db, id, &outcome, user_id)?;
     Ok(outcome)
+}
+
+/// Records a session's end. With play time reporting off it is kept from GOG at once, rather than
+/// after the steps that follow the game (Comet's stop, the cloud): a launcher closed meanwhile
+/// would have left it to be sent later.
+fn end_session(db: &Db, id: i64, outcome: &SessionOutcome, user_id: Option<&str>) -> Result<()> {
+    session::record_end(db, id, outcome)?;
+    if let Some(user_id) = user_id
+        && !crate::settings::report_playtime(db)?
+    {
+        crate::playtime::keep_private(db, user_id)?;
+    }
+    Ok(())
 }
 
 async fn cloud_sync(
@@ -521,4 +534,31 @@ pub fn recover_unfinished(db: &Db, dirs: &Dirs) -> Result<Vec<session::SessionRe
         session::mark_interrupted(db, s.id)?;
     }
     Ok(unfinished)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// With play time reporting off, a session is kept from GOG as it ends: a launcher closed or
+    /// crashed during the steps after the game (Comet's stop, the cloud) left it to be sent later.
+    #[test]
+    fn a_session_played_with_reporting_off_is_kept_private_as_it_ends() {
+        let db = Db::in_memory().unwrap();
+        crate::settings::set_report_playtime(&db, false).unwrap();
+        let id = session::record_start(&db, "1", Some("1234")).unwrap();
+        let outcome = SessionOutcome {
+            main_code: Some(0),
+            clean: true,
+        };
+        end_session(&db, id, &outcome, Some("1234")).unwrap();
+        crate::settings::set_report_playtime(&db, true).unwrap();
+        let reported: i64 = db
+            .conn()
+            .query_row("SELECT reported FROM sessions WHERE id = ?1", [id], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(reported, 2, "never to be sent");
+    }
 }
