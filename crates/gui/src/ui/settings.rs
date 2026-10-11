@@ -287,9 +287,10 @@ impl App {
             note(
                 "No telemetry: SlattyLauncher talks to GOG, to the download servers GOG names, \
                  to umu's database when allowed above, to GitHub once Proton downloads are \
-                 turned on in Runners, and to SteamGridDB once turned on in Advanced. umu, which \
-                 runs Windows games, asks Valve (repo.steampowered.com) whether its runtime is \
-                 current. SECURITY.md lists everything that leaves your computer.",
+                 turned on in Runners, to SteamGridDB once turned on in Advanced, and to Steam's \
+                 image servers and Web API once turned on in Steam. umu, which runs Windows games, \
+                 asks Valve (repo.steampowered.com) whether its runtime is current. SECURITY.md \
+                 lists everything that leaves your computer.",
             ),
         ]
     }
@@ -588,6 +589,11 @@ impl App {
     fn steam_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         use crate::steam::SteamMsg;
         let found = match &self.steam.found {
+            Some(name) if self.steam.on && self.steam.account.is_some() => format!(
+                "Signed in to Steam as {name}: {} games. They are read from the Steam client's own \
+                 files on this computer.",
+                self.steam.games.len()
+            ),
             Some(name) => format!(
                 "Signed in to Steam as {name}. Its games are read from the Steam client's own files \
                  on this computer."
@@ -763,7 +769,8 @@ impl App {
             setting(
                 wide,
                 "Games",
-                text(format!("{} owned · {refreshed}", self.library.len()))
+                // GOG's games: Steam's are counted in Settings → Steam.
+                text(format!("{} owned · {refreshed}", self.gog_titles.len()))
                     .size(15)
                     .into(),
                 Some(refresh.into()),

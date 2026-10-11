@@ -581,6 +581,29 @@ fn a_renamed_steam_game_gets_steams_title_back() {
     );
 }
 
+/// Settings → Library counts the games GOG's refresh is about, and Settings → Steam Steam's.
+#[test]
+fn each_store_counts_its_own_games_in_settings() {
+    let mut app = library_app();
+    app.steam.on = true;
+    app.steam.found = Some("[FAKE] Player".into());
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    app.page = Page::Settings;
+    app.window = Size::new(1440.0, 2400.0);
+    let mut ui = render_window(&app);
+    let all = texts(&mut ui);
+    assert!(
+        all.iter()
+            .any(|t| t == "14 owned · Last refreshed 09/10/2026 00:53"),
+        "{all:?}"
+    );
+    assert!(
+        all.iter()
+            .any(|t| t.contains("[FAKE] Player") && t.contains("2 games")),
+        "{all:?}"
+    );
+}
+
 /// GOG is asked about GOG's games alone: Steam's never count as games GOG could not describe.
 #[test]
 fn steam_games_are_not_gogs_to_read() {

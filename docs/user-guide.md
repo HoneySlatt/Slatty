@@ -630,7 +630,7 @@ The interface's **Settings** tab lists its parts on the left (Account, Library, 
 Runners, Appearance, Notifications, Privacy, Advanced, About); choosing one brings it to the top, and the list follows the page as it
 scrolls. **Steam** is described in [Steam games](#steam-games). **Account** shows who is signed in, with
 Log out, and Forget account, which asks first, then does what `slatty auth logout --forget` does
-(see [Signing in](#signing-in)). **Library** shows how many games you own and when the list was refreshed, with Refresh
+(see [Signing in](#signing-in)). **Library** shows how many games you own on GOG and when the list was refreshed, with Refresh
 library, and the size of the covers. **Installs** holds:
 
 - **Default installation path:** where new games are installed unless the Install panel says
