@@ -99,8 +99,16 @@ pub async fn sync<T: CloudTransport>(
     let _lock = if opts.dry_run {
         None
     } else {
-        let refused = || Error::Refused("a cloud sync for this game is already running".into());
-        Some(lock::try_acquire(&lock_path)?.ok_or_else(refused)?)
+        // A process another thread starts holds a copy of the lock until it runs its program, so
+        // one just released can look held for an instant.
+        match lock::acquire(&lock_path, std::time::Duration::from_secs(1)).await {
+            Err(Error::Refused(_)) => {
+                return Err(Error::Refused(
+                    "a cloud sync for this game is already running".into(),
+                ));
+            }
+            lock => Some(lock?),
+        }
     };
 
     let local = scan::scan(target.root)?;

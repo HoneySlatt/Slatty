@@ -812,6 +812,24 @@ async fn the_same_change_on_both_sides_is_no_conflict() {
     );
 }
 
+/// A process started by another thread holds a copy of every open file until it runs its program,
+/// the lock just released by the last sync included: a lock held for an instant is waited for.
+#[tokio::test]
+async fn a_lock_held_for_an_instant_does_not_refuse_a_sync() {
+    let env = Env::new("lock-instant");
+    env.write("a.sav", "A");
+    let held = crate::lock::try_acquire(&env.dirs.locks().join("cloud-u-g.lock"))
+        .unwrap()
+        .unwrap();
+    let release = tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        drop(held);
+    });
+    let r = env.sync(SyncOptions::default()).await;
+    assert_eq!(r.uploaded, vec!["a.sav"]);
+    release.await.unwrap();
+}
+
 struct MarkerCloud<'a>(&'a MemoryCloud);
 
 impl super::transport::CloudTransport for MarkerCloud<'_> {
