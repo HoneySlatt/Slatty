@@ -290,6 +290,15 @@ pub fn installed(steam: &Steam) -> Vec<Installed> {
     found
 }
 
+/// The game of app `app` in any of Steam's library folders, once Steam wrote its manifest: one
+/// file looked for in each folder, rather than every manifest of every folder (`installed`).
+pub fn find_manifest(steam: &Steam, app: u32) -> Option<Installed> {
+    libraries(steam).into_iter().find_map(|library| {
+        let apps = library.join("steamapps");
+        read(&apps.join(format!("appmanifest_{app}.acf"))).and_then(|m| manifest(&apps, &m))
+    })
+}
+
 /// `game` read again from its own manifest, the one file Steam changes as it downloads: cheaper
 /// than every library folder, which can be network drives. None once Steam removed it; as it was
 /// while its manifest cannot be read (being written, a drive gone for a moment).
@@ -508,6 +517,15 @@ pub(crate) mod tests {
         );
         std::fs::remove_file(&manifest).unwrap();
         assert_eq!(read_again(life), None, "uninstalled");
+    }
+
+    /// The manifest of one game is found in whichever library folder Steam put it.
+    #[test]
+    fn one_games_manifest_is_found_in_any_library_folder() {
+        let fake = FakeSteam::new("find-manifest");
+        assert_eq!(find_manifest(&fake.steam, 70).map(|g| g.app_id), Some(70));
+        assert_eq!(find_manifest(&fake.steam, 440).map(|g| g.app_id), Some(440));
+        assert_eq!(find_manifest(&fake.steam, 999), None);
     }
 
     /// What Steam wrote of a game it downloads is measured in its `downloading` folder, Steam's

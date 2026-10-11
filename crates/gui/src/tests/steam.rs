@@ -505,6 +505,53 @@ fn a_download_steam_makes_shows_until_it_is_done() {
     assert_eq!(app.steam_downloads_every(), None);
 }
 
+/// A game asked of Steam to install shows as soon as Steam writes its manifest, the window in
+/// front or not: that file alone is looked for, every few seconds, for a while. A read of every
+/// library folder asked while one runs (the window's focus back) is made once it ends, not dropped.
+#[test]
+fn an_install_asked_of_steam_is_followed_before_the_focus_comes_back() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    assert_eq!(app.steam_downloads_every(), None);
+    let _ = app.update(Message::Steam(SteamMsg::Ask(
+        "steam-620".into(),
+        Action::Install,
+    )));
+    app.unfocused = true;
+    assert_eq!(
+        app.steam_downloads_every(),
+        Some(crate::steam::DOWNLOAD_EVERY)
+    );
+    let began = Update {
+        done: 0,
+        total: 4_000,
+        stage_total: 8_000,
+        started: true,
+        paused: false,
+    };
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        [(
+            "steam-620".into(),
+            Some(installed(620, 0, false, Some(began))),
+        )]
+        .into(),
+        HashMap::new(),
+    )));
+    assert!(app.steam.expecting.is_none(), "found");
+    assert!(app.steam.installed.contains_key("steam-620"));
+
+    app.steam.reading_installed = true;
+    let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![])));
+    assert!(
+        app.steam.reading_installed,
+        "read again after the one running"
+    );
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![])));
+    assert!(!app.steam.reading_installed, "once");
+}
+
 /// Steam downloads one game at a time: of two it began, the one without a `downloading` folder
 /// while the other has one waits its turn, and the other's progress comes from what it wrote
 /// there, its manifest staying as it was. Its folder growing keeps it followed, every few seconds.
@@ -683,8 +730,12 @@ fn steam_files_that_cannot_be_read_are_told_and_slow_folders_not_asked_twice() {
     }
 
     assert!(app.steam.reading_installed, "read after the library");
+    // Focused twice meanwhile: read once more after it, not beside it, nor twice.
+    let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));
     let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));
     assert!(app.steam.reading_installed);
+    let _ = app.update(Message::Steam(SteamMsg::Installed(Vec::new())));
+    assert!(app.steam.reading_installed, "once more");
     let _ = app.update(Message::Steam(SteamMsg::Installed(Vec::new())));
     assert!(!app.steam.reading_installed);
     let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));

@@ -578,7 +578,8 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
 - **Run by the Steam client.** Play, Install, **Verify files in Steam** and **Uninstall in Steam**
   hand the game to the Steam client (`steam://` addresses, opened by the desktop): it must be
   installed and signed in, and does the work in its own window. What it installed or removed shows
-  once the launcher's window is in front again.
+  once the launcher's window is in front again; a game you asked it to install, as soon as Steam
+  starts it (its manifest is looked for every five seconds, for five minutes).
 - **Steam's downloads.** An install or update the client makes shows on the game's page
   (Downloading, Paused or Queued in Steam) and in the Downloads tab under **In Steam**, with its
   progress, and a notification says when it is done. They are read from the game's manifest

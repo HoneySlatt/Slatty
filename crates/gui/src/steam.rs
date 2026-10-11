@@ -79,6 +79,12 @@ pub struct SteamView {
     /// and whether those are being read again.
     pub written: HashMap<String, local::Written>,
     pub reading_downloads: bool,
+    /// A game Steam was asked to install, until its manifest shows or `START_WAIT` passed: Steam
+    /// writes it once its own window was answered, maybe after the launcher's had the focus back.
+    pub expecting: Option<(u32, Instant)>,
+    /// Whether the library folders are to be read again once the read running ends: asked for
+    /// meanwhile (the window's focus back), it would have missed what changed since it began.
+    pub read_installed_again: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -230,9 +236,16 @@ impl App {
                         .into_iter()
                         .map(|g| (store::steam_id(g.app_id), Some(g))),
                 );
-                return self.steam_installed(read);
+                let told = self.steam_installed(read);
+                if std::mem::take(&mut self.steam.read_installed_again) {
+                    return Task::batch([told, self.read_steam_installed()]);
+                }
+                return told;
             }
-            SteamMsg::Installed(_) => self.steam.reading_installed = false,
+            SteamMsg::Installed(_) => {
+                self.steam.reading_installed = false;
+                self.steam.read_installed_again = false;
+            }
             SteamMsg::ReadDownloads if self.steam.on => {
                 // One read at a time: a network drive not answering would have them pile up.
                 if std::mem::replace(&mut self.steam.reading_downloads, true) {
@@ -245,10 +258,23 @@ impl App {
                     .filter(|g| g.update.is_some_and(|u| u.started && !u.paused))
                     .cloned()
                     .collect();
+                // An install asked of Steam whose manifest is not seen yet: that file alone.
+                let expected = self
+                    .steam
+                    .expecting
+                    .filter(|(app, _)| !self.steam.installed.contains_key(&store::steam_id(*app)))
+                    .map(|(app, _)| app);
                 return Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             let (mut read, mut written) = (HashMap::new(), HashMap::new());
+                            if let Some(app) = expected
+                                && let Some(game) = std::env::var_os("HOME")
+                                    .and_then(|home| local::find(std::path::Path::new(&home)))
+                                    .and_then(|steam| local::find_manifest(&steam, app))
+                            {
+                                read.insert(store::steam_id(app), Some(game));
+                            }
                             for g in downloading {
                                 let id = store::steam_id(g.app_id);
                                 if let Some(w) = local::written(&g) {
@@ -277,6 +303,11 @@ impl App {
                     self.steam.download_moved = Some(Instant::now());
                 }
                 self.steam.written = written;
+                if self.steam.expecting.is_some_and(|(app, asked)| {
+                    read.contains_key(&store::steam_id(app)) || asked.elapsed() > START_WAIT
+                }) {
+                    self.steam.expecting = None;
+                }
                 return self.steam_installed(read);
             }
             SteamMsg::Downloads(..) => self.steam.reading_downloads = false,
@@ -325,11 +356,15 @@ impl App {
                 }
             }
             // Steam's own window takes over; what it installs or removes shows once the launcher's
-            // window has the focus again (`NotifyMsg::Focus`).
+            // window has the focus again (`NotifyMsg::Focus`), and a game it was asked to install
+            // as soon as Steam writes its manifest (`SteamView::expecting`).
             SteamMsg::Ask(game_id, action) => {
                 if let Some(app) = store::steam_app(&game_id) {
                     if action == Action::Play {
                         self.steam.starting = Some((game_id, Instant::now()));
+                    }
+                    if action == Action::Install {
+                        self.steam.expecting = Some((app, Instant::now()));
                     }
                     return Task::perform(
                         async move { client::ask(action, app).map_err(|e| e.to_string()) },
@@ -701,7 +736,14 @@ impl App {
             .steam
             .download_moved
             .is_some_and(|t| t.elapsed() < STILL_FOR);
+        // Asked to install a game, Steam writes its manifest once its own window was answered.
+        let expecting = self.steam.on
+            && self
+                .steam
+                .expecting
+                .is_some_and(|(_, asked)| asked.elapsed() < START_WAIT);
         match (downloading, moved) {
+            _ if expecting => Some(DOWNLOAD_EVERY),
             (false, _) => None,
             (true, true) => Some(DOWNLOAD_EVERY),
             (true, false) => (!self.unfocused).then_some(STALLED_EVERY),
@@ -719,10 +761,12 @@ impl App {
         Task::batch([self.read_steam_installed(), read_played(), look()])
     }
 
-    /// Reads the games installed in Steam's library folders, unless a read still runs: a network
-    /// drive waking up holds it for seconds, and each focus of the window would add another.
+    /// Reads the games installed in Steam's library folders, or once more after the read still
+    /// running, not beside it: a network drive waking up holds it for seconds, and each focus of
+    /// the window would add another.
     fn read_steam_installed(&mut self) -> Task<Message> {
         if std::mem::replace(&mut self.steam.reading_installed, true) {
+            self.steam.read_installed_again = true;
             return Task::none();
         }
         read_installed()
