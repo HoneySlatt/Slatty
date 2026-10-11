@@ -527,7 +527,10 @@ slatty proton share on                 # list the downloaded builds in Steam and
   was set to it; choose another build for that game in Steam or Heroic.
 - Valve's own builds (Proton Experimental, stable, Hotfix) need Steam's client library: an
   isolated game run with one is given `steamclient.so` from Steam's `linux64` and `linux32`
-  folders, read-only, and nothing else of Steam. The other builds run without it.
+  folders, read-only, and nothing else of Steam. The other builds run without it. A game that is
+  not isolated finds it in your own `~/.steam/sdk64`, which only Steam installed natively makes:
+  with Steam's Flatpak alone, such a launch is refused and says to turn isolation on or to choose
+  another build.
 
 ## Settings
 

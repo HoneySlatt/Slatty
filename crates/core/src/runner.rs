@@ -346,6 +346,10 @@ fn umu_env(
     if install.isolated {
         env.extend(isolation_env(dirs, install, Some(proton))?);
     } else {
+        check_steam_sdk_in(
+            Path::new(&std::env::var_os("HOME").unwrap_or_default()),
+            proton,
+        )?;
         env.push((
             "STEAM_COMPAT_INSTALL_PATH".into(),
             install.path.display().to_string(),
@@ -364,6 +368,21 @@ fn valve_proton(proton: &Path) -> bool {
     }
     name(proton.parent()) == Some("common")
         && name(proton.parent().and_then(Path::parent)) == Some("steamapps")
+}
+
+/// Refuses one of Valve's builds for a game run with the user's own `home`, when it lacks the
+/// `~/.steam/sdk64` only Steam installed natively makes (its Flatpak keeps its own under
+/// `~/.var/app`).
+fn check_steam_sdk_in(home: &Path, proton: &Path) -> Result<()> {
+    if valve_proton(proton) && !home.join(".steam/sdk64/steamclient.so").is_file() {
+        return Err(Error::Refused(
+            "Valve's Proton builds need Steam's client library in ~/.steam/sdk64, which only \
+             Steam installed natively makes: turn isolation on for this game, which gives it the \
+             library, or choose another Proton build"
+                .into(),
+        ));
+    }
+    Ok(())
 }
 
 /// `~/.steam/sdk64/steamclient.so` and the 32-bit one in the game's own home, leading to Steam's
@@ -758,6 +777,27 @@ mod tests {
         );
         assert!(env.iter().all(|(k, _)| !k.starts_with("PRESSURE_VESSEL")));
         assert!(env.iter().all(|(k, _)| k != "HOME"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Without isolation the game has the user's own home, where only Steam installed natively
+    /// makes `~/.steam/sdk64`: a Valve build from Steam's Flatpak would stop at steam.exe's
+    /// assertion. It is refused with what to do instead.
+    #[test]
+    fn a_valve_build_without_steams_client_library_is_refused_with_a_reason() {
+        let root = std::env::temp_dir().join(format!("slatty-no-sdk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        let valve = root.join("lib/steamapps/common/Proton - Experimental");
+        assert!(matches!(
+            check_steam_sdk_in(&home, &valve),
+            Err(Error::Refused(_))
+        ));
+        assert!(check_steam_sdk_in(&home, &root.join("protons/GE-Proton11-7")).is_ok());
+        std::fs::create_dir_all(home.join(".steam/sdk64")).unwrap();
+        std::fs::write(home.join(".steam/sdk64/steamclient.so"), b"").unwrap();
+        assert!(check_steam_sdk_in(&home, &valve).is_ok());
         std::fs::remove_dir_all(root).unwrap();
     }
 
