@@ -587,6 +587,74 @@ async fn concurrent_sync_of_the_same_game_is_refused() {
     ));
 }
 
+/// A cloud whose first listing waits until `gate` is opened.
+struct SlowCloud<'a> {
+    inner: &'a MemoryCloud,
+    gate: tokio::sync::Notify,
+    first: std::sync::atomic::AtomicBool,
+}
+
+impl super::transport::CloudTransport for SlowCloud<'_> {
+    async fn list(&self) -> crate::Result<Vec<super::transport::RemoteEntry>> {
+        if self.first.swap(false, Ordering::SeqCst) {
+            self.gate.notified().await;
+        }
+        self.inner.list().await
+    }
+    async fn download(&self, name: &str) -> crate::Result<Vec<u8>> {
+        self.inner.download(name).await
+    }
+    async fn upload(
+        &self,
+        name: &str,
+        data: &[u8],
+        m: chrono::DateTime<chrono::Utc>,
+    ) -> crate::Result<()> {
+        self.inner.upload(name, data, m).await
+    }
+    async fn delete(&self, name: &str) -> crate::Result<()> {
+        self.inner.delete(name).await
+    }
+}
+
+/// A Check, which the game page starts by itself, waiting on a slow network must not refuse the
+/// sync of a launch.
+#[tokio::test]
+async fn a_check_in_progress_does_not_refuse_a_sync() {
+    let env = Env::new("check-lock");
+    env.write("a.sav", "A");
+    let cloud = SlowCloud {
+        inner: &env.cloud,
+        gate: tokio::sync::Notify::new(),
+        first: true.into(),
+    };
+    let root = env.root();
+    let target = SyncTarget {
+        db: &env.db,
+        dirs: &env.dirs,
+        user_id: "u",
+        game_id: "g",
+        location: "saves",
+        root: &root,
+    };
+    let check = sync(
+        &cloud,
+        &target,
+        SyncOptions {
+            dry_run: true,
+            ..Default::default()
+        },
+    );
+    let launch = async {
+        let r = sync(&cloud, &target, SyncOptions::default()).await;
+        cloud.gate.notify_one();
+        r
+    };
+    let (check, launch) = tokio::join!(check, launch);
+    assert!(check.is_ok());
+    assert_eq!(launch.unwrap().uploaded, vec!["a.sav"]);
+}
+
 struct MarkerCloud<'a>(&'a MemoryCloud);
 
 impl super::transport::CloudTransport for MarkerCloud<'_> {

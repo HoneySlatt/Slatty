@@ -78,7 +78,8 @@ Modification dates are never used to decide.
   - the save folder path changed since the last sync. Its history is then ignored, and files that
     differ become conflicts.
 - **History is per account.** Another account never inherits it.
-- **One sync per game at a time.** A lock refuses a second sync on the same game.
+- **One sync per game at a time.** A lock refuses a second sync on the same game. A check, which
+  writes nothing, does not take it.
 - **Uploads re-check the cloud.** Just before uploading, the cloud is listed again; a file that
   changed in the meantime is not overwritten and becomes a conflict at the next sync.
 - **Network failures leave local files untouched**, and history only advances for files that were

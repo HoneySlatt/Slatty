@@ -91,8 +91,14 @@ pub async fn sync<T: CloudTransport>(
         .dirs
         .locks()
         .join(format!("cloud-{}-{}.lock", target.user_id, target.game_id));
-    let _lock = lock::try_acquire(&lock_path)?
-        .ok_or_else(|| Error::Refused("a cloud sync for this game is already running".into()))?;
+    // A dry run writes nothing, and the game page starts one by itself: it must not refuse the
+    // sync of a launch while it waits on the network.
+    let _lock = if opts.dry_run {
+        None
+    } else {
+        let refused = || Error::Refused("a cloud sync for this game is already running".into());
+        Some(lock::try_acquire(&lock_path)?.ok_or_else(refused)?)
+    };
 
     let local = scan::scan(target.root)?;
     let remote = remote_map(cloud.list().await?, target.location)?;
