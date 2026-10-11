@@ -113,6 +113,7 @@ fn a_download_cut_off_by_the_network_waits_and_resumes_first() {
         directory: "Game 5".into(),
         state: DOWNLOADING.into(),
         dlcs: Vec::new(),
+        proton: None,
     }
     .save(&db)
     .unwrap();
@@ -396,6 +397,7 @@ fn a_failed_download_is_not_started_again_by_itself() {
         directory: "Game 5".into(),
         state: FAILED.into(),
         dlcs: Vec::new(),
+        proton: None,
     }
     .save(&db)
     .unwrap();
@@ -452,4 +454,49 @@ fn an_install_chosen_during_a_download_goes_to_the_queue_from_its_dialog() {
     }
     assert_eq!(app.queue, ["6"]);
     assert!(app.dialog.is_none(), "the dialog closes once queued");
+}
+
+/// The Proton build chosen for a queued install is kept with it, for a start after a restart, when
+/// the default may be another.
+#[test]
+fn a_queued_install_keeps_the_proton_chosen_for_it() {
+    use slatty_core::installer::InstallJob;
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    ready_to_install(&mut app, "5");
+    let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
+    ready_to_install(&mut app, "6");
+    if let Some(InstallView::Ready(info)) = app.install_views.get_mut("6") {
+        info.proton = Some("/proton/[FAKE]-Other".into());
+    }
+    let _ = app.update(Message::Install(InstallMsg::Start("6".into())));
+    assert_eq!(app.queue, ["6"]);
+    assert_eq!(
+        InstallJob::load(&db, "6").unwrap().unwrap().proton,
+        Some(PathBuf::from("/proton/[FAKE]-Other"))
+    );
+}
+
+/// After a restart with no default Proton, a queued Windows install cannot start: the ones after
+/// it still do.
+#[test]
+fn an_install_that_cannot_start_does_not_hold_up_the_queue() {
+    let mut app = library_app();
+    for (id, proton) in [("6", None), ("7", Some("/proton/GE-Proton".into()))] {
+        let info = crate::install::PlanInfo {
+            title: format!("[FAKE] Game {id}"),
+            directory: format!("Game {id}"),
+            proton,
+            ..fake_plan()
+        };
+        app.install_views
+            .insert(id.into(), InstallView::Queued(info));
+        app.queue.push(id.into());
+    }
+    let _ = app.start_next();
+    assert!(matches!(
+        app.install_views.get("7"),
+        Some(InstallView::Running { .. })
+    ));
+    assert!(app.notice.is_some(), "says why the other did not start");
 }

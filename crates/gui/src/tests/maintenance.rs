@@ -179,6 +179,7 @@ fn interrupted_work_is_listed_with_a_way_to_finish_it() {
         directory: "Game 7".into(),
         state: "paused".into(),
         dlcs: vec![],
+        proton: None,
     }
     .save(&app.core.as_ref().unwrap().db)
     .unwrap();

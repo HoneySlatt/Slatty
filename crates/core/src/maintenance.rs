@@ -438,6 +438,7 @@ pub async fn reconfigure(
             .unwrap_or_default(),
         state: UPDATING.into(),
         dlcs: selected.clone(),
+        proton: None,
     };
     // Noted just before the first file changes: a change refused before (not enough space, GOG
     // not answering) leaves the game as it was, playable. Held back is noted then too, so a change

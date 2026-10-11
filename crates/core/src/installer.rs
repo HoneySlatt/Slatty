@@ -147,6 +147,7 @@ pub async fn install(
         directory: directory.clone(),
         state: DOWNLOADING.into(),
         dlcs: plan.selected_dlcs(),
+        proton: (plan.platform == Platform::Windows).then(|| req.proton.clone()),
     };
     job.save(db)?;
 

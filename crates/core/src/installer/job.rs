@@ -26,6 +26,9 @@ pub struct InstallJob {
     pub directory: String,
     pub state: String,
     pub dlcs: Vec<String>,
+    /// The Proton build chosen for a Windows build; `None` when not known (an update, a job
+    /// written by an older version).
+    pub proton: Option<PathBuf>,
 }
 
 impl InstallJob {
@@ -38,11 +41,11 @@ impl InstallJob {
     pub fn save(&self, db: &Db) -> Result<()> {
         crate::paths::check_game_id(&self.game_id)?;
         db.conn().execute(
-            "INSERT INTO install_jobs (game_id, build_id, language, root, directory, state, updated_at, dlcs)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "INSERT INTO install_jobs (game_id, build_id, language, root, directory, state, updated_at, dlcs, proton)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(game_id) DO UPDATE SET build_id = excluded.build_id, language = excluded.language,
                 root = excluded.root, directory = excluded.directory, state = excluded.state,
-                updated_at = excluded.updated_at, dlcs = excluded.dlcs",
+                updated_at = excluded.updated_at, dlcs = excluded.dlcs, proton = excluded.proton",
             params![
                 self.game_id,
                 self.build_id,
@@ -51,7 +54,8 @@ impl InstallJob {
                 self.directory,
                 self.state,
                 Utc::now().timestamp(),
-                self.dlcs.join(",")
+                self.dlcs.join(","),
+                self.proton.as_ref().map(|p| p.to_string_lossy())
             ],
         )?;
         Ok(())
@@ -61,7 +65,8 @@ impl InstallJob {
         Ok(db
             .conn()
             .query_row(
-                "SELECT game_id, build_id, language, root, directory, state, dlcs FROM install_jobs WHERE game_id = ?1",
+                "SELECT game_id, build_id, language, root, directory, state, dlcs, proton
+                 FROM install_jobs WHERE game_id = ?1",
                 [game_id],
                 |r| {
                     Ok(InstallJob {
@@ -77,6 +82,7 @@ impl InstallJob {
                             .filter(|s| !s.is_empty())
                             .map(String::from)
                             .collect(),
+                        proton: r.get::<_, Option<String>>(7)?.map(PathBuf::from),
                     })
                 },
             )

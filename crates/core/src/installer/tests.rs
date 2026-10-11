@@ -969,6 +969,7 @@ fn discarding_an_unfinished_install_removes_only_its_partial_folder() {
         directory: "Game".into(),
         state: "downloading".into(),
         dlcs: vec![],
+        proton: None,
     }
     .save(&db)
     .unwrap();
@@ -1001,6 +1002,7 @@ fn discarding_an_install_whose_folder_was_published_is_refused() {
         directory: "Game".into(),
         state: "paused".into(),
         dlcs: vec![],
+        proton: None,
     }
     .save(&db)
     .unwrap();
@@ -1066,6 +1068,7 @@ fn jobs_left_behind_by_a_registered_install_are_forgotten() {
         directory: "Game".into(),
         state: state.into(),
         dlcs: vec![],
+        proton: None,
     };
     job("1", "downloading").save(&db).unwrap();
     job("2", crate::maintenance::UPDATING).save(&db).unwrap();
@@ -1141,6 +1144,7 @@ fn a_game_id_unsafe_in_a_file_name_is_never_used() {
             directory: "Game".into(),
             state: QUEUED.into(),
             dlcs: vec![],
+            proton: None,
         }
         .save(&db),
     );
@@ -1173,9 +1177,12 @@ fn a_queued_install_waits_and_keeps_its_place() {
         directory: "Game".into(),
         state: QUEUED.into(),
         dlcs: vec![],
+        proton: Some("/proton/[FAKE]-Proton-1".into()),
     };
     job.save(&db).unwrap();
-    let job = InstallJob::load(&db, "1").unwrap().unwrap();
+    let loaded = InstallJob::load(&db, "1").unwrap().unwrap();
+    assert_eq!(loaded, job, "the Proton chosen included");
+    let job = loaded;
     assert!(job.is_queued() && !job.is_paused() && !job.is_update());
     let order = vec!["2".to_string(), "1".to_string()];
     crate::settings::set_download_queue(&db, &order).unwrap();
@@ -1216,6 +1223,7 @@ fn an_older_build_holds_a_game_back_as_chosen_not_as_resumed() {
         directory: "Game".into(),
         state: QUEUED.into(),
         dlcs: vec![],
+        proton: None,
     };
     assert_eq!(held_on_start(Some(&job), &plan(build())), None);
 }

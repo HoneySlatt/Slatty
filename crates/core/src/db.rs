@@ -89,6 +89,10 @@ ALTER TABLE game_custom ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE installs ADD COLUMN isolated INTEGER NOT NULL DEFAULT 1;
 UPDATE installs SET isolated = 0 WHERE platform = 'linux' OR runner NOT LIKE '%"kind":"umu"%';
 "#,
+    // The Proton build chosen for a queued or interrupted install, which the default may not be.
+    r#"
+ALTER TABLE install_jobs ADD COLUMN proton TEXT;
+"#,
 ];
 
 pub struct Db {

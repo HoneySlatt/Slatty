@@ -96,6 +96,7 @@ impl App {
                 .filter(|d| d.selected)
                 .map(|d| d.id.clone())
                 .collect(),
+            proton: info.proton.clone(),
         };
         // Decided now, as the build is chosen: by its turn, GOG may have published a newer one.
         // An interrupted install keeps the decision made when it started. Written under the game's

@@ -256,8 +256,10 @@ impl App {
                     (Platform::Linux, _) => PathBuf::new(),
                     (Platform::Windows, Some(proton)) => proton,
                     (Platform::Windows, None) => {
-                        self.notify_error("Choose a Proton version first.".into());
-                        return Task::none();
+                        let title = self.title_of(&game_id);
+                        self.notify_error(format!("Choose a Proton version for {title} first."));
+                        // Started from the queue, it does not hold up the installs after it.
+                        return self.start_next();
                     }
                 };
                 let root = PathBuf::from(info.root.trim());
@@ -661,7 +663,10 @@ async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, P
         newest: plan.is_newest(),
         platform: plan.platform,
         platforms: choice.platforms,
-        proton: choice.proton,
+        proton: job
+            .as_ref()
+            .and_then(|j| j.proton.clone())
+            .or(choice.proton),
         root: root.display().to_string(),
         free,
         directory: plan.directory_name()?,
