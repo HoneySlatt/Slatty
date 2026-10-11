@@ -191,6 +191,10 @@ fn hex(c: Color) -> String {
     }
 }
 
+/// The longest page transition a theme may ask for: a longer one would leave pages blank for as
+/// long.
+const MAX_TRANSITION_MS: u64 = 10_000;
+
 impl Tokens {
     /// `base`, overridden by the keys the file sets.
     fn from_toml(text: &str, base: Tokens) -> Result<Tokens, String> {
@@ -218,17 +222,29 @@ impl Tokens {
                 *slot = color;
             }
         }
+        // TOML takes `nan` and `inf`: either in the motion would leave every page blank.
+        let number = |key: &str, value: f32| {
+            value
+                .is_finite()
+                .then_some(value)
+                .ok_or_else(|| format!("`{key}` must be a number"))
+        };
         if let Some(r) = file.shape.radius {
-            t.radius = r.max(0.0);
+            t.radius = number("radius", r)?.max(0.0);
         }
         if let Some(r) = file.shape.cover_radius {
-            t.cover_radius = r.max(0.0);
+            t.cover_radius = number("cover_radius", r)?.max(0.0);
         }
         if let Some(ms) = file.motion.transition_ms {
+            if ms > MAX_TRANSITION_MS {
+                return Err(format!(
+                    "`transition_ms` must be {MAX_TRANSITION_MS} or less"
+                ));
+            }
             t.transition = Duration::from_millis(ms);
         }
         if let Some(rise) = file.motion.transition_rise {
-            t.transition_rise = rise;
+            t.transition_rise = number("transition_rise", rise)?;
         }
         Ok(t)
     }
@@ -896,6 +912,22 @@ mod tests {
         let typo =
             Tokens::from_toml("[colors]\naccnet = \"#ffffff\"\n", Tokens::default()).unwrap_err();
         assert!(typo.contains("accnet"), "{typo}");
+    }
+
+    /// TOML takes `nan` and `inf` for numbers: either in the motion left every page blank,
+    /// Settings included, as would a page that takes years to appear.
+    #[test]
+    fn numbers_that_would_blank_the_pages_are_named() {
+        for (line, key) in [
+            ("[motion]\ntransition_rise = nan\n", "transition_rise"),
+            ("[motion]\ntransition_rise = inf\n", "transition_rise"),
+            ("[shape]\nradius = inf\n", "radius"),
+            ("[shape]\ncover_radius = nan\n", "cover_radius"),
+            ("[motion]\ntransition_ms = 99999999\n", "transition_ms"),
+        ] {
+            let e = Tokens::from_toml(line, Tokens::default()).unwrap_err();
+            assert!(e.contains(key), "{line}: {e}");
+        }
     }
 
     #[test]

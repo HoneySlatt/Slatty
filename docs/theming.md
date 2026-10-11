@@ -56,7 +56,8 @@ transition_ms = 180         # Page transition; 0 turns it off
 transition_rise = 8         # How far a new page rises, in pixels
 ```
 
-Colours are `#rrggbb`, or `#rrggbbaa` with transparency. Radii and the rise are in pixels.
+Colours are `#rrggbb`, or `#rrggbbaa` with transparency. Radii and the rise are in pixels, and
+must be numbers (not `nan` or `inf`); a transition lasts at most 10,000 ms.
 
 ## Example
 
