@@ -276,8 +276,14 @@ build, and for a Linux game the runtime tool it goes through. A game that change
 its code in other games, isolated or not. An isolated launch therefore runs umu inside bubblewrap
 (`runner::read_only_tools`): the system as it is (`--dev-bind / /`), with umu's runtimes, the
 Proton build and SlattyLauncher's own runtime tool (`runner::runtime_tool`, written again before
-each launch) bound read-only over themselves. Each runtime's `var/`, where pressure-vessel copies
-the runtime, and the `.ref` lock files it takes in the runtime stay writable. pressure-vessel then
+each launch) bound read-only over themselves, by where they lead (`runner::bind`: bubblewrap cannot
+mount over a link, which a `<project>-latest` build is). Each runtime's `var/`, where pressure-vessel copies
+the runtime, and the `.ref` lock files it takes in the runtime stay writable. So does a Valve
+build's `dist.lock`, which its `proton` script takes at every launch; what that script writes into
+its own folder after a Steam update (SteamPipe's fixups: empty folders, files made read-only, then
+`files/steampipe_fixups_mtime` in Python's `str(getmtime)` form, which it compares) is done before
+the launch, outside the sandbox (`runner::set_up_valve_build`), and a Valve build Proton never set
+up (no `files/share/default_pfx`) is refused with the way out. pressure-vessel then
 cannot hard-link the runtime across the read-only mount (EXDEV) and copies it: reflinked on btrfs
 or XFS (an isolated launch took 2.3 s instead of 1.4 s), written in full on ext4 (about 750 MB).
 umu cannot update a runtime it sees read-only, so isolated launches set `UMU_RUNTIME_UPDATE=0`,

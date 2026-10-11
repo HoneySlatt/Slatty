@@ -571,6 +571,78 @@ fn bind(out: &mut Vec<String>, how: &str, path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// What Python's `str(os.path.getmtime(…))` gives for a file's time: CPython adds the nanoseconds
+/// as `sec + nsec * 1e-9` and prints the shortest form that reads back the same, as Rust does.
+fn python_time(sec: i64, nsec: u32) -> String {
+    let text = (sec as f64 + f64::from(nsec) * 1e-9).to_string();
+    if text.contains('.') {
+        text
+    } else {
+        format!("{text}.0")
+    }
+}
+
+/// `steampipe_fixups.json`: what SteamPipe, which ships Valve's builds, cannot keep.
+#[derive(Deserialize)]
+struct SteamPipeFixups {
+    empty_dirs: Vec<String>,
+    no_write_paths: Vec<String>,
+}
+
+/// Sets up one of Valve's Proton builds as its `proton` script would at a launch, before an
+/// isolated one runs it read-only: SteamPipe's fixups once after each Steam update (empty folders
+/// made again, some files made read-only, as `steampipe_fixups.py` does; BSD-3-Clause, Valve), and
+/// its `dist.lock`. Whether `proton` is one of Valve's builds. One Proton never set up (no default
+/// prefix yet, or a `dist` folder of old versions) is refused: Proton would write in it.
+fn set_up_valve_build(proton: &Path) -> Result<bool> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let json = proton.join("steampipe_fixups.json");
+    let Ok(meta) = std::fs::metadata(&json) else {
+        return Ok(false);
+    };
+    if !proton.join("files/share/default_pfx").is_dir() || proton.join("dist").exists() {
+        return Err(Error::Refused(format!(
+            "{} has not set itself up yet: start a game with it once from Steam, or this game once \
+             with isolation off",
+            proton.display()
+        )));
+    }
+    let io = |what: &str, p: &Path, e| Error::io(format!("{what} {}", p.display()), e);
+    let lock = proton.join("dist.lock");
+    if !lock.exists() {
+        std::fs::File::create(&lock).map_err(|e| io("create", &lock, e))?;
+    }
+    let stamp = proton.join("files/steampipe_fixups_mtime");
+    let now = python_time(meta.mtime(), meta.mtime_nsec() as u32);
+    let done = std::fs::read_to_string(&stamp).unwrap_or_default();
+    if done.lines().next().map(str::trim) == Some(now.as_str()) {
+        return Ok(true);
+    }
+    let bytes = std::fs::read(&json).map_err(|e| io("read", &json, e))?;
+    let fixups: SteamPipeFixups = serde_json::from_slice(&bytes)
+        .map_err(|e| Error::parse("steampipe_fixups.json", e.to_string()))?;
+    let inside = |p: &str| {
+        Path::new(p)
+            .components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)))
+            .then(|| proton.join(p))
+    };
+    for dir in fixups.empty_dirs.iter().filter_map(|d| inside(d)) {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    for file in fixups.no_write_paths.iter().filter_map(|f| inside(f)) {
+        let meta = std::fs::symlink_metadata(&file).map_err(|e| io("read", &file, e))?;
+        if meta.is_symlink() {
+            continue;
+        }
+        let mode = meta.permissions().mode() & !0o222;
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode))
+            .map_err(|e| io("make read-only", &file, e))?;
+    }
+    std::fs::write(&stamp, format!("{now}\n")).map_err(|e| io("write", &stamp, e))?;
+    Ok(true)
+}
+
 fn read_only_tools(
     umu: PathBuf,
     args: Vec<String>,
@@ -597,6 +669,10 @@ fn read_only_tools(
     }
     if let Some(proton) = proton {
         bind(&mut out, "--ro-bind", proton)?;
+        // Valve's builds take it at every launch.
+        if set_up_valve_build(proton)? {
+            bind(&mut out, "--bind", &proton.join("dist.lock"))?;
+        }
     }
     out.push("--".into());
     out.push(umu.display().to_string());
@@ -736,6 +812,61 @@ fn path_list(paths: &[PathBuf]) -> Result<String> {
 mod tests {
     use super::*;
     use crate::install::Platform;
+
+    /// Proton compares what it wrote with Python's `str(os.path.getmtime(…))`; anything else and it
+    /// would apply the fixups again inside the sandbox, where the build is read-only. These are
+    /// what Proton wrote for three builds Steam installed, with their files' times.
+    #[test]
+    fn modification_times_are_written_as_python_does() {
+        assert_eq!(python_time(1785465617, 157678679), "1785465617.1576786");
+        assert_eq!(python_time(1790982754, 235707053), "1790982754.235707");
+        assert_eq!(python_time(1790982750, 502144544), "1790982750.5021446");
+        assert_eq!(python_time(1790982750, 0), "1790982750.0");
+    }
+
+    /// Valve's Proton builds apply SteamPipe's fixups to their own folder at their first launch
+    /// after a Steam update, under `dist.lock`: done before an isolated launch, outside the
+    /// sandbox, where the build is read-only. A build Proton never set up is refused.
+    #[test]
+    fn valve_builds_are_set_up_before_an_isolated_launch() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let dir = std::env::temp_dir().join(format!("slatty-valve-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("files/share/default_pfx")).unwrap();
+        std::fs::write(dir.join("files/lib.so"), b"").unwrap();
+        std::fs::write(
+            dir.join("steampipe_fixups.json"),
+            r#"{"empty_dirs": ["files/lib/empty", "../outside"], "no_write_paths": ["files/lib.so"]}"#,
+        )
+        .unwrap();
+        let fixed = |p: &str| dir.join(p);
+
+        assert!(set_up_valve_build(&dir).unwrap(), "a build Steam ships");
+        assert!(fixed("files/lib/empty").is_dir());
+        assert!(!dir.parent().unwrap().join("outside").exists());
+        let mode = std::fs::metadata(fixed("files/lib.so"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o222, 0);
+        assert!(fixed("dist.lock").is_file());
+        let json = std::fs::metadata(fixed("steampipe_fixups.json")).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(fixed("files/steampipe_fixups_mtime")).unwrap(),
+            format!("{}\n", python_time(json.mtime(), json.mtime_nsec() as u32))
+        );
+        // Done: left as it is until Steam updates the build.
+        std::fs::remove_dir(fixed("files/lib/empty")).unwrap();
+        assert!(set_up_valve_build(&dir).unwrap());
+        assert!(!fixed("files/lib/empty").exists());
+
+        std::fs::remove_dir_all(fixed("files/share/default_pfx")).unwrap();
+        assert!(matches!(set_up_valve_build(&dir), Err(Error::Refused(_))));
+        let other = dir.join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        assert!(!set_up_valve_build(&other).unwrap(), "not one of Valve's");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     /// A game set to a `<project>-latest` build closed at once when isolated: bubblewrap cannot
     /// mount over a link ("Can't mount on symlink destination"). The build it leads to is mounted.
