@@ -55,5 +55,8 @@ Reviewed before publication. Among what changed:
 - Where bubblewrap cannot hold an isolated game (Ubuntu 23.10 and later without an AppArmor
   profile for it), the launch is refused with the reason and the way out, never run without
   isolation; `slatty doctor` checks it too.
+- Steam's games: the Steam client's files are only read, its sign-in and settings files never;
+  GOG is never asked about a Steam game; Steam's servers are asked nothing until **Images from
+  Steam** or **Steam Web API** is turned on, and the Web API key stays in the keyring.
 
 Known limits are listed in [SECURITY.md](SECURITY.md) and [docs/compatibility.md](docs/compatibility.md).
