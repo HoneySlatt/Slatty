@@ -126,8 +126,24 @@ pub(crate) fn delete_listed(
         remove_empty_dirs(root)?;
         report.kept = leftovers(root, root);
         if report.kept.is_empty() {
-            std::fs::remove_dir(root)
-                .map_err(|e| Error::io(format!("delete {}", root.display()), e))?;
+            let delete = |dir: &Path, link: bool| {
+                if link {
+                    std::fs::remove_file(dir)
+                } else {
+                    std::fs::remove_dir(dir)
+                }
+                .map_err(|e| Error::io(format!("delete {}", dir.display()), e))
+            };
+            // A folder moved elsewhere and linked back: the folder it leads to, now empty, then
+            // the link (which `remove_dir` refuses).
+            if std::fs::symlink_metadata(root).is_ok_and(|m| m.is_symlink()) {
+                if let Ok(real) = root.canonicalize() {
+                    delete(&real, false)?;
+                }
+                delete(root, true)?;
+            } else {
+                delete(root, false)?;
+            }
             report.folder_removed = true;
         }
     } else {
@@ -875,6 +891,24 @@ mod tests {
             env.dirs.data.join("prefixes/1/drive_c").exists(),
             "prefix kept by default"
         );
+        assert!(Install::get(&env.db, "1").unwrap().is_none());
+    }
+
+    /// A game folder moved to another disk and linked back: uninstalling it deletes its files
+    /// there, then the folder emptied and the link, instead of failing on the link for good with
+    /// the game still registered.
+    #[test]
+    fn a_game_folder_linked_from_elsewhere_is_uninstalled() {
+        let env = Env::new("linked-folder", true);
+        std::fs::remove_dir_all(env.game().join("saves")).unwrap();
+        let elsewhere = env.root.join("elsewhere");
+        std::fs::rename(env.game(), &elsewhere).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, env.game()).unwrap();
+        let r = uninstall(&env.db, &env.dirs, "1", false).unwrap();
+        assert_eq!(r.removed_files, 2);
+        assert!(r.folder_removed);
+        assert!(!elsewhere.exists());
+        assert!(std::fs::symlink_metadata(env.game()).is_err());
         assert!(Install::get(&env.db, "1").unwrap().is_none());
     }
 
