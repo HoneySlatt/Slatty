@@ -222,6 +222,8 @@ How an install behaves:
 - `slatty install <game-id> --cancel` abandons an interrupted install. It deletes only its hidden
   partial folder. In the interface, use **Discard download** in the Install panel, or **Cancel**
   while it downloads: it asks first, then stops the download and deletes what was downloaded.
+  Once every file is downloaded and the game folder is in place, the install can no longer be
+  discarded, only finished: install the game again, then uninstall it if you do not want it.
 
 Dependencies that ship files into the game folder are installed with the game. GOG's installer
 scripts ("support" files) are kept in `~/.local/share/slatty/support/<id>/`; they are used by the
@@ -400,7 +402,10 @@ An update compares each file of the new build with the one on disk:
 If an update is interrupted, the game cannot be launched until `slatty update <game-id>` completes
 it. The command resumes with the same build and only downloads what is still missing. An update
 refused before any file changes (not enough disk space, GOG not answering) leaves the game playable
-as it was.
+as it was. The space check counts a file that keeps its size as already there, and each replaced
+file is written beside the old one before it takes its place: an update that changes large files
+without changing their size can still run out of space part way. It then stops, and resumes once
+space is freed.
 
 When GOG publishes a binary patch from the installed build to the new one, changed files are rebuilt
 from the installed version and a small delta, often a few hundred bytes for a file of several

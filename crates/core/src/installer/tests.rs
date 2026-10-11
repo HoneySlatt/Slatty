@@ -983,6 +983,36 @@ fn discarding_an_unfinished_install_removes_only_its_partial_folder() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// Cancelled while GOG's support files were fetched: the game folder is already in place, and only
+/// the job lets the next install finish it.
+#[test]
+fn discarding_an_install_whose_folder_was_published_is_refused() {
+    let root = std::env::temp_dir().join(format!("slatty-discard-done-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let dirs = Dirs::under(&root.join("app"));
+    let db = Db::in_memory().unwrap();
+    std::fs::create_dir_all(root.join("Game")).unwrap();
+    std::fs::write(root.join("Game/Game.exe"), "[FAKE]").unwrap();
+    InstallJob {
+        game_id: "1".into(),
+        build_id: "b".into(),
+        language: "en-US".into(),
+        root: root.clone(),
+        directory: "Game".into(),
+        state: "paused".into(),
+        dlcs: vec![],
+    }
+    .save(&db)
+    .unwrap();
+    assert!(matches!(
+        discard(&db, &dirs, "1"),
+        Err(crate::Error::Refused(_))
+    ));
+    assert!(InstallJob::load(&db, "1").unwrap().is_some());
+    assert!(root.join("Game/Game.exe").exists());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn a_build_without_language_packs_can_be_planned_again() {
     let m = meta(vec![depot("1", &["*"], 100)]);

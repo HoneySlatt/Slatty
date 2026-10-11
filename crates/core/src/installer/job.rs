@@ -149,6 +149,15 @@ pub fn discard(db: &Db, dirs: &Dirs, game_id: &str) -> Result<Option<PathBuf>> {
         )));
     }
     let partial = partial_dir(&job.root, &job.directory);
+    let target = job.root.join(&job.directory);
+    // The download finished and took the game folder's place; only the job lets an install finish
+    // it, since a new one refuses an existing folder.
+    if !partial.exists() && target.is_dir() {
+        return Err(Error::Refused(format!(
+            "{} is already downloaded; install the game again to finish it",
+            target.display()
+        )));
+    }
     if partial.exists() {
         std::fs::remove_dir_all(&partial)
             .map_err(|e| Error::io(format!("delete {}", partial.display()), e))?;
