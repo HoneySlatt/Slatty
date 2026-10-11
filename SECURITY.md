@@ -1,108 +1,191 @@
-# Security
+# Security and privacy
+
+SlattyLauncher signs in to your GOG account, writes into your game folders and saves, and starts
+programs you did not write. This page says how it protects each of them, exactly what leaves your
+computer, and where the protection ends.
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for a security problem. Contact the maintainer privately through
-the repository's security advisory feature once the project is published. Until then, contact the
-author directly.
+Report security problems privately, through GitHub's private vulnerability reporting: on the
+repository, open **Security**, then **Report a vulnerability**
+(<https://github.com/HoneySlatt/SlattyLauncher/security/advisories/new>). Please do not open a
+public issue for them.
 
-Include the steps to reproduce and the version or commit you tested.
+Say what an attacker can do and under which conditions, how to reproduce it, and the version or
+commit you tested. Fixes go into the latest release.
 
-## How SlattyLauncher handles your account
+## Threat model in short
 
-- **No password.** You sign in on GOG's own page, in your browser.
-- **Tokens stay in the keyring.** Session tokens are stored only in the system keyring (Secret
-  Service). Without a keyring, SlattyLauncher refuses to store them rather than writing a plain file.
-- **Signing out is final.** Logging out deletes the tokens from the keyring. Installs and updates
-  still running keep their own copy in memory until they end, and never write it back.
-- **Tokens stay out of logs and process lists.**
-  - They never appear in logs, error messages or process arguments.
-  - Some GOG endpoints take tokens in the URL, so network errors are reported without their URL.
-- **Comet handoff.** Comet receives tokens through a file readable only by you, in a private runtime
-  directory. The file is deleted as soon as Comet has read it.
-- **Comet runs as little as it can.** It acts for your GOG account and listens on this computer
-  (127.0.0.1:9977) while it runs, where any local program can reach it. It is started only for a
-  game that ships GOG's Galaxy SDK, stopped when the game ends, and never started once
-  **Achievements in game** is off (Settings → Privacy).
-- **Logs.** Comet's log may contain game client identifiers. Review it before sharing.
+What is protected:
+
+- your GOG session (the tokens that act for your account);
+- your files, your saves and the launcher's own data;
+- your privacy: nothing leaves the computer that this page does not list.
+
+What is treated as hostile:
+
+- **Everything that comes from the network.** GOG's answers, manifests, installers and cloud
+  listings, Proton releases from GitHub, SteamGridDB's and umu's answers. Paths are checked, sizes
+  are bounded before memory is taken, and nothing is written outside the folder it belongs to.
+- **Games.** A game is code you did not write. Windows games run isolated from your files by
+  default (below). Whatever a game leaves in its folder or prefix (a link, a pipe, a huge file) is
+  never followed or trusted by the launcher's own work there: updates, patches, cloud sync, setup
+  programs, the Galaxy service.
+- **Other users of the computer.** The launcher's folders and database are readable by you only,
+  and Comet receives your tokens in a folder only you can open.
+
+Out of scope: anyone with root or with your user account (they can read your files, and your
+keyring once it is unlocked), a compromised system or package source, GOG itself (it controls your
+account), and a game you run without isolation (it runs as you).
+
+## Your account
+
+- **No password.** You sign in on GOG's own page, in your browser. SlattyLauncher never asks for
+  your GOG password.
+- **Tokens in the keyring only.** Session tokens are stored in the system keyring (Secret
+  Service), entry `slatty-launcher` / `gog:<user id>`. Without a keyring, SlattyLauncher refuses to
+  store them rather than write a file. Your SteamGridDB API key, once given, is kept there too.
+- **Tokens stay out of logs, error messages and process arguments.** Some GOG endpoints take
+  tokens in the address, so network errors are reported without it.
+- **Your token goes to GOG only.** It is sent to `https://` addresses on `gog.com` alone, whatever
+  a GOG answer names, and a redirect never tells the next server where it came from.
+- **Signing out** deletes the tokens from the keyring. Work still running keeps its copy in memory
+  until it ends, and never writes it back. **Forget account** (Settings → Account, or
+  `slatty auth logout --forget`) also deletes what SlattyLauncher keeps of the account: its name,
+  play history, cloud sync history, library cache and Comet's achievement records. Games, saves,
+  prefixes and save backups are never deleted.
 - **Account changes.** Work started for one account never uses another's tokens: after a switch,
-  its library, achievement, cloud and play time requests are refused, and its late results are
-  dropped.
-- **Private files.** SlattyLauncher's folders (settings, data, cache, state) are made readable by
-  you only (0700) at every start, and its database 0600: they hold your library, play times, save
-  backups and Wine prefixes.
-- **Game files stay in the game folder.** Paths from GOG's manifests, installers and cloud
-  listings are checked before anything is written. Symbolic links from Linux installers are
-  resolved on disk once all are made, and one that leads out of the game folder, even through
-  another link, is removed. No file is written through a link that leads out of the game folder,
-  and an uninstall or update that would delete through one deletes nothing. Temporary files get
-  names never used before and never follow a link already there. These checks do not guard
-  against another program changing the folders at the same moment.
+  its requests are refused and its late results dropped.
+
+### Comet
+
+[Comet](https://github.com/imLinguin/comet) is the program that lets a game report achievements as
+you play (**Achievements in game**, Settings → Privacy, on by default). SlattyLauncher starts it
+only for a Windows game that ships GOG's Galaxy SDK, for the length of the session, and stops it
+when the game ends, or when the launcher itself is closed or killed.
+
+- It receives your tokens through a file readable by you only, in a folder of `$XDG_RUNTIME_DIR`
+  that is checked to be yours alone. The file is deleted as soon as Comet listens. SlattyLauncher
+  only talks to a Comet that runs as you.
+- **While it runs, any program on this computer can get your GOG access token from it.** Comet
+  listens on 127.0.0.1:9977 and answers a token request from anything that connects, without
+  asking who it is: your other programs, an isolated game, a Flatpak with network access, other
+  users of the computer. An access token works for about an hour, and Comet keeps a fresh one as
+  long as it runs. This is how Comet works, and SlattyLauncher cannot change it. Turn
+  **Achievements in game** off to avoid it; unlocking by hand (Settings → Advanced) does not need
+  Comet.
+- Comet talks to GOG for your account on its own (see the next section).
+- Comet's log (`~/.local/state/slatty/logs/comet.log`) is written without the messages in which
+  Comet can include your refresh token.
 
 ## What leaves your computer
 
-- No telemetry.
-- GOG's services and the download servers GOG names: your library, downloads, cloud saves,
-  achievements and, unless turned off in Settings → Privacy, your play sessions (as Galaxy sends
-  them). Sessions played while this is off are never sent later.
-- umu's public game database (`umu.openwinecomponents.org`): a game's GOG product id, once, at its
-  first launch, to pick its Proton fixes. It can be turned off in Settings → Privacy; the game then
-  runs without fixes.
-- SteamGridDB (`steamgriddb.com`), only once turned on in Settings → Advanced and only when you
-  search it in Edit game: the name you search and your own SteamGridDB API key, kept in the system
-  keyring and sent in a header. Pictures you look at come from its servers.
-- GitHub (`api.github.com`, `github.com`, which sends the files from
-  `release-assets.githubusercontent.com`), only once Proton downloads are turned on in
-  Settings → Runners, and only when you list or download Proton builds or, once **Keep up to
-  date** is on, at start at most once a day for the projects a game follows as
-  `<project>-latest`: which project's releases are asked for, without any account. A downloaded archive is checked against the SHA-512 sum its
-  release publishes before it is opened; this catches a damaged download, not a release replaced
-  by whoever controls the project's GitHub account. It is unpacked like a Linux installer: nothing
-  is written out of its folder.
+No telemetry, no crash reports, no usage statistics.
 
-## Scope
+| Who | What they receive | When | Setting (default) |
+|---|---|---|---|
+| GOG: `auth.gog.com`, `embed.gog.com`, `users.gog.com`, `galaxy-library.gog.com`, `gamesdb.gog.com`, `api.gog.com`, `content-system.gog.com`, `remote-config.gog.com`, `cloudstorage.gog.com`, `gameplay.gog.com`, and the download and image servers GOG's answers name | What each feature needs: sign-in, your library, your avatar, game downloads, cloud saves, achievements | When you use the feature | — |
+| GOG, `content-system.gog.com` | The installed games whose new builds are looked for | At start, at sign-in and every six hours | Update games automatically, Settings → Installs (on) |
+| GOG, `gameplay.gog.com` | Each play session (game, start, length), as Galaxy sends them; sessions played while off are never sent later | After a session | Play time on GOG, Settings → Privacy (on) |
+| GOG, through Comet: `auth.gog.com`; `gameplay.gog.com` (achievements, statistics, leaderboards, with your system's language); `notifications-pusher.gog.com` (a live connection signed in with your token and subscribed to your friends, presence, chat, library and notification topics); `cfg.gog.com` and the servers it names (Galaxy's "peer" component, downloaded into Comet's folder) | Whether GOG then shows you online, or playing, to your friends has not been checked | While a game that ships Galaxy's SDK runs | Achievements in game, Settings → Privacy (on) |
+| Valve, `repo.steampowered.com`, through umu-launcher | Which version of the Steam Linux Runtime is current; the runtime itself on first use and when it changes | At each launch through umu (Windows games, and Linux games run in umu's container); for isolated games the update itself is made at most once a day, just before a launch | — |
+| umu's game database, `umu.openwinecomponents.org` | A game's GOG product id | At its first launch, only when its Proton build's own copy of umu's database does not list it | Proton fixes online, Settings → Privacy (off) |
+| Whatever the game's Proton fix downloads from: winetricks' sources (Microsoft and others), GitHub Pages, `download.amd.com`, Google Drive | Requests for the files that fix installs | When a game that has such a fix starts (fixes come with the Proton build) | — |
+| GitHub: `api.github.com`, `github.com`, `release-assets.githubusercontent.com` | Which project's releases are asked for, without any account | When you list or download Proton builds; at start, at most once a day, for the builds games follow as `<project>-latest` | Proton downloads, Settings → Runners (off); Keep up to date (off) |
+| SteamGridDB: `www.steamgriddb.com` and its image servers | The name you search, and your SteamGridDB API key in a header | When you search in Edit game | SteamGridDB, Settings → Advanced (off) |
 
-SlattyLauncher runs games with your user rights.
+Every request names SlattyLauncher and its version in its `User-Agent`, except those to GOG's
+cloud storage, which send Galaxy's, as heroic-gogdl does. Desktop notifications (Settings →
+Notifications, on) go to your desktop's notification service, not to the network, but they can
+show game titles and achievement names on a lock screen.
+
+## Your files
+
+- **Private folders.** SlattyLauncher's folders (settings, data, cache, state) are made readable by
+  you only (0700) at every start, its database as it is created (0600): they hold your library,
+  play history, save backups and Wine prefixes.
+- **Backups are kept.** Before a save is replaced or deleted, locally or in the cloud, a copy is
+  written to `~/.local/share/slatty/backups/` and flushed to the disk. SlattyLauncher never deletes
+  backups; they hold your saves.
+- **Logs are kept** in `~/.local/state/slatty/logs/` until you delete them. A game's log records
+  whatever the game prints, which can include identifiers or tickets of its own (one game printed a
+  GOG ticket there). Read a log before sharing it.
+- **Core dumps.** If SlattyLauncher crashes and your system keeps core dumps (systemd-coredump does
+  on many distributions), the dump can hold your session tokens.
+
+## Downloads and what they write
+
+- **Paths.** Every path from GOG's manifests, installers and cloud listings is checked: none may
+  leave the game or save folder. No file is written through a symbolic link that leads out of the
+  game folder, and an update or uninstall that would delete through one deletes nothing. Temporary
+  files get names never used before and never follow a link already there. These checks do not
+  guard against another program changing the folders at the same moment.
+- **Sizes.** Limits apply before memory or disk is taken: network answers (256 MiB), manifests once
+  inflated (512 MiB), download chunks (64 MiB), a game's own `goggame-*.info` and `start.sh`
+  (16 MiB), each Linux installer entry (the size its installer gives), a library listing (10,000
+  pages).
+- **Content.** Galaxy chunks and files are checked against the MD5 sums of GOG's manifests, Linux
+  installer entries against their size and CRC-32, files rebuilt from binary patches against GOG's
+  sums, Proton archives against the SHA-512 sum published with their release. These catch a
+  damaged download; they prove nothing against whoever can change the manifest or the release (GOG's
+  servers, the project's GitHub account). Archives and installers are unpacked like a game: nothing
+  is written outside their folder.
+
+## Games and isolation
+
+A game that is not isolated runs as you: a Windows game sees your whole system through Wine's `z:`
+drive, as in every Wine or Proton launcher, and a Linux game sees what you see. Linux games are not
+isolated by default, since their saves may be in your home folder.
 
 **Isolated games** (Windows games installed with Proton, by default; see the
 [user guide](docs/user-guide.md#isolation-from-your-files)) run in the container umu already uses,
-pressure-vessel from the Steam Linux Runtime, told to share less:
+pressure-vessel from the Steam Linux Runtime, told to share less, inside a bubblewrap sandbox
+SlattyLauncher adds (`bwrap` must be installed):
 
-- the game sees its own folder (writable), its Wine prefix, a home folder of its own, and read-only
-  umu's runtime and the setup files SlattyLauncher downloads for it;
-- your home folder, your `/tmp` and other disks stay out of view (checked with `/home` and a
-  network share each mounted on their own), so Wine's `z:` drive shows nothing of your files;
-  so does your Steam installation (`~/.steam`, `~/.local/share/Steam`: the client's settings
-  and tokens), which the container otherwise shows every game, read-only;
+- the game sees its own folder (writable), its Wine prefix and a home folder of its own; umu's
+  runtime, the Proton build, the tool a Linux game runs through and the setup files SlattyLauncher
+  downloads for it are read-only, so a game cannot plant code that would run in other games;
+- your home folder, your `/tmp`, your other disks and your Steam installation (`~/.steam`,
+  `~/.local/share/Steam`: the client's settings and tokens) stay out of view, checked with `/home`
+  and a network share each mounted on their own;
+- it sees and signals only its own processes: your other programs are neither visible nor
+  reachable from it;
 - your own environment cannot open it further: the variables umu and its container turn into
   shared folders (`PRESSURE_VESSEL_SHARE_HOME`, `STEAM_COMPAT_*` paths, `PROTON_LOG_DIR`,
   `WINEPREFIX` for a Linux game) are set by SlattyLauncher for every isolated launch;
-- a game cannot widen it from inside between two sessions: a file in its folder named like the
-  program umu is given (`sh`, `sc`, `Z:\…\game.exe`), or a link named as its working directory,
-  would have umu share the whole disk or the container where the link leads; the launch is
-  refused instead. The launcher's own work in the prefix and the game folder (cloud sync, the
-  Galaxy service, the backup made before deleting a prefix) refuses to follow a link out of them;
-- the D-Bus session and system buses stay out too: through them a program could have other
-  services act for it, systemd starting a command outside the container among them, or, where
-  your system's rules allow the active session, suspending the computer or mounting a drive.
-  Wine sees the same network adapters and drives without them; it loses only Bluetooth devices
-  reached through the system's Bluetooth service.
+- a game cannot widen it between two sessions: a file in its folder named like the program umu is
+  given (`sh`, `sc`, `Z:\…\game.exe`), or a link named as its working directory, would have umu
+  share the whole disk or the container where the link leads; the launch is refused instead;
+- the D-Bus session and system buses stay out: through them a program could have other services
+  act for it (systemd starting a command outside the container, or, where your system allows it,
+  suspending the computer or mounting a drive). Wine loses only Bluetooth devices reached through
+  the system's Bluetooth service.
 
 What isolation leaves open:
 
-- **Display, sound and devices.** Wayland or X11, PipeWire or PulseAudio, the GPU, `/dev` (gamepads)
-  and the network are shared, as games need them. The X11 socket lets any client read what other
-  X clients receive (keyboard included); under Wayland, that is Xwayland's clients only. The
-  PipeWire sockets include its manager socket (`pipewire-0-manager`), through which a program can
-  reach every stream, the microphone among them. Comet's port (127.0.0.1:9977) is reachable, as
-  are Unix sockets other programs open in the abstract namespace, which goes with the network.
-- **Processes.** Other processes of yours are visible in `/proc`, though not their files or
-  environment.
-- **What your environment loads into the game.** The modules in `LD_PRELOAD` (MangoHud,
-  GameMode) and the Vulkan layers of your user account are brought into the container, read-only,
-  as pressure-vessel does for every game.
+- **Display, sound, devices and network.** Wayland or X11, PipeWire or PulseAudio, the GPU, `/dev`
+  (gamepads) and the network are shared, as games need them. The X11 socket lets any client read
+  what other X clients receive, keyboard included; under Wayland, that is Xwayland's clients only.
+  PipeWire's manager socket gives access to every stream, the microphone among them. Comet's port
+  and the Unix sockets other programs open in the abstract namespace are reachable.
+- **Your environment.** Apart from the variables above, the game inherits your environment: a
+  token you keep in an environment variable is visible to it. The modules in `LD_PRELOAD`
+  (MangoHud, GameMode) and your Vulkan layers are brought into the container, read-only, as
+  pressure-vessel does for every game.
+- **A program written to break out.** Isolation keeps games out of your files; it is not a
+  boundary against code that exploits the kernel, bubblewrap, pressure-vessel or the X server.
 
-Isolation keeps a game out of your files; it is not a boundary against a program written to break
-out. Games that are not isolated, and Linux games by default, see your files: a Windows game
-through Wine's `z:` drive (the whole system, as in every Wine or Proton launcher), a Linux game as
-you.
+Its cost: since the runtime is read-only, pressure-vessel copies it at each isolated launch instead
+of linking it. On a file system with reflinks (btrfs, XFS) that added about a second to a launch;
+on one without (ext4), the runtime's files, about 750 MB, are written at each launch.
+
+## What SlattyLauncher does not protect against
+
+- Programs running as you, and anyone with root: they can act as you, read your files and, once it
+  is unlocked, your keyring.
+- Anything able to reach 127.0.0.1:9977 while Comet runs (see [Comet](#comet)).
+- A game that is not isolated, and a program written to break out of the container.
+- GOG's servers, the GitHub account of a Proton project or umu's database turned malicious: their
+  data is checked for shape, size and paths, not for intent.
+- Someone watching your network: connections use TLS, but which hosts you contact, and when, can
+  be seen.
