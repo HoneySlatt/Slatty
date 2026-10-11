@@ -323,7 +323,8 @@ pub async fn unpack(
 ) -> Result<(String, PathBuf)> {
     let archive = real(archive)?;
     let into = real(into)?;
-    let name = title.trim().replace(['/', '\\', '\0'], " ");
+    // An isolated launch refuses a folder with `:` in its path (`runner::path_list`).
+    let name = title.trim().replace(['/', '\\', '\0', ':'], " ");
     let name = name.trim();
     if name.is_empty() || name == "." || name == ".." {
         return Err(Error::Refused("the game needs a title".into()));
@@ -1615,6 +1616,25 @@ mod tests {
             std::fs::read(folder.join("Game/lib.so")).unwrap(),
             b"[FAKE] mine"
         );
+    }
+
+    /// A title's `:` stays out of the folder's name: an isolated game's folder is shared with its
+    /// container through a list `:` separates, which a folder with one in its name cannot join.
+    #[tokio::test]
+    async fn a_colon_in_the_title_stays_out_of_the_folder_name() {
+        let f = fake("colon");
+        let zip = f.root.join("[FAKE] game.zip");
+        let files = [zip_file("run.sh", b"#!/bin/sh\n")];
+        std::fs::write(
+            &zip,
+            crate::installer::zip::build::installer(b"", &files, false),
+        )
+        .unwrap();
+        let (_, folder) = unpacked(&f, &zip, "[FAKE] Quest: Remastered")
+            .await
+            .unwrap();
+        let name = folder.file_name().unwrap().to_string_lossy();
+        assert!(!name.contains(':'), "{name}");
     }
 
     /// A zip and a tarball are unpacked as they are; one never added is thrown away whole.
