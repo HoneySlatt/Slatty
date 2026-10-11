@@ -20,6 +20,23 @@ pub fn client() -> Result<Client> {
         .map_err(|e| Error::network("building the HTTP client", e))
 }
 
+/// `url`, when it is one of GOG's own addresses over HTTPS: the only kind an address read from one
+/// of GOG's answers may be when the account's token goes with it.
+pub fn gog_only(url: &str) -> Result<&str> {
+    let gog = url::Url::parse(url).is_ok_and(|u| {
+        u.scheme() == "https"
+            && u.host_str()
+                .is_some_and(|h| h == "gog.com" || h.ends_with(".gog.com"))
+    });
+    if gog {
+        Ok(url)
+    } else {
+        Err(Error::Refused(
+            "an address outside GOG was not sent the account's token".into(),
+        ))
+    }
+}
+
 pub async fn send(req: RequestBuilder, context: &'static str) -> Result<Response> {
     let resp = req.send().await.map_err(|e| Error::network(context, e))?;
     let status = resp.status();
@@ -135,6 +152,29 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.bytes().await.unwrap().len(), SECONDS);
+    }
+
+    #[test]
+    fn only_gogs_own_addresses_are_sent_the_token() {
+        for ok in [
+            "https://api.gog.com/products/1/downlink/installer/en1installer0",
+            "https://gog-cdn-fastly.gog.com/content-system/v2/patches/meta/1",
+            "https://gog.com/x",
+        ] {
+            assert!(gog_only(ok).is_ok(), "{ok}");
+        }
+        for refused in [
+            "http://api.gog.com/x",
+            "https://evil.example/x",
+            "https://api.gog.com.evil.example/x",
+            "https://evilgog.com/x",
+            "not an address",
+        ] {
+            assert!(
+                matches!(gog_only(refused), Err(Error::Refused(_))),
+                "{refused}"
+            );
+        }
     }
 
     #[tokio::test]

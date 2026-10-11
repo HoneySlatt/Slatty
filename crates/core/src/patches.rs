@@ -85,7 +85,8 @@ async fn zlib_json<T: serde::de::DeserializeOwned>(
     context: &'static str,
 ) -> Result<T> {
     let raw = http::bytes(
-        http.get(url).bearer_auth(tokens.access_token.expose()),
+        http.get(http::gog_only(url)?)
+            .bearer_auth(tokens.access_token.expose()),
         context,
     )
     .await?;

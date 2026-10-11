@@ -258,7 +258,9 @@ impl GogInstallers {
             .get(part)
             .ok_or_else(|| Error::NotFound(format!("installer {part}")))?;
         let link: Downlink = http::json(
-            self.http.get(api).bearer_auth(tokens.access_token.expose()),
+            self.http
+                .get(http::gog_only(api)?)
+                .bearer_auth(tokens.access_token.expose()),
             "asking for a download link",
         )
         .await?;

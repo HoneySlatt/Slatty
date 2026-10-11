@@ -443,6 +443,42 @@ fn reads_the_linux_installers_of_a_game_and_its_dlc() {
     );
 }
 
+/// The address asked for a download link comes from GOG's answer: the account's token goes with
+/// it only when that address is GOG's own.
+#[tokio::test]
+async fn a_download_link_address_outside_gog_is_not_sent_the_token() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let seen = tokio::spawn(async move {
+        let Ok(Ok((mut socket, _))) =
+            tokio::time::timeout(std::time::Duration::from_secs(2), listener.accept()).await
+        else {
+            return String::new();
+        };
+        let mut buf = vec![0u8; 4096];
+        let n = socket.read(&mut buf).await.unwrap_or(0);
+        let _ = socket
+            .write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+            .await;
+        String::from_utf8_lossy(&buf[..n]).to_lowercase()
+    });
+    let tokens = crate::auth::Tokens {
+        user_id: "1".into(),
+        access_token: crate::secret::Secret::new("FAKE-ACCESS"),
+        refresh_token: crate::secret::Secret::new("FAKE-REFRESH"),
+        expires_at: i64::MAX,
+    };
+    let installers = GogInstallers::new(
+        crate::http::client().unwrap(),
+        tokens,
+        None,
+        vec![format!("http://{addr}/downlink")],
+    );
+    assert!(matches!(installers.size(0).await, Err(Error::Refused(_))));
+    assert!(!seen.await.unwrap().contains("fake-access"));
+}
+
 /// A game writes its folder: a folder of links it replaced with a link out of it never leads a
 /// repair to delete or link anything there.
 #[tokio::test]
