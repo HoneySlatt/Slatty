@@ -34,10 +34,7 @@ impl App {
     fn cloud_details<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let t = tokens();
         let cloud = self.cloud.get(&g.id);
-        let launched = self
-            .installs
-            .get(&g.id)
-            .is_some_and(slatty_core::runner::prefix_ready);
+        let launched = self.cloud.get(&g.id).is_some_and(|c| c.launched);
         let (ic, color, status) = self.cloud_status(g);
         let mut col = Column::new().spacing(22).push(
             // The state's own icon, unless it is the cloud already.
@@ -89,10 +86,7 @@ impl App {
     /// Check and Sync now, across the bottom of the drawer.
     fn cloud_actions<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let busy = self.cloud.get(&g.id).is_some_and(|c| c.busy);
-        let launched = self
-            .installs
-            .get(&g.id)
-            .is_some_and(slatty_core::runner::prefix_ready);
+        let launched = self.cloud.get(&g.id).is_some_and(|c| c.launched);
         let labelled = |ic, label, color| {
             row![icon(ic, 20.0, color), text(label).size(16).font(semibold())]
                 .spacing(12)

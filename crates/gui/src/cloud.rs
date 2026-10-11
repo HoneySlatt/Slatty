@@ -30,6 +30,8 @@ pub struct CloudView {
     pub status: Option<CloudStatus>,
     /// What the last sync did, kept across the checks that follow it.
     pub last_sync: Option<String>,
+    /// Whether the game started once (`CloudResult::launched`), as the last check found.
+    pub launched: bool,
 }
 
 /// One save folder of the game, as the last check or sync left it.
@@ -61,6 +63,9 @@ pub struct CloudResult {
     pub status: CloudStatus,
     /// For a sync: what it did.
     pub summary: Option<String>,
+    /// Whether the game started once, its prefix made (`runner::prefix_ready`): read with the
+    /// check, off the interface thread, rather than by the page as it draws.
+    pub launched: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,6 +120,7 @@ impl App {
                 busy: false,
                 status: Some(r.status),
                 last_sync: r.summary.or(last_sync),
+                launched: r.launched,
             },
             Err(e) => CloudView {
                 lines: vec![format!("Error: {e}")],
@@ -150,6 +156,7 @@ async fn cloud_task(
         },
     };
     let tokens = tokens_for(&core, &user_id).await?;
+    let launched = slatty_core::runner::prefix_ready(&install);
     let Some(outcomes) =
         cloud::sync_game(&core.db, &core.dirs, &core.http, &tokens, &install, opts)
             .await
@@ -161,6 +168,7 @@ async fn cloud_task(
             conflicts: false,
             status: CloudStatus::NoCloud,
             summary: None,
+            launched,
         });
     };
     let mut locations = Vec::new();
@@ -252,5 +260,6 @@ async fn cloud_task(
         status,
         summary: (!opts.dry_run)
             .then(|| format!("Last sync: {uploaded} file(s) uploaded, {downloaded} downloaded.")),
+        launched,
     })
 }

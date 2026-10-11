@@ -17,6 +17,41 @@ fn a_game_not_installed_has_cloud_saves_until_gog_says_otherwise() {
     assert!(render(&app).find("Not supported by this game").is_ok());
 }
 
+/// Whether the game was started once (its prefix made) comes with the cloud check, made off the
+/// interface thread: the page reads nothing of the prefix as it draws, which a network drive
+/// waking up would freeze at every frame.
+#[test]
+fn the_cloud_card_reads_nothing_of_the_prefix_as_it_draws() {
+    use crate::cloud::{CloudRequest, CloudResult, CloudStatus};
+    let mut app = library_app();
+    let _ = app.update(Message::Select("3".into()));
+    settle(&mut app);
+    let checked = |launched| CloudResult {
+        lines: Vec::new(),
+        locations: Vec::new(),
+        conflicts: false,
+        status: CloudStatus::Pending(2),
+        summary: None,
+        launched,
+    };
+    let _ = app.update(Message::CloudDone(
+        "3".into(),
+        CloudRequest::Check,
+        Ok(checked(true)),
+    ));
+    assert!(render(&app).find("2 file(s) to sync").is_ok());
+    let _ = app.update(Message::CloudDone(
+        "3".into(),
+        CloudRequest::Check,
+        Ok(checked(false)),
+    ));
+    assert!(
+        render(&app)
+            .find("2 file(s) downloaded at first launch")
+            .is_ok()
+    );
+}
+
 #[test]
 fn cloud_saves_wait_for_the_first_launch_to_be_written() {
     let mut app = library_app();
@@ -55,6 +90,7 @@ fn cloud_drawer_shows_the_folder_and_what_a_sync_would_do() {
         conflicts: false,
         status: CloudStatus::Pending(2),
         summary: None,
+        launched: false,
     };
     let _ = app.update(Message::CloudDone(
         "3".into(),

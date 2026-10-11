@@ -515,10 +515,7 @@ impl App {
 
     /// The cloud state of a game in a few words, with its icon and colour.
     pub(super) fn cloud_status(&self, g: &LibraryGame) -> (Icon, iced::Color, String) {
-        let launched = self
-            .installs
-            .get(&g.id)
-            .is_some_and(slatty_core::runner::prefix_ready);
+        let launched = self.cloud.get(&g.id).is_some_and(|c| c.launched);
         if self
             .installs
             .get(&g.id)
