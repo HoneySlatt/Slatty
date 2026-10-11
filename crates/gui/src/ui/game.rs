@@ -567,11 +567,10 @@ impl App {
             }
         } else {
             match self.overview.get(&g.id) {
-                Some(o) if o.cloud_saves => {
-                    (Icon::Cloud, tokens().muted, "Synced once installed".into())
+                Some(o) if o.checked && !o.cloud_saves => {
+                    (Icon::X, tokens().muted, "Not supported by this game".into())
                 }
-                Some(_) => (Icon::X, tokens().muted, "Not supported by this game".into()),
-                None => (Icon::Cloud, tokens().muted, "Synced once installed".into()),
+                _ => (Icon::Cloud, tokens().muted, "Synced once installed".into()),
             }
         }
     }

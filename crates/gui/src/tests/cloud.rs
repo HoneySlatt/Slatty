@@ -1,5 +1,22 @@
 use super::*;
 
+/// A game not installed says it has no cloud saves only once GOG was asked: its play time alone,
+/// read first, says nothing of them.
+#[test]
+fn a_game_not_installed_has_cloud_saves_until_gog_says_otherwise() {
+    let mut app = library_app();
+    let _ = app.update(Message::PlaytimesFetched(vec![("5".into(), 90)]));
+    let _ = app.update(Message::Select("5".into()));
+    settle(&mut app);
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Not supported by this game").is_err());
+        assert!(ui.find("Synced once installed").is_ok());
+    }
+    app.overview.get_mut("5").unwrap().checked = true;
+    assert!(render(&app).find("Not supported by this game").is_ok());
+}
+
 #[test]
 fn cloud_saves_wait_for_the_first_launch_to_be_written() {
     let mut app = library_app();
