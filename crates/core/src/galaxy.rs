@@ -368,14 +368,31 @@ fn chunk_url(endpoint: &Endpoint, compressed_md5: &str) -> String {
         "path".into(),
         Value::String(format!("{path}/{}", galaxy_path(compressed_md5))),
     );
-    let mut url = endpoint.url_format.clone();
-    for (k, v) in &params {
-        let value = match v {
-            Value::String(s) => s.clone(),
-            other => other.to_string(),
-        };
-        url = url.replace(&format!("{{{k}}}"), &value);
+    // Filled in one pass: a value naming another parameter is not filled again, which GOG's
+    // answer could otherwise nest into gigabytes.
+    let mut url = String::with_capacity(endpoint.url_format.len());
+    let mut rest = endpoint.url_format.as_str();
+    while let Some(open) = rest.find('{') {
+        url.push_str(&rest[..open]);
+        let after = &rest[open + 1..];
+        match after
+            .find('}')
+            .and_then(|close| Some((close, params.get(&after[..close])?)))
+        {
+            Some((close, v)) => {
+                match v {
+                    Value::String(s) => url.push_str(s),
+                    other => url.push_str(&other.to_string()),
+                }
+                rest = &after[close + 1..];
+            }
+            None => {
+                url.push('{');
+                rest = after;
+            }
+        }
     }
+    url.push_str(rest);
     url
 }
 
@@ -619,6 +636,37 @@ mod tests {
             [1, 2],
             "not compressed"
         );
+    }
+
+    /// A chunk's address is the endpoint's template filled with its parameters once: a parameter
+    /// whose value names another is not filled again, which nested values in GOG's answer would
+    /// make grow to gigabytes.
+    #[test]
+    fn a_chunk_address_fills_the_template_once() {
+        let endpoint: Endpoint = serde_json::from_value(serde_json::json!({
+            "endpoint_name": "fastly",
+            "url_format": "{base_url}/token={token}{path}",
+            "parameters": {"base_url": "https://cdn.example/content", "token": "[FAKE]",
+                           "path": "/store/1"}
+        }))
+        .unwrap();
+        assert_eq!(
+            chunk_url(&endpoint, "abcdef0123"),
+            "https://cdn.example/content/token=[FAKE]/store/1/ab/cd/abcdef0123"
+        );
+        let mut nested = serde_json::Map::new();
+        for i in 0..30 {
+            nested.insert(
+                format!("k{i:02}"),
+                format!("{{k{:02}}}{{k{:02}}}", i + 1, i + 1).into(),
+            );
+        }
+        let endpoint = Endpoint {
+            endpoint_name: String::new(),
+            url_format: "{k00}".into(),
+            parameters: nested,
+        };
+        assert!(chunk_url(&endpoint, "abcdef0123").len() < 1 << 10);
     }
 
     #[test]
