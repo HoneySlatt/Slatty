@@ -438,11 +438,36 @@ async fn remote_paths_cannot_escape_the_save_folder() {
     let env = Env::new("escape");
     std::fs::create_dir_all(env.root()).unwrap();
     env.put_remote("../../evil.sh", "x");
+    env.put_remote("b.sav", "b");
     let r = env.sync(SyncOptions::default()).await;
-    assert_eq!(r.errors.len(), 1);
     assert!(
         !env.tmp.join("evil.sh").exists() && !env.tmp.parent().unwrap().join("evil.sh").exists()
     );
+    // Left out and reported, without blocking the launch or the other saves.
+    assert!(r.is_clean(), "{:?}", r.errors);
+    assert_eq!(r.skipped_remote, ["../../evil.sh"]);
+    assert_eq!(r.downloaded, ["b.sav"]);
+}
+
+/// `Save.dat` and `save.dat` in the cloud are one file on Windows: that pair is left out, on both
+/// sides, and the location's other saves still sync.
+#[tokio::test]
+async fn case_duplicates_in_the_cloud_skip_only_that_pair() {
+    let env = Env::new("case-pair");
+    env.put_remote("Save.dat", "upper");
+    env.put_remote("save.dat", "lower");
+    env.put_remote("b.sav", "b");
+    env.write("save.dat", "local");
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(r.is_clean(), "{:?}", r.errors);
+    let mut skipped = r.skipped_remote.clone();
+    skipped.sort();
+    assert_eq!(skipped, ["Save.dat", "save.dat"]);
+    assert_eq!(r.downloaded, ["b.sav"]);
+    assert!(r.uploaded.is_empty());
+    assert_eq!(env.read("save.dat").as_deref(), Some("local"));
+    assert_eq!(env.remote("save.dat").as_deref(), Some("lower"));
+    assert_eq!(env.remote("Save.dat").as_deref(), Some("upper"));
 }
 
 #[tokio::test]

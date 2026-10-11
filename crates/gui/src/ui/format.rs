@@ -173,6 +173,12 @@ fn describe_cloud(prefix: &str, s: &CloudSummary) -> String {
     if !s.problems.is_empty() {
         out += &format!("; problems: {}", s.problems.join(", "));
     }
+    if !s.left_out.is_empty() {
+        out += &format!(
+            "; left out (unsafe name, or a case-only duplicate): {}",
+            s.left_out.join(", ")
+        );
+    }
     out
 }
 

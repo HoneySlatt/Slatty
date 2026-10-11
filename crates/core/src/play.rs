@@ -29,6 +29,8 @@ pub struct CloudSummary {
     pub conflicts: Vec<String>,
     pub problems: Vec<String>,
     pub pending_deletions: Vec<String>,
+    /// Cloud files left out (`SyncReport::skipped_remote`); they do not stop a launch.
+    pub left_out: Vec<String>,
     pub backup_dir: Option<PathBuf>,
 }
 
@@ -60,6 +62,8 @@ impl CloudSummary {
                             .iter()
                             .map(|p| format!("{}/{p}", o.name)),
                     );
+                    s.left_out
+                        .extend(r.skipped_remote.iter().map(|p| format!("{}/{p}", o.name)));
                     s.backup_dir = s.backup_dir.take().or_else(|| r.backup_dir.clone());
                 }
                 Err(e) => s.problems.push(format!("{}: {e}", o.name)),

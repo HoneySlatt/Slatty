@@ -50,7 +50,8 @@ pub async fn compare<T: CloudTransport>(
     filter: Option<&str>,
 ) -> Result<Vec<FileComparison>> {
     let local = scan::scan(root)?;
-    let remote = remote_map(cloud.list().await?, location)?;
+    // What the sync leaves out is not compared either (`SyncReport::skipped_remote`).
+    let (remote, _) = remote_map(cloud.list().await?, location);
     let filter = filter.map(str::to_lowercase);
     let keys: BTreeSet<&String> = local.files.keys().chain(remote.keys()).collect();
     let mut out = Vec::new();

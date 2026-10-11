@@ -50,6 +50,10 @@ pub struct SyncReport {
     pub refused: Vec<(String, String)>,
     pub errors: Vec<(String, String)>,
     pub skipped_local: Vec<String>,
+    /// Cloud files left out, and the local file of the same name with them: a name a save folder
+    /// cannot hold safely (`..`, absolute), or two that differ only by case (one file on Windows).
+    /// Reported without making the sync unclean, so it does not block a launch.
+    pub skipped_remote: Vec<String>,
     pub backup_dir: Option<PathBuf>,
 }
 
@@ -112,7 +116,11 @@ pub async fn sync<T: CloudTransport>(
     };
 
     let local = scan::scan(target.root)?;
-    let remote = remote_map(cloud.list().await?, target.location)?;
+    let (remote, skipped_remote) = remote_map(cloud.list().await?, target.location);
+    // The local file of a name left out in the cloud is left alone too: neither uploaded over
+    // one of the pair, nor deleted as if the cloud had deleted it.
+    let left_out: std::collections::BTreeSet<String> =
+        skipped_remote.iter().map(|rel| scan::key(rel)).collect();
     let stored_root = stored_root(target)?;
     let root_changed = match stored_root {
         Some(stored) => {
@@ -126,15 +134,17 @@ pub async fn sync<T: CloudTransport>(
         None => false,
     };
     // History recorded for another folder says nothing about this one.
-    let base = if root_changed {
+    let mut base = if root_changed {
         BTreeMap::new()
     } else {
         load_base(target)?
     };
+    base.retain(|k, _| !left_out.contains(k));
 
     let local_view: BTreeMap<String, LocalFile> = local
         .files
         .iter()
+        .filter(|(k, _)| !left_out.contains(*k))
         .map(|(k, f)| {
             (
                 k.clone(),
@@ -177,6 +187,7 @@ pub async fn sync<T: CloudTransport>(
         opts,
         report: SyncReport {
             skipped_local: local.skipped.clone(),
+            skipped_remote,
             plan: plan.clone(),
             ..Default::default()
         },
@@ -381,7 +392,7 @@ impl<T: CloudTransport> Run<'_, T> {
         if self.deferred.is_empty() {
             return Ok(());
         }
-        let fresh = remote_map(self.cloud.list().await?, self.target.location)?;
+        let (fresh, _) = remote_map(self.cloud.list().await?, self.target.location);
         let mut uploaded = Vec::new();
         for (key, op) in std::mem::take(&mut self.deferred) {
             let planned = self.remote.get(&key).map(|r| &r.hash);
@@ -407,7 +418,7 @@ impl<T: CloudTransport> Run<'_, T> {
             return Ok(());
         }
         // Unconfirmed uploads get no history: the next sync finds the same content on both sides.
-        let listed = (self.cloud.list().await).and_then(|l| remote_map(l, self.target.location));
+        let listed = (self.cloud.list().await).map(|l| remote_map(l, self.target.location).0);
         let after = match listed {
             Ok(after) => after,
             Err(e) => {
@@ -473,12 +484,16 @@ impl<T: CloudTransport> Run<'_, T> {
     }
 }
 
+/// The cloud files of `location` by key, and those left out (`SyncReport::skipped_remote`): a
+/// name that would leave the save folder, and both of two names that differ only by case.
 pub(crate) fn remote_map(
     entries: Vec<RemoteEntry>,
     location: &str,
-) -> Result<BTreeMap<String, RemoteRef>> {
+) -> (BTreeMap<String, RemoteRef>, Vec<String>) {
     let prefix = format!("{location}/");
     let mut map = BTreeMap::new();
+    let mut skipped = Vec::new();
+    let mut paired = std::collections::BTreeSet::new();
     for e in entries {
         let Some(rel) = e.name.strip_prefix(&prefix) else {
             continue;
@@ -487,8 +502,16 @@ pub(crate) fn remote_map(
             continue;
         }
         let rel = rel.to_string();
+        if !Path::new(&rel)
+            .components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)))
+        {
+            skipped.push(rel);
+            continue;
+        }
+        let key = scan::key(&rel);
         if let Some(previous) = map.insert(
-            scan::key(&rel),
+            key.clone(),
             RemoteRef {
                 name: e.name,
                 rel: rel.clone(),
@@ -496,13 +519,16 @@ pub(crate) fn remote_map(
                 last_modified: e.last_modified,
             },
         ) {
-            return Err(Error::Refused(format!(
-                "cloud holds `{}` and `{rel}`, which differ only by case",
-                previous.rel
-            )));
+            skipped.push(previous.rel);
+            paired.insert(key);
         }
     }
-    Ok(map)
+    for key in paired {
+        if let Some(last) = map.remove(&key) {
+            skipped.push(last.rel);
+        }
+    }
+    (map, skipped)
 }
 
 fn load_base(t: &SyncTarget<'_>) -> Result<BTreeMap<String, BaseEntry>> {

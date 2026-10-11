@@ -138,6 +138,12 @@ fn print_cloud(title: &str, s: &CloudSummary) {
     for d in &s.pending_deletions {
         println!("  deletion not applied: {}", shown(d));
     }
+    for l in &s.left_out {
+        println!(
+            "  cloud file left out (unsafe name, or a case-only duplicate): {}",
+            shown(l)
+        );
+    }
     if let Some(dir) = &s.backup_dir {
         println!("  previous versions saved in {}", shown(dir.display()));
     }

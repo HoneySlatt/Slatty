@@ -140,6 +140,10 @@ fn write_report(out: &mut impl Write, r: &SyncReport, dry_run: bool) -> std::io:
         &r.pending_deletions,
     )?;
     list("skipped local entries", &r.skipped_local)?;
+    list(
+        "cloud files left out (unsafe name, or two names differing only by case)",
+        &r.skipped_remote,
+    )?;
     for (path, kind) in &r.conflicts {
         writeln!(
             out,

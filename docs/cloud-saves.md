@@ -91,9 +91,12 @@ Modification dates are never used to decide.
   actually transferred. An upload the cloud listing could not confirm gets no history; the next
   sync finds the same content on both sides and adopts it.
 - **Cloud paths cannot escape the save folder.** A cloud file name containing `..` or an absolute
-  path is rejected.
-- **Case-only duplicates are refused.** `Save.dat` and `save.dat` are one file on Windows, so a
-  folder holding both is reported instead of being synchronised.
+  path is left out and reported.
+- **Case-only duplicates are left out.** `Save.dat` and `save.dat` are one file on Windows, so a
+  pair of them in the cloud is reported instead of being synchronised, and the local file of that
+  name is left alone too (neither uploaded over one of them nor deleted).
+- **What is left out does not block a launch.** Another client, or the game itself, can write such
+  a name: the location's other saves still sync, and the game starts.
 - **Binary saves are never merged.**
 
 ## Around a game session
