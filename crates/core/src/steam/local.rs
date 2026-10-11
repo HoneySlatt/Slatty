@@ -66,23 +66,38 @@ const UPDATE_RUNNING: u64 = 256;
 const UPDATE_PAUSED: u64 = 512;
 const UPDATE_STARTED: u64 = 1024;
 
-/// The Steam installation in `home`: native, through the `~/.steam/steam` link, or the Flatpak's;
-/// the one an account signed in to.
+/// The Steam installation in `home` an account signed in to: native, through the `~/.steam/steam`
+/// link, or the Flatpak's; with both, the one signed in to last.
 pub fn find(home: &Path) -> Option<Steam> {
-    [
+    let mut found: Option<(u64, Steam)> = None;
+    for (path, flatpak) in [
         (".local/share/Steam", false),
         (".steam/steam", false),
         (".var/app/com.valvesoftware.Steam/data/Steam", true),
         (".var/app/com.valvesoftware.Steam/.local/share/Steam", true),
-    ]
-    .into_iter()
-    .map(|(path, flatpak)| (home.join(path), flatpak))
-    .find(|(root, _)| root.join("config/loginusers.vdf").is_file())
-    .map(|(root, flatpak)| Steam { root, flatpak })
+    ] {
+        let steam = Steam {
+            root: home.join(path),
+            flatpak,
+        };
+        if !steam.root.join("config/loginusers.vdf").is_file() {
+            continue;
+        }
+        let at = last_sign_in(&steam).map_or(0, |(at, _)| at);
+        if found.as_ref().is_none_or(|(before, _)| at > *before) {
+            found = Some((at, steam));
+        }
+    }
+    found.map(|(_, steam)| steam)
 }
 
 /// The account last signed in to the Steam client, if one ever was.
 pub fn signed_in_user(steam: &Steam) -> Option<SteamUser> {
+    last_sign_in(steam).map(|(_, user)| user)
+}
+
+/// When an account last signed in to this Steam installation (seconds since 1970), and which.
+fn last_sign_in(steam: &Steam) -> Option<(u64, SteamUser)> {
     let users = read(&steam.root.join("config/loginusers.vdf"))?;
     users
         .get("users")?
@@ -101,7 +116,7 @@ pub fn signed_in_user(steam: &Steam) -> Option<SteamUser> {
             ))
         })
         .max()
-        .map(|(_, id64, name)| SteamUser { id64, name })
+        .map(|(at, id64, name)| (at, SteamUser { id64, name }))
 }
 
 /// The Steam app ids of the account's games: those Steam keeps details of for its library.
@@ -164,13 +179,17 @@ pub fn played(steam: &Steam, user: &SteamUser) -> HashMap<u32, Played> {
 
 /// Steam's library folders, the main one first.
 pub fn libraries(steam: &Steam) -> Vec<PathBuf> {
+    // The main folder is often found through a link (`~/.steam/steam`) and named by its real path.
+    let real = |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let mut found = vec![steam.root.clone()];
+    let mut seen = vec![real(&steam.root)];
     if let Some(vdf) = read(&steam.root.join("steamapps/libraryfolders.vdf")) {
         let folders = vdf.get("libraryfolders").map_or(&[][..], Vdf::entries);
         for (_, folder) in folders {
             if let Some(path) = folder.text("path").map(PathBuf::from)
-                && !found.contains(&path)
+                && !seen.contains(&real(&path))
             {
+                seen.push(real(&path));
                 found.push(path);
             }
         }
@@ -404,6 +423,53 @@ pub(crate) mod tests {
         assert_eq!(state(1026, 9000).unwrap().update.unwrap().done, 4000);
         std::fs::remove_file(&manifest).unwrap();
         assert_eq!(read_again(life), None, "uninstalled");
+    }
+
+    /// Steam found through its `~/.steam/steam` link names its main library by its real path: read
+    /// once, not twice.
+    #[test]
+    fn the_main_library_found_through_a_link_is_read_once() {
+        let fake = FakeSteam::new("link");
+        let link = fake.home.join(".steam/steam");
+        std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&fake.steam.root, &link).unwrap();
+        let through_link = Steam {
+            root: link.clone(),
+            flatpak: false,
+        };
+        assert_eq!(
+            libraries(&through_link),
+            [link, fake.home.join("other-library")]
+        );
+    }
+
+    /// Steam installed natively and as a Flatpak: the one an account signed in to last is used.
+    #[test]
+    fn of_two_steam_installations_the_one_signed_in_to_last_is_used() {
+        let fake = FakeSteam::new("two-installs");
+        let flatpak = fake
+            .home
+            .join(".var/app/com.valvesoftware.Steam/.local/share/Steam");
+        std::fs::create_dir_all(flatpak.join("config")).unwrap();
+        let sign_in = |at: u64| {
+            std::fs::write(
+                flatpak.join("config/loginusers.vdf"),
+                format!(
+                    r#""users" {{ "76561198000000005" {{ "PersonaName" "[FAKE] Flatpak" "Timestamp" "{at}" }} }}"#
+                ),
+            )
+            .unwrap();
+        };
+        sign_in(300);
+        let found = find(&fake.home).unwrap();
+        assert!(found.flatpak && found.root == flatpak, "{found:?}");
+        assert_eq!(signed_in_user(&found).unwrap().name, "[FAKE] Flatpak");
+        sign_in(150);
+        assert_eq!(
+            find(&fake.home),
+            Some(fake.steam.clone()),
+            "the native one, signed in at 200"
+        );
     }
 
     #[test]
