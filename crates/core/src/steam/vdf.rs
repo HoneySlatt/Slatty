@@ -43,6 +43,7 @@ impl Vdf {
 pub fn parse(text: &str) -> Result<Vdf> {
     let mut tokens = Tokens {
         chars: text.chars().peekable(),
+        entries_left: MAX_ENTRIES,
     };
     let entries = section(&mut tokens, 0, false)?;
     Ok(Vdf::Section(entries))
@@ -62,6 +63,10 @@ fn section(tokens: &mut Tokens<'_>, depth: usize, braced: bool) -> Result<Vec<(S
             Some(Token::Text(key)) => key,
             Some(_) => return Err(bad("a key was expected")),
         };
+        tokens.entries_left = tokens
+            .entries_left
+            .checked_sub(1)
+            .ok_or_else(|| bad("too many entries"))?;
         let value = match tokens.next()? {
             Some(Token::Open) => Vdf::Section(section(tokens, depth + 1, true)?),
             Some(Token::Text(value)) => Vdf::Text(value),
@@ -79,7 +84,13 @@ enum Token {
 
 struct Tokens<'a> {
     chars: std::iter::Peekable<std::str::Chars<'a>>,
+    /// Entries a file may still hold: each takes some 80 bytes besides its text, so that a file of
+    /// tiny entries would take far more memory than its size.
+    entries_left: usize,
 }
+
+/// Far more entries than any of Steam's text files holds (some thousands).
+const MAX_ENTRIES: usize = 1_000_000;
 
 impl Tokens<'_> {
     /// The next token, past spaces, `//` comments and the `[$WIN32]`-like conditions some files
@@ -193,8 +204,11 @@ mod tests {
             "{ }",
             "\"a\" }",
             &"\"a\" {".repeat(MAX_DEPTH + 2),
+            // Tiny entries, each taking far more memory than its bytes.
+            &"a b ".repeat(MAX_ENTRIES + 1),
         ] {
-            assert!(parse(text).is_err(), "{text:?}");
+            assert!(parse(text).is_err(), "{}", &text[..text.len().min(40)]);
         }
+        assert!(parse(&"a b ".repeat(1000)).is_ok());
     }
 }

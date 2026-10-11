@@ -3,6 +3,7 @@
 //! (https://github.com/SteamDatabase/SteamAppInfo): versions 40 and 41 are read. Only the apps
 //! asked for are decoded; the others are skipped by their size.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -44,6 +45,7 @@ pub(crate) fn parse(data: &[u8], wanted: &HashSet<u32>) -> Result<HashMap<u32, V
         _ => return Err(bad(&format!("unknown version {magic:#x}"))),
     };
     let mut apps = HashMap::new();
+    let keys = Keys::new(strings.as_deref());
     loop {
         let app_id = at.u32()?;
         if app_id == 0 {
@@ -57,10 +59,10 @@ pub(crate) fn parse(data: &[u8], wanted: &HashSet<u32>) -> Result<HashMap<u32, V
                 data: &data[..end],
                 pos: at.pos + ENTRY_HEADER,
             };
-            let keys = Keys {
-                strings: strings.as_deref(),
-            };
-            apps.insert(app_id, Vdf::Section(section(&mut entry, &keys, 0)?));
+            apps.insert(
+                app_id,
+                Vdf::Section(section(&mut entry, &keys, 0, Some(shown))?),
+            );
         }
         at.pos = end;
     }
@@ -70,7 +72,7 @@ pub(crate) fn parse(data: &[u8], wanted: &HashSet<u32>) -> Result<HashMap<u32, V
 /// (`appcache/stats`); refused when damaged.
 pub(crate) fn keyvalues(data: &[u8]) -> Result<Vdf> {
     let mut at = Cursor { data, pos: 0 };
-    let entries = section(&mut at, &Keys { strings: None }, 0)?;
+    let entries = section(&mut at, &Keys::new(None), 0, None)?;
     Ok(Vdf::Section(entries))
 }
 
@@ -81,30 +83,76 @@ fn string_table(data: &[u8], offset: usize) -> Result<Vec<String>> {
     if count > data.len() {
         return Err(bad("string table"));
     }
-    (0..count).map(|_| at.c_string()).collect()
+    (0..count)
+        .map(|_| at.c_str().map(Cow::into_owned))
+        .collect()
 }
 
 struct Keys<'a> {
     /// Version 41's string table; version 40 writes each key in place.
     strings: Option<&'a [String]>,
+    /// Bytes the decoded entries may still take: a key of the string table can be used any number
+    /// of times, so a small file could otherwise ask for gigabytes.
+    left: std::cell::Cell<usize>,
 }
 
-impl Keys<'_> {
-    fn read(&self, at: &mut Cursor<'_>) -> Result<String> {
+/// What one file's decoded entries may take, far more than Steam's (some MB).
+const DECODED: usize = 256 << 20;
+/// What an entry takes besides its text.
+const ENTRY: usize = 64;
+
+impl<'a> Keys<'a> {
+    fn new(strings: Option<&'a [String]>) -> Keys<'a> {
+        Keys {
+            strings,
+            left: std::cell::Cell::new(DECODED),
+        }
+    }
+
+    /// Takes `bytes` of what is left to decode.
+    fn spend(&self, bytes: usize) -> Result<()> {
+        let left = self.left.get().checked_sub(bytes + ENTRY);
+        self.left
+            .set(left.ok_or_else(|| bad("too large once read"))?);
+        Ok(())
+    }
+
+    /// The next key, borrowed from the string table or from the file.
+    fn key(&self, at: &mut Cursor<'a>) -> Result<Cow<'a, str>> {
         match self.strings {
             Some(strings) => {
                 let index = at.u32()? as usize;
                 strings
                     .get(index)
-                    .cloned()
+                    .map(|key| Cow::Borrowed(key.as_str()))
                     .ok_or_else(|| bad("a key outside the string table"))
             }
-            None => at.c_string(),
+            None => at.c_str(),
         }
     }
 }
 
-fn section(at: &mut Cursor<'_>, keys: &Keys<'_>, depth: usize) -> Result<Vec<(String, Vdf)>> {
+/// Which entries of an app are decoded, by depth and key: what the library shows (`common`'s
+/// name, type, systems and images) and the app's id. The rest, most of the file (`config`,
+/// `depots`, `extended`, the store's texts in every language), is read past, not decoded: about
+/// 60 KB an app otherwise.
+fn shown(depth: usize, key: &str) -> bool {
+    let is = |name: &str| key.eq_ignore_ascii_case(name);
+    match depth {
+        0 => is("appinfo"),
+        1 => is("appid") || is("common"),
+        2 => is("name") || is("type") || is("oslist") || is("library_assets_full"),
+        _ => true,
+    }
+}
+
+/// The entries of a section, those `keep` takes (by depth and key) when given.
+fn section<'a>(
+    at: &mut Cursor<'a>,
+    keys: &Keys<'a>,
+    depth: usize,
+    keep: Option<fn(usize, &str) -> bool>,
+) -> Result<Vec<(String, Vdf)>> {
     if depth > MAX_DEPTH {
         return Err(bad("nested too deep"));
     }
@@ -114,17 +162,48 @@ fn section(at: &mut Cursor<'_>, keys: &Keys<'_>, depth: usize) -> Result<Vec<(St
         if kind == 0x08 {
             return Ok(entries);
         }
-        let key = keys.read(at)?;
+        let key = keys.key(at)?;
+        if keep.is_some_and(|keep| !keep(depth, &key)) {
+            skip(at, keys, kind, depth + 1)?;
+            continue;
+        }
+        keys.spend(key.len())?;
         let value = match kind {
-            0x00 => Vdf::Section(section(at, keys, depth + 1)?),
-            0x01 => Vdf::Text(at.c_string()?),
+            0x00 => Vdf::Section(section(at, keys, depth + 1, keep)?),
+            0x01 => Vdf::Text(at.c_str()?.into_owned()),
             0x02 | 0x04 | 0x06 => Vdf::Text((at.u32()? as i32).to_string()),
             0x03 => Vdf::Text(f32::from_bits(at.u32()?).to_string()),
             0x07 => Vdf::Text(at.u64()?.to_string()),
             0x0A => Vdf::Text((at.u64()? as i64).to_string()),
             other => return Err(bad(&format!("value type {other:#x}"))),
         };
-        entries.push((key, value));
+        if let Vdf::Text(text) = &value {
+            keys.spend(text.len())?;
+        }
+        entries.push((key.into_owned(), value));
+    }
+}
+
+/// Reads past a value of `kind` without decoding it.
+fn skip<'a>(at: &mut Cursor<'a>, keys: &Keys<'a>, kind: u8, depth: usize) -> Result<()> {
+    match kind {
+        0x00 => {
+            if depth > MAX_DEPTH {
+                return Err(bad("nested too deep"));
+            }
+            loop {
+                let kind = at.u8()?;
+                if kind == 0x08 {
+                    return Ok(());
+                }
+                keys.key(at)?;
+                skip(at, keys, kind, depth + 1)?;
+            }
+        }
+        0x01 => at.c_str().map(drop),
+        0x02..=0x04 | 0x06 => at.take(4).map(drop),
+        0x07 | 0x0A => at.take(8).map(drop),
+        other => Err(bad(&format!("value type {other:#x}"))),
     }
 }
 
@@ -133,8 +212,8 @@ struct Cursor<'a> {
     pos: usize,
 }
 
-impl Cursor<'_> {
-    fn take(&mut self, n: usize) -> Result<&[u8]> {
+impl<'a> Cursor<'a> {
+    fn take(&mut self, n: usize) -> Result<&'a [u8]> {
         let end = self
             .pos
             .checked_add(n)
@@ -161,15 +240,15 @@ impl Cursor<'_> {
         ))
     }
 
-    fn c_string(&mut self) -> Result<String> {
+    /// A text ended by a zero, borrowed from the file when it is UTF-8.
+    fn c_str(&mut self) -> Result<Cow<'a, str>> {
         let rest = self.data.get(self.pos..).unwrap_or_default();
         let len = rest
             .iter()
             .position(|&b| b == 0)
             .ok_or_else(|| bad("a text is not ended"))?;
-        let text = String::from_utf8_lossy(&rest[..len]).into_owned();
         self.pos += len + 1;
-        Ok(text)
+        Ok(String::from_utf8_lossy(&rest[..len]))
     }
 }
 
@@ -222,6 +301,79 @@ pub(crate) mod tests {
             file.push(0);
         }
         file
+    }
+
+    /// Version 40 (keys written in place), with what the library does not show beside `common`.
+    #[test]
+    fn only_what_the_library_shows_is_decoded() {
+        let text = |out: &mut Vec<u8>, s: &str| {
+            out.extend(s.as_bytes());
+            out.push(0);
+        };
+        let mut kv = vec![0x00];
+        text(&mut kv, "appinfo");
+        kv.push(0x02);
+        text(&mut kv, "appid");
+        kv.extend(5u32.to_le_bytes());
+        kv.push(0x00);
+        text(&mut kv, "common");
+        for (k, v) in [
+            ("name", "[FAKE] Five"),
+            ("type", "game"),
+            ("review_score", "9"),
+        ] {
+            kv.push(0x01);
+            text(&mut kv, k);
+            text(&mut kv, v);
+        }
+        kv.push(0x08);
+        kv.push(0x00);
+        text(&mut kv, "depots");
+        kv.push(0x00);
+        text(&mut kv, "1");
+        kv.push(0x07);
+        text(&mut kv, "size");
+        kv.extend(7u64.to_le_bytes());
+        kv.extend([0x08, 0x08, 0x08, 0x08]);
+        let mut data = Vec::new();
+        data.extend(V40.to_le_bytes());
+        data.extend(1u32.to_le_bytes());
+        data.extend(5u32.to_le_bytes());
+        data.extend(((ENTRY_HEADER + kv.len()) as u32).to_le_bytes());
+        data.extend([0u8; ENTRY_HEADER]);
+        data.extend(kv);
+        data.extend(0u32.to_le_bytes());
+
+        let apps = parse(&data, &HashSet::from([5])).unwrap();
+        let app = apps[&5].get("appinfo").unwrap();
+        assert_eq!(app.text("appid"), Some("5"));
+        let common = app.get("common").unwrap();
+        assert_eq!(common.text("name"), Some("[FAKE] Five"));
+        assert_eq!(common.text("review_score"), None, "read past");
+        assert!(app.get("depots").is_none(), "read past");
+    }
+
+    /// A key of version 41's string table can be used any number of times: what the entries take
+    /// once decoded is bounded, whatever the file asks.
+    #[test]
+    fn keys_used_over_and_over_cannot_take_more_than_their_share() {
+        let table = vec!["k".repeat(1000)];
+        let mut kv = Vec::new();
+        for _ in 0..100 {
+            kv.push(0x01);
+            kv.extend(0u32.to_le_bytes());
+            kv.push(0);
+        }
+        kv.push(0x08);
+        let keys = |left: usize| Keys {
+            strings: Some(&table),
+            left: std::cell::Cell::new(left),
+        };
+        let mut at = Cursor { data: &kv, pos: 0 };
+        assert!(section(&mut at, &keys(200_000), 0, None).is_ok());
+        let mut at = Cursor { data: &kv, pos: 0 };
+        let refused = section(&mut at, &keys(50_000), 0, None);
+        assert!(refused.is_err(), "100 keys of 1,000 bytes, 50,000 allowed");
     }
 
     #[test]
