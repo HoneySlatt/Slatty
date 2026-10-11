@@ -188,6 +188,7 @@ pub fn sync_shared(db: &Db, dirs: &Dirs) -> Result<()> {
     let Some(_lock) = crate::lock::try_acquire(&lock_file(dirs))? else {
         return Ok(());
     };
+    keep_own_paths(db, dirs)?;
     sync_shared_in(dirs, &shared, crate::settings::share_protons(db)?)
 }
 
@@ -243,7 +244,7 @@ pub fn link_newest(dirs: &Dirs) -> Result<()> {
 }
 
 /// The Proton builds games and the default are set to.
-fn used(db: &Db) -> Result<Vec<PathBuf>> {
+fn used(db: &Db, dirs: &Dirs) -> Result<Vec<PathBuf>> {
     let mut used: Vec<PathBuf> = Install::list(db)?
         .into_iter()
         .filter_map(|i| match i.runner {
@@ -252,12 +253,48 @@ fn used(db: &Db) -> Result<Vec<PathBuf>> {
         })
         .collect();
     used.extend(crate::settings::default_proton(db)?);
-    Ok(used)
+    Ok(used.iter().map(|p| own_path(dirs, p)).collect())
+}
+
+/// `proton` as the launcher names a build of its own: a path leading to one through another link
+/// (Steam's `compatibilitytools.d` once the builds are shared, a Heroic setting) is the build's
+/// own. Other paths, the `-latest` links among them, are kept as they are.
+pub fn own_path(dirs: &Dirs, proton: &Path) -> PathBuf {
+    let root = dir(dirs);
+    if proton.parent() == Some(root.as_path()) {
+        return proton.to_path_buf();
+    }
+    match (proton.canonicalize(), root.canonicalize()) {
+        (Ok(real), Ok(real_root)) if real.parent() == Some(real_root.as_path()) => {
+            root.join(real.file_name().unwrap_or_default())
+        }
+        _ => proton.to_path_buf(),
+    }
+}
+
+/// Stores the Proton of each game, and the default, as `own_path` names them, so that they keep
+/// their build when Steam's links to it go (sharing turned off).
+pub fn keep_own_paths(db: &Db, dirs: &Dirs) -> Result<()> {
+    for install in Install::list(db)? {
+        if let Runner::Umu { proton, .. } = &install.runner {
+            let own = own_path(dirs, proton);
+            if own != *proton {
+                crate::install::set_proton(db, &install.game_id, &own)?;
+            }
+        }
+    }
+    if let Some(proton) = crate::settings::default_proton(db)? {
+        let own = own_path(dirs, &proton);
+        if own != proton {
+            crate::settings::set_default_proton(db, &own)?;
+        }
+    }
+    Ok(())
 }
 
 /// The projects a game or the default follows through their `-latest` link.
 pub fn followed(db: &Db, dirs: &Dirs) -> Result<Vec<Source>> {
-    let used = used(db)?;
+    let used = used(db, dirs)?;
     Ok(Source::ALL
         .into_iter()
         .filter(|s| used.contains(&latest_link(dirs, *s)))
@@ -352,7 +389,7 @@ fn prune(
     newest: &Path,
     previous: Option<&Path>,
 ) -> Result<()> {
-    let used = used(db)?;
+    let used = used(db, dirs)?;
     for build in installed(dirs) {
         let name = build.file_name().unwrap_or_default().to_string_lossy();
         if Source::of(&name) == Some(source)
@@ -623,7 +660,9 @@ pub fn remove(db: &Db, dirs: &Dirs, path: &Path) -> Result<()> {
     }
     let users: Vec<String> = Install::list(db)?
         .into_iter()
-        .filter(|i| matches!(&i.runner, Runner::Umu { proton, .. } if proton == path))
+        .filter(
+            |i| matches!(&i.runner, Runner::Umu { proton, .. } if own_path(dirs, proton) == path),
+        )
         .map(|i| i.title)
         .collect();
     if !users.is_empty() {
@@ -633,7 +672,7 @@ pub fn remove(db: &Db, dirs: &Dirs, path: &Path) -> Result<()> {
             users.join(", ")
         )));
     }
-    if crate::settings::default_proton(db)?.as_deref() == Some(path) {
+    if crate::settings::default_proton(db)?.is_some_and(|d| own_path(dirs, &d) == path) {
         return Err(Error::Refused(format!(
             "{} is the default Proton; choose another one first",
             name.unwrap_or_default()

@@ -598,6 +598,36 @@ fn a_build_a_game_or_the_default_uses_is_not_removed() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// A build shared with Steam is also reachable through Steam's link to it, which the user guide's
+/// own `--proton` example names: a game or the default set that way uses the build all the same,
+/// and keeps it when sharing is turned off.
+#[test]
+fn a_build_used_through_steams_link_to_it_counts_as_used() {
+    let root = root("used-through-link");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    let build = fake_build(&dirs, "GE-Proton11-7-x86_64");
+    let shared = root.join("steam/compatibilitytools.d");
+    sync_shared_in(&dirs, &shared, true).unwrap();
+    let through_steam = shared.join("GE-Proton11-7-x86_64");
+    assert!(through_steam.join("proton").is_file());
+
+    crate::settings::set_default_proton(&db, &through_steam).unwrap();
+    assert!(matches!(remove(&db, &dirs, &build), Err(Error::Refused(_))));
+    let other = fake_build(&dirs, "GE-Proton11-6-x86_64");
+    crate::settings::set_default_proton(&db, &other).unwrap();
+    game_on(&db, &root, "1", &through_steam);
+    assert!(matches!(remove(&db, &dirs, &build), Err(Error::Refused(_))));
+    assert!(build.exists());
+
+    // Turning sharing off removes Steam's link; the game keeps its build.
+    keep_own_paths(&db, &dirs).unwrap();
+    sync_shared_in(&dirs, &shared, false).unwrap();
+    let runner = Install::get(&db, "1").unwrap().unwrap().runner;
+    assert!(matches!(runner, Runner::Umu { proton, .. } if proton == build));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn github_is_asked_only_once_downloads_are_turned_on() {
     let db = Db::in_memory().unwrap();
