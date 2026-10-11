@@ -406,7 +406,7 @@ impl App {
             // ones the user gave.
             let gog = self.library.iter().map(|g| {
                 let title = self.gog_titles.get(&g.id).unwrap_or(&g.title);
-                (g.id.as_str(), title.as_str(), g.steam.as_slice())
+                (g.id.as_str(), title.as_str(), g.steam.as_deref())
             });
             let twins = slatty_core::steam::library::twins(gog, &self.steam.games);
             let twinned: std::collections::HashSet<&String> = twins.values().collect();

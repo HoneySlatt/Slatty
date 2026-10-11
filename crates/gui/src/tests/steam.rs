@@ -17,7 +17,7 @@ fn steam_game(app: u32, title: &str) -> LibraryGame {
         logo: None,
         os: vec!["windows".into()],
         metadata: MetadataSource::Product,
-        steam: Vec::new(),
+        steam: None,
     }
 }
 
@@ -468,7 +468,7 @@ fn a_download_steam_makes_shows_until_it_is_done() {
 #[test]
 fn a_game_owned_on_both_shows_once_as_gogs() {
     let mut app = library_app();
-    app.library[0].steam = vec![440];
+    app.library[0].steam = Some(vec![440]);
     app.library[1].title = "[FAKE] Portal".into();
     app.gog_titles.insert("2".into(), "[FAKE] Portal".into());
     app.steam.on = true;
@@ -516,7 +516,7 @@ fn a_game_owned_on_both_shows_once_as_gogs() {
 
     // Signed out of GOG, the Steam games show on their own again.
     let mut signed_out = library_app();
-    signed_out.library[0].steam = vec![440];
+    signed_out.library[0].steam = Some(vec![440]);
     signed_out.steam.on = true;
     let _ = signed_out.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
     signed_out.logged_out();

@@ -113,19 +113,20 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
                 .map(String::from)
                 .collect(),
             metadata: MetadataSource::Product,
-            steam: Vec::new(),
+            steam: None,
         });
     }
     Some(library)
 }
 
-/// The Steam game each GOG game is, by GOG id, among `gog` (id, title, Steam app ids GOG's
-/// database gives) and `steam`: first by those app ids, then, for a GOG game GOG's database gives
-/// none for, by title, written alike once kept to letters and digits, lower-cased. A GOG game
-/// whose Steam apps are all elsewhere is not matched by title, nor a title two Steam games share;
-/// each Steam game goes to one GOG game.
+/// The Steam game each GOG game is, by GOG id, among `gog` (id, title, the Steam app ids GOG's
+/// database gives) and `steam`: by those app ids where the database described the game; by title,
+/// written alike once kept to letters and digits, lower-cased, only where it did not (or the
+/// library was read before the app ids were kept). A game the database knows no Steam release of,
+/// or whose Steam apps are all elsewhere, is not matched, nor a title two Steam games share; each
+/// Steam game goes to one GOG game.
 pub fn twins<'a>(
-    gog: impl IntoIterator<Item = (&'a str, &'a str, &'a [u32])>,
+    gog: impl IntoIterator<Item = (&'a str, &'a str, Option<&'a [u32]>)>,
     steam: &'a [LibraryGame],
 ) -> HashMap<String, String> {
     let alike = |title: &str| -> String {
@@ -151,9 +152,11 @@ pub fn twins<'a>(
     let mut twins = HashMap::new();
     let mut by_name = Vec::new();
     for (id, title, apps) in gog {
-        if apps.is_empty() {
+        let Some(apps) = apps else {
             by_name.push((id, title));
-        } else if let Some(steam_id) = apps
+            continue;
+        };
+        if let Some(steam_id) = apps
             .iter()
             .filter_map(|app| by_app.get(app))
             .find(|steam_id| !taken.contains(*steam_id))
@@ -231,7 +234,7 @@ pub fn web_game(game: &super::web::OwnedGame, from_servers: bool) -> LibraryGame
         logo: server("logo.png"),
         os: Vec::new(),
         metadata: MetadataSource::Product,
-        steam: Vec::new(),
+        steam: None,
     }
 }
 
@@ -407,7 +410,7 @@ mod tests {
             logo: None,
             os: Vec::new(),
             metadata: MetadataSource::Product,
-            steam: Vec::new(),
+            steam: None,
         };
         let steam = [
             steam_game(10, "[FAKE] Another Name On Steam"),
@@ -416,19 +419,23 @@ mod tests {
             steam_game(31, "[FAKE] Shared  name"),
             steam_game(40, "[FAKE] Elsewhere"),
             steam_game(50, "[FAKE] Claimed"),
+            steam_game(60, "[FAKE] Same Name, Another Game"),
         ];
-        let gog: [(&str, &str, &[u32]); 8] = [
+        let gog: [(&str, &str, Option<&[u32]>); 9] = [
             // GOG's database names the Steam app: matched whatever the titles.
-            ("1", "[FAKE] Its GOG Name", &[9, 10]),
-            ("2", "[FAKE] the witcher® 3 – WILD HUNT™", &[]),
-            ("3", "[FAKE] Shared Name", &[]),
-            ("4", "[FAKE] Elsewhere", &[99]),
+            ("1", "[FAKE] Its GOG Name", Some(&[9, 10])),
+            // Not described by it (or read before): by title.
+            ("2", "[FAKE] the witcher® 3 – WILD HUNT™", None),
+            ("3", "[FAKE] Shared Name", None),
+            ("4", "[FAKE] Elsewhere", Some(&[99])),
             // A title that would claim what an app id claims, and a second GOG game alike.
-            ("5", "[FAKE] Claimed", &[]),
-            ("6", "[FAKE] Other", &[50]),
-            ("7", "[FAKE] The Witcher 3 Wild Hunt", &[]),
+            ("5", "[FAKE] Claimed", None),
+            ("6", "[FAKE] Other", Some(&[50])),
+            ("7", "[FAKE] The Witcher 3 Wild Hunt", None),
             // Its first Steam app already went to another: its second one is still free.
-            ("8", "[FAKE] Two Releases", &[50, 40]),
+            ("8", "[FAKE] Two Releases", Some(&[50, 40])),
+            // Described, with no Steam release: a game of the same name is another game.
+            ("9", "[FAKE] Same Name, Another Game", Some(&[])),
         ];
         let twins = twins(gog, &steam);
         let mut found: Vec<(&str, &str)> = twins

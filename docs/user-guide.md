@@ -554,8 +554,10 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   client running, and their saves and achievements reach GOG without one: SlattyLauncher
   recommends their GOG build for your privacy and security.
 - **A game you own on both** shows once, as its GOG game: matched by the Steam release GOG's
-  database gives for it (read with the library: a library refreshed before this version matches
-  after **Refresh library**), else by a title written alike (case, spaces and punctuation aside).
+  database gives for it, read with the library. A game the database does not describe, or a
+  library refreshed before this version until the next **Refresh library**, is matched by a title
+  written alike (case, spaces and punctuation aside); one the database knows no Steam release of
+  is not matched, even by title: a Steam game of the same name is then another game.
   Its page offers **Play the Steam version**, or **Install the Steam version**, through Steam,
   under the GOG build's own buttons; it counts as installed when either is; its play time adds
   the sessions of both, and its last session is the latest of either. Its achievements and cloud

@@ -39,9 +39,10 @@ pub struct LibraryGame {
     pub os: Vec<String>,
     pub metadata: MetadataSource,
     /// The Steam app ids GOG's database gives for the same game (its releases on Steam), so that a
-    /// game owned on both shows once.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub steam: Vec<u32>,
+    /// game owned on both shows once: none when it knows of no Steam release, not known when the
+    /// database did not describe the game (or the library was read before this was kept).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steam: Option<Vec<u32>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,16 +179,13 @@ fn from_gamesdb(id: &str, v: &Value) -> Option<LibraryGame> {
         .unwrap_or_default();
     // The game's releases on every store GOG knows; a Steam release's id is its app id (others,
     // such as `bundle_<id>`, are not apps).
-    let steam = v["game"]["releases"]
-        .as_array()
-        .map(|releases| {
-            releases
-                .iter()
-                .filter(|r| r["platform_id"] == "steam")
-                .filter_map(|r| r["external_id"].as_str()?.parse().ok())
-                .collect()
-        })
-        .unwrap_or_default();
+    let steam = v["game"]["releases"].as_array().map(|releases| {
+        releases
+            .iter()
+            .filter(|r| r["platform_id"] == "steam")
+            .filter_map(|r| r["external_id"].as_str()?.parse().ok())
+            .collect()
+    });
     Some(LibraryGame {
         id: id.to_string(),
         title,
@@ -220,7 +218,7 @@ async fn from_product(http: &Client, id: &str) -> LibraryGame {
         background: None,
         logo: None,
         os: Vec::new(),
-        steam: Vec::new(),
+        steam: None,
     }
 }
 
@@ -443,14 +441,26 @@ mod tests {
         assert_eq!(g.title, "[FAKE] Game");
         assert_eq!(g.cover.as_deref(), Some("https://img/abc.jpg"));
         assert_eq!(g.os, vec!["windows"]);
-        assert_eq!(g.steam, [440, 441], "its Steam apps, from GOG's database");
+        assert_eq!(
+            g.steam.as_deref(),
+            Some(&[440, 441][..]),
+            "its Steam apps, from GOG's database"
+        );
         let cached = serde_json::to_string(&g).unwrap();
         let back: LibraryGame = serde_json::from_str(&cached).unwrap();
-        assert_eq!(back.steam, [440, 441]);
+        assert_eq!(back.steam, g.steam);
         let mut old: Value = serde_json::from_str(&cached).unwrap();
         old.as_object_mut().unwrap().remove("steam");
         let back: LibraryGame = serde_json::from_value(old).unwrap();
-        assert!(back.steam.is_empty(), "a cache made before reads as none");
+        assert_eq!(back.steam, None, "a cache made before: not known");
+
+        // Described, without a Steam release: known to be none, and kept as such.
+        let mut alone = v.clone();
+        alone["game"]["releases"] = json!([{"platform_id": "gog", "external_id": "1000000001"}]);
+        let g = from_gamesdb("1000000001", &alone).unwrap();
+        assert_eq!(g.steam.as_deref(), Some(&[][..]));
+        let back: LibraryGame = serde_json::from_str(&serde_json::to_string(&g).unwrap()).unwrap();
+        assert_eq!(back.steam.as_deref(), Some(&[][..]));
     }
 
     #[test]
@@ -475,7 +485,7 @@ mod tests {
             logo: None,
             os: Vec::new(),
             metadata: MetadataSource::Gamesdb,
-            steam: Vec::new(),
+            steam: None,
         }
     }
 
@@ -581,7 +591,7 @@ mod tests {
                 Vec::new()
             },
             metadata,
-            steam: Vec::new(),
+            steam: None,
         };
         save_cache(
             &dirs,

@@ -580,7 +580,7 @@ fn library_at_10000_games() {
     app.page = Page::Library;
     for (i, g) in app.library.iter_mut().take(100).enumerate() {
         if i < 50 {
-            g.steam = vec![i as u32 + 1];
+            g.steam = Some(vec![i as u32 + 1]);
         } else {
             g.title = format!("[FAKE] Steam 世界 {}: The Long Journey", i + 1);
         }
