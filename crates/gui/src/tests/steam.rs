@@ -552,6 +552,35 @@ fn steams_web_api_fills_in_once_turned_on_and_its_games_go_with_it() {
     assert!(!ids(&app).contains(&"steam-70") && ids(&app).contains(&"steam-440"));
 }
 
+/// A Steam game renamed in Edit game gets Steam's own title back with Reset to default.
+#[test]
+fn a_renamed_steam_game_gets_steams_title_back() {
+    use crate::edit::EditMsg;
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let edit = |app: &mut App, m: EditMsg| drop(app.update(Message::Edit(m)));
+    edit(&mut app, EditMsg::Open("steam-440".into()));
+    edit(&mut app, EditMsg::Title("[FAKE] Renamed".into()));
+    edit(&mut app, EditMsg::Save);
+    assert!(titles(&app).contains(&"Renamed".to_string()));
+
+    edit(&mut app, EditMsg::Open("steam-440".into()));
+    edit(&mut app, EditMsg::Reset);
+    assert_eq!(
+        app.edit.as_ref().unwrap().title,
+        "[FAKE] Fortress",
+        "Steam's own"
+    );
+    edit(&mut app, EditMsg::Save);
+    assert!(app.customs.is_empty());
+    assert!(
+        titles(&app).contains(&"Fortress".to_string()),
+        "{:?}",
+        titles(&app)
+    );
+}
+
 /// GOG is asked about GOG's games alone: Steam's never count as games GOG could not describe.
 #[test]
 fn steam_games_are_not_gogs_to_read() {

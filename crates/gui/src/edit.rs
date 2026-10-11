@@ -2,6 +2,7 @@
 //! background, and whether it is hidden. Pictures come from a file or, once turned on, from
 //! SteamGridDB. Changes stay in a draft until saved.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use iced::widget::image;
@@ -318,8 +319,12 @@ impl App {
                 }
             }
             EditMsg::Reset => {
-                if let Some(d) = &mut self.edit {
-                    d.title = self.gog_titles.get(&d.game_id).cloned().unwrap_or_default();
+                let title = self
+                    .edit
+                    .as_ref()
+                    .map(|d| self.store_title(&d.game_id).to_string());
+                if let (Some(d), Some(title)) = (&mut self.edit, title) {
+                    d.title = title;
                     d.sort_title.clear();
                     d.hidden = false;
                     d.cover = ImageChange::Reset;
@@ -337,9 +342,9 @@ impl App {
         let (Some(core), Some(d)) = (&self.core, &self.edit) else {
             return;
         };
-        let gog = self.gog_titles.get(&d.game_id).map_or("", String::as_str);
-        // A title left as GOG's is not stored, so a later rename on GOG still shows.
-        let title = if d.title.trim() == gog {
+        let own = self.store_title(&d.game_id);
+        // A title left as its store's is not stored, so a later rename by the store still shows.
+        let title = if d.title.trim() == own {
             ""
         } else {
             d.title.as_str()
@@ -375,18 +380,36 @@ impl App {
         }
     }
 
-    /// Library titles as the user named them, GOG's otherwise.
+    /// Library titles as the user named them, their store's otherwise.
     pub fn apply_customs(&mut self) {
+        let steam: HashMap<&str, &str> = self
+            .steam
+            .games
+            .iter()
+            .map(|g| (g.id.as_str(), g.title.as_str()))
+            .collect();
         for g in &mut self.library {
             if let Some(title) = self
                 .customs
                 .get(&g.id)
                 .and_then(|c| c.title.clone())
                 .or_else(|| self.gog_titles.get(&g.id).cloned())
+                .or_else(|| steam.get(g.id.as_str()).map(|t| t.to_string()))
             {
                 g.title = title;
             }
         }
+    }
+
+    /// A game's title as its store gives it, GOG's or Steam's.
+    fn store_title(&self, game_id: &str) -> &str {
+        self.gog_titles
+            .get(game_id)
+            .or_else(|| {
+                let steam = self.steam.games.iter().find(|g| g.id == game_id)?;
+                Some(&steam.title)
+            })
+            .map_or("", String::as_str)
     }
 
     /// The cover shown for a game: the user's, else GOG's once downloaded.
