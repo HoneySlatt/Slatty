@@ -587,6 +587,47 @@ async fn concurrent_sync_of_the_same_game_is_refused() {
     ));
 }
 
+/// Two accounts own the game and share its save folder. When the first signs back in, its history
+/// no longer describes the folder: the other account's save is not uploaded over its own.
+#[tokio::test]
+async fn history_is_not_trusted_after_another_account_synced_the_folder() {
+    let env = Env::new("two-accounts");
+    let cloud_b = MemoryCloud::default();
+    cloud_b.put("saves/a.sav", b"B1");
+    let root = env.root();
+    let target = |user_id| SyncTarget {
+        db: &env.db,
+        dirs: &env.dirs,
+        user_id,
+        game_id: "g",
+        location: "saves",
+        root: &root,
+    };
+    env.write("a.sav", "A1");
+    sync(&env.cloud, &target("a"), SyncOptions::default())
+        .await
+        .unwrap();
+    let keep_remote = SyncOptions {
+        prefer: Some(Prefer::Remote),
+        ..Default::default()
+    };
+    sync(&cloud_b, &target("b"), keep_remote).await.unwrap();
+    assert_eq!(env.read("a.sav").as_deref(), Some("B1"));
+    env.write("a.sav", "B2");
+    sync(&cloud_b, &target("b"), SyncOptions::default())
+        .await
+        .unwrap();
+
+    let r = sync(&env.cloud, &target("a"), SyncOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        r.conflicts,
+        vec![("a.sav".to_string(), ConflictKind::Unrelated)]
+    );
+    assert_eq!(env.remote("a.sav").as_deref(), Some("A1"));
+}
+
 /// A cloud whose first listing waits until `gate` is opened.
 struct SlowCloud<'a> {
     inner: &'a MemoryCloud,

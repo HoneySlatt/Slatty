@@ -75,7 +75,8 @@ Modification dates are never used to decide.
     reinstall, a folder deleted or moved). The cloud copies are then downloaded back instead, as
     if the machine were new: a folder that disappeared as a whole was not emptied on purpose;
   - the cloud is empty while history says it had saves (wrong account, service problem);
-  - the save folder path changed since the last sync. Its history is then ignored, and files that
+  - the save folder path changed since the last sync, or another account synced the same folder
+    since (accounts that own a game share its prefix). Its history is then ignored, and files that
     differ become conflicts.
 - **History is per account.** Another account never inherits it.
 - **One sync per game at a time.** A lock refuses a second sync on the same game. A check, which

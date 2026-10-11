@@ -156,7 +156,9 @@ pub fn describe_warning(w: Warning) -> &'static str {
         Warning::RemoteEmptyWithHistory => {
             "cloud empty although it held saves: local deletions blocked"
         }
-        Warning::RootChanged => "the save folder changed: previous history is ignored",
+        Warning::RootChanged => {
+            "the save folder changed, or another account synced it: previous history is ignored"
+        }
     }
 }
 

@@ -103,7 +103,12 @@ pub async fn sync<T: CloudTransport>(
     let local = scan::scan(target.root)?;
     let remote = remote_map(cloud.list().await?, target.location)?;
     let stored_root = stored_root(target)?;
-    let root_changed = stored_root.is_some_and(|r| Path::new(&r) != target.root);
+    let root_changed = match stored_root {
+        Some((root, last_sync_at)) => {
+            Path::new(&root) != target.root || synced_by_another(target, last_sync_at)?
+        }
+        None => false,
+    };
     // History recorded for another folder says nothing about this one.
     let base = if root_changed {
         BTreeMap::new()
@@ -522,15 +527,31 @@ fn delete_base(t: &SyncTarget<'_>, key: &str) -> Result<()> {
     Ok(())
 }
 
-fn stored_root(t: &SyncTarget<'_>) -> Result<Option<String>> {
+/// The folder this account last synced the location in, and when.
+fn stored_root(t: &SyncTarget<'_>) -> Result<Option<(String, Option<i64>)>> {
     Ok(t.db
         .conn()
         .query_row(
-            "SELECT root FROM sync_roots WHERE user_id = ?1 AND game_id = ?2 AND location = ?3",
+            "SELECT root, last_sync_at FROM sync_roots
+             WHERE user_id = ?1 AND game_id = ?2 AND location = ?3",
             params![t.user_id, t.game_id, t.location],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()?)
+}
+
+/// Whether another account synced the same folder since this one last did (accounts that own the
+/// game share its prefix): this account's history no longer describes the folder.
+fn synced_by_another(t: &SyncTarget<'_>, since: Option<i64>) -> Result<bool> {
+    let Some(since) = since else {
+        return Ok(false);
+    };
+    Ok(t.db.conn().query_row(
+        "SELECT EXISTS (SELECT 1 FROM sync_roots
+         WHERE game_id = ?1 AND location = ?2 AND root = ?3 AND user_id != ?4 AND last_sync_at >= ?5)",
+        params![t.game_id, t.location, t.root.to_string_lossy(), t.user_id, since],
+        |r| r.get(0),
+    )?)
 }
 
 fn save_root(t: &SyncTarget<'_>) -> Result<()> {
