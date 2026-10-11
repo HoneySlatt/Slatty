@@ -11,12 +11,19 @@ use slatty_core::steam::library::SteamLibrary;
 use slatty_core::steam::local::{self, Installed, Played};
 use slatty_core::store::{self, Store};
 
+use crate::notify::Kind;
 use crate::{App, Message};
 
 /// How often the games Steam runs are looked for, while one is asked for or runs (about 2 ms).
 pub const LOOK_EVERY: Duration = Duration::from_secs(2);
 /// How long a game asked of Steam is looked for: Steam may update it, or ask something, first.
 const START_WAIT: Duration = Duration::from_secs(300);
+
+/// How often the manifest of a game Steam downloads is read, while one does.
+pub const DOWNLOAD_EVERY: Duration = Duration::from_secs(5);
+/// Downloads whose manifests stayed the same this long are no longer read (Steam closed, or
+/// waiting for another one): the window having the focus again reads them anew.
+const STILL_FOR: Duration = Duration::from_secs(120);
 
 /// Unlocked and total achievements of each game that has any, by game id.
 pub type Counts = HashMap<String, (usize, usize)>;
@@ -36,6 +43,8 @@ pub struct SteamView {
     pub covers: HashMap<String, std::path::PathBuf>,
     /// The games Steam installed, by game id, once its library folders are read.
     pub installed: HashMap<String, Installed>,
+    /// When what Steam downloads last changed: its manifests are read until it stays the same.
+    pub download_moved: Option<Instant>,
     /// How long each game was played and when last, as Steam records it, by game id.
     pub played: HashMap<String, Played>,
     pub achievements: Counts,
@@ -55,6 +64,10 @@ pub enum SteamMsg {
     Cover(String, Option<std::path::PathBuf>),
     /// The games installed in Steam's library folders.
     Installed(Vec<Installed>),
+    /// Time to read again the manifests of the games Steam downloads.
+    ReadDownloads,
+    /// Those manifests, by game id; none for a game Steam removed.
+    Downloads(HashMap<String, Option<Installed>>),
     /// Play times read again, with the Steam id of the account they are of.
     Played(Option<(u64, HashMap<String, Played>)>),
     /// Unlocked and total achievements of the games that have any, with the account's Steam id.
@@ -130,12 +143,48 @@ impl App {
             }
             SteamMsg::Cover(..) => {}
             SteamMsg::Installed(games) if self.steam.on => {
-                self.steam.installed = games
-                    .into_iter()
-                    .map(|g| (store::steam_id(g.app_id), g))
+                let mut read: HashMap<String, Option<Installed>> = self
+                    .steam
+                    .installed
+                    .keys()
+                    .map(|id| (id.clone(), None))
                     .collect();
+                read.extend(
+                    games
+                        .into_iter()
+                        .map(|g| (store::steam_id(g.app_id), Some(g))),
+                );
+                return self.steam_installed(read);
             }
             SteamMsg::Installed(_) => {}
+            SteamMsg::ReadDownloads if self.steam.on => {
+                let downloading: Vec<Installed> = self
+                    .steam
+                    .installed
+                    .values()
+                    .filter(|g| g.update.is_some_and(|u| u.started && !u.paused))
+                    .cloned()
+                    .collect();
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            downloading
+                                .into_iter()
+                                .map(|g| {
+                                    let id = store::steam_id(g.app_id);
+                                    (id, local::read_again(&g))
+                                })
+                                .collect()
+                        })
+                        .await
+                        .unwrap_or_default()
+                    },
+                    |read| Message::Steam(SteamMsg::Downloads(read)),
+                );
+            }
+            SteamMsg::ReadDownloads => {}
+            SteamMsg::Downloads(read) if self.steam.on => return self.steam_installed(read),
+            SteamMsg::Downloads(_) => {}
             // Another account signed in to Steam meanwhile: its own games show.
             SteamMsg::Played(Some((account, _)))
                 if self.steam.on && self.steam.account != Some(account) =>
@@ -263,6 +312,52 @@ impl App {
     /// a Steam game's.
     pub fn manual_changes(&self, game_id: &str) -> bool {
         self.manual_achievements && store::steam_app(game_id).is_none()
+    }
+
+    /// Puts in what Steam's manifests now say of these games (none: removed), and tells of the
+    /// downloads they show done.
+    fn steam_installed(&mut self, read: HashMap<String, Option<Installed>>) -> Task<Message> {
+        let mut told = Vec::new();
+        for (id, now) in read {
+            let before = self.steam.installed.get(&id).and_then(|g| g.update);
+            let after = now.as_ref().and_then(|g| g.update);
+            if before != after {
+                self.steam.download_moved = Some(Instant::now());
+            }
+            match now {
+                Some(game) => {
+                    if before.is_some_and(|u| u.started) && after.is_none() && game.ready {
+                        told.push(id.clone());
+                    }
+                    self.steam.installed.insert(id, game);
+                }
+                None => {
+                    self.steam.installed.remove(&id);
+                }
+            }
+        }
+        Task::batch(told.into_iter().map(|id| {
+            let body = format!(
+                "Steam installed {}: it is ready to play.",
+                self.title_of(&id)
+            );
+            self.notify(Kind::Downloads, Some(&id), "Download complete", body)
+        }))
+    }
+
+    /// Whether the manifests of the games Steam downloads are to be read: one downloads, and
+    /// changed lately.
+    pub fn watching_steam_downloads(&self) -> bool {
+        self.steam.on
+            && self
+                .steam
+                .download_moved
+                .is_some_and(|t| t.elapsed() < STILL_FOR)
+            && self
+                .steam
+                .installed
+                .values()
+                .any(|g| g.update.is_some_and(|u| u.started && !u.paused))
     }
 
     /// Whether the games Steam runs are to be looked at: one was asked for, or runs.

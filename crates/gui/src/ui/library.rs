@@ -271,9 +271,11 @@ impl App {
         let action = if self.steam_game(&g.id).is_some() {
             use crate::steam::SteamMsg;
             use slatty_core::steam::client::Action;
-            let ready = self.steam.installed.get(&g.id).map(|i| i.ready);
-            let (ic, action) = match ready {
+            let installed = self.steam.installed.get(&g.id);
+            let downloading = installed.is_some_and(|i| i.update.is_some_and(|u| u.started));
+            let (ic, action) = match installed.map(|i| i.ready) {
                 _ if self.steam.running.contains(&g.id) => (Icon::Play, None),
+                _ if downloading => (Icon::Download, None),
                 Some(true) => (Icon::Play, Some(Action::Play)),
                 Some(false) => (Icon::Download, None),
                 None => (Icon::Download, Some(Action::Install)),

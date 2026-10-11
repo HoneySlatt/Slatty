@@ -30,6 +30,20 @@ pub fn human_size(bytes: u64) -> String {
     slatty_core::units::size(bytes)
 }
 
+/// Where an install or update Steam makes is: "Downloading 45 %", paused, or waiting.
+pub fn steam_download(u: &slatty_core::steam::local::Update) -> String {
+    if u.paused {
+        "Paused in Steam".into()
+    } else if u.total == 0 {
+        "Queued in Steam".into()
+    } else {
+        format!(
+            "Downloading {:.0} %",
+            u.done as f64 * 100.0 / u.total as f64
+        )
+    }
+}
+
 pub fn duration(seconds: i64) -> String {
     let minutes = seconds / 60;
     match (minutes / 60, minutes % 60) {

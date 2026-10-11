@@ -44,7 +44,27 @@ pub struct Installed {
     pub size: u64,
     /// Whether it is fully installed, not being downloaded or updated.
     pub ready: bool,
+    /// The install or update Steam has to make, or makes.
+    pub update: Option<Update>,
 }
+
+/// An install or update of a game, as Steam's manifest of it tells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Update {
+    /// Bytes downloaded, of those to download (0 of 0 until Steam knows).
+    pub done: u64,
+    pub total: u64,
+    /// Whether Steam began it: it downloads, or waits for its turn or for Steam to run.
+    pub started: bool,
+    pub paused: bool,
+}
+
+/// Steam's app state bits (`StateFlags`), as SteamKit names them (`EAppState`).
+const FULLY_INSTALLED: u64 = 4;
+const UPDATE_REQUIRED: u64 = 2;
+const UPDATE_RUNNING: u64 = 256;
+const UPDATE_PAUSED: u64 = 512;
+const UPDATE_STARTED: u64 = 1024;
 
 /// The Steam installation in `home`: native, through the `~/.steam/steam` link, or the Flatpak's;
 /// the one an account signed in to.
@@ -180,17 +200,35 @@ pub fn installed(steam: &Steam) -> Vec<Installed> {
     found
 }
 
+/// `game` read again from its own manifest, the one file Steam changes as it downloads: cheaper
+/// than every library folder, which can be network drives. None once Steam removed it.
+pub fn read_again(game: &Installed) -> Option<Installed> {
+    let apps = game.dir.parent()?.parent()?;
+    let path = apps.join(format!("appmanifest_{}.acf", game.app_id));
+    read(&path).and_then(|m| manifest(apps, &m))
+}
+
 fn manifest(apps: &Path, vdf: &Vdf) -> Option<Installed> {
     let state = vdf.get("AppState")?;
     let number = |key| state.text(key).and_then(|t| t.parse::<u64>().ok());
     let dir = state.text("installdir").filter(|d| safe_name(d))?;
+    let flags = number("StateFlags").unwrap_or(0);
+    let update = (flags & (UPDATE_REQUIRED | UPDATE_RUNNING | UPDATE_STARTED) != 0).then(|| {
+        let total = number("BytesToDownload").unwrap_or(0);
+        Update {
+            done: number("BytesDownloaded").unwrap_or(0).min(total),
+            total,
+            started: flags & (UPDATE_RUNNING | UPDATE_STARTED) != 0,
+            paused: flags & UPDATE_PAUSED != 0,
+        }
+    });
     Some(Installed {
         app_id: number("appid").and_then(|id| u32::try_from(id).ok())?,
         name: state.text("name").unwrap_or_default().to_string(),
         dir: apps.join("common").join(dir),
         size: number("SizeOnDisk").unwrap_or(0),
-        // Steam's "fully installed" state bit.
-        ready: number("StateFlags").is_some_and(|f| f & 4 != 0),
+        ready: flags & FULLY_INSTALLED != 0,
+        update,
     })
 }
 
@@ -256,7 +294,8 @@ pub(crate) mod tests {
             std::fs::create_dir_all(other.join("steamapps")).unwrap();
             std::fs::write(
                 other.join("steamapps/appmanifest_70.acf"),
-                r#""AppState" { "appid" "70" "name" "[FAKE] Life" "installdir" "Life" "StateFlags" "1026" }"#,
+                r#""AppState" { "appid" "70" "name" "[FAKE] Life" "installdir" "Life" "StateFlags" "1026"
+                    "BytesToDownload" "4000" "BytesDownloaded" "1000" }"#,
             )
             .unwrap();
             for app in [70, 440, 220] {
@@ -325,6 +364,46 @@ pub(crate) mod tests {
             fake.steam.root.join("steamapps/common/Fortress")
         );
         assert_eq!(installed[1].size, 1000);
+    }
+
+    #[test]
+    fn what_steam_downloads_is_read_from_the_games_manifest() {
+        let fake = FakeSteam::new("downloads");
+        let installed = installed(&fake.steam);
+        let (life, fortress) = (&installed[0], &installed[1]);
+        assert_eq!(
+            life.update,
+            Some(Update {
+                done: 1000,
+                total: 4000,
+                started: true,
+                paused: false
+            })
+        );
+        assert_eq!(fortress.update, None, "fully installed, nothing to do");
+
+        let manifest = fake.home.join("other-library/steamapps/appmanifest_70.acf");
+        let state = |flags: u64, done: u64| {
+            std::fs::write(
+                &manifest,
+                format!(
+                    r#""AppState" {{ "appid" "70" "installdir" "Life" "StateFlags" "{flags}"
+                        "BytesToDownload" "4000" "BytesDownloaded" "{done}" }}"#
+                ),
+            )
+            .unwrap();
+            read_again(life)
+        };
+        // Paused, an update waiting for Steam to begin it, done, more than announced.
+        let paused = state(1026 | 512, 2000).unwrap().update.unwrap();
+        assert!(paused.paused && paused.done == 2000);
+        let waiting = state(4 | 2, 0).unwrap();
+        assert!(waiting.ready && !waiting.update.unwrap().started);
+        let done = state(4, 4000).unwrap();
+        assert!(done.ready && done.update.is_none());
+        assert_eq!(state(1026, 9000).unwrap().update.unwrap().done, 4000);
+        std::fs::remove_file(&manifest).unwrap();
+        assert_eq!(read_again(life), None, "uninstalled");
     }
 
     #[test]

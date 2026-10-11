@@ -35,7 +35,14 @@ impl App {
             })
             .map(|(id, k)| (id.as_str(), *k))
             .collect();
-        let active = usize::from(self.installing().is_some()) + stopped.len();
+        // What the Steam client downloads, as its manifests tell.
+        let mut steam: Vec<(&String, &slatty_core::steam::local::Update)> = self
+            .steam
+            .installed
+            .iter()
+            .filter_map(|(id, g)| Some((id, g.update.as_ref().filter(|u| u.started)?)))
+            .collect();
+        let active = usize::from(self.installing().is_some()) + stopped.len() + steam.len();
         let header = column![
             text("Downloads").size(32).font(bold()),
             text(format!(
@@ -89,6 +96,17 @@ impl App {
             content = content
                 .push(heading("Updates", Some(updates)))
                 .push(self.updates_list());
+        }
+        if !steam.is_empty() {
+            steam.sort_by_key(|(id, _)| self.title_of(id));
+            content = content.push(heading("In Steam", Some(steam.len()))).push(
+                Column::with_children(
+                    steam
+                        .into_iter()
+                        .map(|(id, u)| self.steam_download_row(id, u)),
+                )
+                .spacing(ROW_SPACING),
+            );
         }
         if !self.completed.is_empty() {
             content = content
@@ -386,6 +404,51 @@ impl App {
                 .align_y(Alignment::Center),
             ]
             .push(play)
+            .spacing(16)
+            .align_y(Alignment::Center),
+        )
+        .padding([0, 12])
+        .height(ROW_HEIGHT)
+        .center_y(ROW_HEIGHT)
+        .width(Length::Fill)
+        .style(theme::card)
+        .into()
+    }
+
+    /// An install or update the Steam client makes, as its manifest tells; Steam's own window
+    /// pauses or cancels it.
+    fn steam_download_row<'a>(
+        &'a self,
+        id: &'a str,
+        u: &slatty_core::steam::local::Update,
+    ) -> Element<'a, Message> {
+        let share = if u.total == 0 {
+            0.0
+        } else {
+            u.done as f32 / u.total as f32
+        };
+        let amount = if u.total == 0 {
+            String::new()
+        } else {
+            format!("{} / {}", human_size(u.done), human_size(u.total))
+        };
+        container(
+            row![
+                self.cover_art(id, 40.0),
+                column![
+                    text(self.title_of(id)).size(16).font(semibold()),
+                    progress_bar(0.0..=1.0, share)
+                        .girth(6)
+                        .style(theme::progress),
+                ]
+                .spacing(8)
+                .width(Length::Fill),
+                text(amount).size(15).width(200),
+                text(steam_download(u))
+                    .size(14)
+                    .color(tokens().muted)
+                    .width(170),
+            ]
             .spacing(16)
             .align_y(Alignment::Center),
         )

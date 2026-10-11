@@ -221,10 +221,16 @@ impl App {
                 _ if self.steam.running.contains(&g.id) => {
                     big(Icon::Play, "Running".into(), None, false)
                 }
+                Some(installed) if installed.update.is_some_and(|u| u.started) => big(
+                    Icon::Download,
+                    steam_download(installed.update.as_ref().expect("just checked")),
+                    None,
+                    false,
+                ),
                 Some(installed) if installed.ready => {
                     big(Icon::Play, "Play".into(), ask(Action::Play), false)
                 }
-                Some(_) => big(Icon::Download, "Updating in Steam".into(), None, false),
+                Some(_) => big(Icon::Download, "Queued in Steam".into(), None, false),
                 None => big(
                     Icon::Download,
                     "Install".into(),

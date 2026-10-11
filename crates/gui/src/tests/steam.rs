@@ -1,7 +1,7 @@
 use slatty_core::library::{LibraryCache, MetadataSource};
 use slatty_core::steam::client::Action;
 use slatty_core::steam::library::SteamLibrary;
-use slatty_core::steam::local::{Installed, Played, SteamUser};
+use slatty_core::steam::local::{Installed, Played, SteamUser, Update};
 
 use super::*;
 use crate::steam::SteamMsg;
@@ -37,6 +37,17 @@ fn steam_library() -> SteamLibrary {
                 last_played: 1_791_590_000,
             },
         )]),
+    }
+}
+
+fn installed(app: u32, size: u64, ready: bool, update: Option<Update>) -> Installed {
+    Installed {
+        app_id: app,
+        name: format!("[FAKE] {app}"),
+        dir: format!("/games/steamapps/common/{app}").into(),
+        size,
+        ready,
+        update,
     }
 }
 
@@ -205,13 +216,9 @@ fn a_steam_game_shows_as_running_while_steam_runs_it() {
     let mut app = library_app();
     app.steam.on = true;
     let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
-    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![Installed {
-        app_id: 440,
-        name: "[FAKE] Fortress".into(),
-        dir: "/games/steamapps/common/Fortress".into(),
-        size: 1,
-        ready: true,
-    }])));
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        440, 1, true, None,
+    )])));
     assert!(!app.watching_steam());
     let _ = app.update(Message::Steam(SteamMsg::Ask(
         "steam-440".into(),
@@ -309,6 +316,66 @@ fn steam_achievements_show_with_gogs_and_are_never_changed_by_hand() {
     assert!(app.pending_change.is_none(), "never asked of Steam");
 }
 
+/// An install Steam makes shows on the game's page and in the Downloads tab, its manifest read
+/// only while it goes on, and its end is told once.
+#[test]
+fn a_download_steam_makes_shows_until_it_is_done() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let downloading = Update {
+        done: 1_000,
+        total: 4_000,
+        started: true,
+        paused: false,
+    };
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        620,
+        0,
+        false,
+        Some(downloading),
+    )])));
+    assert!(app.watching_steam_downloads());
+    let _ = app.update(Message::Select("steam-620".into()));
+    assert!(render(&app).find("Downloading 25 %").is_ok());
+    app.selected = None;
+    app.page = Page::Downloads;
+    {
+        let mut ui = render(&app);
+        let all = texts(&mut ui);
+        assert!(
+            all.iter().any(|t| t == "In Steam · 1") && all.iter().any(|t| t == "[FAKE] Portal"),
+            "{all:?}"
+        );
+        assert!(all.iter().any(|t| t.starts_with("1 active")), "{all:?}");
+        assert!(!all.iter().any(|t| t.starts_with("Nothing is downloading")));
+    }
+
+    let paused = Update {
+        paused: true,
+        ..downloading
+    };
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        [(
+            "steam-620".into(),
+            Some(installed(620, 0, false, Some(paused))),
+        )]
+        .into(),
+    )));
+    assert!(!app.watching_steam_downloads(), "Steam's to resume");
+    assert!(toasted(&app).is_empty());
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        [("steam-620".into(), Some(installed(620, 4_000, true, None)))].into(),
+    )));
+    assert_eq!(toasted(&app).len(), 1, "{:?}", toasted(&app));
+    assert_eq!(toasted(&app)[0].0, "Download complete");
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        620, 4_000, true, None,
+    )])));
+    assert_eq!(toasted(&app).len(), 1, "told once");
+    assert!(!app.watching_steam_downloads());
+}
+
 /// GOG is asked about GOG's games alone: Steam's never count as games GOG could not describe.
 #[test]
 fn steam_games_are_not_gogs_to_read() {
@@ -335,13 +402,12 @@ fn a_steam_games_page_asks_steam() {
     let mut app = library_app();
     app.steam.on = true;
     let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
-    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![Installed {
-        app_id: 440,
-        name: "[FAKE] Fortress".into(),
-        dir: "/games/steamapps/common/Fortress".into(),
-        size: 25_000_000_000,
-        ready: true,
-    }])));
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        440,
+        25_000_000_000,
+        true,
+        None,
+    )])));
     assert!(app.is_installed("steam-440") && !app.is_installed("steam-620"));
 
     let asked = |app: &mut App, id: &str, label: &str| {

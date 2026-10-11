@@ -132,7 +132,9 @@ tab leads back to the game.
   cancelled download. Drag a row by its handle to change the order, or remove it with ×. Pausing
   the running download holds the queue. The queue and its order are kept when SlattyLauncher
   closes; it goes on at the next start;
-- the installs **completed** since SlattyLauncher started, with Play.
+- the installs **completed** since SlattyLauncher started, with Play;
+- with Steam's games on, the installs and updates the Steam client makes (**In Steam**, see
+  [Steam games](#steam-games)).
 
 Escape closes the panel, then the game page.
 
@@ -512,6 +514,12 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   hand the game to the Steam client (`steam://` addresses, opened by the desktop): it must be
   installed and signed in, and does the work in its own window. What it installed or removed shows
   once the launcher's window is in front again.
+- **Steam's downloads.** An install or update the client makes shows on the game's page
+  (Downloading, Paused or Queued in Steam) and in the Downloads tab under **In Steam**, with its
+  progress, and a notification says when it is done. They are read from the game's manifest
+  (`appmanifest_<id>.acf`) every five seconds while one downloads, and no longer once it stayed
+  the same for two minutes (Steam closed or busy with another): the window coming to the front
+  reads them again. Steam's own window pauses or cancels them.
 - **Play time and last played** are Steam's own records for the account
   (`userdata/<account>/config/localconfig.vdf`), shown on the game page and used by the library's
   sorts with GOG's; they are never sent to GOG. They are read again when a game Steam ran ends,
