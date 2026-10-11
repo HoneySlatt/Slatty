@@ -328,7 +328,9 @@ impl<T: CloudTransport> Run<'_, T> {
         if let Some(parent) = dest.parent() {
             crate::paths::ensure_dir(parent)?;
         }
+        // On the disk before the save is replaced or deleted: a power cut must not leave neither.
         std::fs::copy(file, &dest)
+            .and_then(|_| std::fs::File::open(&dest)?.sync_all())
             .map_err(|e| Error::io(format!("back up {}", file.display()), e))?;
         self.report.backup_dir = Some(self.backup_root.clone());
         Ok(())

@@ -95,6 +95,8 @@ pub fn uninstall(
                 .join(game_id)
                 .join(Utc::now().format("%Y%m%d-%H%M%S").to_string());
             copy_dir(&users, &backup)?;
+            // On the disk before anything is deleted: a power cut must not leave neither.
+            crate::fsutil::sync_filesystem(&backup)?;
             report.prefix_backup = Some(backup);
         }
     }
