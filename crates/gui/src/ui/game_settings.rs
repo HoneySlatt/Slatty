@@ -37,11 +37,27 @@ impl App {
             return note("Not installed.");
         };
         let section = |ic, title, content| titled(ic, title, content, indent);
-        let mut sections = vec![section(
-            Icon::Folder,
-            "Folder",
-            text(install.path.display().to_string()).size(15).into(),
-        )];
+        let folder = text(install.path.display().to_string()).size(15);
+        // A game added by hand may have been moved since: it is found again by its program.
+        let folder: Element<'a, Message> = if slatty_core::store::is_local(&g.id) {
+            column![
+                folder,
+                row![
+                    button(text("Locate…").size(14))
+                        .padding([8, 16])
+                        .on_press(Message::Settings(SettingsMsg::LocateGame(g.id.clone())))
+                        .style(theme::tonal),
+                    note("Moved it? Choose where it is now."),
+                ]
+                .spacing(12)
+                .align_y(Alignment::Center),
+            ]
+            .spacing(10)
+            .into()
+        } else {
+            folder.into()
+        };
+        let mut sections = vec![section(Icon::Folder, "Folder", folder)];
         // A game that can be started several ways: the one its Play starts.
         if let Some(options) = self.launch_options.get(&g.id).filter(|o| o.len() > 1) {
             let id = g.id.clone();

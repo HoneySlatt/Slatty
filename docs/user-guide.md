@@ -521,6 +521,8 @@ slatty remove <game-id> [--delete-prefix]
   - `--installed-by` names the game the installer ran for. Closing the dialog before adding it,
     or `slatty remove` on that id, throws away what was installed (a prefix's `users` folder
     copied to the backups first).
+- A game moved elsewhere is found again with **Locate…** in its Game settings (Folder): its
+  program must be at the same place in the folder chosen.
 - A game unpacked by SlattyLauncher keeps the list of the files it unpacked: removing it deletes
   those files and only those; what the game wrote in its folder since (saves, settings) stays.
 

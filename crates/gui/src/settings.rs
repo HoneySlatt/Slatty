@@ -282,6 +282,10 @@ pub enum SettingsMsg {
     LaunchTask(String, String),
     /// Proton build of one installed game, used from its next launch.
     GameProton(String, ProtonChoice),
+    /// Where a game added by hand was moved: asked, picked, then found there or not.
+    LocateGame(String),
+    PickedLocation(String, Option<PathBuf>),
+    Located(String, Result<slatty_core::install::Install, String>),
 }
 
 impl App {
@@ -541,6 +545,37 @@ impl App {
                     Err(e) => self.notify_error(e.to_string()),
                 }
             }
+            SettingsMsg::LocateGame(game_id) => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Choose the game's folder")
+                            .pick_folder()
+                            .await
+                            .map(|f| f.path().to_path_buf())
+                    },
+                    move |path| Message::Settings(SettingsMsg::PickedLocation(game_id, path)),
+                );
+            }
+            SettingsMsg::PickedLocation(_, None) => {}
+            SettingsMsg::PickedLocation(game_id, Some(folder)) => {
+                let id = game_id.clone();
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            slatty_core::added::locate(&core.db, &core.dirs, &id, &folder)
+                        })
+                        .await
+                        .map_err(err)?
+                        .map_err(err)
+                    },
+                    move |r| Message::Settings(SettingsMsg::Located(game_id, r)),
+                );
+            }
+            SettingsMsg::Located(game_id, Ok(install)) => {
+                self.installs.insert(game_id, install);
+            }
+            SettingsMsg::Located(_, Err(e)) => self.notify_error(e),
         }
         Task::none()
     }

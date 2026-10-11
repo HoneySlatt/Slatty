@@ -86,6 +86,30 @@ fn a_game_added_by_hand_gets_its_own_title_back_with_reset() {
     assert_eq!(app.edit.as_ref().unwrap().title, "[FAKE] Mine");
 }
 
+/// Its settings offer to find it where it was moved, and keep the folder found.
+#[test]
+fn a_moved_game_added_by_hand_is_located_from_its_settings() {
+    use crate::settings::SettingsMsg;
+    let mut app = added_app();
+    open(&mut app, "local-1", Some(Panel::GameSettings));
+    let mut ui = render(&app);
+    assert!(ui.find("Game version").is_err(), "nothing of GOG's");
+    ui.click("Locate…").unwrap();
+    assert!(
+        ui.into_messages().any(
+            |m| matches!(m, Message::Settings(SettingsMsg::LocateGame(id)) if id == "local-1")
+        )
+    );
+    let mut moved = app.installs["local-1"].clone();
+    moved.path = PathBuf::from("/games/Moved");
+    let _ = app.update(Message::Settings(SettingsMsg::Located(
+        "local-1".into(),
+        Ok(moved),
+    )));
+    assert_eq!(app.installs["local-1"].path, PathBuf::from("/games/Moved"));
+    assert!(render(&app).find("/games/Moved").is_ok());
+}
+
 /// Removing one asks first, says its files stay, and takes it out of the library.
 #[test]
 fn removing_a_game_added_by_hand_asks_first() {

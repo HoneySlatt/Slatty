@@ -575,6 +575,28 @@ pub fn remove(
     Ok(report)
 }
 
+/// Finds a game added by hand in `folder`, where it was moved: its program must be there, at the
+/// same place within it.
+pub fn locate(db: &Db, dirs: &Dirs, game_id: &str, folder: &Path) -> Result<Install> {
+    let mut install = Install::get(db, game_id)?
+        .filter(|i| crate::store::is_local(&i.game_id))
+        .ok_or_else(|| Error::NotFound(format!("{game_id} was not added by hand")))?;
+    let folder = real(folder)?;
+    check_folder(&folder)?;
+    let task = load_task(dirs, game_id)?;
+    let program = folder.join(&task.program);
+    if !program.is_file() || !leads_inside(&folder, &program) {
+        return Err(Error::Refused(format!(
+            "{} is not in {}",
+            task.program.display(),
+            folder.display()
+        )));
+    }
+    install.path = folder;
+    install.save(db)?;
+    Ok(install)
+}
+
 /// What a game added by hand starts: its program, arguments and working directory, checked to be
 /// in its folder still (a link could lead out of it since).
 pub fn launch_task(dirs: &Dirs, install: &Install) -> Result<(PathBuf, Vec<String>, PathBuf)> {
@@ -961,6 +983,26 @@ mod tests {
         std::fs::remove_dir_all(f.game.join("bin")).unwrap();
         std::os::unix::fs::symlink(&elsewhere, f.game.join("bin")).unwrap();
         assert!(launch_task(&f.dirs, &install).is_err());
+    }
+
+    /// A game moved elsewhere is found there again, by its program at the same place.
+    #[test]
+    fn a_moved_game_is_located_by_its_program() {
+        let f = fake("locate");
+        let install = add(&f.db, &f.dirs, f.windows()).unwrap();
+        let moved = f.root.join("moved/[FAKE] Game");
+        std::fs::create_dir_all(moved.parent().unwrap()).unwrap();
+        std::fs::rename(&f.game, &moved).unwrap();
+        assert!(launch_task(&f.dirs, &install).is_err(), "missing");
+        assert!(
+            locate(&f.db, &f.dirs, "local-1", &f.root).is_err(),
+            "not there"
+        );
+        let found = locate(&f.db, &f.dirs, "local-1", &moved).unwrap();
+        assert_eq!(found.path, moved.canonicalize().unwrap());
+        assert_eq!(Install::get(&f.db, "local-1").unwrap(), Some(found.clone()));
+        assert!(launch_task(&f.dirs, &found).is_ok());
+        assert!(locate(&f.db, &f.dirs, "1", &moved).is_err(), "a GOG game");
     }
 
     /// A game an installer put in its prefix is added under the id the installer ran for, with
