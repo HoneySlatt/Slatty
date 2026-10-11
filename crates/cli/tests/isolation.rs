@@ -278,22 +278,40 @@ async fn an_isolated_linux_game_cannot_change_the_tool_it_runs_through() {
                 .join("umu/compatibilitytools/umu-sniper")
         });
     let planted = tool.join("[FAKE] written-by-the-game");
+    // umu's own files beside its runtimes: its shim runs in every container it starts.
+    let umu = PathBuf::from(std::env::var("XDG_DATA_HOME").expect("XDG_DATA_HOME")).join("umu");
+    let shim = umu.join("umu-shim");
+    let before = std::fs::read(&shim).ok();
+    let beside = umu.join("[FAKE] written-by-the-game");
+    let try_write = |label: &str, path: &Path| {
+        format!(
+            "touch '{}' 2>/dev/null\nif [ -e '{}' ]; then echo WRITTEN; else echo refused; fi > out-{label}\n",
+            path.display(),
+            path.display()
+        )
+    };
     std::fs::write(
         &script,
         format!(
-            "#!/bin/sh\ncd '{}'\ntouch '{}' 2>/dev/null\n\
-             if [ -e '{}' ]; then echo WRITTEN; else echo refused; fi > out-tool\n",
+            "#!/bin/sh\ncd '{}'\n{}{}echo '# [FAKE]' >> '{}' 2>/dev/null\n",
             root.join("game").display(),
-            planted.display(),
-            planted.display(),
+            try_write("tool", &planted),
+            try_write("umu", &beside),
+            shim.display(),
         ),
     )
     .unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
     run(&spec, &root.join("game.log")).await;
-    let written = result(&root, "out-tool");
-    let leftover = std::fs::remove_file(&planted).is_ok();
-    assert_eq!((written.as_str(), leftover), ("refused", false));
+    let written = (result(&root, "out-tool"), result(&root, "out-umu"));
+    let shim_changed = std::fs::read(&shim).ok() != before;
+    if shim_changed && let Some(before) = &before {
+        std::fs::write(&shim, before).unwrap();
+    }
+    let leftovers = [&planted, &beside].map(|p| std::fs::remove_file(p).is_ok());
+    assert_eq!(written, ("refused".into(), "refused".into()));
+    assert!(!shim_changed, "umu's shim was changed");
+    assert_eq!(leftovers, [false, false]);
     std::fs::remove_dir_all(root).unwrap();
 }
 
