@@ -86,16 +86,31 @@ pub async fn ensure(dirs: &Dirs, install: &Install, exe: &Path, supervisor: &Pat
             )));
         }
     }
+    copy_into(prefix, exe, install.isolated)?;
+    Ok(true)
+}
+
+/// Copies the service's executable into the prefix, last: its presence means the registration
+/// completed. An isolated game's own programs ran in its prefix in the meantime (`sc`, `reg`), and
+/// could have planted a link there: the folder is checked again just before the copy.
+fn copy_into(prefix: &Path, exe: &Path, isolated: bool) -> Result<()> {
+    let dest = prefix.join(PREFIX_PATH);
+    if isolated {
+        crate::installer::refuse_outside(prefix, &dest)?;
+    }
     let dir = dest.parent().expect("constant path has a parent");
     crate::paths::ensure_dir(dir)?;
     let partial = dir.join("GalaxyCommunication.exe.slatty-partial");
-    // The source may be read-only (Nix store) and fs::copy carries the mode over.
-    let _ = std::fs::remove_file(&partial);
-    std::fs::copy(exe, &partial)
+    let mut out = crate::fsutil::restart_staging(&partial)?;
+    // Written as a new file: the source may be read-only (Nix store), and fs::copy carries its mode.
+    std::fs::File::open(exe)
+        .and_then(|mut source| std::io::copy(&mut source, &mut out))
         .and_then(|_| std::fs::set_permissions(&partial, std::fs::Permissions::from_mode(0o644)))
         .and_then(|_| std::fs::rename(&partial, &dest))
-        .map_err(|e| Error::io(format!("copy {} to {}", exe.display(), dest.display()), e))?;
-    Ok(true)
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&partial);
+            Error::io(format!("copy {} to {}", exe.display(), dest.display()), e)
+        })
 }
 
 /// `sc create` fails with ERROR_SERVICE_EXISTS (1073) when an earlier attempt stopped after it;
@@ -153,6 +168,27 @@ mod tests {
         let result = ensure(&dirs, &install, &root.join("exe"), &root.join("supervisor")).await;
         assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
         assert!(!root.join("outside").join("redists").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The registration runs programs in the prefix (through umu, as the game) before the copy: a
+    /// link planted meanwhile is refused at the copy too.
+    #[test]
+    fn the_copy_is_never_made_through_a_link_planted_during_the_registration() {
+        let root = std::env::temp_dir().join(format!("slatty-galaxy-late-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let prefix = root.join("pfx");
+        std::fs::create_dir_all(prefix.join("drive_c")).unwrap();
+        std::fs::create_dir_all(root.join("outside")).unwrap();
+        std::fs::write(root.join("exe"), b"[FAKE] service").unwrap();
+        std::os::unix::fs::symlink(root.join("outside"), prefix.join("drive_c/ProgramData"))
+            .unwrap();
+        let r = copy_into(&prefix, &root.join("exe"), true);
+        assert!(matches!(r, Err(Error::Refused(_))), "{r:?}");
+        assert!(!root.join("outside/GOG.com").exists());
+        std::fs::remove_file(prefix.join("drive_c/ProgramData")).unwrap();
+        copy_into(&prefix, &root.join("exe"), true).unwrap();
+        assert!(installed(&prefix));
         std::fs::remove_dir_all(root).unwrap();
     }
 
