@@ -46,17 +46,26 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
             // Only umu's container isolates. Elsewhere on NixOS, which keeps neither `/bin/bash`
             // (which GOG's scripts ask for) nor the libraries games load (OpenGL, sound) where
             // they look, games run in a usual Linux layout.
+            let through_umu = |umu: PathBuf| -> Result<Wrapper> {
+                let tool = runtime_tool(dirs, "steamrt3").expect("umu knows steamrt3")?;
+                Ok(Wrapper::Umu(umu, tool))
+            };
             let wrapper = if install.isolated {
                 let umu = find_in_path("umu-run").ok_or_else(|| {
                     Error::NotFound("umu-run is needed to run a game isolated".into())
                 })?;
-                Some(Wrapper::Umu(umu))
+                Some(through_umu(umu)?)
             } else if Path::new("/etc/NIXOS").exists() {
-                find_in_path("steam-run")
-                    .map(Wrapper::SteamRun)
-                    .or_else(|| find_in_path("umu-run").map(Wrapper::Umu))
+                match find_in_path("steam-run") {
+                    Some(run) => Some(Wrapper::SteamRun(run)),
+                    None => find_in_path("umu-run").map(through_umu).transpose()?,
+                }
             } else {
                 None
+            };
+            let tool = match &wrapper {
+                Some(Wrapper::Umu(_, tool)) => Some(tool.clone()),
+                _ => None,
             };
             let (mut program, mut args, mut env) = native_command(&script, wrapper);
             if install.isolated {
@@ -72,7 +81,7 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
                 args.insert(0, interpreter_name(&script)?);
                 check_shared(install, &args, &install.path)?;
                 env.push(("UMU_RUNTIME_UPDATE".into(), "0".into()));
-                (program, args) = read_only_tools(program, args, None)?;
+                (program, args) = read_only_tools(program, args, tool.as_deref())?;
             }
             Ok(LaunchSpec {
                 program,
@@ -98,8 +107,8 @@ enum Wrapper {
     /// Steam).
     SteamRun(PathBuf),
     /// umu without Proton: the Steam Linux Runtime 3.0 (sniper) container, which umu already
-    /// downloads for Windows games.
-    Umu(PathBuf),
+    /// downloads for Windows games, through SlattyLauncher's own tool for it (`runtime_tool`).
+    Umu(PathBuf, PathBuf),
 }
 
 /// How to start a native game's script: inside `wrapper` when there is one, else through the
@@ -111,13 +120,11 @@ fn native_command(
     let script_arg = vec![script.display().to_string()];
     match wrapper {
         Some(Wrapper::SteamRun(run)) => return (run, script_arg, Vec::new()),
-        Some(Wrapper::Umu(umu)) => {
-            let env = [
-                ("UMU_NO_PROTON", "1"),
-                ("RUNTIMEPATH", "steamrt3"),
-                ("GAMEID", "umu-0"),
+        Some(Wrapper::Umu(umu, tool)) => {
+            let env = vec![
+                ("PROTONPATH".into(), tool.display().to_string()),
+                ("GAMEID".into(), "umu-0".into()),
             ];
-            let env = env.map(|(k, v)| (k.to_string(), v.to_string())).to_vec();
             return (umu, script_arg, env);
         }
         None => {}
@@ -1058,12 +1065,14 @@ mod tests {
             native_command(&script, Some(Wrapper::SteamRun(run.clone()))),
             (run, arg.clone(), Vec::new())
         );
-        // umu without Proton, in the Steam Linux Runtime 3.0.
+        // umu without Proton, in the Steam Linux Runtime 3.0, through SlattyLauncher's tool.
         let umu = PathBuf::from("/bin/umu-run");
-        let (program, args, env) = native_command(&script, Some(Wrapper::Umu(umu.clone())));
+        let tool = PathBuf::from("/data/umu-runtimes/tools/steamrt3");
+        let (program, args, env) =
+            native_command(&script, Some(Wrapper::Umu(umu.clone(), tool.clone())));
         assert_eq!((program, args), (umu, arg));
-        assert!(env.contains(&("UMU_NO_PROTON".into(), "1".into())));
-        assert!(env.contains(&("RUNTIMEPATH".into(), "steamrt3".into())));
+        assert!(env.contains(&("PROTONPATH".into(), tool.display().to_string())));
+        assert!(env.iter().all(|(k, _)| k != "UMU_NO_PROTON"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

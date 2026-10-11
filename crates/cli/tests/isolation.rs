@@ -256,6 +256,47 @@ async fn an_isolated_game_cannot_signal_nor_read_the_users_other_programs() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// A Linux game runs through a compatibility tool of the runtime alone, as a Windows game runs
+/// through Proton: a tool an isolated game could change would run its code in every later game
+/// that uses it, isolated or not.
+#[tokio::test]
+#[ignore]
+async fn an_isolated_linux_game_cannot_change_the_tool_it_runs_through() {
+    let (root, dirs) = fixture("linux-tool");
+    // The launch is built from the script, which is written in full below.
+    let script = root.join("game/start.sh");
+    std::fs::write(&script, "#!/bin/sh\n").unwrap();
+    let spec = runner::launch_spec(&dirs, &linux_install(&root), None).unwrap();
+    // umu's own tool for the runtime, unless the launch names one.
+    let tool = spec
+        .env
+        .iter()
+        .find(|(k, _)| k == "PROTONPATH")
+        .map(|(_, v)| PathBuf::from(v))
+        .unwrap_or_else(|| {
+            PathBuf::from(std::env::var("XDG_DATA_HOME").expect("XDG_DATA_HOME"))
+                .join("umu/compatibilitytools/umu-sniper")
+        });
+    let planted = tool.join("[FAKE] written-by-the-game");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\ncd '{}'\ntouch '{}' 2>/dev/null\n\
+             if [ -e '{}' ]; then echo WRITTEN; else echo refused; fi > out-tool\n",
+            root.join("game").display(),
+            planted.display(),
+            planted.display(),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    run(&spec, &root.join("game.log")).await;
+    let written = result(&root, "out-tool");
+    let leftover = std::fs::remove_file(&planted).is_ok();
+    assert_eq!((written.as_str(), leftover), ("refused", false));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// umu's runtime runs every game's container from the user's files, and the Proton build every
 /// game of that build: one an isolated game could change would run its code in other games, or
 /// in Steam's.

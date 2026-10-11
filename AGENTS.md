@@ -241,7 +241,7 @@ The public documentation is in English and must match the code. Update it in the
 ## Known pitfalls
 
 - **NixOS has no `/bin/bash`.** GOG's Linux `start.sh` scripts need it: native games start
-  through `steam-run`, else umu without Proton (`UMU_NO_PROTON=1`). Tests that spawn native games
+  through `steam-run`, else umu without Proton (`runner::runtime_tool`). Tests that spawn native games
   remove both from `PATH`, because their sandboxes cannot see the test's temporary folder.
 - **umu's runtime cannot see `/tmp/nix-shell.*`.** Point `TMPDIR` inside the home folder for
   tests that run Proton.
