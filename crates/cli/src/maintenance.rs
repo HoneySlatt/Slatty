@@ -41,7 +41,8 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
     println!("Only files installed by slatty are deleted; anything else in that folder is kept.");
     match (args.delete_prefix, install.runner.prefix()) {
         (true, Some(p)) => println!(
-            "The Wine prefix {} is deleted after its users folder is backed up.",
+            "The Wine prefix {} is deleted after its saves (users folder, registry, ProgramData) \
+             are backed up.",
             p.display()
         ),
         (false, Some(p)) => println!("The Wine prefix {} (local saves) is kept.", p.display()),
@@ -64,7 +65,7 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
         }
     }
     if let Some(b) = &r.prefix_backup {
-        println!("Prefix user folder backed up to {}", b.display());
+        println!("Prefix saves backed up to {}", b.display());
     }
     Ok(())
 }

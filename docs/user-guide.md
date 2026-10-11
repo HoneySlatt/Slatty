@@ -472,7 +472,8 @@ slatty uninstall <game-id> --delete-prefix
 - It deletes only the files it installed. Anything else in the game folder is kept and listed:
   saves stored there, mods, configuration files.
 - The Wine prefix, where most saves live, is kept unless you pass `--delete-prefix`. Even then, its
-  `users` folder is copied to `~/.local/share/slatty/backups/prefixes/` first, and only the prefix
+  `users` folder is copied to `~/.local/share/slatty/backups/prefixes/` first, with Wine's registry
+  files (where Unity games keep their progress) and `C:\ProgramData` beside it, and only the prefix
   SlattyLauncher made for that game (`prefixes/<game-id>`) is ever deleted.
 
 The interface offers the same actions in the game's Manage panel (⋮).
@@ -520,8 +521,8 @@ slatty remove <game-id> [--delete-prefix]
     installer, only the game's files are taken. Paths that climb out of the folder and links
     that lead out are left out. The program is then picked in that folder.
   - `--installed-by` names the game the installer ran for. Closing the dialog before adding it,
-    or `slatty remove` on that id, throws away what was installed (a prefix's `users` folder
-    copied to the backups first).
+    or `slatty remove` on that id, throws away what was installed (a prefix's saves, its `users`
+    folder, registry and `C:\ProgramData`, copied to the backups first).
 - A game moved elsewhere is found again with **Locate…** in its Game settings (Folder): its
   program must be at the same place in the folder chosen.
 - A game unpacked by SlattyLauncher keeps the list of the files it unpacked, with their size and
@@ -544,8 +545,8 @@ slatty remove <game-id> [--delete-prefix]
 - `slatty add` says so when the folder holds a GOG game: installed from GOG, it would have its cloud
   saves and achievements.
 - `slatty remove` takes it out of the library and never deletes its files, which are yours. With
-  `--delete-prefix`, the prefix SlattyLauncher made for it is deleted too, its `users` folder (the
-  saves) copied to the backups first.
+  `--delete-prefix`, the prefix SlattyLauncher made for it is deleted too, its saves (its `users`
+  folder, registry and `C:\ProgramData`) copied to the backups first.
 
 ## Steam games
 

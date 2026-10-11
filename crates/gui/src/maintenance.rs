@@ -244,10 +244,7 @@ impl App {
                                 ));
                             }
                             if let Some(b) = r.prefix_backup {
-                                lines.push(format!(
-                                    "Prefix user folder backed up to {}",
-                                    b.display()
-                                ));
+                                lines.push(format!("Prefix saves backed up to {}", b.display()));
                             }
                             lines
                         })

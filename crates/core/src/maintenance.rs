@@ -59,29 +59,51 @@ fn folder_present(install: &Install) -> Result<()> {
     )))
 }
 
-/// Copies the `users` folder of a prefix about to be deleted, where most saves live, to the
-/// backups, on the disk before anything is deleted; where it went, when there was one.
+/// Copies what holds saves in a prefix about to be deleted to the backups, on the disk before
+/// anything is deleted: its `users` folder, where most saves live, then beside it (`<time>-prefix`)
+/// Wine's registry files, where Unity games keep their progress, and `C:\ProgramData`, where some
+/// games save. Where the `users` folder went, else the rest, when there was any.
 pub(crate) fn back_up_prefix(dirs: &Dirs, game_id: &str, prefix: &Path) -> Result<Option<PathBuf>> {
     let users = prefix.join("drive_c/users");
-    if !users.is_dir() {
-        return Ok(None);
-    }
+    let program_data = prefix.join("drive_c/ProgramData");
     // A game writes its prefix: a link there would have the backup copy where it leads.
-    if !installer::leads_inside(prefix, &users) {
-        return Err(Error::Refused(format!(
-            "{} leads out of the prefix through a link; nothing was deleted",
-            users.display()
-        )));
+    for folder in [&users, &program_data] {
+        if folder.exists() && !installer::leads_inside(prefix, folder) {
+            return Err(Error::Refused(format!(
+                "{} leads out of the prefix through a link; nothing was deleted",
+                folder.display()
+            )));
+        }
     }
-    let backup = dirs
-        .data
-        .join("backups/prefixes")
-        .join(game_id)
-        .join(Utc::now().format("%Y%m%d-%H%M%S").to_string());
-    copy_dir(&users, &backup)?;
+    let stamp = Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    let root = dirs.data.join("backups/prefixes").join(game_id);
+    let mut saved = None;
+    if users.is_dir() {
+        let backup = root.join(&stamp);
+        copy_dir(&users, &backup)?;
+        saved = Some(backup);
+    }
+    let rest = root.join(format!("{stamp}-prefix"));
+    for name in ["user.reg", "system.reg", "userdef.reg"] {
+        let from = prefix.join(name);
+        // Its own files only, never one a link leads to.
+        if std::fs::symlink_metadata(&from).is_ok_and(|m| m.is_file()) {
+            crate::paths::ensure_dir(&rest)?;
+            std::fs::copy(&from, rest.join(name))
+                .map_err(|e| Error::io(format!("copy {}", from.display()), e))?;
+        }
+    }
+    if program_data.is_dir() {
+        copy_dir(&program_data, &rest.join("ProgramData"))?;
+    }
+    if rest.exists() {
+        saved.get_or_insert(rest);
+    }
     // On the disk before anything is deleted: a power cut must not leave neither.
-    crate::fsutil::sync_filesystem(&backup)?;
-    Ok(Some(backup))
+    if let Some(backup) = &saved {
+        crate::fsutil::sync_filesystem(backup)?;
+    }
+    Ok(saved)
 }
 
 /// Deletes `files` (relative, checked safe) from `root`, never through a link that leads out of
@@ -870,6 +892,34 @@ mod tests {
             b"prefix save"
         );
         assert!(!env.dirs.data.join("prefixes/1").exists());
+    }
+
+    /// Saves outside the user folder go with the prefix too: a Unity game's progress in Wine's
+    /// registry (`user.reg`), a game saving in `C:\ProgramData`. They are copied first as well.
+    #[test]
+    fn deleting_the_prefix_backs_up_its_registry_and_program_data() {
+        let env = Env::new("prefix-registry", true);
+        let prefix = env.dirs.data.join("prefixes/1");
+        std::fs::write(prefix.join("user.reg"), b"[FAKE] progress").unwrap();
+        std::fs::create_dir_all(prefix.join("drive_c/ProgramData/[FAKE]")).unwrap();
+        std::fs::write(
+            prefix.join("drive_c/ProgramData/[FAKE]/save.dat"),
+            b"[FAKE] slot",
+        )
+        .unwrap();
+        uninstall(&env.db, &env.dirs, "1", true).unwrap();
+        let backups = env.dirs.data.join("backups/prefixes/1");
+        let found = |rel: &str| {
+            std::fs::read_dir(&backups)
+                .unwrap()
+                .flatten()
+                .find_map(|e| std::fs::read(e.path().join(rel)).ok())
+        };
+        assert_eq!(found("user.reg").as_deref(), Some(&b"[FAKE] progress"[..]));
+        assert_eq!(
+            found("ProgramData/[FAKE]/save.dat").as_deref(),
+            Some(&b"[FAKE] slot"[..])
+        );
     }
 
     /// The prefix's user folder is a link out of the prefix (a game writes its prefix): the
