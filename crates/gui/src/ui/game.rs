@@ -754,11 +754,26 @@ impl App {
                 Some(Action::Install),
             ),
         };
+        // Where both builds are offered, why the GOG one comes first.
+        let why = container(
+            text(
+                "This GOG build runs isolated from your files and needs no client running: the \
+                 safer choice. The Steam build runs through Steam's client.",
+            )
+            .size(13),
+        )
+        .padding([4, 10])
+        .max_width(360)
+        .style(theme::block);
         row![
             icon(Icon::Globe, 18.0, tokens().muted),
-            text("Also in your Steam library")
-                .size(14)
-                .color(tokens().muted),
+            tooltip(
+                text("Also in your Steam library")
+                    .size(14)
+                    .color(tokens().muted),
+                why,
+                tooltip::Position::Top,
+            ),
             button(text(label).size(14))
                 .padding([6, 12])
                 .on_press_maybe(action.map(|a| Message::Steam(SteamMsg::Ask(twin.to_string(), a))))
