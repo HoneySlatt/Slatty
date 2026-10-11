@@ -89,6 +89,11 @@ fn main() -> iced::Result {
         unsafe { std::env::set_var("WGPU_BACKEND", "vulkan") };
     }
     boot::start(backends);
+    // Iced reads them once the graphics driver is set up: up to a tenth of a second more before
+    // the first frame when they are not in the disk cache yet, as after the computer starts.
+    std::thread::spawn(|| {
+        iced::advanced::graphics::text::font_system();
+    });
     let mut app = iced::application(App::boot, App::update, App::view);
     for font in theme::FONTS {
         app = app.font(font);

@@ -59,9 +59,11 @@ from the keyring (whether the Steam Web API's and SteamGridDB's keys are saved i
 library shows: a locked keyring holds a read until its prompt is answered), game folders or Steam
 libraries, which can sit on a network drive taking seconds to wake up: how each game starts
 (`App::read_launch_options`, which a Play pressed before waits for) and the Proton builds found
-there (`runners::list`) are read once the library shows, as after an install or an update. Each
-feature keeps its state, message handling and background tasks in its own module, and the views
-live under `ui/`.
+there (`runners::list`) are read once the library shows, as after an install or an update. The
+system's fonts are read on another thread begun at the same time: Iced reads them once the
+graphics driver is set up, about 70 ms more before the first frame when they are not in the disk
+cache yet, as after the computer starts. Each feature keeps its state, message handling and
+background tasks in its own module, and the views live under `ui/`.
 
 Work started for the signed-in account (`App::account_task`) carries the sign-in it started in,
 and its result is dropped once that sign-in has ended: a late answer never fills the page of the

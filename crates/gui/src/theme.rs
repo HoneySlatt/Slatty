@@ -322,8 +322,9 @@ pub const FONTS: [&[u8]; 3] = [
 pub const DEFAULT_FAMILY: &str = "Geist";
 
 static FONT: RwLock<Font> = RwLock::new(Font::with_name(DEFAULT_FAMILY));
-/// The weight drawn for "semibold": many families only come in regular and bold.
-static SEMIBOLD: RwLock<font::Weight> = RwLock::new(font::Weight::Semibold);
+/// The weight drawn for "semibold": many families only come in regular and bold. Unknown for a
+/// chosen family until first drawn, so that the system's fonts are not read before the window.
+static SEMIBOLD: RwLock<Option<font::Weight>> = RwLock::new(Some(font::Weight::Semibold));
 
 /// The font family of the interface, chosen in Settings; Geist by default.
 pub fn font() -> Font {
@@ -337,12 +338,9 @@ pub fn set_font(family: Option<&str>) {
         Some(name) => Font::with_name(Box::leak(name.to_string().into_boxed_str())),
         None => Font::with_name(DEFAULT_FAMILY),
     };
-    let semibold = match family {
-        Some(name) if !has_weight(name, 600) => font::Weight::Bold,
-        _ => font::Weight::Semibold,
-    };
     *FONT.write().unwrap_or_else(|e| e.into_inner()) = font;
-    *SEMIBOLD.write().unwrap_or_else(|e| e.into_inner()) = semibold;
+    *SEMIBOLD.write().unwrap_or_else(|e| e.into_inner()) =
+        family.is_none().then_some(font::Weight::Semibold);
 }
 
 /// Whether the system has `family` in this weight (400 regular, 600 semibold, 700 bold).
@@ -365,10 +363,17 @@ pub fn bold() -> Font {
 }
 
 pub fn semibold() -> Font {
-    Font {
-        weight: *SEMIBOLD.read().unwrap_or_else(|e| e.into_inner()),
-        ..font()
-    }
+    let font = font();
+    let known = *SEMIBOLD.read().unwrap_or_else(|e| e.into_inner());
+    let weight = known.unwrap_or_else(|| {
+        let weight = match font.family {
+            font::Family::Name(name) if !has_weight(name, 600) => font::Weight::Bold,
+            _ => font::Weight::Semibold,
+        };
+        *SEMIBOLD.write().unwrap_or_else(|e| e.into_inner()) = Some(weight);
+        weight
+    });
+    Font { weight, ..font }
 }
 
 /// Text in the interface's font: use it instead of `iced::widget::text`.
