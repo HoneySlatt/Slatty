@@ -14,6 +14,7 @@ mod play;
 mod presets;
 mod runners;
 mod settings;
+mod steam;
 #[cfg(test)]
 mod tests;
 mod theme;
@@ -274,6 +275,10 @@ pub struct App {
     pub proton_choices: Vec<PathBuf>,
     /// Proton builds from GitHub (Settings → Runners).
     pub runners: runners::RunnersView,
+    /// Steam's games beside GOG's (Settings → Steam).
+    pub steam: steam::SteamView,
+    /// GOG's sign-in asked for from Settings, while Steam's games show without GOG.
+    pub login_open: bool,
     /// Games updated without asking (Settings → Installs).
     pub updates: updates::AutoUpdates,
     /// Work that closing the window would interrupt, waiting for the user's choice.
@@ -376,6 +381,8 @@ impl Default for App {
             proton: None,
             proton_choices: Vec::new(),
             runners: runners::RunnersView::default(),
+            steam: steam::SteamView::default(),
+            login_open: false,
             updates: updates::AutoUpdates::default(),
             quit_confirm: None,
             forget_confirm: false,
@@ -468,6 +475,9 @@ pub enum Message {
     Maintenance(MaintenanceMsg),
     Settings(SettingsMsg),
     Runners(runners::RunnersMsg),
+    Steam(steam::SteamMsg),
+    /// Shows GOG's sign-in, or goes back from it, while Steam's games show without GOG.
+    ShowLogin(bool),
     Updates(updates::UpdatesMsg),
     DismissNotice,
     CloseRequested,
@@ -729,7 +739,22 @@ impl App {
                 let ids = self.installs.keys().cloned().collect();
                 let folders = self.read_launch_options(ids, None);
                 let protons = runners::list(self.core.as_ref().expect("just set"));
-                let tasks = [avatar, resume, proton_update, check, folders, protons];
+                self.steam.found = boot.steam_found;
+                self.steam.on = boot.steam_games;
+                let steam = if self.steam.on {
+                    steam::load()
+                } else {
+                    Task::none()
+                };
+                let tasks = [
+                    avatar,
+                    resume,
+                    proton_update,
+                    check,
+                    folders,
+                    protons,
+                    steam,
+                ];
                 if let Some(cache) = boot.library {
                     return Task::batch(tasks.into_iter().chain([self.set_library(cache)]));
                 }
@@ -867,6 +892,8 @@ impl App {
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Runners(msg) => return self.update_runners(msg),
+            Message::Steam(msg) => return self.update_steam(msg),
+            Message::ShowLogin(open) => self.login_open = open,
             Message::Updates(msg) => return self.update_updates(msg),
             Message::Edit(msg) => return self.update_edit(msg),
             Message::OpenDialog(id, panel) => {
@@ -1015,6 +1042,7 @@ impl App {
         }
         if !self.installs.contains_key(&id)
             && !self.installability.contains_key(&id)
+            && self.steam_game(&id).is_none()
             && let Some(core) = &self.core
         {
             let (http, game_id) = (core.http.clone(), id.clone());

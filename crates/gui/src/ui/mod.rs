@@ -43,13 +43,17 @@ impl App {
                 .padding(40)
                 .into();
         }
-        let Some(account) = &self.account else {
-            return self.with_notice(self.login_view());
+        // Steam's games show without GOG; GOG's sign-in stays one click away in Settings.
+        let username = match (&self.account, &self.steam.found) {
+            (Some(account), _) if !self.login_open => account.username.as_str(),
+            (None, Some(name)) if self.steam.on && !self.login_open => name.as_str(),
+            (None, None) if self.steam.on && !self.login_open => "Steam",
+            _ => return self.with_notice(self.login_view()),
         };
         let body: Element<'_, Message> = match self.selected_game() {
             Some(game) => self.arriving(self.game_page(game)),
             None => column![
-                self.top_bar(&account.username),
+                self.top_bar(username),
                 container(
                     self.arriving(match self.page {
                         Page::Library => self.library_page(),

@@ -297,6 +297,15 @@ impl App {
     }
 
     pub fn request_images(&mut self, urls: Vec<String>) -> Task<Message> {
+        // Steam's games name the files its client cached: shown as they are, nothing downloaded.
+        let (local, urls): (Vec<String>, Vec<String>) =
+            urls.into_iter().partition(|u| u.starts_with('/'));
+        for path in local {
+            if std::path::Path::new(&path).is_file() {
+                self.images
+                    .insert(path.clone(), iced::widget::image::Handle::from_path(&path));
+            }
+        }
         let (Some(core), Some(account)) = (self.core.clone(), self.account.as_ref()) else {
             return Task::none();
         };
@@ -337,7 +346,7 @@ impl App {
             .iter()
             .map(|g| (g.id.clone(), g.title.clone()))
             .collect();
-        self.apply_customs();
+        self.merge_steam();
         let Some(core) = self.core.clone() else {
             return Task::none();
         };
@@ -445,7 +454,7 @@ impl App {
                 Shelf::Hidden => self.is_hidden(&g.id),
                 _ if self.is_hidden(&g.id) => false,
                 Shelf::All => true,
-                Shelf::Installed => self.installs.contains_key(&g.id),
+                Shelf::Installed => self.is_installed(&g.id),
                 Shelf::Favorites => self.favorites.contains(&g.id),
             })
             .filter(|(_, g)| !f.windows || g.os.iter().any(|o| o == "windows"))

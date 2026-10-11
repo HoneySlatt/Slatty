@@ -268,7 +268,20 @@ impl App {
             .on_press(Message::Select(g.id.clone()))
             .style(theme::plain);
         let installed = self.installs.contains_key(&g.id);
-        let action = if installed {
+        let action = if self.steam_game(&g.id).is_some() {
+            use crate::steam::SteamMsg;
+            use slatty_core::steam::client::Action;
+            let ready = self.steam.installed.get(&g.id).map(|i| i.ready);
+            let (ic, action) = match ready {
+                Some(true) => (Icon::Play, Some(Action::Play)),
+                Some(false) => (Icon::Download, None),
+                None => (Icon::Download, Some(Action::Install)),
+            };
+            button(icon(ic, 16.0, tokens().on_accent))
+                .padding([8, 14])
+                .on_press_maybe(action.map(|a| Message::Steam(SteamMsg::Ask(g.id.clone(), a))))
+                .style(theme::primary)
+        } else if installed {
             button(icon(Icon::Play, 16.0, tokens().on_accent))
                 .padding([8, 14])
                 .on_press_maybe(self.can_play(&g.id).then(|| Message::Play(g.id.clone())))
@@ -279,16 +292,21 @@ impl App {
                 .on_press(Message::OpenDialog(g.id.clone(), Panel::Install))
                 .style(theme::primary)
         };
+        // Steam keeps a Steam game's settings: its page says what can be asked of Steam.
         let settings = button(icon(Icon::SlidersHorizontal, 16.0, tokens().text))
             .padding(8)
-            .on_press(Message::OpenDialog(
-                g.id.clone(),
-                if installed {
-                    Panel::GameSettings
-                } else {
-                    Panel::Install
-                },
-            ))
+            .on_press(if self.steam_game(&g.id).is_some() {
+                Message::Select(g.id.clone())
+            } else {
+                Message::OpenDialog(
+                    g.id.clone(),
+                    if installed {
+                        Panel::GameSettings
+                    } else {
+                        Panel::Install
+                    },
+                )
+            })
             .style(theme::plain);
         let overlay = column![
             space().height(Length::Fill),

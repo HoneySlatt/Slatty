@@ -65,9 +65,25 @@ impl App {
         ];
         // On a narrow page (a small window, a drawer beside it) play time and the last session get
         // the room their values need, without their icons.
+        let steam = self.steam_game(&g.id).is_some();
         let cards = container(responsive(move |size| {
             let narrow = size.width < NARROW_CARDS;
             let (stats, achievements) = if narrow { (11, 8) } else { (10, 9) };
+            if steam {
+                return row![
+                    container(self.stats(g, narrow))
+                        .padding([0, 18])
+                        .align_y(Alignment::Center)
+                        .width(Length::FillPortion(stats))
+                        .height(CARD_HEIGHT)
+                        .style(theme::block),
+                    container(self.steam_card())
+                        .width(Length::FillPortion(7 + achievements))
+                        .height(CARD_HEIGHT),
+                ]
+                .spacing(14)
+                .into();
+            }
             row![
                 container(self.stats(g, narrow))
                     .padding([0, 18])
@@ -193,7 +209,23 @@ impl App {
                 theme::primary
             })
         };
-        let main = if self.installs.contains_key(&g.id) {
+        let main = if self.steam_game(&g.id).is_some() {
+            use crate::steam::SteamMsg;
+            use slatty_core::steam::client::Action;
+            let ask = |action| Some(Message::Steam(SteamMsg::Ask(g.id.clone(), action)));
+            match self.steam.installed.get(&g.id) {
+                Some(installed) if installed.ready => {
+                    big(Icon::Play, "Play".into(), ask(Action::Play), false)
+                }
+                Some(_) => big(Icon::Download, "Updating in Steam".into(), None, false),
+                None => big(
+                    Icon::Download,
+                    "Install".into(),
+                    ask(Action::Install),
+                    false,
+                ),
+            }
+        } else if self.installs.contains_key(&g.id) {
             if this_running {
                 big(Icon::Stop, "Stop".into(), Some(Message::StopGame), true)
             } else if self.updates.current.as_deref() == Some(g.id.as_str()) {
@@ -607,10 +639,38 @@ impl App {
         .into()
     }
 
+    /// What a Steam game's page says of Steam, in place of GOG's cloud and achievements cards.
+    fn steam_card(&self) -> Element<'_, Message> {
+        container(
+            row![
+                container(icon(Icon::Globe, 20.0, tokens().text))
+                    .center(40)
+                    .style(theme::circle),
+                column![
+                    text("Runs through Steam").size(16).font(semibold()),
+                    text(
+                        "Steam's client plays, updates and syncs it, and it cannot run isolated \
+                         from your files. A GOG build of it would be the better choice for your \
+                         privacy."
+                    )
+                    .size(13)
+                    .color(tokens().muted),
+                ]
+                .spacing(4)
+                .width(Length::Fill),
+            ]
+            .spacing(14)
+            .align_y(Alignment::Center),
+        )
+        .padding([0, 18])
+        .align_y(Alignment::Center)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(theme::block)
+        .into()
+    }
+
     pub(super) fn footer<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let Some(install) = self.installs.get(&g.id) else {
-            return Space::new().into();
-        };
         let item = |ic: Icon, label: String| {
             row![
                 icon(ic, 18.0, tokens().muted),
@@ -618,6 +678,28 @@ impl App {
             ]
             .spacing(10)
             .align_y(Alignment::Center)
+        };
+        if let Some(installed) = self.steam.installed.get(&g.id) {
+            use crate::steam::SteamMsg;
+            use slatty_core::steam::client::Action;
+            let ask = |label, action| {
+                button(text(label).size(14))
+                    .padding([6, 12])
+                    .on_press(Message::Steam(SteamMsg::Ask(g.id.clone(), action)))
+                    .style(theme::link)
+            };
+            return row![
+                item(Icon::HardDrive, human_size(installed.size)),
+                space().width(Length::Fill),
+                ask("Verify files in Steam", Action::Verify),
+                ask("Uninstall in Steam", Action::Uninstall),
+            ]
+            .spacing(18)
+            .align_y(Alignment::Center)
+            .into();
+        }
+        let Some(install) = self.installs.get(&g.id) else {
+            return Space::new().into();
         };
         let content = match self.records.get(&g.id) {
             Some(r) => row![

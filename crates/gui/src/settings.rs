@@ -78,6 +78,7 @@ pub enum Section {
     #[default]
     Account,
     Library,
+    Steam,
     Installs,
     Runners,
     Appearance,
@@ -88,9 +89,10 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Section; 9] = [
+    pub const ALL: [Section; 10] = [
         Section::Account,
         Section::Library,
+        Section::Steam,
         Section::Installs,
         Section::Runners,
         Section::Appearance,
@@ -104,6 +106,7 @@ impl Section {
         match self {
             Section::Account => "Account",
             Section::Library => "Library",
+            Section::Steam => "Steam",
             Section::Installs => "Installs",
             Section::Runners => "Runners",
             Section::Appearance => "Appearance",
@@ -119,6 +122,7 @@ impl Section {
         match self {
             Section::Account => "settings-account",
             Section::Library => "settings-library",
+            Section::Steam => "settings-steam",
             Section::Installs => "settings-installs",
             Section::Runners => "settings-runners",
             Section::Appearance => "settings-appearance",

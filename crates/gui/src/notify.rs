@@ -139,7 +139,13 @@ impl App {
 
     pub fn update_notify(&mut self, msg: NotifyMsg) -> Task<Message> {
         match msg {
-            NotifyMsg::Focus(focused) => self.unfocused = !focused,
+            NotifyMsg::Focus(focused) => {
+                self.unfocused = !focused;
+                // Back from Steam's own window, maybe after an install or an uninstall there.
+                if focused && self.steam.on {
+                    return crate::steam::read_installed();
+                }
+            }
             NotifyMsg::Expire(now) => self.toasts.retain(|t| t.until > now),
             NotifyMsg::Dismiss(id) => self.toasts.retain(|t| t.id != id),
             NotifyMsg::Open(id) => {

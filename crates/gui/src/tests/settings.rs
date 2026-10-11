@@ -266,7 +266,7 @@ fn the_side_list_of_settings_follows_the_scroll() {
     assert_eq!(scrolled(&mut app, 210.0), Section::Library);
     assert_eq!(
         scrolled(&mut app, 440.0),
-        Section::Installs,
+        Section::Steam,
         "nearly at the top"
     );
     assert_eq!(scrolled(&mut app, 900.0), Section::About, "at the end");
@@ -279,7 +279,7 @@ fn the_side_list_of_settings_follows_the_scroll() {
     let _ = app.update(Message::Settings(SettingsMsg::Show(Section::Appearance)));
     let _ = app.update(Message::Settings(SettingsMsg::ScrollTo(Some(1100.0))));
     assert_eq!(scrolled(&mut app, 900.0), Section::Appearance);
-    assert_eq!(scrolled(&mut app, 500.0), Section::Installs);
+    assert_eq!(scrolled(&mut app, 500.0), Section::Steam);
 
     // A new window size measures again.
     let _ = app.update(Message::WindowResized(Size::new(1000.0, 800.0)));

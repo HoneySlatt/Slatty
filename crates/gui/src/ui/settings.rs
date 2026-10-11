@@ -72,6 +72,7 @@ impl App {
             let rows = match s {
                 Section::Account => self.account_rows(wide),
                 Section::Library => self.library_rows(wide),
+                Section::Steam => self.steam_rows(wide),
                 Section::Installs => self.installs_rows(wide),
                 Section::Runners => self.runners_rows(wide),
                 Section::Appearance => self.appearance_rows(wide),
@@ -166,6 +167,29 @@ impl App {
             ]
             .spacing(8),
         ]
+        .push(self.steam.found.is_some().then(|| {
+            let (label, msg) = if self.steam.on {
+                ("Back to the library", Message::ShowLogin(false))
+            } else {
+                (
+                    "Use my Steam games without GOG",
+                    Message::Steam(crate::steam::SteamMsg::Switch(true)),
+                )
+            };
+            column![
+                note(
+                    "Steam is installed here: its games can show in the library too, read from the \
+                     Steam client's files and run by the client. GOG's games run isolated from \
+                     your files and need no client: where you have the choice, GOG is the better \
+                     one for your privacy and security."
+                ),
+                button(text(label))
+                    .padding([10, 16])
+                    .on_press(msg)
+                    .style(theme::tonal),
+            ]
+            .spacing(10)
+        }))
         .spacing(18)
         .max_width(720);
         container(content).padding(60).center_x(Length::Fill).into()
@@ -561,7 +585,52 @@ fn switch<'a>(on: bool, msg: fn(bool) -> SettingsMsg, what: &'static str) -> Ele
 }
 
 impl App {
+    fn steam_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
+        use crate::steam::SteamMsg;
+        let found = match &self.steam.found {
+            Some(name) => format!(
+                "Signed in to Steam as {name}. Its games are read from the Steam client's own files \
+                 on this computer: nothing is asked of Steam's servers."
+            ),
+            None => "Steam was not found on this computer (installed natively or as a Flatpak), \
+                     or no account ever signed in to it."
+                .into(),
+        };
+        vec![setting(
+            wide,
+            "Steam games",
+            column![
+                toggler(self.steam.on)
+                    .on_toggle_maybe(
+                        self.steam
+                            .found
+                            .is_some()
+                            .then_some(|on| Message::Steam(SteamMsg::Switch(on))),
+                    )
+                    .size(22),
+                note(found),
+                note(
+                    "They are installed, played, verified and uninstalled by the Steam client, \
+                     which must be installed and signed in, and they cannot run isolated from your \
+                     files. Where you own a game on both, its GOG build is the better choice for \
+                     your privacy and security.",
+                ),
+            ]
+            .spacing(8)
+            .into(),
+            None,
+        )]
+    }
+
     fn account_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
+        if self.account.is_none() {
+            return vec![setting(
+                wide,
+                "GOG",
+                note("Not signed in: only your Steam games show."),
+                Some(action("Sign in to GOG", Message::ShowLogin(true))),
+            )];
+        }
         let name = self.account.as_ref().map(|a| a.username.as_str());
         vec![
             setting(
@@ -775,6 +844,7 @@ fn section_icon(s: Section) -> Icon {
     match s {
         Section::Account => Icon::User,
         Section::Library => Icon::LayoutGrid,
+        Section::Steam => Icon::Globe,
         Section::Installs => Icon::Download,
         Section::Runners => Icon::Package,
         Section::Appearance => Icon::Palette,

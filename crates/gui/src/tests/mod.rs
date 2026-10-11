@@ -268,4 +268,5 @@ mod maintenance;
 mod notify;
 mod runners;
 mod settings;
+mod steam;
 mod updates;

@@ -18,6 +18,7 @@ Anything done in one is visible in the other.
 - [Achievements](#achievements)
 - [Maintenance](#maintenance)
 - [Games installed elsewhere](#games-installed-elsewhere)
+- [Steam games](#steam-games)
 - [Proton builds](#proton-builds)
 - [Settings](#settings)
 - [Where data is stored](#where-data-is-stored)
@@ -483,6 +484,30 @@ slatty forget <game-id>
 
 Imported games cannot be verified or uninstalled, because SlattyLauncher does not know which files
 belong to them.
+
+## Steam games
+
+The games of the account signed in to the Steam client can show in the library beside GOG's, off
+until turned on: in **Settings → Steam**, or on the GOG sign-in page with **Use my Steam games
+without GOG**, which needs no GOG account at all.
+
+- **Read from Steam's own files, never written.** SlattyLauncher finds Steam (installed natively or
+  as a Flatpak) and the account last signed in to it, then reads the account's games
+  (`userdata/<account>/config/librarycache`), their names and images (`appcache/appinfo.vdf` and
+  the client's image cache) and the games installed in each Steam library folder
+  (`appmanifest_*.acf`). Nothing is asked of Steam's servers and no Steam password or key is ever
+  asked for.
+- **Run by the Steam client.** Play, Install, **Verify files in Steam** and **Uninstall in Steam**
+  hand the game to the Steam client (`steam://` addresses, opened by the desktop): it must be
+  installed and signed in, and does the work in its own window. What it installed or removed shows
+  once the launcher's window is in front again.
+- **What Steam keeps.** Updates, cloud saves, achievements in game and launch options are the Steam
+  client's; Steam's games cannot run isolated from your files.
+- **GOG is the better choice where you have it.** GOG's games run isolated from your files, need no
+  client running, and their saves and achievements reach GOG without one: SlattyLauncher
+  recommends their GOG build for your privacy and security.
+- Steam's games can be renamed, illustrated, hidden and marked as favorites like GOG's. A game the
+  Steam client has no details of yet (some recently added games) does not show until it has.
 
 ## Proton builds
 

@@ -187,6 +187,10 @@ on one without (ext4), the runtime's files, about 750 MB, are written at each la
   is unlocked, your keyring.
 - Anything able to reach 127.0.0.1:9977 while Comet runs (see [Comet](#comet)).
 - A game that is not isolated, and a program written to break out of the container.
+- Steam's games and the Steam client (once **Steam games** is on, Settings → Steam): SlattyLauncher
+  only reads Steam's files, never writes them and sends nothing to Steam, but the games are run by
+  the Steam client, with its own access to your files, network and account, and cannot be
+  isolated. Prefer a game's GOG build where you have the choice.
 - GOG's servers, the GitHub account of a Proton project or umu's database turned malicious: their
   data is checked for shape, size and paths, not for intent.
 - Someone watching your network: connections use TLS, but which hosts you contact, and when, can
