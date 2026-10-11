@@ -157,7 +157,7 @@ impl App {
                     .and_then(|t| t.game.clone());
                 self.toasts.retain(|t| t.id != id);
                 if let Some(game) = game {
-                    return self.update(Message::Select(game));
+                    return self.open_game(game, None);
                 }
             }
             NotifyMsg::Switch(kind, on) => {

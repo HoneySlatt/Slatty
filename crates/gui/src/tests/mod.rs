@@ -91,6 +91,31 @@ fn library_app() -> App {
     app
 }
 
+/// A library long enough to scroll, its cover grid scrolled down with the wheel; and how far.
+fn scrolled_library() -> (App, f32) {
+    use iced::mouse::{Event as Mouse, ScrollDelta};
+    let mut app = library_app();
+    app.library = (1..=200)
+        .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
+        .collect();
+    let messages: Vec<Message> = {
+        let mut ui = render(&app);
+        ui.point_at(iced::Point::new(600.0, 500.0));
+        let _ = ui.simulate([iced::Event::Mouse(Mouse::WheelScrolled {
+            delta: ScrollDelta::Pixels {
+                x: 0.0,
+                y: -2_000.0,
+            },
+        })]);
+        ui.into_messages().collect()
+    };
+    for m in messages {
+        let _ = app.update(m);
+    }
+    let offset = app.grid_view.expect("scrolled").absolute_offset().y;
+    (app, offset)
+}
+
 fn open(app: &mut App, game: &str, panel: Option<Panel>) {
     app.selected = Some(game.into());
     app.panel = panel;

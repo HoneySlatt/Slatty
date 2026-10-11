@@ -60,6 +60,18 @@ fn a_download_says_when_it_starts_and_ends_in_a_card() {
     assert!(app.toasts.is_empty(), "gone once its time is over");
 }
 
+/// The page a card opens goes back to the library where it was scrolled.
+#[test]
+fn a_game_opened_from_a_card_goes_back_to_where_the_library_was() {
+    let (mut app, offset) = scrolled_library();
+    let _ = app.notify(Kind::Downloads, Some("5"), "Download complete", "[FAKE]");
+    let card = app.toasts[0].id;
+    let _ = app.update(Message::Notify(NotifyMsg::Open(card)));
+    assert_eq!(app.selected.as_deref(), Some("5"));
+    let _ = app.update(Message::CloseDetail);
+    assert_eq!(app.grid_view.map(|v| v.absolute_offset().y), Some(offset));
+}
+
 /// Achievements unlocked in a game are said once it ends, the only time the launcher learns them.
 #[test]
 fn achievements_unlocked_are_said_when_the_game_ends() {

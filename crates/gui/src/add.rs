@@ -276,7 +276,7 @@ impl App {
                         ),
                     });
                 }
-                return self.update(Message::Select(id));
+                return self.open_game(id, None);
             }
             AddMsg::Saved(Err(e)) => {
                 if let Some(d) = &mut self.add_game {

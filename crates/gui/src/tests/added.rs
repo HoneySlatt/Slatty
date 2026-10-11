@@ -232,6 +232,28 @@ fn a_game_is_added_from_the_library() {
     );
 }
 
+/// The page of the game added goes back to the library where it was scrolled.
+#[test]
+fn the_game_added_goes_back_to_where_the_library_was() {
+    use crate::add::AddMsg;
+    let (mut app, offset) = scrolled_library();
+    let _ = app.update(Message::Add(AddMsg::Open));
+    let install = Install {
+        umu_id: None,
+        game_id: "local-4".into(),
+        title: "[FAKE] Quest".into(),
+        platform: Platform::Linux,
+        path: PathBuf::from("/games/[FAKE] Quest"),
+        client_id: None,
+        runner: Runner::Native,
+        isolated: false,
+    };
+    let _ = app.update(Message::Add(AddMsg::Saved(Ok((install, None)))));
+    assert_eq!(app.selected.as_deref(), Some("local-4"));
+    let _ = app.update(Message::CloseDetail);
+    assert_eq!(app.grid_view.map(|v| v.absolute_offset().y), Some(offset));
+}
+
 /// With an installer, it runs first; the dialog stays open while it does, then asks for the
 /// program it installed; closing it then throws that away.
 #[test]
