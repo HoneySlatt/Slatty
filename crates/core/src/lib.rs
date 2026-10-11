@@ -30,6 +30,7 @@ pub mod secret;
 pub mod session;
 pub mod settings;
 pub mod setup;
+pub mod steam;
 pub mod steamgriddb;
 pub mod store;
 pub mod umu;
