@@ -77,5 +77,9 @@ fn status(ctx: &Ctx) -> Result<()> {
         "Images from Steam's servers: {}",
         on(slatty_core::settings::steam_images(&ctx.db)?)
     );
+    println!(
+        "Steam Web API: {}",
+        on(slatty_core::settings::steam_web_api(&ctx.db)?)
+    );
     Ok(())
 }

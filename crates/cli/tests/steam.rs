@@ -88,6 +88,7 @@ fn steam_games_are_listed_once_turned_on() {
     assert!(status.contains("[FAKE] Player"), "{status}");
     assert!(status.contains("Games:        1 (1 installed"), "{status}");
     assert!(status.contains("In the library: off"), "{status}");
+    assert!(status.contains("Steam Web API: off"), "{status}");
     assert!(
         !slatty(&root, &["library", "list"]).status.success(),
         "no GOG account and Steam's games off"
