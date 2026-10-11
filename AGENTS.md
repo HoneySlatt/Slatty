@@ -48,11 +48,16 @@ cargo test --release -p slatty-gui library_at_10000_games -- --ignored --nocaptu
 TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored proton prefix galaxy_service
 unshare -rn sh -c 'ip link set lo up && cargo test -- --ignored comet'   # offline
 
-# Isolation: a marker in the home folder stays hidden from a game run in umu's container
-TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored isolated
+# Isolation: a game in umu's container sees nothing of the home folder and cannot change the
+# tools other games run. A failing check writes a probe into umu's runtime and the Proton build:
+# give it copies (`cp -a --reflink=auto`) of ~/.local/share/umu (under <data>/umu) and of a build.
+TMPDIR=$HOME/.cache XDG_DATA_HOME=<data> SLATTY_TEST_PROTON=<copy of a Proton dir> \
+  cargo test -p slatty-cli --test isolation -- --ignored --test-threads=1
 
-# Dependency audit, after adding or updating a dependency (downloads the advisory database)
+# Dependency audit and policy, after adding or updating a dependency (they download the
+# advisory database)
 nix shell nixpkgs#cargo-audit -c cargo audit
+nix shell nixpkgs#cargo-deny -c cargo deny check
 ```
 
 `SLATTY_LOG=warn` (or `debug`) prints the core's logs on stderr.
@@ -88,10 +93,12 @@ These act on a real person's account, disk or system. Ask the human first, every
 - Wrap sensitive values in `secret::Secret`; its `Debug` hides the value.
 - Turn `reqwest` errors into `Error::network(context, e)`, which strips the URL: some GOG
   endpoints carry tokens in the query string.
-- Besides GOG and the download servers it names, the only services contacted are umu's game
-  database (can be turned off) and SteamGridDB (off until turned on). A new outgoing request to
-  another host needs a switch in Settings and an entry in SECURITY.md ("What leaves your
-  computer").
+- Besides GOG and the download servers it names, SlattyLauncher itself contacts only umu's game
+  database, GitHub (Proton builds) and SteamGridDB, each off until turned on. The programs it
+  starts contact others (umu asks Valve about its runtime, Comet talks to GOG): a change that adds
+  such traffic counts too. A new outgoing request to another host needs a switch in Settings, off
+  until turned on, and an entry in SECURITY.md ("What leaves your computer").
+- Send the account's token only through `http::gog_only` for an address a GOG answer names.
 - No telemetry, ever.
 
 ### Files and data safety

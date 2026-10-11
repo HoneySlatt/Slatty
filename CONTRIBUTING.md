@@ -31,17 +31,21 @@ cargo test
 
 ## Dependency audit
 
-Check the dependencies against the RustSec advisories (this downloads the advisory database):
+Check the dependencies against the RustSec advisories, and against the policy in `deny.toml`
+(licences compatible with the GPL, crates.io as the only source, advisories): both download the
+advisory database.
 
 ```sh
 nix shell nixpkgs#cargo-audit -c cargo audit
+nix shell nixpkgs#cargo-deny -c cargo deny check
 ```
 
-The last audit (2026-10-10) found no vulnerability. Four warnings come with Iced 0.14 and should go
-with an Iced update: `paste` (unmaintained; only in macOS's Metal backend, not built on Linux),
-`rustybuzz` and `ttf-parser` (unmaintained; text and font reading), and `lru` (unsound only when a
-key's `Drop` panics, which the glyph cache's keys never do). Image decoding is limited to the
-formats SlattyLauncher shows (JPEG, PNG, WebP, GIF, BMP), so fewer decoders face downloaded files.
+The last audit (2026-10-11) found no vulnerability, and `cargo deny check` passes. Four warnings
+come with Iced 0.14 and should go with an Iced update: `paste` (unmaintained; only in macOS's Metal
+backend, not built on Linux), `rustybuzz` and `ttf-parser` (unmaintained; text and font reading,
+ignored in `deny.toml` with the reason), and `lru` (unsound only when a key's `Drop` panics, which
+the glyph cache's keys never do). Image decoding is limited to the formats SlattyLauncher shows
+(JPEG, PNG, WebP, GIF, BMP), so fewer decoders face downloaded files.
 
 ## Code style
 

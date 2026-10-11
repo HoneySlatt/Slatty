@@ -48,6 +48,8 @@ See [docs/roadmap.md](docs/roadmap.md).
   (GE-Proton, Proton-CachyOS, …) in `~/.local/share/Steam/compatibilitytools.d`, one of Valve's
   (Proton Experimental, stable, Hotfix) downloaded by Steam in any of its libraries, one umu
   downloaded, or one SlattyLauncher downloads from GitHub (Settings → Runners).
+- [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`), able to start a sandbox, for
+  games run isolated from your files (Windows games, by default). Flatpak needs it too.
 - [Comet](https://github.com/imLinguin/comet) for achievements.
 - Comet's `GalaxyCommunication.exe` dummy service, which some games need to report achievements.
 - An XDG desktop portal with a file chooser (xdg-desktop-portal-gtk, -gnome, -kde…) and libdbus
@@ -61,7 +63,7 @@ Comet's sources) and every build dependency.
 ```sh
 nix develop          # or `direnv allow`
 cargo build
-slatty doctor        # checks umu, Comet, the keyring and the Comet port
+slatty doctor        # checks umu, bubblewrap, Comet, the keyring and the Comet port
 slatty-gui           # graphical interface
 ```
 
@@ -82,6 +84,26 @@ slatty launch <game-id>
 
 Game ids are listed by `slatty library list`. The same actions are available in `slatty-gui`.
 The [user guide](docs/user-guide.md) covers every command.
+
+## Security and privacy
+
+- You sign in on GOG's own page; your password never reaches SlattyLauncher. Session tokens live in
+  the system keyring, never in a file, a log or a process argument.
+- No telemetry. Besides GOG, what is contacted is listed host by host in
+  [SECURITY.md](SECURITY.md#what-leaves-your-computer), with the setting that controls it. Third
+  parties are off until you turn them on (umu's online database, GitHub for Proton builds,
+  SteamGridDB); umu itself asks Valve whether its runtime is current at each launch.
+- Windows games run isolated from your files by default, in umu's container inside bubblewrap:
+  they see their own folder and a home of their own, cannot change the runtime or Proton build
+  other games use, and cannot reach your other programs. Isolation is not a boundary against a
+  program written to break out; [SECURITY.md](SECURITY.md#games-and-isolation) says what it leaves
+  open.
+- While a game reports achievements through Comet (on by default), any program on this computer
+  can get your GOG access token from Comet; turn **Achievements in game** off to avoid it.
+- Saves are never replaced or deleted without a copy, and a cloud conflict never resolves itself
+  ([how](docs/cloud-saves.md)).
+
+Report vulnerabilities privately, as [SECURITY.md](SECURITY.md#reporting-a-vulnerability) says.
 
 ## Documentation
 
