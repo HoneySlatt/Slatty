@@ -653,32 +653,54 @@ impl App {
     }
 
     /// What a Steam game's page says of Steam, in place of GOG's cloud and achievements cards.
+    /// What runs a Steam game, in a few words as the cloud card says its state; the reason the
+    /// GOG build is the safer choice on hover. Its icon goes when a drawer narrows the card.
     fn steam_card(&self) -> Element<'_, Message> {
-        container(
-            row![
-                container(icon(Icon::Globe, 20.0, tokens().text))
-                    .center(40)
-                    .style(theme::circle),
-                column![
-                    text("Runs through Steam").size(16).font(semibold()),
-                    text(
-                        "Played, updated and synced by Steam's client, not isolated from your \
-                         files. A GOG build is the safer choice."
-                    )
-                    .size(13)
-                    .color(tokens().muted),
-                ]
-                .spacing(4)
-                .width(Length::Fill),
-            ]
-            .spacing(14)
-            .align_y(Alignment::Center),
+        let card = responsive(move |size| {
+            let content = row![]
+                .push((size.width >= 240.0).then(|| {
+                    container(icon(Icon::Globe, 22.0, tokens().text))
+                        .center(40)
+                        .style(theme::circle)
+                }))
+                .push(
+                    column![
+                        text("Runs through Steam")
+                            .size(15)
+                            .font(semibold())
+                            .wrapping(Wrapping::None),
+                        text("Not isolated from your files")
+                            .size(14)
+                            .color(tokens().muted)
+                            .width(Length::Fill),
+                    ]
+                    .spacing(4)
+                    .width(Length::Fill),
+                )
+                .spacing(14)
+                .align_y(Alignment::Center);
+            container(content).center_y(Length::Fill).into()
+        });
+        let why = container(
+            text(
+                "Steam's client plays, updates and syncs it, and it cannot run isolated from your \
+                 files. A GOG build runs isolated and needs no client running: the safer choice \
+                 for your privacy and security.",
+            )
+            .size(13),
         )
-        .padding([0, 18])
-        .align_y(Alignment::Center)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(theme::block)
+        .padding([4, 10])
+        .max_width(360)
+        .style(theme::block);
+        tooltip(
+            container(card)
+                .padding([0, 18])
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(theme::block),
+            why,
+            tooltip::Position::Top,
+        )
         .into()
     }
 
