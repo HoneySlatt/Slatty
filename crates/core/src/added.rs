@@ -643,15 +643,11 @@ pub fn remove(
     if !crate::store::is_local(game_id) {
         return Err(Error::Refused(format!("{game_id} was not added by hand")));
     }
+    // Also refused while the game runs, under its supervisor once its launcher is gone: a session
+    // recorded as running with neither is one a crash left.
     let _busy = crate::lock::game(dirs, game_id)?;
     let install = Install::get(db, game_id)?
         .ok_or_else(|| Error::NotFound(format!("{game_id} is not in the library")))?;
-    if crate::session::unfinished(db)?
-        .iter()
-        .any(|s| s.game_id == game_id)
-    {
-        return Err(Error::Refused(format!("{} is running", install.title)));
-    }
     // What SlattyLauncher unpacked for it goes, checked whole before anything is deleted.
     let unpacked = load_task(dirs, game_id)
         .map(|t| t.unpacked)
@@ -1287,6 +1283,21 @@ mod tests {
         assert_eq!(Install::get(&f.db, "local-1").unwrap(), None);
         assert!(load_task(&f.dirs, "local-1").is_err());
         assert!(crate::custom::all(&f.db).unwrap().is_empty());
+    }
+
+    /// A session a crashed launcher left as running does not keep the game in the library: one
+    /// still running holds the game's session lock, under its supervisor.
+    #[test]
+    fn a_session_a_crash_left_running_does_not_keep_the_game() {
+        let f = fake("stale-session");
+        add(&f.db, &f.dirs, f.windows()).unwrap();
+        crate::session::record_start(&f.db, "local-1", None).unwrap();
+        let running = crate::lock::try_acquire(&crate::lock::session(&f.dirs, "local-1"))
+            .unwrap()
+            .unwrap();
+        assert!(remove(&f.db, &f.dirs, "local-1", false).is_err());
+        drop(running);
+        remove(&f.db, &f.dirs, "local-1", false).unwrap();
     }
 
     #[test]
