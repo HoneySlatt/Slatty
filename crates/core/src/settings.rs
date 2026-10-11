@@ -313,6 +313,33 @@ fn proton_candidates_in(downloaded: &Path, home: &Path) -> Vec<PathBuf> {
     found
 }
 
+/// Steam's client library folders (`linux64`, `linux32`, each with a `steamclient.so`), which
+/// Valve's Proton builds need, where Steam is installed.
+pub fn steam_client_libs() -> Option<[PathBuf; 2]> {
+    steam_client_libs_in(&home())
+}
+
+fn steam_client_libs_in(home: &Path) -> Option<[PathBuf; 2]> {
+    steam_roots(home)
+        .into_iter()
+        .map(|steam| [steam.join("linux64"), steam.join("linux32")])
+        .find(|libs| libs.iter().all(|l| l.join("steamclient.so").is_file()))
+}
+
+/// Steam's `compatibilitytools.d`, where Steam and Heroic look for custom Proton builds, when
+/// Steam is installed natively. The Flatpak's cannot see a folder of this user's.
+pub fn shared_protons_dir() -> Option<PathBuf> {
+    shared_protons_dir_in(&home())
+}
+
+fn shared_protons_dir_in(home: &Path) -> Option<PathBuf> {
+    [".local/share/Steam", ".steam/steam"]
+        .iter()
+        .map(|p| home.join(p))
+        .find(|p| p.is_dir())
+        .map(|p| p.join("compatibilitytools.d"))
+}
+
 /// Where Steam keeps its data: native, the `~/.steam/steam` link, and the Flatpak.
 fn steam_roots(home: &Path) -> Vec<PathBuf> {
     [
@@ -367,6 +394,29 @@ mod tests {
     fn build(dir: &Path) {
         std::fs::create_dir_all(dir).unwrap();
         std::fs::write(dir.join("proton"), b"").unwrap();
+    }
+
+    #[test]
+    fn steam_gives_its_client_libraries_and_its_custom_builds_folder() {
+        let home = std::env::temp_dir().join(format!("slatty-steam-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        assert_eq!(steam_client_libs_in(&home), None);
+        assert_eq!(shared_protons_dir_in(&home), None);
+        let steam = home.join(".local/share/Steam");
+        std::fs::create_dir_all(steam.join("linux64")).unwrap();
+        assert_eq!(steam_client_libs_in(&home), None, "both libraries or none");
+        assert_eq!(
+            shared_protons_dir_in(&home),
+            Some(steam.join("compatibilitytools.d"))
+        );
+        std::fs::create_dir_all(steam.join("linux32")).unwrap();
+        std::fs::write(steam.join("linux64/steamclient.so"), b"").unwrap();
+        std::fs::write(steam.join("linux32/steamclient.so"), b"").unwrap();
+        assert_eq!(
+            steam_client_libs_in(&home),
+            Some([steam.join("linux64"), steam.join("linux32")])
+        );
+        std::fs::remove_dir_all(home).unwrap();
     }
 
     #[test]

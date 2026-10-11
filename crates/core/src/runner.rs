@@ -59,7 +59,7 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
             };
             let (program, mut args, mut env) = native_command(&script, wrapper);
             if install.isolated {
-                env.extend(isolation_env(dirs, install)?);
+                env.extend(isolation_env(dirs, install, None)?);
                 // Without one, umu takes `~/Games/umu/<id>` or the user's `$WINEPREFIX` as the
                 // prefix, and the container shares it: the game's own home takes that place.
                 env.push((
@@ -335,7 +335,7 @@ fn umu_env(
     // writable: an isolated game's folder is shared on its own instead. Proton's fixes then find
     // the game from its working directory.
     if install.isolated {
-        env.extend(isolation_env(dirs, install)?);
+        env.extend(isolation_env(dirs, install, Some(proton))?);
     } else {
         env.push((
             "STEAM_COMPAT_INSTALL_PATH".into(),
@@ -343,6 +343,44 @@ fn umu_env(
         ));
     }
     Ok(env)
+}
+
+/// Whether `proton` is one of Valve's own builds, which Steam keeps in a library's
+/// `steamapps/common`. Their `steam.exe` stops unless it loads Steam's client library from
+/// `~/.steam/sdk64`; the builds made for use outside Steam (GE-Proton, Proton-CachyOS,
+/// UMU-Proton) go on without it.
+fn valve_proton(proton: &Path) -> bool {
+    fn name(p: Option<&Path>) -> Option<&str> {
+        p.and_then(Path::file_name).and_then(|n| n.to_str())
+    }
+    name(proton.parent()) == Some("common")
+        && name(proton.parent().and_then(Path::parent)) == Some("steamapps")
+}
+
+/// `~/.steam/sdk64/steamclient.so` and the 32-bit one in the game's own home, leading to Steam's
+/// in `libs` (`linux64`, `linux32`), which the container is given read-only. Folders holding a
+/// link, not links to Steam's folders: pressure-vessel removes a link it finds at `~/.steam/sdk64`
+/// in a home of its own (checked). A game could have replaced them with links out of its home.
+fn steam_sdk_links(home: &Path, libs: &[PathBuf; 2]) -> Result<()> {
+    for (sdk, lib) in ["sdk64", "sdk32"].into_iter().zip(libs) {
+        let dir = home.join(".steam").join(sdk);
+        if !crate::installer::leads_inside(home, &dir) {
+            return Err(Error::Refused(format!(
+                "{} leads out of the game's home",
+                dir.display()
+            )));
+        }
+        crate::paths::ensure_dir(&dir)?;
+        let link = dir.join("steamclient.so");
+        let target = lib.join("steamclient.so");
+        if std::fs::read_link(&link).ok() == Some(target.clone()) {
+            continue;
+        }
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(&target, &link)
+            .map_err(|e| Error::io(format!("link {}", link.display()), e))?;
+    }
+    Ok(())
 }
 
 /// Where an isolated game finds a home folder of its own, in place of the user's. It holds what
@@ -354,16 +392,27 @@ pub fn isolated_home(dirs: &Dirs, game_id: &str) -> Result<PathBuf> {
 
 /// What the container umu runs games in (pressure-vessel, from the Steam Runtime) is told for an
 /// isolated game: a home folder of its own, its folder writable, and read-only what umu and the
-/// post-install setup need. The rest of the user's files, `/tmp` included, stays out of it.
-fn isolation_env(dirs: &Dirs, install: &Install) -> Result<Vec<(String, String)>> {
+/// post-install setup need. The rest of the user's files, `/tmp` included, stays out of it. One
+/// of Valve's Proton builds is given Steam's client library too (`steam_sdk_links`).
+fn isolation_env(
+    dirs: &Dirs,
+    install: &Install,
+    proton: Option<&Path>,
+) -> Result<Vec<(String, String)>> {
     let home = isolated_home(dirs, &install.game_id)?;
     crate::paths::ensure_dir(&home)?;
-    let home = home.display().to_string();
-    let read_only = [
+    let mut read_only = vec![
         umu_data(),
         crate::setup::redist_dir(dirs),
         crate::installer::support_dir(dirs, &install.game_id),
     ];
+    if proton.is_some_and(valve_proton)
+        && let Some(libs) = crate::settings::steam_client_libs()
+    {
+        steam_sdk_links(&home, &libs)?;
+        read_only.extend(libs);
+    }
+    let home = home.display().to_string();
     let mut env = vec![
         ("PRESSURE_VESSEL_HOME".into(), home.clone()),
         // The user's own environment could ask the container to share the home folder after all.
@@ -594,6 +643,47 @@ mod tests {
         );
         assert!(env.iter().all(|(k, _)| !k.starts_with("PRESSURE_VESSEL")));
         assert!(env.iter().all(|(k, _)| k != "HOME"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn valve_builds_get_steam_client_library_links_in_the_game_home() {
+        assert!(valve_proton(Path::new(
+            "/mnt/share/SteamLibrary/steamapps/common/Proton - Experimental"
+        )));
+        assert!(!valve_proton(Path::new(
+            "/home/u/.local/share/Steam/compatibilitytools.d/GE-Proton11-7"
+        )));
+        assert!(!valve_proton(Path::new(
+            "/home/u/.local/share/slatty/protons/GE-Proton11-7"
+        )));
+
+        let root = std::env::temp_dir().join(format!("slatty-sdk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let home = root.join("home");
+        let libs = [root.join("steam/linux64"), root.join("steam/linux32")];
+        for lib in &libs {
+            std::fs::create_dir_all(lib).unwrap();
+            std::fs::write(lib.join("steamclient.so"), b"").unwrap();
+        }
+        std::fs::create_dir_all(&home).unwrap();
+        steam_sdk_links(&home, &libs).unwrap();
+        steam_sdk_links(&home, &libs).unwrap();
+        for (sdk, lib) in ["sdk64", "sdk32"].into_iter().zip(&libs) {
+            let link = home.join(".steam").join(sdk).join("steamclient.so");
+            assert_eq!(
+                std::fs::read_link(&link).unwrap(),
+                lib.join("steamclient.so")
+            );
+        }
+        // Replaced by the game with a link out of its home: nothing is written through it.
+        std::fs::remove_dir_all(home.join(".steam/sdk64")).unwrap();
+        std::os::unix::fs::symlink(root.join("steam"), home.join(".steam/sdk64")).unwrap();
+        assert!(matches!(
+            steam_sdk_links(&home, &libs),
+            Err(Error::Refused(_))
+        ));
+        assert!(!root.join("steam/steamclient.so").exists());
         std::fs::remove_dir_all(root).unwrap();
     }
 

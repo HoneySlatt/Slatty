@@ -499,6 +499,9 @@ slatty proton update                   # or now
 - A build is kept until you delete it, even once a newer one is out, unless an update deletes it as
   above. Deleting one is refused while a game or the default Proton uses it, or while games follow
   the `-latest` link that leads to it.
+- Valve's own builds (Proton Experimental, stable, Hotfix) need Steam's client library: an
+  isolated game run with one is given `steamclient.so` from Steam's `linux64` and `linux32`
+  folders, read-only, and nothing else of Steam. The other builds run without it.
 
 ## Settings
 

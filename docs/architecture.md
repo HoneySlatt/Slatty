@@ -246,7 +246,14 @@ environment (`runner::isolation_env`) to share less:
   (`~/.steam` and where its links lead, `~/.local/share/Steam` with the client's settings and
   tokens) read-only with every game, from the home folder `HOME` names (`wrap-home.c`,
   `expose_steam`). umu keeps its runtimes and cache where they are through `XDG_DATA_HOME` and
-  `XDG_CACHE_HOME`, which the container replaces with the game's own;
+  `XDG_CACHE_HOME`, which the container replaces with the game's own. One of Valve's own Proton
+  builds (in a Steam library's `steamapps/common`) is the exception: its `steam.exe` stops
+  (`steamclient_init unable to load native steamclient library`, then an assertion) unless it
+  loads `$HOME/.steam/sdk64/steamclient.so`, so the game's home gets `.steam/sdk64` and
+  `.steam/sdk32` folders holding a link to Steam's `linux64/steamclient.so` and
+  `linux32/steamclient.so`, shared read-only (`runner::steam_sdk_links`); folders, because
+  pressure-vessel removes a link it finds at `~/.steam/sdk64` in a home of its own. The builds
+  made for use outside Steam (GE-Proton, Proton-CachyOS, UMU-Proton) go on without the library;
 - `PRESSURE_VESSEL_SHARE_HOME=0`, `PROTON_LOG_DIR` (the game's home), and an empty
   `STEAM_COMPAT_INSTALL_PATH`, `STEAM_COMPAT_LIBRARY_PATHS`, `STEAM_COMPAT_CLIENT_INSTALL_PATH`,
   `STEAM_COMPAT_MOUNT_PATHS`, `STEAM_COMPAT_TOOL_PATH`, `STEAM_COMPAT_APP_LIBRARY_PATH(S)`,
