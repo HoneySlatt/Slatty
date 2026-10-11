@@ -140,6 +140,32 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
     Ok(install)
 }
 
+/// The games added by hand, as the library lists them: with no image of their own (the user's
+/// edits give them some) and never matched with a Steam game.
+pub fn library(db: &Db) -> Result<Vec<crate::library::LibraryGame>> {
+    Ok(Install::list(db)?
+        .into_iter()
+        .filter(|i| crate::store::is_local(&i.game_id))
+        .map(|i| crate::library::LibraryGame {
+            id: i.game_id,
+            title: i.title,
+            cover: None,
+            icon: None,
+            background: None,
+            logo: None,
+            os: vec![
+                match i.platform {
+                    Platform::Windows => "windows",
+                    Platform::Linux => "linux",
+                }
+                .into(),
+            ],
+            metadata: crate::library::MetadataSource::Missing,
+            steam: Some(Vec::new()),
+        })
+        .collect())
+}
+
 /// Takes a game added by hand out of the library. Its folder is left as it is: its files are the
 /// user's. Its prefix, which SlattyLauncher made, is deleted only when asked, its saves copied to
 /// the backups first.
@@ -417,6 +443,18 @@ mod tests {
         assert_eq!(
             Install::get(&f.db, "local-1").unwrap().as_ref(),
             Some(&first)
+        );
+        let listed = library(&f.db).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(
+            (listed[0].id.as_str(), listed[0].title.as_str()),
+            ("local-1", "[FAKE] Game")
+        );
+        assert_eq!(listed[0].os, ["windows"]);
+        assert_eq!(
+            listed[0].steam,
+            Some(Vec::new()),
+            "never a Steam game's twin"
         );
         assert_eq!(add(&f.db, &f.dirs, f.windows()).unwrap().game_id, "local-2");
         remove(&f.db, &f.dirs, "local-2", false).unwrap();

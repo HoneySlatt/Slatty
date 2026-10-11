@@ -18,6 +18,7 @@ Anything done in one is visible in the other.
 - [Achievements](#achievements)
 - [Maintenance](#maintenance)
 - [Games installed elsewhere](#games-installed-elsewhere)
+- [Games from no store](#games-from-no-store)
 - [Steam games](#steam-games)
 - [Proton builds](#proton-builds)
 - [Settings](#settings)
@@ -489,6 +490,32 @@ slatty forget <game-id>
 Imported games cannot be verified or uninstalled, because SlattyLauncher does not know which files
 belong to them.
 
+## Games from no store
+
+Games bought elsewhere, or made by yourself, can join the library by the program that starts
+them:
+
+```sh
+slatty add <program> --title <title> [--folder <folder>] [--working-dir <folder>] [--proton <Proton dir>] [--isolated | --not-isolated] [-- <arguments>]
+slatty remove <game-id> [--delete-prefix]
+```
+
+- A Windows program (`.exe`) runs through umu and Proton, in a Wine prefix of its own made at its
+  first launch; a Linux program, script or AppImage runs as GOG's Linux builds do (see
+  [Playing](#playing)). Which one it is comes from the file itself, not its name.
+- The game's folder is the program's own unless `--folder` names one holding it; an isolated game
+  can write in it, so a folder holding your home folder, or the whole disk, is refused. Isolation
+  is as for a game installed now (Settings → Installs) unless told.
+- The game gets the id `local-<number>`, listed by `slatty library list` (no GOG account needed),
+  and is played with `slatty launch`, like any other.
+- It has no cloud saves and no achievements, and GOG is never told of it: its play time stays on
+  this computer. umu's database is not asked for its fixes.
+- `slatty add` says so when the folder holds a GOG game: installed from GOG, it would have its cloud
+  saves and achievements.
+- `slatty remove` takes it out of the library and never deletes its files, which are yours. With
+  `--delete-prefix`, the prefix SlattyLauncher made for it is deleted too, its `users` folder (the
+  saves) copied to the backups first.
+
 ## Steam games
 
 The games of the account signed in to the Steam client can show in the library beside GOG's, off
@@ -713,6 +740,7 @@ corners and the page transition. See [theming](theming.md).
 | `~/.local/share/slatty/protons/<name>/` | Proton builds downloaded from GitHub |
 | `~/.local/share/slatty/homes/<id>/` | The home folder of an isolated game: what it writes there, a Linux game's saves among them. Kept when the game is uninstalled |
 | `~/.local/share/slatty/manifests/<id>.json` | Files installed for each game |
+| `~/.local/share/slatty/added/<id>.json` | What a game added by hand starts: its program, arguments and working directory |
 | `~/.local/share/slatty/custom/<id>/` | Covers and backgrounds you chose for a game |
 | `~/.local/share/slatty/backups/` | Copies made before any save is replaced or a prefix deleted |
 | `~/.local/share/slatty/diagnostics/` | Cloud copies downloaded by `slatty cloud diff` |

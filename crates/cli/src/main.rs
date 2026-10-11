@@ -1,4 +1,5 @@
 mod achievements;
+mod added;
 mod auth;
 mod cloud;
 mod games;
@@ -35,6 +36,10 @@ enum Command {
     Install(install::InstallArgs),
     /// Register a game that is already installed
     Import(games::ImportArgs),
+    /// Add a game from no store, by the program that starts it
+    Add(added::AddArgs),
+    /// Take a game added by hand out of the library; its files are left untouched
+    Remove(added::RemoveArgs),
     /// List installed games and interrupted installs
     Installs,
     /// Show the command that would launch a game
@@ -116,6 +121,8 @@ async fn run() -> Result<()> {
         Command::Auth(cmd) => auth::run(&ctx, cmd).await,
         Command::Library(cmd) => library::run(&ctx, cmd).await,
         Command::Import(args) => games::import(&ctx, args),
+        Command::Add(args) => added::add(&ctx, args),
+        Command::Remove(args) => added::remove(&ctx, args),
         Command::Install(args) => install::run(&ctx, args).await,
         Command::Installs => games::list(&ctx).and_then(|()| install::list_jobs(&ctx)),
         Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),

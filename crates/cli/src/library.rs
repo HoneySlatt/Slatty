@@ -9,7 +9,8 @@ use crate::{Ctx, shown};
 pub enum LibraryCommand {
     /// Download the library and refresh the local cache
     Sync,
-    /// List games from the local cache (works offline), and Steam's once turned on
+    /// List games from the local cache (works offline), Steam's once turned on, and those added
+    /// by hand
     List {
         /// Case-insensitive title filter
         search: Option<String>,
@@ -49,6 +50,7 @@ pub async fn run(ctx: &Ctx, cmd: LibraryCommand) -> Result<()> {
                 }
             };
             let steam = crate::steam::games(ctx)?;
+            let added = slatty_core::added::library(&ctx.db)?;
             match Account::active(&ctx.db)? {
                 Some(info) => match library::load_cache(&ctx.dirs, &info.user_id)? {
                     Some(cache) => {
@@ -57,13 +59,17 @@ pub async fn run(ctx: &Ctx, cmd: LibraryCommand) -> Result<()> {
                     }
                     None => println!("No cached library yet. Run `slatty library sync`."),
                 },
-                // Steam's games need no GOG account.
-                None if steam.is_some() => {}
+                // Steam's games and those added by hand need no GOG account.
+                None if steam.is_some() || !added.is_empty() => {}
                 None => return Err(slatty_core::Error::NotLoggedIn.into()),
             }
             if let Some(steam) = steam {
                 print(&steam.games);
                 println!("(Steam games, read from the Steam client's files)");
+            }
+            if !added.is_empty() {
+                print(&added);
+                println!("(games added by hand)");
             }
         }
     }
