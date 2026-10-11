@@ -27,12 +27,16 @@ impl App {
     pub fn load_achievements(&mut self, game_id: String) -> Task<Message> {
         // A Steam game's are read from the Steam client's files, without any GOG account.
         if self.steam_game(&game_id).is_some() {
+            // Read for the account whose games show, once they are read.
+            let Some(account) = self.steam.account else {
+                return Task::none();
+            };
             self.achievements.insert(game_id.clone(), Loadable::Loading);
             let web = self
                 .asks_steam_web()
-                .then(|| Some((self.core.as_ref()?.http.clone(), self.steam.account?)))
+                .then(|| Some(self.core.as_ref()?.http.clone()))
                 .flatten();
-            return crate::steam::load_achievements(game_id, self.steam.images, web);
+            return crate::steam::load_achievements(game_id, self.steam.images, account, web);
         }
         let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
             return Task::none();

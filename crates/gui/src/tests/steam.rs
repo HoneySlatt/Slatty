@@ -357,6 +357,22 @@ fn steam_achievements_show_with_gogs_and_are_never_changed_by_hand() {
     let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(other))));
     assert!(!app.achievements.contains_key("steam-440"));
     assert!(app.steam.achievements.is_empty());
+    // A list read for the first account, arriving late, is not taken for the new one's.
+    let _ = app.update(Message::LoadAchievements("steam-440".into()));
+    let late = vec![fake_achievement("Known", true)];
+    let _ = app.update(Message::Steam(SteamMsg::Achieved(
+        76561198000000002,
+        "steam-440".into(),
+        Ok(late.clone()),
+    )));
+    assert!(!app.achievements.contains_key("steam-440"));
+    assert!(app.steam.achievements.is_empty());
+    let _ = app.update(Message::Steam(SteamMsg::Achieved(
+        76561198000000009,
+        "steam-440".into(),
+        Ok(late),
+    )));
+    assert_eq!(app.steam.achievements["steam-440"], (1, 1));
 }
 
 /// An install Steam makes shows on the game's page and in the Downloads tab, its manifest read

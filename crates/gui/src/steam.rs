@@ -88,6 +88,12 @@ pub enum SteamMsg {
     Played(Option<(u64, HashMap<String, Played>)>),
     /// Unlocked and total achievements of the games that have any, with the account's Steam id.
     Counted(Option<(u64, Counts)>),
+    /// A game's achievements, read for the account of that Steam id.
+    Achieved(
+        u64,
+        String,
+        Result<Vec<slatty_core::achievements::Achievement>, String>,
+    ),
     /// Time to look at which games Steam runs.
     Look,
     /// The games Steam runs, by app id.
@@ -257,6 +263,15 @@ impl App {
                 self.steam.achievements = counts;
             }
             SteamMsg::Counted(_) => {}
+            SteamMsg::Achieved(account, game_id, list)
+                if self.steam.on && self.steam.account == Some(account) =>
+            {
+                return self.achievements_received(game_id, list);
+            }
+            // Read for an account no longer shown: read again when asked.
+            SteamMsg::Achieved(_, game_id, _) => {
+                self.achievements.remove(&game_id);
+            }
             SteamMsg::Look if self.steam.on => return look(),
             SteamMsg::Look => {}
             SteamMsg::Running(apps) => {
@@ -688,7 +703,8 @@ fn count_achievements(apps: Vec<u32>) -> Task<Message> {
 pub fn load_achievements(
     game_id: String,
     icons: bool,
-    web: Option<(slatty_core::http::HttpClient, u64)>,
+    account: u64,
+    web: Option<slatty_core::http::HttpClient>,
 ) -> Task<Message> {
     let id = game_id.clone();
     Task::perform(
@@ -697,7 +713,8 @@ pub fn load_achievements(
             let here = tokio::task::spawn_blocking(move || {
                 let home = std::env::var_os("HOME").map(std::path::PathBuf::from)?;
                 let steam = local::find(&home)?;
-                let user = local::signed_in_user(&steam)?;
+                // Another account signed in to Steam meanwhile: not its achievements.
+                let user = local::signed_in_user(&steam).filter(|u| u.id64 == account)?;
                 slatty_core::steam::stats::achievements(&steam, &user, app, icons)
             })
             .await
@@ -705,7 +722,7 @@ pub fn load_achievements(
             .flatten();
             match (here, web) {
                 (Some(list), _) => Ok(list),
-                (None, Some((http, account))) => {
+                (None, Some(http)) => {
                     let key = web_key().await?;
                     web::achievements(&http, &key, account, app, icons)
                         .await
@@ -719,7 +736,7 @@ pub fn load_achievements(
                 ),
             }
         },
-        move |list| Message::Achievements(game_id, list),
+        move |list| Message::Steam(SteamMsg::Achieved(account, game_id, list)),
     )
 }
 
