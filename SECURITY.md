@@ -175,7 +175,9 @@ isolated game:
   given (`sh`, `sc`, `Z:\…\game.exe`), or a link named as its working directory, would have umu
   share the whole disk or the container where the link leads; the launch is refused instead. The
   daily runtime refresh and the sandbox check, which run outside the container, take nothing from
-  the folder the launcher was started in (a `true` a game wrote in its folder);
+  the folder the launcher was started in (a `true` a game wrote in its folder), and links a game
+  made in its own home's `.steam`, which would have your Steam installation shared, are taken
+  away before each launch;
 - the D-Bus session and system buses stay out: through them a program could have other services
   act for it (systemd starting a command outside the container, or, where your system allows it,
   suspending the computer or mounting a drive). Wine loses only Bluetooth devices reached through

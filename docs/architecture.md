@@ -264,7 +264,8 @@ through its environment (`runner::isolation_env`) to share less:
 - `HOME` set to the game's own home as well: pressure-vessel shares the Steam installation
   (`~/.steam` and where its links lead, `~/.local/share/Steam` with the client's settings and
   tokens) read-only with every game, from the home folder `HOME` names (`wrap-home.c`,
-  `expose_steam`). umu keeps its runtimes and cache where they are through `XDG_DATA_HOME` and
+  `expose_steam`). The game writes its own home, so links it put in its `.steam` (or that folder
+  as a link) are taken away before each launch (`runner::forget_steam_links`). umu keeps its runtimes and cache where they are through `XDG_DATA_HOME` and
   `XDG_CACHE_HOME`, which the container replaces with the game's own. One of Valve's own Proton
   builds (in a Steam library's `steamapps/common`) is the exception: its `steam.exe` stops
   (`steamclient_init unable to load native steamclient library`, then an assertion) unless it

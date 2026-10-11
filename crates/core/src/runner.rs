@@ -457,6 +457,29 @@ fn steam_sdk_links(home: &Path, libs: &[PathBuf; 2]) -> Result<()> {
     Ok(())
 }
 
+/// Takes away the links in `home/.steam`, and that folder itself when it is one: pressure-vessel
+/// looks at `$HOME/.steam` from outside the container to share the Steam installation, and a game
+/// writes its own home, so it could have linked the user's there (the client's settings and
+/// tokens). SlattyLauncher's own `sdk64` and `sdk32` are folders, which stay.
+fn forget_steam_links(home: &Path) -> Result<()> {
+    let steam = home.join(".steam");
+    let unlink = |path: &Path| {
+        std::fs::remove_file(path).map_err(|e| Error::io(format!("delete {}", path.display()), e))
+    };
+    match std::fs::symlink_metadata(&steam) {
+        Ok(m) if m.is_symlink() => unlink(&steam),
+        Ok(m) if m.is_dir() => {
+            for entry in std::fs::read_dir(&steam).into_iter().flatten().flatten() {
+                if entry.file_type().is_ok_and(|t| t.is_symlink()) {
+                    unlink(&entry.path())?;
+                }
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Where an isolated game finds a home folder of its own, in place of the user's. It holds what
 /// the game writes there, Linux games' saves among them.
 pub fn isolated_home(dirs: &Dirs, game_id: &str) -> Result<PathBuf> {
@@ -475,6 +498,7 @@ fn isolation_env(
 ) -> Result<Vec<(String, String)>> {
     let home = isolated_home(dirs, &install.game_id)?;
     crate::paths::ensure_dir(&home)?;
+    forget_steam_links(&home)?;
     let mut read_only = vec![
         umu_data(),
         crate::setup::redist_dir(dirs),
@@ -1290,6 +1314,44 @@ mod tests {
             isolated_home(&dirs, "1").unwrap(),
             dirs.data.join("homes/1")
         );
+    }
+
+    /// pressure-vessel looks at `$HOME/.steam`, here the game's own home, which the game writes,
+    /// from outside the container: a link the game put there to the user's Steam installation would
+    /// have it shared as the user's own (the client's settings and tokens). Such links go before
+    /// each isolated launch; SlattyLauncher's own `sdk64` and `sdk32` folders stay.
+    #[test]
+    fn links_a_game_put_in_its_steam_folder_go_before_it_starts() {
+        let root = std::env::temp_dir().join(format!("slatty-home-steam-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dirs = Dirs::under(&root.join("slatty"));
+        let install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: root.join("game"),
+            client_id: None,
+            runner: Runner::Native,
+            umu_id: None,
+            isolated: true,
+        };
+        let home = isolated_home(&dirs, "1").unwrap();
+        let steam = root.join("user/.steam");
+        std::fs::create_dir_all(&steam).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        std::os::unix::fs::symlink(&steam, home.join(".steam")).unwrap();
+        isolation_env(&dirs, &install, None).unwrap();
+        assert!(
+            std::fs::symlink_metadata(home.join(".steam")).map_or(true, |m| !m.is_symlink()),
+            "the link went"
+        );
+        assert!(steam.is_dir(), "not what it led to");
+        std::fs::create_dir_all(home.join(".steam/sdk64")).unwrap();
+        std::os::unix::fs::symlink(&steam, home.join(".steam/root")).unwrap();
+        isolation_env(&dirs, &install, None).unwrap();
+        assert!(std::fs::symlink_metadata(home.join(".steam/root")).is_err());
+        assert!(home.join(".steam/sdk64").is_dir());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     /// An isolated game following `<project>-latest` gets the build the link leads to as the
