@@ -119,10 +119,13 @@ impl App {
                 if on {
                     return load(self.steam.images);
                 }
+                // What is forgotten is what was read; the switches stay as they are saved.
                 let found = self.steam.found.take();
                 self.steam = crate::steam::SteamView {
                     found,
                     images: self.steam.images,
+                    web: self.steam.web,
+                    web_key: self.steam.web_key,
                     ..Default::default()
                 };
                 self.merge_steam();

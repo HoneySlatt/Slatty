@@ -550,6 +550,18 @@ fn steams_web_api_fills_in_once_turned_on_and_its_games_go_with_it() {
 
     let _ = app.update(Message::Steam(SteamMsg::WebApi(false)));
     assert!(!ids(&app).contains(&"steam-70") && ids(&app).contains(&"steam-440"));
+
+    // Steam's games turned off and on keep the switches as they are saved: what Settings shows
+    // is what the next start does.
+    let _ = app.update(Message::Steam(SteamMsg::WebApi(true)));
+    let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
+    let _ = app.update(Message::Steam(SteamMsg::Switch(true)));
+    assert_eq!(
+        (app.steam.web, app.steam.web_key),
+        (true, Some(true)),
+        "on, as saved"
+    );
+    assert!(slatty_core::settings::steam_web_api(&db).unwrap());
 }
 
 /// A Steam game renamed in Edit game gets Steam's own title back with Reset to default.
