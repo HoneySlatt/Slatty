@@ -101,8 +101,21 @@ pub async fn achievements(
     steam_id: u64,
     app_id: u32,
     icons: bool,
+    allowed: &std::sync::atomic::AtomicBool,
 ) -> Result<Vec<Achievement>> {
-    achievements_at(http, API, key, steam_id, app_id, icons).await
+    achievements_at(http, API, key, steam_id, app_id, icons, allowed).await
+}
+
+/// Refuses once the Web API was turned off (`allowed`), before each request: a game's
+/// achievements take three, each tried up to three times.
+fn still_allowed(allowed: &std::sync::atomic::AtomicBool) -> Result<()> {
+    if allowed.load(std::sync::atomic::Ordering::Relaxed) {
+        Ok(())
+    } else {
+        Err(crate::error::Error::Refused(
+            "Steam's Web API is turned off".into(),
+        ))
+    }
 }
 
 async fn achievements_at(
@@ -112,6 +125,7 @@ async fn achievements_at(
     steam_id: u64,
     app_id: u32,
     icons: bool,
+    allowed: &std::sync::atomic::AtomicBool,
 ) -> Result<Vec<Achievement>> {
     #[derive(Deserialize)]
     struct Schema {
@@ -160,6 +174,7 @@ async fn achievements_at(
         unlocktime: i64,
     }
     let app = app_id.to_string();
+    still_allowed(allowed)?;
     let schema = http
         .get(format!("{api}/ISteamUserStats/GetSchemaForGame/v2/"))
         .query(&[("key", key.expose()), ("appid", &app), ("l", "english")]);
@@ -168,6 +183,7 @@ async fn achievements_at(
     if defined.is_empty() {
         return Ok(Vec::new());
     }
+    still_allowed(allowed)?;
     let player = http
         .get(format!("{api}/ISteamUserStats/GetPlayerAchievements/v1/"))
         .query(&[
@@ -184,6 +200,7 @@ async fn achievements_at(
         .map(|a| (a.apiname, a.unlocktime))
         .collect();
     // How common each is: a nice-to-have, which needs no key.
+    still_allowed(allowed)?;
     let rarity = rarity_at(http, api, app_id).await.unwrap_or_default();
     let icon = |url: &str| {
         let file = url.rsplit('/').next().unwrap_or_default();
@@ -352,6 +369,43 @@ mod tests {
         assert_eq!(games.unwrap(), []);
     }
 
+    /// Turned off while a game's achievements are asked for, Steam's Web API is asked nothing more:
+    /// neither the account's unlocks (key and Steam id in the address) nor how common they are.
+    #[tokio::test]
+    async fn achievements_ask_nothing_more_once_the_web_api_is_turned_off() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let api = format!("http://{}", listener.local_addr().unwrap());
+        let allowed = Arc::new(AtomicBool::new(true));
+        let asked = Arc::new(AtomicUsize::new(0));
+        let (flag, count) = (allowed.clone(), asked.clone());
+        let server = tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                count.fetch_add(1, Ordering::SeqCst);
+                let mut buf = vec![0u8; 8192];
+                let _ = socket.read(&mut buf).await;
+                // Turned off as the first answer comes.
+                flag.store(false, Ordering::SeqCst);
+                let body = r#"{"game":{"availableGameStats":{"achievements":[
+                    {"name":"ACH_WAKE","displayName":"[FAKE] Wake up","hidden":0}]}}}"#;
+                let reply = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\
+                     connection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                socket.write_all(reply.as_bytes()).await.unwrap();
+            }
+        });
+        let key = Secret::new("FAKEKEY0123");
+        let list =
+            achievements_at(&http::client().unwrap(), &api, &key, 1, 70, true, &allowed).await;
+        assert!(matches!(list, Err(Error::Refused(_))), "{list:?}");
+        assert_eq!(asked.load(Ordering::SeqCst), 1);
+        server.abort();
+    }
+
     #[tokio::test]
     async fn achievements_come_from_the_schema_and_the_accounts_unlocks() {
         let (api, requests) = serve(
@@ -383,7 +437,8 @@ mod tests {
         )
         .await;
         let key = Secret::new("FAKEKEY0123");
-        let list = achievements_at(&http::client().unwrap(), &api, &key, 1, 70, true)
+        let on = std::sync::atomic::AtomicBool::new(true);
+        let list = achievements_at(&http::client().unwrap(), &api, &key, 1, 70, true, &on)
             .await
             .unwrap();
         assert_eq!(list.len(), 2);

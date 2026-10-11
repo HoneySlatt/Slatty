@@ -873,9 +873,9 @@ pub fn load_achievements(
                 {
                     Err("Steam's Web API is turned off.".to_string())
                 }
-                (None, Some((http, _))) => {
+                (None, Some((http, allowed))) => {
                     let key = web_key().await?;
-                    web::achievements(&http, &key, account, app, icons)
+                    web::achievements(&http, &key, account, app, icons, &allowed)
                         .await
                         .map_err(|e| e.to_string())
                 }
