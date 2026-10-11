@@ -575,6 +575,48 @@ fn library_at_10000_games() {
             big.saturating_sub(base)
         );
     }
+    // 1,000 Steam games beside them, a tenth owned on GOG too (50 named by GOG's database, 50 by
+    // title): merged as the library loads or GOG's is refreshed, then listed with GOG's.
+    app.page = Page::Library;
+    for (i, g) in app.library.iter_mut().take(100).enumerate() {
+        if i < 50 {
+            g.steam = vec![i as u32 + 1];
+        } else {
+            g.title = format!("[FAKE] Steam 世界 {}: The Long Journey", i + 1);
+        }
+    }
+    app.steam.on = true;
+    app.steam.games = (1..=1_000u32)
+        .map(|i| {
+            let mut g = fake_game(
+                &slatty_core::store::steam_id(i),
+                &format!("Steam 世界 {i}: The Long Journey"),
+            );
+            g.os = vec!["windows".into(), "linux".into()];
+            g
+        })
+        .collect();
+    let t = std::time::Instant::now();
+    for _ in 0..10 {
+        app.merge_steam();
+    }
+    println!(
+        "Steam's games merged: {:?} ({} games, {} owned on both)",
+        t.elapsed() / 10,
+        app.library.len(),
+        app.steam.twins.len()
+    );
+    for sort in Sort::ALL {
+        app.sort = sort;
+        app.lists.clear();
+        time(&app, &format!("view with Steam's, {sort}"));
+    }
+    let t = std::time::Instant::now();
+    for _ in 0..10 {
+        app.lists.clear();
+        let _ = app.visible_games();
+    }
+    println!("list made again with Steam's: {:?}", t.elapsed() / 10);
 }
 
 #[test]

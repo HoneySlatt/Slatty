@@ -38,6 +38,8 @@ pub struct SteamView {
     pub images: bool,
     /// The Steam id of the account whose games show.
     pub account: Option<u64>,
+    /// Why the client's list of apps could not be read, which leaves no game to show.
+    pub unreadable: Option<String>,
     pub games: Vec<LibraryGame>,
     /// Their covers, as the client cached them or as downloaded, by game id.
     pub covers: HashMap<String, std::path::PathBuf>,
@@ -47,6 +49,8 @@ pub struct SteamView {
     pub twins: HashMap<String, String>,
     /// When what Steam downloads last changed: its manifests are read until it stays the same.
     pub download_moved: Option<Instant>,
+    /// Whether the library folders are being read.
+    pub reading_installed: bool,
     /// How long each game was played and when last, as Steam records it, by game id.
     pub played: HashMap<String, Played>,
     pub achievements: Counts,
@@ -124,6 +128,7 @@ impl App {
                 self.steam.games = library.games;
                 self.steam.covers = library.covers;
                 self.steam.played = library.played;
+                self.steam.unreadable = library.unreadable;
                 let apps = self
                     .steam
                     .games
@@ -132,7 +137,7 @@ impl App {
                     .collect();
                 self.merge_steam();
                 return Task::batch([
-                    read_installed(),
+                    self.read_steam_installed(),
                     self.download_covers(),
                     count_achievements(apps),
                 ]);
@@ -145,6 +150,7 @@ impl App {
             }
             SteamMsg::Cover(..) => {}
             SteamMsg::Installed(games) if self.steam.on => {
+                self.steam.reading_installed = false;
                 let mut read: HashMap<String, Option<Installed>> = self
                     .steam
                     .installed
@@ -158,7 +164,7 @@ impl App {
                 );
                 return self.steam_installed(read);
             }
-            SteamMsg::Installed(_) => {}
+            SteamMsg::Installed(_) => self.steam.reading_installed = false,
             SteamMsg::ReadDownloads if self.steam.on => {
                 let downloading: Vec<Installed> = self
                     .steam
@@ -397,12 +403,21 @@ impl App {
     pub fn watching_steam(&self) -> bool {
         self.steam.on && (self.steam.starting.is_some() || !self.steam.running.is_empty())
     }
-}
 
-/// What may have changed while the window was in the background: the games installed, play
-/// times and the account (Steam's own window, or a game played from it), the games running.
-pub fn refresh() -> Task<Message> {
-    Task::batch([read_installed(), read_played(), look()])
+    /// What may have changed while the window was in the background: the games installed, play
+    /// times and the account (Steam's own window, or a game played from it), the games running.
+    pub fn refresh_steam(&mut self) -> Task<Message> {
+        Task::batch([self.read_steam_installed(), read_played(), look()])
+    }
+
+    /// Reads the games installed in Steam's library folders, unless a read still runs: a network
+    /// drive waking up holds it for seconds, and each focus of the window would add another.
+    fn read_steam_installed(&mut self) -> Task<Message> {
+        if std::mem::replace(&mut self.steam.reading_installed, true) {
+            return Task::none();
+        }
+        read_installed()
+    }
 }
 
 /// Reads the play times of the account signed in to Steam.
@@ -502,7 +517,7 @@ pub fn load(from_servers: bool) -> Task<Message> {
 }
 
 /// Reads the games installed in Steam's library folders, which can be network drives.
-pub fn read_installed() -> Task<Message> {
+fn read_installed() -> Task<Message> {
     Task::perform(
         async {
             tokio::task::spawn_blocking(|| {

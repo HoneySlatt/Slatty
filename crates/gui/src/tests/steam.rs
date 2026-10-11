@@ -31,6 +31,7 @@ fn steam_library() -> SteamLibrary {
             steam_game(620, "[FAKE] Portal"),
         ],
         covers: std::collections::HashMap::new(),
+        unreadable: None,
         played: std::collections::HashMap::from([(
             "steam-440".to_string(),
             Played {
@@ -424,6 +425,39 @@ fn a_game_owned_on_both_shows_once_as_gogs() {
     let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
     assert!(app.steam_twin("1").is_none() && !app.is_installed("1"));
     assert_eq!(app.library.len(), 14);
+}
+
+/// What can go wrong with Steam's files is said, not hidden: a list of apps Steam changed the
+/// format of leaves no game to name, and Settings says why. A library folder slow to answer (a
+/// network drive waking up) is not asked again at each focus of the window meanwhile.
+#[test]
+fn steam_files_that_cannot_be_read_are_told_and_slow_folders_not_asked_twice() {
+    let mut app = library_app();
+    app.steam.on = true;
+    app.steam.found = Some("[FAKE] Player".into());
+    let mut library = steam_library();
+    library.games.clear();
+    library.unreadable = Some("[FAKE] unknown version 0x7564430".into());
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(library))));
+    app.page = Page::Settings;
+    app.window = Size::new(1440.0, 2400.0);
+    {
+        let mut ui = render_window(&app);
+        let all = texts(&mut ui);
+        assert!(
+            all.iter()
+                .any(|t| t.contains("[FAKE] unknown version 0x7564430")),
+            "{all:?}"
+        );
+    }
+
+    assert!(app.steam.reading_installed, "read after the library");
+    let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));
+    assert!(app.steam.reading_installed);
+    let _ = app.update(Message::Steam(SteamMsg::Installed(Vec::new())));
+    assert!(!app.steam.reading_installed);
+    let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));
+    assert!(app.steam.reading_installed, "read again at the next focus");
 }
 
 /// GOG is asked about GOG's games alone: Steam's never count as games GOG could not describe.

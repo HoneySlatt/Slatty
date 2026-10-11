@@ -501,7 +501,8 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
 ```
 
 - **Read from Steam's own files, never written.** SlattyLauncher finds Steam (installed natively or
-  as a Flatpak) and the account last signed in to it, then reads the account's games
+  as a Flatpak; with both, the one an account signed in to last) and the account last signed in to
+  it, then reads the account's games
   (`userdata/<account>/config/librarycache`), their names and images (`appcache/appinfo.vdf` and
   the client's image cache) and the games installed in each Steam library folder
   (`appmanifest_*.acf`). No Steam password or key is ever asked for.
@@ -549,7 +550,9 @@ slatty library list    # Steam's games too once turned on, with or without a GOG
   the sessions of both, and its last session is the latest of either. Its achievements and cloud
   saves are GOG's.
 - Steam's games can be renamed, illustrated, hidden and marked as favorites like GOG's. A game the
-  Steam client has no details of yet (some recently added games) does not show until it has.
+  Steam client has no details of yet (some recently added games) does not show until it has. If
+  Steam changes the format of its list of apps (`appcache/appinfo.vdf`), no Steam game can show
+  until SlattyLauncher reads the new one: Settings → Steam and `slatty steam status` say so.
 
 ## Proton builds
 

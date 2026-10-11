@@ -609,6 +609,12 @@ impl App {
                     )
                     .size(22),
                 note(found),
+                self.steam.unreadable.as_ref().filter(|_| self.steam.on).map(|e| {
+                    note(format!(
+                        "Steam's list of games (appcache/appinfo.vdf) could not be read, so none \
+                         can show: {e}. A Steam update may have changed it; tell us."
+                    ))
+                }),
                 note(
                     "They are installed, played, verified and uninstalled by the Steam client, \
                      which must be installed and signed in, and they cannot run isolated from your \

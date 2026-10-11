@@ -27,6 +27,9 @@ pub struct SteamLibrary {
     pub covers: HashMap<String, PathBuf>,
     /// How long each game was played and when last, by game id.
     pub played: HashMap<String, local::Played>,
+    /// Why the client's list of apps (`appinfo.vdf`) could not be read, which leaves no game to
+    /// name: a version of the file not known yet, a damaged one.
+    pub unreadable: Option<String>,
 }
 
 /// The library of the account signed in to Steam; none when no account ever signed in. With
@@ -37,9 +40,15 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
     let user = local::signed_in_user(steam)?;
     let owned = local::owned(steam, &user);
     let wanted: HashSet<u32> = owned.iter().copied().collect();
-    let apps = appinfo::read(&steam.root.join("appcache/appinfo.vdf"), &wanted)
-        .inspect_err(|e| tracing::warn!("Steam's appinfo.vdf: {e}"))
-        .unwrap_or_default();
+    let (apps, unreadable) = match appinfo::read(&steam.root.join("appcache/appinfo.vdf"), &wanted)
+    {
+        Ok(apps) => (apps, None),
+        Err(_) if wanted.is_empty() => (HashMap::new(), None),
+        Err(e) => {
+            tracing::warn!("Steam's appinfo.vdf: {e}");
+            (HashMap::new(), Some(e.to_string()))
+        }
+    };
     let images = steam.root.join("appcache/librarycache");
     let mut played = local::played(steam, &user);
     let mut library = SteamLibrary {
@@ -47,6 +56,7 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
         games: Vec::new(),
         covers: HashMap::new(),
         played: HashMap::new(),
+        unreadable,
     };
     for app_id in owned {
         let Some(common) = apps
@@ -321,6 +331,32 @@ mod tests {
                 .flatten()
                 .all(|url| is_server_image(url))
         }));
+    }
+
+    /// A version of appinfo.vdf not known yet (or a damaged one) leaves no game to name: said, so
+    /// that the library is not merely empty.
+    #[test]
+    fn an_appinfo_that_cannot_be_read_is_told() {
+        let fake = FakeSteam::new("library-unreadable");
+        let library = read(&fake.steam, false).unwrap();
+        assert!(
+            library.games.is_empty() && library.unreadable.is_some(),
+            "missing"
+        );
+        std::fs::create_dir_all(fake.steam.root.join("appcache")).unwrap();
+        let mut newer =
+            crate::steam::appinfo::tests::fake_appinfo(&[(70, "[FAKE] Life", "game", "")]);
+        newer[0] = 0x2A;
+        std::fs::write(fake.steam.root.join("appcache/appinfo.vdf"), newer).unwrap();
+        let library = read(&fake.steam, false).unwrap();
+        assert!(
+            library
+                .unreadable
+                .as_deref()
+                .is_some_and(|e| e.contains("unknown version")),
+            "{:?}",
+            library.unreadable
+        );
     }
 
     #[test]

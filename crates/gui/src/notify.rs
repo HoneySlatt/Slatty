@@ -144,7 +144,7 @@ impl App {
                 // Back from Steam's own window (an install, an uninstall, another account), or
                 // from a game played through it.
                 if focused && self.steam.on {
-                    return crate::steam::refresh();
+                    return self.refresh_steam();
                 }
             }
             NotifyMsg::Expire(now) => self.toasts.retain(|t| t.until > now),

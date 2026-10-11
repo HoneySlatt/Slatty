@@ -53,12 +53,21 @@ fn status(ctx: &Ctx) -> Result<()> {
         .into_iter()
         .filter(|i| ids.contains(slatty_core::store::steam_id(i.app_id).as_str()))
         .collect();
-    let updating = installed.iter().filter(|i| !i.ready).count();
-    println!(
-        "Games:        {} ({} installed, {updating} of them downloading or updating)",
-        library.games.len(),
-        installed.len()
-    );
+    let updating = installed
+        .iter()
+        .filter(|i| i.update.is_some_and(|u| u.started))
+        .count();
+    match &library.unreadable {
+        Some(e) => println!(
+            "Games:        none can be named: appcache/appinfo.vdf could not be read ({})",
+            shown(e)
+        ),
+        None => println!(
+            "Games:        {} ({} installed, {updating} of them downloading or updating)",
+            library.games.len(),
+            installed.len()
+        ),
+    }
     let on = |on: bool| if on { "on" } else { "off" };
     println!(
         "In the library: {} (Settings → Steam in slatty-gui)",
