@@ -145,8 +145,13 @@ pub async fn play(
 ) -> Result<()> {
     let _busy = crate::lock::game(dirs, &req.game_id)?;
     let user_id = Account::active(db)?.map(|a| a.user_id);
-    let mut install = Install::get(db, &req.game_id)?
-        .ok_or_else(|| Error::NotFound(format!("{} is not imported", req.game_id)))?;
+    let mut install = Install::get(db, &req.game_id)?.ok_or_else(|| {
+        Error::NotFound(if crate::store::is_local(&req.game_id) {
+            format!("{} is not in the library", req.game_id)
+        } else {
+            format!("{} is not imported", req.game_id)
+        })
+    })?;
     crate::umu::resolve(db, http, &mut install).await;
     if crate::maintenance::update_pending(db, &req.game_id)?.is_some() {
         return Err(Error::Refused(
@@ -611,6 +616,32 @@ mod tests {
         assert!(recover_unfinished(&db, &dirs).unwrap().is_empty());
         drop(held);
         assert_eq!(recover_unfinished(&db, &dirs).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A game added by hand, removed since, is said to be no longer in the library: it was never
+    /// imported.
+    #[tokio::test]
+    async fn a_game_added_by_hand_removed_since_is_not_in_the_library() {
+        let root = std::env::temp_dir().join(format!("slatty-play-removed-{}", std::process::id()));
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        let (_stop, stop) = tokio::sync::mpsc::unbounded_channel();
+        let request = PlayRequest {
+            game_id: "local-3".into(),
+            cloud: false,
+            comet: false,
+            supervisor: root.join("[FAKE] supervisor"),
+        };
+        let http = crate::http::client().unwrap();
+        let refused = play(&db, &dirs, &http, request, |_| {}, stop)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            refused.contains("local-3 is not in the library"),
+            "{refused}"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

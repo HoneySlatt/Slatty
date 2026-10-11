@@ -147,11 +147,17 @@ pub async fn run_installer(
 ) -> Result<String> {
     use crate::session::SessionHandle;
     let installer = real(installer)?;
-    if platform_of(&installer)? != Platform::Windows {
-        return Err(Error::Refused(format!(
-            "{} is not a Windows installer",
-            installer.display()
-        )));
+    match platform_of(&installer) {
+        Ok(Platform::Windows) => {}
+        Ok(Platform::Linux) | Err(Error::Refused(_)) => {
+            return Err(Error::Refused(format!(
+                "{} is no installer or archive SlattyLauncher can use: choose a Windows \
+                 installer (.exe), a Linux one (MojoSetup .sh), or a .zip, .tar.gz or .tar.xz \
+                 archive",
+                installer.display()
+            )));
+        }
+        Err(e) => return Err(e),
     }
     let folder = installer
         .parent()
@@ -341,13 +347,12 @@ pub async fn unpack(
     // attempt) is not the folder to unpack into.
     let partial = into.join(format!(".{name}.slatty-unpack"));
     std::fs::create_dir(&partial).map_err(|e| {
-        Error::io(
-            format!(
-                "make {} (remove it if it is left from before)",
-                partial.display()
-            ),
-            e,
-        )
+        let hint = if e.kind() == std::io::ErrorKind::AlreadyExists {
+            " (remove it if it is left from before)"
+        } else {
+            ""
+        };
+        Error::io(format!("make {}{hint}", partial.display()), e)
     })?;
     let game_id = next_id(db, dirs)?;
     let files = unpack_into(&archive, &partial, &target, cancel, progress).await;
@@ -1716,6 +1721,45 @@ mod tests {
         )
         .unwrap();
         assert_eq!(mode(&folder.join("Game/game")) & 0o777, 0o755);
+    }
+
+    /// An installer SlattyLauncher neither runs nor unpacks (a .7z, a .msi) is refused saying
+    /// which it takes, not which programs it starts.
+    #[tokio::test]
+    async fn an_installer_neither_run_nor_unpacked_is_refused_saying_which_are() {
+        let f = fake("seven-zip");
+        let archive = f.root.join("[FAKE] game.7z");
+        std::fs::write(&archive, b"7z\xbc\xaf\x27\x1c[FAKE]").unwrap();
+        assert!(!is_archive(&archive));
+        let supervisor = f.root.join("[FAKE] supervisor");
+        let refused = run_installer(&f.db, &f.dirs, &supervisor, &archive, None, false)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains(".tar.gz"), "{refused}");
+    }
+
+    /// Only a folder an earlier attempt left is said to be one to remove: a name the disk refuses
+    /// (too long, or with characters FAT or SMB refuse) is told plainly.
+    #[tokio::test]
+    async fn an_unpack_folder_that_cannot_be_made_says_why() {
+        let f = fake("unpack-folder");
+        let zip = f.root.join("[FAKE] game.zip");
+        let files = [zip_file("run.sh", b"#!/bin/sh\n")];
+        std::fs::write(
+            &zip,
+            crate::installer::zip::build::installer(b"", &files, false),
+        )
+        .unwrap();
+        let long = "[FAKE] ".repeat(40);
+        let refused = unpacked(&f, &zip, &long).await.unwrap_err().to_string();
+        assert!(!refused.contains("left from before"), "{refused}");
+        std::fs::create_dir_all(f.root.join("library/.[FAKE] Left.slatty-unpack")).unwrap();
+        let refused = unpacked(&f, &zip, "[FAKE] Left")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("left from before"), "{refused}");
     }
 
     /// A title's `:` stays out of the folder's name: an isolated game's folder is shared with its
