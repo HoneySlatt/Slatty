@@ -23,6 +23,8 @@ toml = "0.9"
 # The desktop's notifications; already built for Iced and the keyring, no crate added.
 zbus = "5"
 tracing-subscriber.workspace = true
+# The graphics backends to start with; already built for Iced, the same version, no crate added.
+wgpu = { version = "27", default-features = false }
 
 [dev-dependencies]
 iced_test = "0.14"

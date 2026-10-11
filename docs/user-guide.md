@@ -608,5 +608,6 @@ Comet's log may contain game client identifiers; review it before sharing.
 | Achievements are not reported | `~/.local/state/slatty/logs/comet.log`. `slatty doctor` must find `GalaxyCommunication.exe`; the launch output says whether the Galaxy service was registered. |
 | A cloud conflict blocks the launch | `slatty cloud diff <id>`, then `slatty cloud sync <id> --prefer local` or `--prefer remote`. |
 | The session was interrupted (crash, power loss) | The next launch reports it. Check `slatty cloud status <id>` before playing. |
+| The window looks wrong or slow after a graphics driver change | It starts with Vulkan alone once Vulkan was found to drive the graphics card, and goes back to every backend by itself after one start if Vulkan stops working. To choose yourself, start it with `WGPU_BACKEND=vulkan`, `gl` or `vulkan,gl`. |
 | Something went wrong without an explanation | Start `slatty` or `slatty-gui` with `SLATTY_LOG=warn` to print warnings on the terminal, such as a binary patch that could not be used. |
 | "another operation on this game is running" | An install, update, repair, uninstall, cloud sync or game session of that game is still running, maybe in another SlattyLauncher window or terminal, or the game itself still runs after SlattyLauncher was closed. Wait for it to finish. |

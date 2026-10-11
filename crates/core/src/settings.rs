@@ -24,6 +24,7 @@ const PROTON_UPDATES: &str = "proton_updates";
 const PROTON_CHECKED_AT: &str = "proton_checked_at";
 const SHARE_PROTONS: &str = "share_protons";
 const AUTO_UPDATE: &str = "auto_update";
+const VULKAN_ONLY: &str = "vulkan_only";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -164,6 +165,16 @@ pub fn auto_update(db: &Db) -> Result<bool> {
 
 pub fn set_auto_update(db: &Db, on: bool) -> Result<()> {
     db.set_setting(AUTO_UPDATE, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether the interface starts its graphics with Vulkan alone: found, at the last start, to be
+/// what it would pick among all its backends. Off until found.
+pub fn vulkan_only(db: &Db) -> Result<bool> {
+    Ok(db.setting(VULKAN_ONLY)?.as_deref() == Some("on"))
+}
+
+pub fn set_vulkan_only(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(VULKAN_ONLY, Some(if on { "on" } else { "off" }))
 }
 
 /// Whether notifications of a kind (`downloads`, `updates`, `achievements`, `cloud`, or `all`, the
@@ -400,6 +411,16 @@ mod tests {
         assert!(notifications(&db, "updates").unwrap(), "the others stay on");
         set_notifications(&db, "downloads", true).unwrap();
         assert!(notifications(&db, "downloads").unwrap());
+    }
+
+    #[test]
+    fn graphics_start_with_every_backend_until_vulkan_is_found() {
+        let db = Db::in_memory().unwrap();
+        assert!(!vulkan_only(&db).unwrap());
+        set_vulkan_only(&db, true).unwrap();
+        assert!(vulkan_only(&db).unwrap());
+        set_vulkan_only(&db, false).unwrap();
+        assert!(!vulkan_only(&db).unwrap());
     }
 
     fn build(dir: &Path) {
