@@ -22,6 +22,7 @@ const ISOLATE_NEW_GAMES: &str = "isolate_new_games";
 const PROTON_DOWNLOADS: &str = "proton_downloads";
 const PROTON_UPDATES: &str = "proton_updates";
 const PROTON_CHECKED_AT: &str = "proton_checked_at";
+const UMU_RUNTIMES_CHECKED_AT: &str = "umu_runtimes_checked_at";
 const SHARE_PROTONS: &str = "share_protons";
 const AUTO_UPDATE: &str = "auto_update";
 const VULKAN_ONLY: &str = "vulkan_only";
@@ -147,6 +148,17 @@ pub fn share_protons(db: &Db) -> Result<bool> {
 
 pub fn set_share_protons(db: &Db, on: bool) -> Result<()> {
     db.set_setting(SHARE_PROTONS, Some(if on { "on" } else { "off" }))
+}
+
+/// When umu last brought its runtimes up to date for isolated games, in seconds since the epoch.
+pub fn umu_runtimes_checked_at(db: &Db) -> Result<Option<i64>> {
+    Ok(db
+        .setting(UMU_RUNTIMES_CHECKED_AT)?
+        .and_then(|v| v.parse().ok()))
+}
+
+pub fn set_umu_runtimes_checked_at(db: &Db, at: i64) -> Result<()> {
+    db.set_setting(UMU_RUNTIMES_CHECKED_AT, Some(&at.to_string()))
 }
 
 /// When GitHub was last asked for newer Proton builds, in seconds since the epoch.

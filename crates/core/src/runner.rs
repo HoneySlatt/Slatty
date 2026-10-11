@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 
 use serde::{Deserialize, Serialize};
 
@@ -57,7 +58,7 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
             } else {
                 None
             };
-            let (program, mut args, mut env) = native_command(&script, wrapper);
+            let (mut program, mut args, mut env) = native_command(&script, wrapper);
             if install.isolated {
                 env.extend(isolation_env(dirs, install, None)?);
                 // Without one, umu takes `~/Games/umu/<id>` or the user's `$WINEPREFIX` as the
@@ -70,6 +71,8 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
                 // its interpreter, which umu looks for inside the container.
                 args.insert(0, interpreter_name(&script)?);
                 check_shared(install, &args, &install.path)?;
+                env.push(("UMU_RUNTIME_UPDATE".into(), "0".into()));
+                (program, args) = read_only_tools(program, args, None)?;
             }
             Ok(LaunchSpec {
                 program,
@@ -241,8 +244,14 @@ fn windows_spec(
             if !game {
                 env.push(("PROTONFIXES_DISABLE".into(), "1".into()));
             }
+            let (program, args) = if install.isolated {
+                env.push(("UMU_RUNTIME_UPDATE".into(), "0".into()));
+                read_only_tools(umu, args, Some(proton))?
+            } else {
+                (umu, args)
+            };
             Ok(LaunchSpec {
-                program: umu,
+                program,
                 args,
                 cwd,
                 env,
@@ -497,6 +506,109 @@ fn check_shared(install: &Install, args: &[String], cwd: &Path) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+/// `umu` and its arguments, run inside bubblewrap with umu's runtimes and the Proton build
+/// read-only. umu has the container share both writable (STEAM_COMPAT_MOUNTS), and programs of
+/// the runtime run outside the container at every launch: an isolated game could otherwise change
+/// them, and have its code run outside its container at the next launch, or in other games. What
+/// pressure-vessel writes as a game starts (its copy of the runtime in `var`, its `.ref` locks)
+/// stays writable; umu leaves the runtime as it is meanwhile (`UMU_RUNTIME_UPDATE=0`, see
+/// `refresh_runtimes`).
+fn read_only_tools(
+    umu: PathBuf,
+    args: Vec<String>,
+    proton: Option<&Path>,
+) -> Result<(PathBuf, Vec<String>)> {
+    let bwrap = find_in_path("bwrap").ok_or_else(|| {
+        Error::NotFound("bubblewrap (bwrap) is needed to run a game isolated".into())
+    })?;
+    let mut out: Vec<String> = ["--dev-bind", "/", "/"].map(String::from).to_vec();
+    let mut bind = |how: &str, path: &Path| {
+        let path = path.display().to_string();
+        out.extend([how.to_string(), path.clone(), path]);
+    };
+    for runtime in runtimes() {
+        bind("--ro-bind", &runtime);
+        let var = runtime.join("var");
+        crate::paths::ensure_dir(&var)?;
+        bind("--bind", &var);
+        for platform in std::fs::read_dir(&runtime).into_iter().flatten().flatten() {
+            let files = platform.path().join("files");
+            if files.is_dir() {
+                let lock = files.join(".ref");
+                if !lock.exists() {
+                    std::fs::File::create(&lock)
+                        .map_err(|e| Error::io(format!("create {}", lock.display()), e))?;
+                }
+                bind("--bind", &lock);
+            }
+        }
+    }
+    if let Some(proton) = proton {
+        bind("--ro-bind", proton);
+    }
+    out.push("--".into());
+    out.push(umu.display().to_string());
+    out.extend(args);
+    Ok((bwrap, out))
+}
+
+/// Brings umu's runtimes up to date, at most once a day, before an isolated launch: such
+/// launches use them read-only and leave them as they are (`read_only_tools`). umu runs nothing of
+/// a game's for it (`true` in each runtime), not isolated. A failure leaves the runtimes as they
+/// are, and the game starts with them.
+pub async fn refresh_runtimes(db: &crate::db::Db, dirs: &Dirs) {
+    const DAY: i64 = 24 * 60 * 60;
+    let now = chrono::Utc::now().timestamp();
+    let checked = crate::settings::umu_runtimes_checked_at(db).ok().flatten();
+    if checked.is_some_and(|at| (0..DAY).contains(&(now - at))) {
+        return;
+    }
+    let Some(umu) = find_in_path("umu-run") else {
+        return;
+    };
+    let _ = crate::paths::ensure_dir(&dirs.logs());
+    let Ok(log) = std::fs::File::create(dirs.logs().join("umu-runtimes.log")) else {
+        return;
+    };
+    for runtime in runtimes() {
+        let Some(name) = runtime.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if name.ends_with("-arm64") != cfg!(target_arch = "aarch64") {
+            continue;
+        }
+        let output =
+            |log: &std::fs::File| log.try_clone().map_or_else(|_| Stdio::null(), Into::into);
+        let _ = tokio::process::Command::new(&umu)
+            .arg("true")
+            .env("UMU_NO_PROTON", "1")
+            .env("RUNTIMEPATH", name)
+            .env("GAMEID", "umu-0")
+            // Else umu makes `~/Games/umu/umu-0` for a prefix.
+            .env("WINEPREFIX", dirs.data.join("umu-runtimes"))
+            .stdin(Stdio::null())
+            .stdout(output(&log))
+            .stderr(output(&log))
+            .status()
+            .await;
+    }
+    let _ = crate::settings::set_umu_runtimes_checked_at(db, now);
+}
+
+/// umu's runtimes (Steam Linux Runtime 2, 3, 4…), in umu's data folder.
+fn runtimes() -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(umu_data())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with("steamrt"))
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    found.sort();
+    found
 }
 
 /// umu's own files (its runtimes and scripts), which it runs from inside the container.

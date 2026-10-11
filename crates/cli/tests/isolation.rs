@@ -217,6 +217,61 @@ async fn an_isolated_linux_game_sees_nothing_of_the_home_folder() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// umu's runtime runs every game's container from the user's files, and the Proton build every
+/// game of that build: one an isolated game could change would run its code in other games, or
+/// in Steam's.
+#[tokio::test]
+#[ignore]
+async fn an_isolated_game_cannot_change_proton_nor_umus_runtime() {
+    let proton = PathBuf::from(std::env::var("SLATTY_TEST_PROTON").expect("SLATTY_TEST_PROTON"));
+    let runtime =
+        PathBuf::from(std::env::var("XDG_DATA_HOME").expect("XDG_DATA_HOME")).join("umu/steamrt3");
+    let (root, dirs) = fixture("tools");
+    let windows = |p: &Path| format!("Z:{}", p.display()).replace('/', "\\");
+    let probe = |dir: &Path| dir.join("[FAKE] written-by-the-game");
+    let write = |label: &str, dir: &Path| {
+        let file = windows(&probe(dir));
+        format!(
+            "echo x> \"{file}\"\r\nif exist \"{file}\" (echo WRITTEN> {label}.txt) else (echo refused> {label}.txt)\r\n"
+        )
+    };
+    std::fs::write(
+        root.join("game/check.bat"),
+        format!(
+            "@echo off\r\n{}{}",
+            write("proton", &proton),
+            write("runtime", &runtime)
+        ),
+    )
+    .unwrap();
+    let install = Install {
+        game_id: "1".into(),
+        title: "[FAKE] Game".into(),
+        platform: Platform::Windows,
+        path: root.join("game"),
+        client_id: None,
+        runner: Runner::Umu {
+            proton: proton.clone(),
+            prefix: root.join("pfx"),
+        },
+        umu_id: None,
+        isolated: true,
+    };
+    let spec = runner::windows_command(
+        &dirs,
+        &install,
+        vec!["cmd".into(), "/c".into(), "check.bat".into()],
+        install.path.clone(),
+    )
+    .unwrap();
+    run(&spec, &root.join("game.log")).await;
+    let written = (result(&root, "proton.txt"), result(&root, "runtime.txt"));
+    let leftovers = [probe(&proton), probe(&runtime)].map(|p| std::fs::remove_file(p).is_ok());
+    assert_eq!(written, ("refused".into(), "refused".into()));
+    assert_eq!(leftovers, [false, false]);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[tokio::test]
 #[ignore]
 async fn an_isolated_game_cannot_plant_a_program_umu_would_take_for_its_own() {
@@ -224,7 +279,9 @@ async fn an_isolated_game_cannot_plant_a_program_umu_would_take_for_its_own() {
     probe(&root, &root.join("game/start.sh"));
     let install = linux_install(&root);
     let spec = runner::launch_spec(&dirs, &install, None).unwrap();
-    assert_eq!(spec.args[0], "sh");
+    // umu runs inside bubblewrap: its own first argument follows its path.
+    let umu = spec.args.iter().position(|a| a == "--").unwrap() + 1;
+    assert_eq!(spec.args[umu + 1], "sh");
 
     // A file named like the interpreter, left in the game's folder by an earlier session: umu
     // takes the folder for the game's and shares the whole filesystem under it.

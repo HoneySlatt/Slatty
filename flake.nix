@@ -52,6 +52,8 @@
               sqlite
               comet-gog
               umu-launcher
+              # Isolated games run inside it, with umu's runtime and Proton read-only.
+              bubblewrap
             ];
             buildInputs = runtimeLibs;
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;

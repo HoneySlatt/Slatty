@@ -147,6 +147,9 @@ pub async fn play(
     let choice = crate::settings::launch_choice(db, &install.game_id)?;
     // Checked now, before the prefix and the setup, so a game that cannot start says so first.
     runner::launch_spec(dirs, &install, choice.as_deref())?;
+    if install.isolated {
+        runner::refresh_runtimes(db, dirs).await;
+    }
     // GOG keeps no cloud saves for Linux builds, and they lack the Galaxy SDK that Comet talks to.
     let native = install.platform == Platform::Linux;
     let cloud = req.cloud && !native;
