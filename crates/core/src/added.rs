@@ -157,7 +157,7 @@ pub async fn run_installer(
         .parent()
         .ok_or_else(|| Error::Refused(format!("{} has no folder", installer.display())))?
         .to_path_buf();
-    check_folder(dirs, &folder, None)?;
+    check_folder(db, dirs, &folder, None)?;
     let game_id = next_id(db, dirs)?;
     // What says this prefix holds a game waiting to be added, which alone may be thrown away.
     crate::fsutil::write_atomic(&installer_file(dirs, &game_id), b"")?;
@@ -335,7 +335,7 @@ pub async fn unpack(
             target.display()
         )));
     }
-    check_folder(dirs, &target, None)?;
+    check_folder(db, dirs, &target, None)?;
     // Made new: one already there (a link planted to have files written elsewhere, or an earlier
     // attempt) is not the folder to unpack into.
     let partial = into.join(format!(".{name}.slatty-unpack"));
@@ -535,7 +535,7 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
             .ok_or_else(|| Error::Refused(format!("{} has no folder", program.display())))?
             .to_path_buf(),
     };
-    check_folder(dirs, &folder, new.installed_by.as_deref())?;
+    check_folder(db, dirs, &folder, new.installed_by.as_deref())?;
     let working_dir = match &new.working_dir {
         Some(dir) => real(dir)?,
         None => program.parent().unwrap_or(&folder).to_path_buf(),
@@ -712,7 +712,7 @@ pub fn locate(db: &Db, dirs: &Dirs, game_id: &str, folder: &Path) -> Result<Inst
         .filter(|i| crate::store::is_local(&i.game_id))
         .ok_or_else(|| Error::NotFound(format!("{game_id} was not added by hand")))?;
     let folder = real(folder)?;
-    check_folder(dirs, &folder, Some(game_id))?;
+    check_folder(db, dirs, &folder, Some(game_id))?;
     let task = load_task(dirs, game_id)?;
     let program = folder.join(&task.program);
     if !program.is_file() || !leads_inside(&folder, &program) {
@@ -796,8 +796,9 @@ pub fn gog_game_in(folder: &Path) -> Option<String> {
 /// system through: the whole disk; one holding the home folder, a folder of programs (`PATH`),
 /// SlattyLauncher's own data or the session's sockets; one inside what holds settings, sockets,
 /// programs or temporary files, or inside SlattyLauncher's data, but for the game's own prefix
-/// (`game_id`'s), where its installer put it.
-fn check_folder(dirs: &Dirs, folder: &Path, game_id: Option<&str>) -> Result<()> {
+/// (`game_id`'s), where its installer put it. Nor may it be, hold or lie inside another game's
+/// folder, or hold the folder games are installed in.
+fn check_folder(db: &Db, dirs: &Dirs, folder: &Path, game_id: Option<&str>) -> Result<()> {
     let real = |p: &Path| p.canonicalize().ok();
     let home = std::env::var_os("HOME").and_then(|h| real(Path::new(&h)));
     let runtime = std::env::var_os("XDG_RUNTIME_DIR").and_then(|r| real(Path::new(&r)));
@@ -843,6 +844,28 @@ fn check_folder(dirs: &Dirs, folder: &Path, game_id: Option<&str>) -> Result<()>
             "{} is not a game's folder: an isolated game can write in its folder, and from \
              this one reach much more. Put the game in a folder of its own",
             folder.display()
+        )));
+    }
+    // An isolated game could rewrite what another one starts, and removing a game deletes the
+    // files listed as unpacked for it wherever its folder is. Compared as they are on disk: a
+    // GOG game's folder is kept as it was chosen, links and all.
+    for other in Install::list(db)? {
+        if Some(other.game_id.as_str()) != game_id
+            && (leads_inside(&other.path, folder) || leads_inside(folder, &other.path))
+        {
+            return Err(Error::Refused(format!(
+                "{} holds or is part of {}'s folder; choose the game's own folder",
+                folder.display(),
+                other.title
+            )));
+        }
+    }
+    let library = crate::settings::library_root(db)?;
+    if leads_inside(folder, &library) {
+        return Err(Error::Refused(format!(
+            "{} holds {}, where games are installed; choose the game's own folder",
+            folder.display(),
+            library.display()
         )));
     }
     Ok(())
@@ -1015,6 +1038,8 @@ mod tests {
             Some(Vec::new()),
             "never a Steam game's twin"
         );
+        // One game per folder.
+        remove(&f.db, &f.dirs, "local-1", false).unwrap();
         assert_eq!(add(&f.db, &f.dirs, f.windows()).unwrap().game_id, "local-2");
         remove(&f.db, &f.dirs, "local-2", false).unwrap();
         assert_eq!(add(&f.db, &f.dirs, f.windows()).unwrap().game_id, "local-3");
@@ -1052,7 +1077,8 @@ mod tests {
         assert_eq!(env("GAMEID"), Some(crate::umu::UNKNOWN));
         assert_eq!(env("STORE"), None, "not GOG's");
 
-        // A Linux program, with the folder it is in as the game's.
+        // A Linux program, with the folder it is in as the game's: one game per folder.
+        remove(&f.db, &f.dirs, &install.game_id, false).unwrap();
         let linux = add(
             &f.db,
             &f.dirs,
@@ -1098,7 +1124,7 @@ mod tests {
         let home = PathBuf::from(std::env::var_os("HOME").unwrap())
             .canonicalize()
             .unwrap();
-        let refused = |folder: &Path| check_folder(&f.dirs, folder, None).is_err();
+        let refused = |folder: &Path| check_folder(&f.db, &f.dirs, folder, None).is_err();
         assert!(refused(&home), "the home folder");
         assert!(refused(home.parent().unwrap()));
         // What an isolated game could reach the rest through.
@@ -1120,7 +1146,13 @@ mod tests {
         assert!(refused(&f.dirs.data), "SlattyLauncher's data");
         assert!(refused(&in_prefix), "another game's prefix");
         assert!(
-            check_folder(&f.dirs, &in_prefix.canonicalize().unwrap(), Some("local-7")).is_ok(),
+            check_folder(
+                &f.db,
+                &f.dirs,
+                &in_prefix.canonicalize().unwrap(),
+                Some("local-7")
+            )
+            .is_ok(),
             "its own prefix, where its installer put it"
         );
         assert!(
@@ -1131,6 +1163,59 @@ mod tests {
         untitled.title = "  ".into();
         assert!(add(&f.db, &f.dirs, untitled).is_err());
         assert!(Install::list(&f.db).unwrap().is_empty(), "nothing added");
+    }
+
+    /// Another game's folder, one inside or holding it, and one holding the folder games are
+    /// installed in are refused: an isolated game could rewrite what the other starts, and removing
+    /// one could delete the other's files.
+    #[test]
+    fn a_folder_shared_with_another_game_is_refused() {
+        let f = fake("shared");
+        let other = f.root.join("games/GOG/[FAKE] Other");
+        std::fs::create_dir_all(other.join("bin")).unwrap();
+        std::fs::write(other.join("bin/game.exe"), b"MZ").unwrap();
+        Install {
+            game_id: "1".into(),
+            title: "[FAKE] Other".into(),
+            platform: Platform::Linux,
+            path: other.clone(),
+            client_id: None,
+            runner: Runner::Native,
+            umu_id: None,
+            isolated: false,
+        }
+        .save(&f.db)
+        .unwrap();
+        std::fs::write(f.root.join("games/GOG/[FAKE].exe"), b"MZ").unwrap();
+        let mut holding = f.windows();
+        holding.program = f.root.join("games/GOG/[FAKE].exe");
+        holding.folder = None;
+        let refused = add(&f.db, &f.dirs, holding).unwrap_err().to_string();
+        assert!(refused.contains("[FAKE] Other"), "{refused}");
+        let mut above = f.windows();
+        above.folder = Some(f.root.join("games"));
+        assert!(add(&f.db, &f.dirs, above).is_err());
+        let mut inside = f.windows();
+        inside.program = other.join("bin/game.exe");
+        inside.folder = None;
+        assert!(add(&f.db, &f.dirs, inside).is_err());
+
+        // Nor is a game added by hand located there, though its program is there too.
+        add(&f.db, &f.dirs, f.windows()).unwrap();
+        assert!(locate(&f.db, &f.dirs, "local-1", &other).is_err());
+        assert!(
+            locate(&f.db, &f.dirs, "local-1", &f.game).is_ok(),
+            "its own"
+        );
+
+        let library = f.root.join("lib/GOG");
+        std::fs::create_dir_all(&library).unwrap();
+        crate::settings::set_library_root(&f.db, &library).unwrap();
+        std::fs::write(f.root.join("lib/[FAKE].exe"), b"MZ").unwrap();
+        let mut above_library = f.windows();
+        above_library.program = f.root.join("lib/[FAKE].exe");
+        above_library.folder = None;
+        assert!(add(&f.db, &f.dirs, above_library).is_err());
     }
 
     /// Removing a game added by hand leaves its folder: the files are the user's. Its prefix goes

@@ -132,7 +132,9 @@ show game titles and achievement names on a lock screen.
   cannot be one through which it would reach more: the whole disk, one holding your home folder,
   a folder of programs (`PATH`), the temporary folders or the session's sockets, nor one inside
   `/etc`, `/dev`, `~/.config`, `~/.local/bin`, `~/.ssh`, `~/.gnupg` or SlattyLauncher's own
-  folders (but for the game's own prefix). GOG is never told of them, nor is umu's database asked about them.
+  folders (but for the game's own prefix). Nor can it be another game's folder, hold one or lie
+  inside one (an isolated game could rewrite what the other starts), nor hold the default
+  installation path. GOG is never told of them, nor is umu's database asked about them.
   A Linux installer or archive is unpacked, never run (a MojoSetup installer's script included),
   with the same path checks as GOG's installers; removing that game deletes the files unpacked
   and only those, while they are as they were unpacked (a save or a setting file the game rewrote
