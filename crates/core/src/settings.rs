@@ -425,8 +425,11 @@ fn steam_roots(home: &Path) -> Vec<PathBuf> {
 
 /// Library folders listed in Steam's `libraryfolders.vdf` (the main one included).
 fn steam_libraries(steam: &Path) -> Vec<PathBuf> {
-    let vdf =
-        std::fs::read_to_string(steam.join("steamapps/libraryfolders.vdf")).unwrap_or_default();
+    // A few KB, read at every start: a pipe or a huge file there must not hold it.
+    let mut vdf = String::new();
+    if let Ok(file) = crate::steam::open(&steam.join("steamapps/libraryfolders.vdf")) {
+        let _ = std::io::Read::read_to_string(&mut std::io::Read::take(file, 1 << 20), &mut vdf);
+    }
     let mut libraries = vec![steam.to_path_buf()];
     for line in vdf.lines() {
         let mut quoted = line.split('"').skip(1).step_by(2);
@@ -511,6 +514,27 @@ mod tests {
             Some([steam.join("linux64"), steam.join("linux32")])
         );
         std::fs::remove_dir_all(home).unwrap();
+    }
+
+    /// Steam's list of library folders is read at every start: a pipe in its place holds nothing.
+    #[test]
+    fn a_pipe_as_steams_library_list_holds_nothing_up() {
+        let steam = std::env::temp_dir().join(format!("slatty-fifo-list-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&steam);
+        std::fs::create_dir_all(steam.join("steamapps")).unwrap();
+        nix::unistd::mkfifo(
+            &steam.join("steamapps/libraryfolders.vdf"),
+            nix::sys::stat::Mode::S_IRWXU,
+        )
+        .unwrap();
+        let (sent, got) = std::sync::mpsc::channel();
+        let read = steam.clone();
+        std::thread::spawn(move || sent.send(steam_libraries(&read)).unwrap());
+        let libraries = got
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("not held by the pipe");
+        assert_eq!(libraries, std::slice::from_ref(&steam));
+        std::fs::remove_dir_all(steam).unwrap();
     }
 
     #[test]
