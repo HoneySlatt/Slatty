@@ -114,6 +114,7 @@ Reference, 2026-10-10 (Ryzen 7 5800X, Radeon RX 6900 XT, niri at 3840×2160, 240
 | `view` while scrolling | p50 0.17 ms, p99 0.25 ms (2.0 ms before the lists were kept, 5.5 ms before the sort keys were kept) |
 | `library_at_10000_games` | view 0.13 ms, Achievements 0.16 ms, list made again 1.8–2.0 ms (1.9 and 2.7 ms per view before the lists were kept) |
 | Idle CPU, nothing happening | 0 ticks in 15 s |
+| Wake-ups at rest (2026-10-11, context switches of every thread in 60 s, with and without a session bus) | 120: one thread of the D-Bus library's pool, kept by the keyring's connection, wakes every 500 ms (240 while Iced's system theme detection kept a second one) |
 
 ### Tests that need real tools
 

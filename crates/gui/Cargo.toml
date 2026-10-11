@@ -14,7 +14,10 @@ path = "src/main.rs"
 
 [dependencies]
 chrono = "0.4.45"
-iced = { version = "0.14", features = ["advanced", "image-without-codecs", "selector", "svg", "tokio"] }
+# Iced's defaults but its system theme detection: the theme comes from SlattyLauncher's own tokens,
+# and the detection waited up to 200 ms for the desktop portal before the window opened, then kept
+# a D-Bus connection whose thread woke the program twice a second for good.
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "thread-pool", "x11", "wayland", "advanced", "image-without-codecs", "selector", "svg", "tokio"] }
 # Only the formats GOG serves and those a custom image may be in: fewer decoders face downloads.
 image = { version = "0.25", default-features = false, features = ["bmp", "gif", "jpeg", "png", "webp"] }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
