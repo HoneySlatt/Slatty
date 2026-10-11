@@ -16,6 +16,24 @@ use crate::error::{Error, Result};
 use crate::fsutil;
 use crate::galaxy::{ContentSource, Depot, DepotFile, DepotItem};
 
+/// The largest chunk accepted. GOG cuts files into chunks of 1 MiB; a manifest saying otherwise is
+/// not trusted with an allocation of the size it gives.
+pub const MAX_CHUNK: u64 = 64 << 20;
+
+/// Refuses chunks no real one can be, as a manifest is read: their sizes are allocated and added
+/// up as they come.
+pub(crate) fn check_chunks(chunks: &[crate::galaxy::Chunk]) -> Result<()> {
+    if chunks
+        .iter()
+        .any(|c| c.size > MAX_CHUNK || c.compressed_size > MAX_CHUNK)
+    {
+        return Err(Error::Refused(
+            "the manifest lists a chunk larger than any GOG makes".into(),
+        ));
+    }
+    Ok(())
+}
+
 const FILE_CONCURRENCY: usize = 4;
 const CHUNK_CONCURRENCY: usize = 2;
 const DOWNLOAD_SUFFIX: &str = ".slatty-dl";
@@ -73,6 +91,7 @@ pub async fn collect_files<S: ContentSource>(source: &S, depots: &[Depot]) -> Re
         for item in source.depot_manifest(depot).await? {
             match item {
                 DepotItem::DepotFile(mut f) => {
+                    check_chunks(&f.chunks)?;
                     f.product_id = depot.product_id.clone();
                     if f.is_support() {
                         let rel = safe_relative(&depot.product_id)?.join(safe_relative(&f.path)?);
@@ -387,6 +406,7 @@ fn unpack_chunk(raw: &[u8], c: &crate::galaxy::Chunk) -> Result<Vec<u8>> {
     }
     let mut data = Vec::with_capacity(c.size as usize);
     ZlibDecoder::new(raw)
+        .take(c.size + 1)
         .read_to_end(&mut data)
         .map_err(|e| Error::io(format!("decompress chunk {}", c.compressed_md5), e))?;
     if data.len() as u64 != c.size || fsutil::hex(&Md5::digest(&data)) != c.md5 {

@@ -307,10 +307,7 @@ impl GogContent {
     async fn fetch(&self, endpoint: &Endpoint, compressed_md5: &str) -> Result<Vec<u8>> {
         let url = chunk_url(endpoint, compressed_md5);
         let resp = http::send(self.http.get(url), "downloading a chunk").await?;
-        resp.bytes()
-            .await
-            .map(|b| b.to_vec())
-            .map_err(|e| Error::network("downloading a chunk", e))
+        http::read_up_to(resp, "downloading a chunk", crate::installer::MAX_CHUNK).await
     }
 
     async fn access(&self) -> Result<Tokens> {

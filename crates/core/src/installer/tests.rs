@@ -183,6 +183,23 @@ async fn downloading_cannot_truncate_a_temporary_symlink_target() {
     assert_eq!(std::fs::read(outside).unwrap(), b"keep");
 }
 
+/// A chunk's sizes come from the manifest: one no chunk can have is refused as the manifest is
+/// read, before anything is allocated for it or added up with the others.
+#[tokio::test]
+async fn a_manifest_with_an_impossible_chunk_size_is_refused() {
+    for huge in [u64::MAX, MAX_CHUNK + 1] {
+        let mut env = Env::new("huge-chunk");
+        for item in env.source.manifests.get_mut("m1").unwrap() {
+            if let DepotItem::DepotFile(f) = item {
+                f.chunks[0].size = huge;
+                break;
+            }
+        }
+        let r = collect_files(&env.source, &env.depots).await;
+        assert!(matches!(r, Err(Error::Refused(_))), "{huge}: {r:?}");
+    }
+}
+
 /// A game writes its folder: an empty folder of the build, under one the game replaced with a
 /// link out of it, is never made there by a repair.
 #[tokio::test]

@@ -172,6 +172,7 @@ fn parse_diffs(items: Vec<serde_json::Value>, product_id: &str) -> Result<Vec<Fi
             }
             let mut patch: FilePatch = serde_json::from_value(item)
                 .map_err(|e| Error::parse("reading a patch manifest", e))?;
+            installer::check_chunks(&patch.chunks)?;
             patch.product_id = product_id.to_string();
             Ok(patch)
         })
@@ -314,7 +315,10 @@ pub async fn download_delta<S: ContentSource>(
 fn unpack(raw: &[u8], c: &Chunk) -> Result<Vec<u8>> {
     let mut data = Vec::with_capacity(c.size as usize);
     if fsutil::hex(&Md5::digest(raw)) != c.compressed_md5
-        || ZlibDecoder::new(raw).read_to_end(&mut data).is_err()
+        || ZlibDecoder::new(raw)
+            .take(c.size + 1)
+            .read_to_end(&mut data)
+            .is_err()
         || fsutil::hex(&Md5::digest(&data)) != c.md5
     {
         return Err(Error::Refused(format!(
