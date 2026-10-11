@@ -63,7 +63,10 @@ fn finish(record: &mut InstallRecord, failed: bool) -> Option<bool> {
         record.setup_failures += 1;
     }
     let again = failed && record.setup_failures < SETUP_RUNS;
-    if !again {
+    if again {
+        // A run forced on a build already set up must be pending too, to run again.
+        record.setup_build = None;
+    } else {
         record.setup_build = Some(record.build_id.clone());
         record.setup_failures = 0;
     }
@@ -460,6 +463,14 @@ mod tests {
             (r.setup_build.as_deref(), r.setup_failures),
             (Some("b1"), 0)
         );
+
+        // Forced again once done (`slatty setup --force`), a failed run is pending again, as said.
+        let mut r = InstallRecord {
+            setup_build: Some("b1".into()),
+            ..record()
+        };
+        assert_eq!(finish(&mut r, true), Some(true));
+        assert_eq!(r.setup_build, None);
 
         let mut r = record();
         assert_eq!(finish(&mut r, true), Some(true));
