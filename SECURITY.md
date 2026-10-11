@@ -126,9 +126,12 @@ show game titles and achievement names on a lock screen.
   files get names never used before and never follow a link already there. These checks do not
   guard against another program changing the folders at the same moment.
 - **Games added by hand.** Their files are yours: removing one from the library never deletes
-  them, only, when asked, the Wine prefix SlattyLauncher made for it, its saves copied first. A
-  folder holding your home folder, or the whole disk, cannot be a game's folder, as an isolated
-  game can write in its folder. GOG is never told of them, nor is umu's database asked about them.
+  them, only, when asked, the Wine prefix SlattyLauncher made for it, its saves (and a game an
+  installer put in it) copied first. An isolated game can write in its folder, so that folder
+  cannot be one through which it would reach more: the whole disk, one holding your home folder,
+  a folder of programs (`PATH`), the temporary folders or the session's sockets, nor one inside
+  `/etc`, `/dev`, `~/.config`, `~/.local/bin`, `~/.ssh`, `~/.gnupg` or SlattyLauncher's own
+  folders (but for the game's own prefix). GOG is never told of them, nor is umu's database asked about them.
   A Linux installer or archive is unpacked, never run (a MojoSetup installer's script included),
   with the same path checks as GOG's installers; removing that game deletes the files unpacked
   and only those. A Windows installer runs in the game's own prefix, isolated when asked.

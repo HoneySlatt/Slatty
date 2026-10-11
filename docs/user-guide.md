@@ -530,7 +530,9 @@ slatty remove <game-id> [--delete-prefix]
   first launch; a Linux program, script or AppImage runs as GOG's Linux builds do (see
   [Playing](#playing)). Which one it is comes from the file itself, not its name.
 - The game's folder is the program's own unless `--folder` names one holding it; an isolated game
-  can write in it, so a folder holding your home folder, or the whole disk, is refused. Isolation
+  can write in it, so a folder through which it would reach more is refused (see SECURITY.md:
+  your home folder or one holding it, a folder of programs, `~/.config`, SlattyLauncher's own
+  folders…): put the game in a folder of its own. Isolation
   is as for a game installed now (Settings → Installs) unless told.
 - The game gets the id `local-<number>`, listed by `slatty library list` (no GOG account needed),
   and is played with `slatty launch`, like any other.

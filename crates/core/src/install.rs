@@ -157,8 +157,16 @@ fn from_row(row: &Row<'_>) -> rusqlite::Result<Result<Install>> {
     })())
 }
 
-/// Builds an install record from a directory that already contains the game.
+/// Builds an install record from a directory that already contains a GOG game. Its id, which
+/// comes from the game's own files or the user, must be GOG's: a game added by hand is not
+/// imported over (its files, which removing it deletes, would be taken for the folder's).
 pub fn from_dir(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Install> {
+    let install = found_in(dir, game_id, runner)?;
+    crate::paths::check_game_id(&install.game_id)?;
+    Ok(install)
+}
+
+fn found_in(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Install> {
     let path = dir
         .canonicalize()
         .map_err(|e| Error::io(format!("open {}", dir.display()), e))?;
@@ -387,6 +395,25 @@ mod tests {
     fn refuses_native_runner_for_windows_build() {
         let root = fixture("native");
         assert!(from_dir(&root.join("Game"), None, Runner::Native).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A game's files could name a game added by hand, whose install it would replace.
+    #[test]
+    fn only_gog_games_are_imported() {
+        let root = fixture("not-gog");
+        std::fs::write(
+            root.join("Game/goggame-local-1.info"),
+            r#"{"gameId":"local-1","name":"[FAKE] Planted",
+                "playTasks":[{"type":"FileTask","path":"answer.exe","isPrimary":true}]}"#,
+        )
+        .unwrap();
+        let proton = Runner::Umu {
+            proton: "/p".into(),
+            prefix: "/pfx".into(),
+        };
+        assert!(from_dir(&root.join("Game"), Some("local-1"), proton.clone()).is_err());
+        assert!(from_dir(&root.join("Game"), Some("steam-440"), proton).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 }

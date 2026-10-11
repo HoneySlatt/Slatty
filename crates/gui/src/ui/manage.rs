@@ -154,19 +154,31 @@ impl App {
                         .on_press(Message::Maintenance(msg))
                         .style(style)
                 };
-            let prefix = self
-                .installs
-                .get(&g.id)
-                .is_some_and(|i| i.runner.prefix().is_some());
+            let install = self.installs.get(&g.id);
+            let prefix = install.and_then(|i| i.runner.prefix());
+            // Its installer put the game itself in its prefix.
+            let in_prefix = install
+                .zip(prefix)
+                .is_some_and(|(i, p)| i.path.starts_with(p));
             let mut confirm = Column::new()
-                .push(note(if prefix {
-                    "Its files stay where they are: they are yours. The Wine prefix \
-                     SlattyLauncher made for it holds most of its saves."
-                } else {
-                    "Its files stay where they are: they are yours."
+                .push(note(match (prefix.is_some(), in_prefix) {
+                    (_, true) => {
+                        "Only what SlattyLauncher unpacked for it is deleted. The game is in \
+                         the Wine prefix SlattyLauncher made for it: deleting the prefix deletes \
+                         the game, copied to the backups first with the prefix's saves."
+                    }
+                    (true, false) => {
+                        "Only what SlattyLauncher unpacked for it is deleted: your own files stay \
+                         where they are. The Wine prefix SlattyLauncher made for it holds most of \
+                         its saves."
+                    }
+                    (false, _) => {
+                        "Only what SlattyLauncher unpacked for it is deleted: your own files stay \
+                         where they are."
+                    }
                 }))
                 .push(choice(
-                    if prefix {
+                    if prefix.is_some() {
                         "Remove, keep the prefix"
                     } else {
                         "Remove from library"
@@ -174,7 +186,7 @@ impl App {
                     MaintenanceMsg::Uninstall(id(), false),
                     theme::danger,
                 ));
-            if prefix {
+            if prefix.is_some() {
                 confirm = confirm.push(choice(
                     "Also delete the prefix (backed up)",
                     MaintenanceMsg::Uninstall(id(), true),

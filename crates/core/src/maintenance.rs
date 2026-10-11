@@ -694,7 +694,7 @@ fn leftovers(root: &Path, dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
+pub(crate) fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     crate::paths::ensure_dir(dst)?;
     for entry in
         std::fs::read_dir(src).map_err(|e| Error::io(format!("list {}", src.display()), e))?

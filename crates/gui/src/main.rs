@@ -1049,6 +1049,22 @@ impl App {
                 work.push(format!("Cloud saves of {} are syncing.", self.title_of(id)));
             }
         }
+        if let Some(d) = self
+            .add_game
+            .as_ref()
+            .filter(|d| d.busy || d.installed_by.is_some())
+        {
+            let title = Some(d.title.trim())
+                .filter(|t| !t.is_empty())
+                .unwrap_or("A game");
+            work.push(match &d.installed_by {
+                Some(id) => format!(
+                    "{title} is not added yet: what its installer put on the disk stays \
+                     (`slatty remove {id}` throws it away)."
+                ),
+                None => format!("{title} is being installed: what is done of it stays."),
+            });
+        }
         if let Some((name, _, _)) = &self.runners.installing {
             work.push(if self.runners.updating {
                 "Proton builds are updating. The update stops here and runs again at the next start."

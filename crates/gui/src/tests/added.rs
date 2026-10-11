@@ -126,8 +126,11 @@ fn removing_a_game_added_by_hand_asks_first() {
     }
     let mut ui = render(&app);
     assert!(
-        ui.find("Its files stay where they are: they are yours.")
-            .is_ok()
+        ui.find(
+            "Only what SlattyLauncher unpacked for it is deleted: your own files stay where they \
+             are."
+        )
+        .is_ok()
     );
     assert!(
         ui.find("Also delete the prefix (backed up)").is_err(),

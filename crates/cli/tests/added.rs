@@ -82,6 +82,12 @@ fn a_game_is_added_listed_and_removed_on_the_command_line() {
     // What an installer put in a prefix, the game never added, is thrown away by `remove`.
     let prefix = root.join("data/slatty/prefixes/local-9");
     std::fs::create_dir_all(prefix.join("drive_c/Games")).unwrap();
+    assert!(
+        !slatty(&root, &["remove", "local-9"]).status.success(),
+        "a prefix no installer was run for"
+    );
+    // As `slatty add --installer` leaves it.
+    std::fs::write(root.join("data/slatty/added/local-9.installer"), b"").unwrap();
     stdout(&slatty(&root, &["remove", "local-9"]));
     assert!(!prefix.exists());
     std::fs::remove_dir_all(root).unwrap();

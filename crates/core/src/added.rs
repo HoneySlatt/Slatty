@@ -122,8 +122,10 @@ pub async fn run_installer(
         .parent()
         .ok_or_else(|| Error::Refused(format!("{} has no folder", installer.display())))?
         .to_path_buf();
-    check_folder(&folder)?;
-    let game_id = crate::store::local_id(next_number(db)?);
+    check_folder(dirs, &folder, None)?;
+    let game_id = next_id(db, dirs)?;
+    // What says this prefix holds a game waiting to be added, which alone may be thrown away.
+    crate::fsutil::write_atomic(&installer_file(dirs, &game_id), b"")?;
     let install = Install {
         runner: runner_for(db, dirs, &game_id, Platform::Windows, proton)?,
         game_id,
@@ -144,6 +146,11 @@ pub async fn run_installer(
             .wait()
             .await?;
         if !outcome.clean || !crate::runner::prefix_ready(&install) {
+            // Nothing was installed in it yet.
+            if let Some(prefix) = install.runner.prefix() {
+                let _ = std::fs::remove_dir_all(prefix);
+            }
+            let _ = std::fs::remove_file(installer_file(dirs, &install.game_id));
             return Err(Error::Refused(format!(
                 "the Wine prefix could not be created; see {}",
                 log.display()
@@ -168,7 +175,7 @@ pub async fn run_installer(
 /// Throws away what an installer was run for, when the game is not added after all: its prefix,
 /// the saves in it copied first, and its logs.
 pub fn discard_installer(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
-    if !crate::store::is_local(game_id) || Install::get(db, game_id)?.is_some() {
+    if !waiting(db, dirs, game_id)? {
         return Err(Error::Refused(format!(
             "{game_id} is no game an installer was run for"
         )));
@@ -181,12 +188,45 @@ pub fn discard_installer(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
         let _ = std::fs::remove_file(unpacked_file(dirs, game_id));
     }
     let prefix = prefix_of(dirs, game_id);
-    if prefix.exists() {
+    if installer_file(dirs, game_id).exists() && prefix.exists() {
         crate::maintenance::back_up_prefix(dirs, game_id, &prefix)?;
         std::fs::remove_dir_all(&prefix)
             .map_err(|e| Error::io(format!("delete {}", prefix.display()), e))?;
     }
+    let _ = std::fs::remove_file(installer_file(dirs, game_id));
     crate::logs::remove_game(dirs, game_id)
+}
+
+/// Whether `game_id` is a game an installer was run for, or an archive unpacked for, not added
+/// (yet): only such a one may be added under that id, or thrown away.
+fn waiting(db: &Db, dirs: &Dirs, game_id: &str) -> Result<bool> {
+    Ok(crate::store::is_local(game_id)
+        && Install::get(db, game_id)?.is_none()
+        && (installer_file(dirs, game_id).is_file() || unpacked_file(dirs, game_id).is_file()))
+}
+
+fn installer_file(dirs: &Dirs, game_id: &str) -> PathBuf {
+    dirs.data.join("added").join(format!("{game_id}.installer"))
+}
+
+/// A number never given, whose id nothing is left of either (a database made again while the
+/// data folder stayed would count from 1 again).
+fn next_id(db: &Db, dirs: &Dirs) -> Result<String> {
+    loop {
+        let id = crate::store::local_id(next_number(db)?);
+        let left = [
+            prefix_of(dirs, &id),
+            dirs.data.join("homes").join(&id),
+            task_file(dirs, &id),
+            installer_file(dirs, &id),
+            unpacked_file(dirs, &id),
+        ]
+        .iter()
+        .any(|p| std::fs::symlink_metadata(p).is_ok());
+        if !left && Install::get(db, &id)?.is_none() {
+            return Ok(id);
+        }
+    }
 }
 
 /// `files`, relative to `folder`, refused whole when one would lead out of it.
@@ -245,9 +285,20 @@ pub async fn unpack(
             target.display()
         )));
     }
-    check_folder(&target)?;
+    check_folder(dirs, &target, None)?;
+    // Made new: one already there (a link planted to have files written elsewhere, or an earlier
+    // attempt) is not the folder to unpack into.
     let partial = into.join(format!(".{name}.slatty-unpack"));
-    let game_id = crate::store::local_id(next_number(db)?);
+    std::fs::create_dir(&partial).map_err(|e| {
+        Error::io(
+            format!(
+                "make {} (remove it if it is left from before)",
+                partial.display()
+            ),
+            e,
+        )
+    })?;
+    let game_id = next_id(db, dirs)?;
     let files = unpack_into(&archive, &partial, &target, cancel, progress).await;
     // Nothing is resumed: what was unpacked of a failed one goes.
     if files.is_err() {
@@ -412,16 +463,12 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
     // into, which is then the game's.
     let unpacked = match &new.installed_by {
         Some(id) => {
-            let unpacked = load_unpacked(dirs, id).ok();
-            if !crate::store::is_local(id)
-                || Install::get(db, id)?.is_some()
-                || (unpacked.is_none() && !prefix_of(dirs, id).is_dir())
-            {
+            if !waiting(db, dirs, id)? {
                 return Err(Error::Refused(format!(
                     "{id} is no game an installer was run for"
                 )));
             }
-            unpacked
+            load_unpacked(dirs, id).ok()
         }
         None => None,
     };
@@ -433,7 +480,7 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
             .ok_or_else(|| Error::Refused(format!("{} has no folder", program.display())))?
             .to_path_buf(),
     };
-    check_folder(&folder)?;
+    check_folder(dirs, &folder, new.installed_by.as_deref())?;
     let working_dir = match &new.working_dir {
         Some(dir) => real(dir)?,
         None => program.parent().unwrap_or(&folder).to_path_buf(),
@@ -466,7 +513,7 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
 
     let game_id = match new.installed_by {
         Some(id) => id,
-        None => crate::store::local_id(next_number(db)?),
+        None => next_id(db, dirs)?,
     };
     let runner = runner_for(db, dirs, &game_id, platform, new.proton)?;
     let isolated = match new.isolated {
@@ -490,6 +537,7 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
     }
     // Its files are now the game's, listed with what it starts.
     let _ = std::fs::remove_file(unpacked_file(dirs, &install.game_id));
+    let _ = std::fs::remove_file(installer_file(dirs, &install.game_id));
     Ok(install)
 }
 
@@ -552,13 +600,29 @@ pub fn remove(
     let unpacked = checked_files(&install.path, &unpacked)?;
     let mut report = crate::maintenance::UninstallReport::default();
     if let Some(prefix) = install.runner.prefix().filter(|_| delete_prefix) {
-        if !prefix.starts_with(dirs.data.join("prefixes")) {
+        // Its own, as SlattyLauncher named it: no other game's, nor one reached through `..`.
+        if prefix != prefix_of(dirs, game_id) {
             return Err(Error::Refused(format!(
                 "{} was not made by SlattyLauncher; nothing was deleted",
                 prefix.display()
             )));
         }
         report.prefix_backup = crate::maintenance::back_up_prefix(dirs, game_id, prefix)?;
+        // An installer put the game itself in it, with whatever it keeps beside it (saves among
+        // them): copied too, before the prefix goes.
+        if install.path.starts_with(prefix) && install.path.is_dir() {
+            let copy = dirs
+                .data
+                .join("backups/prefixes")
+                .join(game_id)
+                .join(format!(
+                    "{}-game",
+                    chrono::Utc::now().format("%Y%m%d-%H%M%S")
+                ));
+            crate::maintenance::copy_dir(&install.path, &copy)?;
+            crate::fsutil::sync_filesystem(&copy)?;
+            report.prefix_backup.get_or_insert(copy);
+        }
         if prefix.exists() {
             std::fs::remove_dir_all(prefix)
                 .map_err(|e| Error::io(format!("delete {}", prefix.display()), e))?;
@@ -582,7 +646,7 @@ pub fn locate(db: &Db, dirs: &Dirs, game_id: &str, folder: &Path) -> Result<Inst
         .filter(|i| crate::store::is_local(&i.game_id))
         .ok_or_else(|| Error::NotFound(format!("{game_id} was not added by hand")))?;
     let folder = real(folder)?;
-    check_folder(&folder)?;
+    check_folder(dirs, &folder, Some(game_id))?;
     let task = load_task(dirs, game_id)?;
     let program = folder.join(&task.program);
     if !program.is_file() || !leads_inside(&folder, &program) {
@@ -662,15 +726,56 @@ pub fn gog_game_in(folder: &Path) -> Option<String> {
         .next()
 }
 
-/// Refuses a game folder an isolated game would be given too much of: the whole disk, or the
-/// home folder or one holding it.
-fn check_folder(folder: &Path) -> Result<()> {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let home = home.as_deref().and_then(|h| h.canonicalize().ok());
-    let too_wide = folder.parent().is_none() || home.is_some_and(|h| h.starts_with(folder));
-    if too_wide {
+/// Refuses a game folder an isolated game, which can write in it, could reach the rest of the
+/// system through: the whole disk; one holding the home folder, a folder of programs (`PATH`),
+/// SlattyLauncher's own data or the session's sockets; one inside what holds settings, sockets,
+/// programs or temporary files, or inside SlattyLauncher's data, but for the game's own prefix
+/// (`game_id`'s), where its installer put it.
+fn check_folder(dirs: &Dirs, folder: &Path, game_id: Option<&str>) -> Result<()> {
+    let real = |p: &Path| p.canonicalize().ok();
+    let home = std::env::var_os("HOME").and_then(|h| real(Path::new(&h)));
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR").and_then(|r| real(Path::new(&r)));
+    let programs: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).filter_map(|p| real(&p)).collect())
+        .unwrap_or_default();
+    let own = [&dirs.data, &dirs.config, &dirs.cache, &dirs.state];
+    // Holding any of these gives them to the game: the temporary folders and the session's hold
+    // its sockets (X11, D-Bus).
+    let held = home
+        .iter()
+        .chain(runtime.iter())
+        .chain(&programs)
+        .cloned()
+        .chain(["/tmp", "/var/tmp", "/dev/shm", "/run"].map(PathBuf::from))
+        .chain(own.iter().filter_map(|d| real(d)))
+        .any(|d| d.starts_with(folder));
+    // Nor may it be inside these.
+    let mut within: Vec<PathBuf> = ["/dev", "/proc", "/sys", "/etc"]
+        .iter()
+        .map(PathBuf::from)
+        .chain(own[1..].iter().filter_map(|d| real(d)))
+        .collect();
+    if let Some(home) = &home {
+        within.extend(
+            [".config", ".local/bin", ".ssh", ".gnupg"]
+                .iter()
+                .map(|d| home.join(d)),
+        );
+    }
+    let inside_data = real(&dirs.data).is_some_and(|data| {
+        folder.starts_with(&data)
+            && !game_id.is_some_and(|id| {
+                real(&prefix_of(dirs, id)).is_some_and(|prefix| folder.starts_with(prefix))
+            })
+    });
+    if folder.parent().is_none()
+        || held
+        || inside_data
+        || within.iter().any(|w| folder.starts_with(w))
+    {
         return Err(Error::Refused(format!(
-            "{} holds much more than a game: put the game in a folder of its own",
+            "{} is not a game's folder: an isolated game can write in its folder, and from \
+             this one reach much more. Put the game in a folder of its own",
             folder.display()
         )));
     }
@@ -924,12 +1029,38 @@ mod tests {
         let mut root = f.windows();
         root.folder = Some("/".into());
         assert!(add(&f.db, &f.dirs, root).is_err(), "the whole disk");
-        let home = PathBuf::from(std::env::var_os("HOME").unwrap());
+        let home = PathBuf::from(std::env::var_os("HOME").unwrap())
+            .canonicalize()
+            .unwrap();
+        let refused = |folder: &Path| check_folder(&f.dirs, folder, None).is_err();
+        assert!(refused(&home), "the home folder");
+        assert!(refused(home.parent().unwrap()));
+        // What an isolated game could reach the rest through.
+        for folder in [
+            PathBuf::from("/tmp"),
+            PathBuf::from("/run"),
+            PathBuf::from("/etc/[FAKE]"),
+            home.join(".config/[FAKE]"),
+            home.join(".local/bin"),
+        ] {
+            assert!(refused(&folder), "{}", folder.display());
+        }
+        let bin = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+            .find_map(|p| p.canonicalize().ok())
+            .unwrap();
+        assert!(refused(&bin), "a folder of programs");
+        std::fs::create_dir_all(f.dirs.data.join("prefixes/local-7/drive_c/Game")).unwrap();
+        let in_prefix = f.dirs.data.join("prefixes/local-7/drive_c/Game");
+        assert!(refused(&f.dirs.data), "SlattyLauncher's data");
+        assert!(refused(&in_prefix), "another game's prefix");
         assert!(
-            check_folder(&home.canonicalize().unwrap()).is_err(),
-            "the home folder"
+            check_folder(&f.dirs, &in_prefix.canonicalize().unwrap(), Some("local-7")).is_ok(),
+            "its own prefix, where its installer put it"
         );
-        assert!(check_folder(home.canonicalize().unwrap().parent().unwrap()).is_err());
+        assert!(
+            !refused(&f.game.canonicalize().unwrap()),
+            "a folder of its own"
+        );
         let mut untitled = f.windows();
         untitled.title = "  ".into();
         assert!(add(&f.db, &f.dirs, untitled).is_err());
@@ -1015,6 +1146,15 @@ mod tests {
         std::fs::create_dir_all(&game).unwrap();
         std::fs::write(game.join("quest.exe"), b"MZ").unwrap();
         next_number(&f.db).unwrap();
+        // As `run_installer` leaves them.
+        let waits = |id: &str| {
+            crate::fsutil::write_atomic(&installer_file(&f.dirs, id), b"").unwrap();
+        };
+        assert!(
+            add(&f.db, &f.dirs, new_quest(&f, &game, "local-1")).is_err(),
+            "a prefix no installer was run for"
+        );
+        waits("local-1");
         let new = |id: &str| NewGame {
             title: "[FAKE] Quest".into(),
             program: game.join("quest.exe"),
@@ -1039,9 +1179,53 @@ mod tests {
         let other = f.dirs.data.join("prefixes/local-2");
         std::fs::create_dir_all(other.join("drive_c/users/steamuser")).unwrap();
         std::fs::write(other.join("drive_c/users/steamuser/save"), b"[FAKE]").unwrap();
+        waits("local-2");
         discard_installer(&f.db, &f.dirs, "local-2").unwrap();
         assert!(!other.exists());
         assert!(f.dirs.data.join("backups/prefixes/local-2").is_dir());
+
+        // Removed with its prefix kept, the game is no installer's to throw away: its prefix,
+        // which holds the game, stays.
+        remove(&f.db, &f.dirs, "local-1", false).unwrap();
+        assert!(discard_installer(&f.db, &f.dirs, "local-1").is_err());
+        assert!(game.join("quest.exe").is_file());
+        assert!(
+            add(&f.db, &f.dirs, new_quest(&f, &game, "local-1")).is_err(),
+            "nor taken again"
+        );
+        // Removed with its prefix, the game in it is copied first.
+        let id = {
+            let prefix = f.dirs.data.join("prefixes/local-3");
+            let game = prefix.join("drive_c/Games/[FAKE] Quest");
+            std::fs::create_dir_all(&game).unwrap();
+            std::fs::write(game.join("quest.exe"), b"MZ").unwrap();
+            std::fs::write(game.join("save.dat"), b"[FAKE]").unwrap();
+            next_number(&f.db).unwrap();
+            waits("local-3");
+            add(&f.db, &f.dirs, new_quest(&f, &game, "local-3"))
+                .unwrap()
+                .game_id
+        };
+        let report = remove(&f.db, &f.dirs, &id, true).unwrap();
+        assert!(report.prefix_removed);
+        let backups = f.dirs.data.join("backups/prefixes/local-3");
+        let copy = std::fs::read_dir(&backups)
+            .unwrap()
+            .flatten()
+            .next()
+            .unwrap()
+            .path();
+        assert!(copy.join("save.dat").is_file(), "{}", copy.display());
+    }
+
+    fn new_quest(f: &Fake, game: &Path, id: &str) -> NewGame {
+        NewGame {
+            title: "[FAKE] Quest".into(),
+            program: game.join("quest.exe"),
+            proton: Some(f.proton.clone()),
+            installed_by: Some(id.into()),
+            ..Default::default()
+        }
     }
 
     fn zip_file<'a>(name: &'a str, data: &'a [u8]) -> crate::installer::zip::build::File<'a> {
