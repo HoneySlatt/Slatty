@@ -1071,6 +1071,32 @@ fn a_stopped_download_gog_could_not_plan_still_goes_on() {
     assert!(app.goes_on.is_empty());
 }
 
+/// The download Download now started paused on request: the one it stopped goes on, as it does
+/// beside any download paused on request.
+#[test]
+fn a_download_stopped_for_download_now_goes_on_when_the_one_started_is_paused() {
+    use super::offline::{installing_6, paused_install_job, queued_job};
+    use crate::downloads::DownloadsMsg;
+    use crate::offline::{OfflineMsg, entry};
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("5"))));
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    assert_eq!(app.queue, ["6"]);
+    let _ = app.update(Message::Offline(OfflineMsg::Pause("5".into())));
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    assert_eq!(app.offline_stopped, [("5".to_string(), None)]);
+    assert_eq!(
+        app.auto_resume.as_deref(),
+        Some("6"),
+        "the stopped one goes on"
+    );
+}
+
 /// Download now pressed while a download pauses on request starts its row once that one is
 /// paused, a game running or not, as it does when nothing downloads.
 #[test]

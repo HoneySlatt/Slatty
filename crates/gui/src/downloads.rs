@@ -373,10 +373,13 @@ impl App {
 
     /// Starts what Download now asked for while the download running paused on request, now that
     /// it is paused: at once while first in line, a game running or not, as with nothing running.
+    /// Else what the launcher stopped goes on beside the pause, which holds the rest of the queue.
     pub(crate) fn start_asked_now(&mut self) -> Task<Message> {
+        let goes_on = self.queue.first().is_some_and(|h| self.goes_on.contains(h));
         match &self.starting_now {
             Some(e) if self.queue.first() == Some(e) => self.start_first(),
             Some(_) => self.start_next(),
+            None if goes_on => self.start_next(),
             None => Task::none(),
         }
     }
