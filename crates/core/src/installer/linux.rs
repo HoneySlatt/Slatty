@@ -299,7 +299,7 @@ impl GogInstallers {
         )
         .await?;
         // The API's size is rounded; the CDN tells the exact one.
-        let first = self.range(&link.downlink, 0, 1).await?;
+        let first = self.range(&link.downlink, 0, 1, None).await?;
         let size = first
             .headers()
             .get(reqwest::header::CONTENT_RANGE)
@@ -338,7 +338,14 @@ impl GogInstallers {
             .map(Some)
     }
 
-    async fn range(&self, url: &str, start: u64, end: u64) -> Result<reqwest::Response> {
+    /// Bytes `start..end` of the file at `url`, which is `total` bytes long when known.
+    async fn range(
+        &self,
+        url: &str,
+        start: u64,
+        end: u64,
+        total: Option<u64>,
+    ) -> Result<reqwest::Response> {
         let resp = http::send(
             self.http
                 .get(url)
@@ -351,6 +358,22 @@ impl GogInstallers {
             return Err(Error::Unsupported(
                 "the download server does not serve parts of files".into(),
             ));
+        }
+        // Nor are other bytes written in their place: another range (a cache), another file (a
+        // link renewed after GOG replaced the installer).
+        let (from, of) = resp
+            .headers()
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("bytes "))
+            .and_then(|v| v.split_once('/'))
+            .and_then(|(span, of)| Some((span.split_once('-')?.0.parse().ok()?, of.parse().ok())))
+            .unzip();
+        if from != Some(start) || total.is_some_and(|t| of.flatten() != Some(t)) {
+            return Err(Error::Parse {
+                context: "downloading from an installer",
+                detail: "the server sent other bytes than those asked for".into(),
+            });
         }
         Ok(resp)
     }
@@ -367,15 +390,15 @@ impl Source for GogInstallers {
         start: u64,
         end: u64,
     ) -> Result<BoxStream<'static, Result<Vec<u8>>>> {
-        let url = self.link(part, false).await?.url;
-        let resp = match self.range(&url, start, end).await {
+        let link = self.link(part, false).await?;
+        let resp = match self.range(&link.url, start, end, Some(link.size)).await {
             // An expired link.
             Err(Error::Http {
                 status: 401 | 403 | 410,
                 ..
             }) => {
                 let url = self.link(part, true).await?.url;
-                self.range(&url, start, end).await?
+                self.range(&url, start, end, Some(link.size)).await?
             }
             other => other?,
         };

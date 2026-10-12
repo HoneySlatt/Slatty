@@ -3,6 +3,57 @@ use std::sync::Mutex;
 use super::*;
 use crate::installer::zip::build::{File, installer};
 
+/// Bytes other than those asked for (a cache answering another range, a renewed link leading to
+/// a file GOG has replaced since) are refused rather than written in their place.
+#[tokio::test]
+async fn bytes_other_than_those_asked_for_are_refused() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    async fn serve(answer: &'static str) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 4096];
+            let _ = socket.read(&mut buf).await;
+            let _ = socket.write_all(answer.as_bytes()).await;
+        });
+        format!("http://{addr}/[FAKE]")
+    }
+    let answer = |range: &str| -> &'static str {
+        format!(
+            "HTTP/1.1 206 Partial Content\r\ncontent-range: bytes {range}\r\ncontent-length: \
+             10\r\nconnection: close\r\n\r\n0123456789"
+        )
+        .leak()
+    };
+    let tokens = Tokens {
+        user_id: "1".into(),
+        access_token: crate::secret::Secret::new("[FAKE]"),
+        refresh_token: crate::secret::Secret::new("[FAKE]"),
+        expires_at: i64::MAX,
+    };
+    let source = GogInstallers::new(crate::http::client().unwrap(), tokens, None, Vec::new());
+    let range = |url: String, total| {
+        let source = &source;
+        async move { source.range(&url, 50, 60, total).await }
+    };
+    assert!(
+        range(serve(answer("50-59/100")).await, Some(100))
+            .await
+            .is_ok()
+    );
+    assert!(
+        range(serve(answer("0-9/100")).await, Some(100))
+            .await
+            .is_err()
+    );
+    assert!(
+        range(serve(answer("50-59/120")).await, Some(100))
+            .await
+            .is_err()
+    );
+}
+
 /// A file GOG keeps no sums for: its `checksum` missing, empty or null.
 #[test]
 fn a_download_link_without_sums_is_read() {

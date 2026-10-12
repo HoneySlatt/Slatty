@@ -290,7 +290,9 @@ A **Linux build** takes another path (`installer::linux`), since GOG's content s
 3. Only entries under `data/noarch/` are kept; a DLC's file replaces the game's at the same path.
    `LinuxDownload` fetches each file with a ranged request (eight at once), inflates it off the
    async threads, checks its size and CRC-32, and writes it as above. A dropped connection or an
-   expired link (401, 403, 410) is tried again. Links out of the game folder are never made.
+   expired link (401, 403, 410) is tried again; an answer whose `Content-Range` names other bytes
+   (another range, a file GOG replaced since) is refused. Links out of the game folder are never
+   made.
 4. The staged folder, its publication, the record and the job are a Windows build's. The game runs
    through `start.sh` with `Runner::Native` (see [Play](#play)).
 
