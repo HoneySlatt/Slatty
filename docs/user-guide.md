@@ -395,8 +395,8 @@ of use. A game that keeps its own record can unlock a cleared achievement again 
 
 With **Update games automatically** on (Settings → Installs, on until turned off), the window
 checks the games SlattyLauncher installed at start, at sign-in and every six hours, and updates
-those on their newest build one after the other, never while a game runs, an install downloads or
-saves sync. They wait in the Updates part of the Downloads tab; while a game updates, its page
+those on their newest build one after the other, never while a game runs, an install or offline
+installers download, or saves sync. They wait in the Updates part of the Downloads tab; while a game updates, its page
 shows **Updating** instead of Play.
 
 A game on an older build you chose stays on it until you update it, or choose the newest build

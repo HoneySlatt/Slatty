@@ -123,16 +123,16 @@ impl App {
         Task::none()
     }
 
-    /// Starts the next waiting update when nothing holds it: no update, install, game (or Play
-    /// pressed, waiting to start it), cloud sync or other work on a game running. Called after
-    /// every message.
+    /// Starts the next waiting update when nothing holds it: no update, download (an install or
+    /// offline installers), game (or Play pressed, waiting to start it), cloud sync or other work
+    /// on a game running. Called after every message.
     pub fn next_update(&mut self) -> Task<Message> {
         let busy = self.updates.current.is_some()
             || self.updates.waiting.is_empty()
             || self.play.as_ref().is_some_and(|p| p.running)
             || self.launch_reading.is_some()
             || self.launch_prompt.is_some()
-            || self.installing().is_some()
+            || self.downloading()
             || self.auto_resume.is_some()
             || self.maintenance.values().any(|m| m.busy)
             || self.cloud.values().any(|c| c.busy);

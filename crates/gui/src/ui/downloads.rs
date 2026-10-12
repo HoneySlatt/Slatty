@@ -204,7 +204,7 @@ impl App {
         }
         list.push(note(
             "Games on their newest build are updated one after the other, never while a game \
-             runs or an install downloads. A paused update waits until you apply it in Manage.",
+             runs or something downloads. A paused update waits until you apply it in Manage.",
         ))
         .into()
     }

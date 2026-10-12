@@ -232,6 +232,23 @@ fn updates_wait_for_a_cloud_sync() {
 }
 
 #[test]
+fn updates_wait_while_offline_installers_download() {
+    use crate::offline::{OfflineMsg, entry};
+    let mut app = auto_app();
+    super::offline::queued_job(&app, "8");
+    app.queue = vec![entry("8")];
+    let _ = app.start_next();
+    assert!(app.offline_run.is_some());
+    let _ = app.update(found());
+    assert!(app.updates.current.is_none());
+    let _ = app.update(Message::Offline(OfflineMsg::Done(
+        "8".into(),
+        Ok(Vec::new()),
+    )));
+    assert_eq!(app.updates.current.as_deref(), Some("3"));
+}
+
+#[test]
 fn updates_found_belong_to_the_account_and_the_switch_that_found_them() {
     // Turned off while the check ran: its answer is not applied.
     let mut app = auto_app();
