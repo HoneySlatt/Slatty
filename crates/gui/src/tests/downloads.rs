@@ -165,7 +165,10 @@ fn a_download_cut_off_by_the_network_waits_and_resumes_first() {
     .unwrap();
     let _ = app.update(Message::Install(InstallMsg::Done(
         "5".into(),
-        Err(Some("[FAKE] network error".into())),
+        Err(Some(crate::install::Failure(
+            "[FAKE] network error".into(),
+            true,
+        ))),
     )));
     assert!(
         matches!(app.install_views.get("6"), Some(InstallView::Queued(_))),
@@ -505,7 +508,10 @@ fn a_failed_download_is_not_started_again_by_itself() {
     .unwrap();
     let _ = app.update(Message::Install(InstallMsg::Done(
         "5".into(),
-        Err(Some("not enough disk space".into())),
+        Err(Some(crate::install::Failure(
+            "not enough disk space".into(),
+            false,
+        ))),
     )));
     assert!(matches!(
         app.install_views.get("5"),
@@ -534,6 +540,59 @@ fn a_failed_download_is_not_started_again_by_itself() {
                 .is_ok()
         );
     }
+}
+
+/// A download stopped by something else than GOG out of reach fails, even when its job still looks
+/// cut off (the command line installing the game holds it): waiting for GOG would start it again
+/// every minute, each time checking every file already downloaded.
+#[test]
+fn a_download_stopped_by_another_error_fails_rather_than_wait_for_gog() {
+    use slatty_core::installer::{DOWNLOADING, InstallJob};
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    for id in ["5", "6"] {
+        ready_to_install(&mut app, id);
+        let _ = app.update(Message::Install(InstallMsg::Start(id.into())));
+    }
+    InstallJob {
+        game_id: "5".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 5".into(),
+        state: DOWNLOADING.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    let _ = app.update(Message::Install(InstallMsg::Done(
+        "5".into(),
+        Err(Some(crate::install::Failure(
+            "[FAKE] another operation on this game is running".into(),
+            false,
+        ))),
+    )));
+    assert!(app.downloads_waiting.is_none(), "GOG is not waited for");
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Failed(_))
+    ));
+    assert_eq!(
+        app.interrupted,
+        [("5".to_string(), crate::Interrupted::Failed)]
+    );
+    assert!(
+        matches!(
+            app.install_views.get("6"),
+            Some(InstallView::Running { .. })
+        ),
+        "the queue goes on"
+    );
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    app.interrupted.retain(|(id, _)| id == "5");
+    let _ = app.start_next();
+    assert!(app.auto_resume.is_none(), "not started again by itself");
 }
 
 /// While a game downloads, the install dialog of another one puts it in the queue, rather than

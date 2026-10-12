@@ -219,46 +219,50 @@ pub async fn install(
         Ok((recorded_files(&set), set.support.len(), set.skipped_links))
     }
     .await;
-    let (files, support_files, skipped_links) = match result {
-        Ok(written) => written,
+    // Registering fails like downloading does (a full data disk): never left as cut off, which
+    // would have it resumed as if GOG had stopped answering.
+    let registered = result.and_then(|(files, support_files, skipped_links)| {
+        InstallRecord {
+            build_id: plan.build.build_id.clone(),
+            version: plan.build.version_name.clone(),
+            language: plan.language.clone(),
+            path: Some(target.clone()),
+            dlcs: plan.selected_dlcs(),
+            setup_build: None,
+            setup_failures: 0,
+            files,
+        }
+        .save(dirs, &req.game_id)?;
+
+        let runner = match plan.platform {
+            Platform::Linux => Runner::Native,
+            Platform::Windows => Runner::Umu {
+                proton: req.proton,
+                prefix: dirs.data.join("prefixes").join(&req.game_id),
+            },
+        };
+        let install = Install {
+            umu_id: None,
+            game_id: req.game_id.clone(),
+            title: plan.title.clone(),
+            platform: plan.platform,
+            path: target.clone(),
+            client_id: plan.meta.client_id.clone(),
+            isolated: crate::install::isolated_when_installed(db, plan.platform, &runner)?,
+            runner,
+        };
+        install.save(db)?;
+        InstallJob::delete(db, &req.game_id)?;
+        Ok((install, support_files, skipped_links))
+    });
+    let (install, support_files, skipped_links) = match registered {
+        Ok(registered) => registered,
         Err(e) => {
             job.state = state_after(&e).into();
             job.save(db)?;
             return Err(e);
         }
     };
-
-    InstallRecord {
-        build_id: plan.build.build_id.clone(),
-        version: plan.build.version_name.clone(),
-        language: plan.language.clone(),
-        path: Some(target.clone()),
-        dlcs: plan.selected_dlcs(),
-        setup_build: None,
-        setup_failures: 0,
-        files,
-    }
-    .save(dirs, &req.game_id)?;
-
-    let runner = match plan.platform {
-        Platform::Linux => Runner::Native,
-        Platform::Windows => Runner::Umu {
-            proton: req.proton,
-            prefix: dirs.data.join("prefixes").join(&req.game_id),
-        },
-    };
-    let install = Install {
-        umu_id: None,
-        game_id: req.game_id.clone(),
-        title: plan.title.clone(),
-        platform: plan.platform,
-        path: target.clone(),
-        client_id: plan.meta.client_id.clone(),
-        isolated: crate::install::isolated_when_installed(db, plan.platform, &runner)?,
-        runner,
-    };
-    install.save(db)?;
-    InstallJob::delete(db, &req.game_id)?;
     // Registered: the mark has done its work. One left behind is deleted by the uninstall.
     let _ = std::fs::remove_file(target.join(STAGED_MARK));
     emit(InstallEvent::Finished {

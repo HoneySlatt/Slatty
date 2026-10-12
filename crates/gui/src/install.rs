@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 use crate::maintenance::MaintenanceMsg;
 use crate::notify::Kind;
 use crate::settings::ProtonChoice;
-use crate::work::{paused_or, progress_stream, tokens};
+use crate::work::progress_stream;
 use crate::{App, CloudRequest, Core, Message, err};
 
 #[derive(Debug, Clone)]
@@ -118,7 +118,7 @@ pub enum InstallMsg {
     Start(String),
     Progress(String, Progress),
     /// `Err(None)` means paused by the user.
-    Done(String, Result<Install, Option<String>>),
+    Done(String, Result<Install, Option<Failure>>),
     Pause(String),
     AskCancel(String),
     KeepDownloading(String),
@@ -483,17 +483,23 @@ impl App {
                 self.sync_interrupted(&game_id);
                 return self.update_install(InstallMsg::Prepare(game_id, None));
             }
-            InstallMsg::Done(game_id, Err(Some(e))) => {
+            InstallMsg::Done(game_id, Err(Some(Failure(e, temporary)))) => {
                 self.sync_interrupted(&game_id);
-                // Left cut off: GOG could not be reached. It resumes first once GOG answers, and
-                // the queue waits for it rather than fail the same way.
-                if self
+                // Left cut off because GOG could not be reached: it resumes first once GOG answers,
+                // and the queue waits for it rather than fail the same way.
+                let cut_off = self
                     .interrupted
                     .iter()
-                    .any(|(id, k)| *id == game_id && *k == crate::Interrupted::Download)
-                {
+                    .any(|(id, k)| *id == game_id && *k == crate::Interrupted::Download);
+                if cut_off && temporary {
                     self.install_views.remove(&game_id);
                     return self.wait_for_gog(e);
+                }
+                // Stopped otherwise (the game busy elsewhere), it is not started again by itself.
+                for (id, kind) in &mut self.interrupted {
+                    if *id == game_id && *kind == crate::Interrupted::Download {
+                        *kind = crate::Interrupted::Failed;
+                    }
                 }
                 let failed = self.notify(
                     Kind::Downloads,
@@ -548,7 +554,7 @@ impl App {
         };
         Task::perform(plan(core, id, choice), move |r| {
             Message::Install(match r {
-                Err(PlanFailure(e, true)) => InstallMsg::Unreachable(game_id, e),
+                Err(Failure(e, true)) => InstallMsg::Unreachable(game_id, e),
                 r => InstallMsg::Planned(game_id, r.map_err(|f| f.0)),
             })
         })
@@ -627,16 +633,17 @@ pub fn versions(builds: &[slatty_core::galaxy::Build]) -> Vec<Version> {
         .collect()
 }
 
-/// Why a plan could not be made, and whether only because GOG could not be reached for now.
-struct PlanFailure(String, bool);
+/// Why a plan or a download failed, and whether only because GOG could not be reached for now.
+#[derive(Debug, Clone)]
+pub struct Failure(pub String, pub bool);
 
-impl From<slatty_core::Error> for PlanFailure {
+impl From<slatty_core::Error> for Failure {
     fn from(e: slatty_core::Error) -> Self {
-        PlanFailure(e.to_string(), e.is_temporary())
+        Failure(e.to_string(), e.is_temporary())
     }
 }
 
-async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, PlanFailure> {
+async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, Failure> {
     let mut account = Account::load(&core.db, &core.dirs).await?;
     let tokens = account.tokens(&core.http).await?.clone();
     let job = InstallJob::load(&core.db, &game_id)?;
@@ -719,7 +726,8 @@ fn install_stream(
     progress_stream(
         async move |throttle| {
             let result = async {
-                let tokens = tokens(&core).await.map_err(Some)?;
+                let mut account = Account::load(&core.db, &core.dirs).await?;
+                let tokens = account.tokens(&core.http).await?.clone();
                 let emit = move |e| {
                     if let InstallEvent::Progress(p) = e {
                         throttle.report(p);
@@ -727,9 +735,12 @@ fn install_stream(
                 };
                 installer::install(&core.db, &core.dirs, &core.http, &tokens, req, emit, cancel)
                     .await
-                    .map_err(paused_or)
             }
-            .await;
+            .await
+            .map_err(|e| match e {
+                slatty_core::Error::Cancelled => None,
+                e => Some(Failure::from(e)),
+            });
             Message::Install(InstallMsg::Done(game_id, result))
         },
         move |p| Message::Install(InstallMsg::Progress(id.clone(), p)),

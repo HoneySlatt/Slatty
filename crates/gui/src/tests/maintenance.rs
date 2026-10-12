@@ -164,7 +164,10 @@ fn interrupted_work_is_listed_with_a_way_to_finish_it() {
     )));
     let _ = app.update(Message::Install(InstallMsg::Done(
         "8".into(),
-        Err(Some("[FAKE] refused before downloading".into())),
+        Err(Some(crate::install::Failure(
+            "[FAKE] refused before downloading".into(),
+            false,
+        ))),
     )));
     assert!(
         app.interrupted.is_empty(),
