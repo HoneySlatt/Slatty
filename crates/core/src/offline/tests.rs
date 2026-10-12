@@ -10,6 +10,8 @@ use super::*;
 struct Fake {
     files: Vec<(String, Vec<u8>, Option<String>)>,
     drops: Mutex<Vec<(usize, u64)>>,
+    /// Answers refused with a server error, as a network briefly gone: that many, then none.
+    refusals: Mutex<usize>,
     corrupt_once: Mutex<Option<(usize, u64)>>,
     opened: Mutex<Vec<(usize, u64, u64)>>,
 }
@@ -22,6 +24,7 @@ impl Fake {
                 .map(|(n, d, x)| (n.to_owned(), d, x))
                 .collect(),
             drops: Mutex::new(Vec::new()),
+            refusals: Mutex::new(0),
             corrupt_once: Mutex::new(None),
             opened: Mutex::new(Vec::new()),
         }
@@ -39,6 +42,16 @@ impl Bytes for Fake {
         start: u64,
         end: u64,
     ) -> Result<BoxStream<'static, Result<Vec<u8>>>> {
+        {
+            let mut refusals = self.refusals.lock().unwrap();
+            if *refusals > 0 {
+                *refusals -= 1;
+                return Err(Error::Http {
+                    context: "test",
+                    status: 503,
+                });
+            }
+        }
         self.opened.lock().unwrap().push((part, start, end));
         let mut data = self.files[part].1[start as usize..end as usize].to_vec();
         if let Some((_, at)) = self
@@ -309,6 +322,20 @@ async fn a_dropped_connection_is_taken_up() {
         *fake.opened.lock().unwrap(),
         [(0, 0, 5000), (0, 2500, 5000)]
     );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// The network gone for a while (Wi-Fi dropping for twenty seconds): the download waits, longer
+/// each time, and goes on once it is back.
+#[tokio::test]
+async fn a_download_outlasts_the_network_gone_for_a_while() {
+    let dir = temp("outage");
+    let a = data(5000, 28);
+    let fake = Fake::new(vec![("setup_fake.exe", a.clone(), None)]);
+    *fake.drops.lock().unwrap() = vec![(0, 0)];
+    *fake.refusals.lock().unwrap() = 5;
+    run_download(&fake, &dir).await.unwrap();
+    assert_eq!(std::fs::read(dir.join("setup_fake.exe")).unwrap(), a);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

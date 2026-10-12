@@ -28,8 +28,9 @@ use crate::{fsutil, http};
 pub const SYSTEMS: [&str; 3] = ["windows", "linux", "mac"];
 const DOWNLOAD_SUFFIX: &str = ".slatty-dl";
 /// Times a file's download is tried in a row after its connection dropped, the first after this
-/// wait, the next after twice as long: a dropped connection often comes back within seconds.
-const ATTEMPTS: u32 = 3;
+/// wait, each next after twice as long: half a minute in all, through a network gone for a while
+/// (Wi-Fi dropping, a router restarting).
+const ATTEMPTS: u32 = 6;
 const FIRST_WAIT: std::time::Duration = if cfg!(test) {
     std::time::Duration::from_millis(10)
 } else {
@@ -636,7 +637,7 @@ async fn fetch<S: Source>(
             tokio::select! {
                 biased;
                 _ = cancel.cancelled() => return Err(Error::Cancelled),
-                _ = tokio::time::sleep(FIRST_WAIT * attempt) => {}
+                _ = tokio::time::sleep(FIRST_WAIT * 2u32.pow(attempt - 1)) => {}
             }
             attempt += 1;
         }
