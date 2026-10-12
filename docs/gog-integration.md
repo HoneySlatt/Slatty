@@ -97,8 +97,8 @@ Cloud requests use a game-scoped token and the Galaxy user agent string used by 
 |---|---|---|---|
 | List | `GET https://gameplay.gog.com/clients/{client_id}/users/{user_id}/achievements` | Comet, Heroic | Verified |
 | Unlock or clear | `POST …/achievements/{achievement_id}` with `{"date_unlocked": "<date>" or null}` | Comet, gog_achievements | Verified |
-| Unlocks made in game | Comet answering the game's Galaxy SDK on 127.0.0.1:9977 | Comet | Implemented; per-game support listed by Comet |
-| Unlocks seen during the game | Comet's `gameplay.db`, table `achievement` (`key`, `name`, `unlock_time` set on unlock, before the upload to GOG) | Comet 0.3.2 sources (`db/gameplay.rs`, `unlock_user_achievement`) | Implemented; not yet checked with a real game |
+| Unlocks made in game | Comet answering the game's Galaxy SDK on 127.0.0.1:9977 | Comet | Verified (Blasphemous, isolated, 2026-10-12); per-game support listed by Comet |
+| Unlocks seen during the game | Comet's `gameplay.db`, table `achievement` (`key`, `name`, `unlock_time` set on unlock, before the upload to GOG) | Comet 0.3.2 sources (`db/gameplay.rs`, `unlock_user_achievement`) | Verified (Blasphemous, 2026-10-12): told during the session, recorded on GOG as it ended |
 
 ### Play time
 

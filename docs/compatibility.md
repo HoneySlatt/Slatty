@@ -76,6 +76,7 @@ Proton-CachyOS.
 | 2026-10-10 | Hollow Knight (1308320804) | 1.5.12620 | Same, isolated without either D-Bus bus | Play isolated | OK | Played 4 min (played and checked by the user); cloud checked, 2 saves uploaded after; Comet started; play time sent. Nothing changed |
 | 2026-10-10 | Hollow Knight (1308320804) | 1.5.12620 | Same, isolated with `HOME` set to its own home and the user's environment kept out | Play isolated | OK | Played 1 min (played and checked by the user); cloud checked, 5 saves uploaded after; Comet started; play time sent. Nothing changed |
 | 2026-10-10 | Cyberpunk 2077 (1423049311) | — | Installed by slatty under `/home`, isolated, Proton-CachyOS 11.0 | Play isolated, with umu's fixes | OK | Played 3 min, no problem seen (played and checked by the user); cloud checked, 1 save uploaded after; Comet started; play time sent. Proton's fixes ran in the container with the GOG database and umu-1091500 (log in its own home): global defaults applied (`OPENSSL_ia32cap`), no fix of its own listed for it |
+| 2026-10-12 | Blasphemous | — | Installed by slatty, isolated | First launch, play isolated, achievement earned in game | OK | Played 5 min (played and checked by the user). First launch: prefix created, GOG's setup script run and the Galaxy service registered, 4 cloud saves downloaded, Comet started. An achievement earned in game reached Comet from the container: shown as unlocked during the session (desktop notification) and recorded on GOG as it ended. 2 saves uploaded after; play time sent |
 
 ## Not tested against GOG yet
 
@@ -87,11 +88,10 @@ Proton-CachyOS.
 - Installing shared redistributables (Visual C++, DirectX) during setup.
 - A game-folder dependency.
 - Cloud deletions.
-- An achievement earned in game and reported through Comet.
-- A game that needs the Galaxy dummy service. The registration itself was checked under
-  UMU-Proton 10.0-4 in a throwaway prefix.
-- Isolated: an achievement reaching Comet from the container, a game with a Proton fix of its
-  own (Cyberpunk 2077 got only the global defaults), a Linux game, and any real game since the
-  tools became read-only and the user's processes hidden (2026-10-11).
+- A game that needs the Galaxy dummy service. Its registration was checked under UMU-Proton 10.0-4
+  in a throwaway prefix, and at Blasphemous's first launch, which did not show whether the game
+  needed it.
+- Isolated: a game with a Proton fix of its own (Cyberpunk 2077 got only the global defaults), and
+  a Linux game.
 - Whether a session with Comet shows the account online, or playing, to GOG friends.
 - A redistributable that asks for a restart (exit code 3010) during setup.
