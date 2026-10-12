@@ -43,6 +43,8 @@ pub const HINTS: f32 = 60.0;
 pub const SHELVES: f32 = 72.0;
 /// How many games the Continue row holds.
 const RECENT: usize = 20;
+/// How long the focus stays on a game of Home before its key art's copy is made.
+const REST: std::time::Duration = std::time::Duration::from_millis(400);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tab {
@@ -210,6 +212,8 @@ pub enum CouchMsg {
     KeyAt(usize, usize),
     /// Installs a game with the default choices.
     Install(String),
+    /// The focus has rested on a game of Home a moment: its key art's copy is made.
+    Rested(String),
     Achievements,
     OpenMenu,
     Menu(MenuItem),
@@ -286,6 +290,11 @@ impl App {
             CouchMsg::Install(game_id) => {
                 self.start_planned.insert(game_id.clone());
                 return self.update_install(InstallMsg::Prepare(game_id, None));
+            }
+            CouchMsg::Rested(game_id) => {
+                if self.home_focus().is_some_and(|(_, _, g)| g.id == game_id) {
+                    return self.scale_art();
+                }
             }
             CouchMsg::Achievements => {
                 if let Some(couch) = &mut self.couch {
@@ -388,16 +397,20 @@ impl App {
     }
 
     /// Asks for the key art of the game with the focus on the home page, unless it is kept, and
-    /// for its copy at the window's width.
+    /// for its copy at the window's width once the focus rests there: a direction held over a row
+    /// would ask for one per game passed over, each long work in the background.
     pub fn home_art(&mut self) -> Task<Message> {
         if self.couch.is_none() {
             return Task::none();
         }
-        let art = self.home_focus().and_then(|(_, _, g)| g.background.clone());
-        Task::batch([
-            self.request_images(art.into_iter().collect()),
-            self.scale_art(),
-        ])
+        let Some((_, _, g)) = self.home_focus() else {
+            return Task::none();
+        };
+        let (id, art) = (g.id.clone(), g.background.clone());
+        let rest = Task::perform(async { tokio::time::sleep(REST).await }, move |_| {
+            Message::Couch(CouchMsg::Rested(id.clone()))
+        });
+        Task::batch([self.request_images(art.into_iter().collect()), rest])
     }
 
     fn library_nav(&mut self, nav: Nav) -> Task<Message> {

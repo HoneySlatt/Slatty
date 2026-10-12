@@ -435,10 +435,18 @@ fn home_draws_the_key_art_from_its_copy() {
         },
     );
     let _ = app.update(Message::Rescaled(1.0));
-    // Down to Favorites, on game 5.
-    let moved = app.update(Message::Couch(CouchMsg::Nav(Nav::Down)));
+    // Down to Favorites, on game 5, then on to 7 at once: nothing made for 5, passed over.
+    nav(&mut app, Nav::Down);
     assert_eq!(app.home_focus().unwrap().2.id, "5");
-    assert!(moved.units() > 0, "its copy asked for");
+    nav(&mut app, Nav::Right);
+    let rested = |app: &mut App, id: &str| {
+        app.update(Message::Couch(CouchMsg::Rested(id.into())))
+            .units()
+    };
+    assert_eq!(rested(&mut app, "5"), 0);
+    // Back on 5, where the focus rests: its copy is asked for then.
+    nav(&mut app, Nav::Left);
+    assert!(rested(&mut app, "5") > 0, "its copy asked for");
     let copy = PathBuf::from("/art/1920/art.jpg");
     let _ = app.update(Message::ArtScaled(art, 1920, Some(copy.clone())));
     let g = app.home_focus().unwrap().2.clone();
