@@ -159,11 +159,12 @@ pub async fn play(
         ));
     }
     let choice = crate::settings::launch_choice(db, &install.game_id)?;
+    // Before the check, which refuses an isolated game whose runtime umu does not have yet.
+    if install.isolated {
+        runner::refresh_runtimes(db, dirs, runner::container(&install)).await;
+    }
     // Checked now, before the prefix and the setup, so a game that cannot start says so first.
     runner::launch_spec(dirs, &install, choice.as_deref())?;
-    if install.isolated {
-        runner::refresh_runtimes(db, dirs).await;
-    }
     // GOG keeps no cloud saves for Linux builds, and they lack the Galaxy SDK that Comet talks to.
     // A game added by hand is not GOG's at all: GOG is not asked anything about it.
     let native = install.platform == Platform::Linux;

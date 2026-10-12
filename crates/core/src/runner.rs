@@ -55,13 +55,14 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
             // (which GOG's scripts ask for) nor the libraries games load (OpenGL, sound) where
             // they look, games run in a usual Linux layout.
             let through_umu = |umu: PathBuf| -> Result<Wrapper> {
-                let tool = runtime_tool(dirs, "steamrt3").expect("umu knows steamrt3")?;
+                let tool = runtime_tool(dirs, NATIVE_RUNTIME).expect("umu knows steamrt3")?;
                 Ok(Wrapper::Umu(umu, tool))
             };
             let wrapper = if install.isolated {
                 let umu = find_in_path("umu-run").ok_or_else(|| {
                     Error::NotFound("umu-run is needed to run a game isolated".into())
                 })?;
+                runtime_installed(&umu_data(), NATIVE_RUNTIME)?;
                 Some(through_umu(umu)?)
             } else if Path::new("/etc/NIXOS").exists() {
                 match find_in_path("steam-run") {
@@ -258,11 +259,16 @@ fn windows_spec(
                     proton.display()
                 )));
             }
-            if install.isolated {
-                container_of(proton)?;
-            }
+            let runtime = if install.isolated {
+                Some(container_of(proton)?)
+            } else {
+                None
+            };
             let umu = find_in_path("umu-run")
                 .ok_or_else(|| Error::NotFound("umu-run is not in PATH".into()))?;
+            if let Some(runtime) = runtime {
+                runtime_installed(&umu_data(), runtime)?;
+            }
             let mut args = args;
             // Given a file of this computer, umu would share the whole filesystem it is on:
             // Proton finds the program by its Windows path instead, through Z: in the container.
@@ -765,6 +771,35 @@ fn ref_locks(runtime: &Path) -> Result<Vec<PathBuf>> {
     Ok(locks)
 }
 
+/// Refuses an isolated launch in a runtime umu does not have yet: umu would install it during the
+/// launch, inside the sandbox, where nothing binds it read-only, and the game could change it
+/// (`refresh_runtimes` installs it before, outside).
+fn runtime_installed(umu: &Path, runtime: &str) -> Result<()> {
+    if umu.join(runtime).is_dir() {
+        return Ok(());
+    }
+    Err(Error::Refused(format!(
+        "umu's runtime {runtime} is not installed yet: it is installed as an isolated game starts, \
+         which needs the network (umu-runtimes.log in the logs folder says what failed)"
+    )))
+}
+
+/// The runtime a native game runs in when isolated: umu's Steam Linux Runtime 3.0 (sniper).
+const NATIVE_RUNTIME: &str = "steamrt3";
+
+/// The folder of the runtime an isolated launch of `install` runs in; `None` when not isolated or
+/// when it cannot be known, which the launch then refuses.
+pub fn container(install: &Install) -> Option<&'static str> {
+    if !install.isolated {
+        return None;
+    }
+    match &install.runner {
+        Runner::Native => Some(NATIVE_RUNTIME),
+        Runner::Umu { proton, .. } => container_of(proton).ok(),
+        Runner::Wine { .. } => None,
+    }
+}
+
 /// Steam's app ids of the runtimes umu keeps, by folder (umu 1.4's `RUNTIME_VERSIONS`).
 const RUNTIME_APPIDS: [(&str, &str); 4] = [
     ("steamrt2", "1391110"),
@@ -824,14 +859,18 @@ fn runtime_tool(dirs: &Dirs, name: &str) -> Option<Result<PathBuf>> {
 }
 
 /// Brings umu's runtimes up to date, at most once a day, before an isolated launch: such
-/// launches use them read-only and leave them as they are (`read_only_tools`). umu runs nothing of
-/// a game's for it (`true` in each runtime, through `runtime_tool`), not isolated. A failure
-/// leaves the runtimes as they are, and the game starts with them.
-pub async fn refresh_runtimes(db: &crate::db::Db, dirs: &Dirs) {
+/// launches use them read-only and leave them as they are (`read_only_tools`). `needed`, the
+/// runtime that launch runs in (`container`), is installed at once when umu does not have it. umu
+/// runs nothing of a game's for it (`true` in each runtime, through `runtime_tool`), not isolated.
+/// A failure leaves the runtimes as they are: the game starts with them, or not at all without the
+/// one it needs.
+pub async fn refresh_runtimes(db: &crate::db::Db, dirs: &Dirs, needed: Option<&str>) {
     const DAY: i64 = 24 * 60 * 60;
     let now = chrono::Utc::now().timestamp();
     let checked = crate::settings::umu_runtimes_checked_at(db).ok().flatten();
-    if checked.is_some_and(|at| (0..DAY).contains(&(now - at))) {
+    let due = !checked.is_some_and(|at| (0..DAY).contains(&(now - at)));
+    let missing = needed.filter(|name| !umu_data().join(name).is_dir());
+    if !due && missing.is_none() {
         return;
     }
     let Some(umu) = find_in_path("umu-run") else {
@@ -841,10 +880,12 @@ pub async fn refresh_runtimes(db: &crate::db::Db, dirs: &Dirs) {
     let Ok(log) = std::fs::File::create(dirs.logs().join("umu-runtimes.log")) else {
         return;
     };
-    for runtime in runtimes() {
-        let Some(name) = runtime.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
+    let present = if due { runtimes() } else { Vec::new() };
+    let names = present
+        .iter()
+        .filter_map(|runtime| runtime.file_name()?.to_str())
+        .chain(missing);
+    for name in names {
         if name.ends_with("-arm64") != cfg!(target_arch = "aarch64") {
             continue;
         }
@@ -862,7 +903,9 @@ pub async fn refresh_runtimes(db: &crate::db::Db, dirs: &Dirs) {
             .status()
             .await;
     }
-    let _ = crate::settings::set_umu_runtimes_checked_at(db, now);
+    if due {
+        let _ = crate::settings::set_umu_runtimes_checked_at(db, now);
+    }
 }
 
 /// What brings a runtime up to date: umu running `true` through `tool`, from a folder of its own.
@@ -1477,6 +1520,62 @@ mod tests {
         manifest("");
         install.isolated = false;
         assert!(!outside(&install), "not isolated, as the user");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// umu installs a runtime it does not have during the launch, inside the sandbox, where nothing
+    /// binds it read-only: the game could change it and have its code run outside its container at
+    /// the next launch. Such a launch is refused (`refresh_runtimes` installs the runtime before,
+    /// outside), and the runtime each isolated launch needs is known before it starts.
+    #[test]
+    fn an_isolated_launch_needs_its_runtime_installed_before() {
+        let dir = std::env::temp_dir().join(format!("slatty-runtime-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("umu/steamrt3")).unwrap();
+        assert!(runtime_installed(&dir.join("umu"), "steamrt3").is_ok());
+        assert!(runtime_installed(&dir.join("umu"), "steamrt4").is_err());
+
+        let proton = dir.join("proton");
+        std::fs::create_dir_all(&proton).unwrap();
+        std::fs::write(proton.join("proton"), b"").unwrap();
+        let manifest = |appid: &str| {
+            let text = format!("\"manifest\"\n{{\n\t\"require_tool_appid\"\t\"{appid}\"\n}}\n");
+            std::fs::write(proton.join("toolmanifest.vdf"), text).unwrap();
+        };
+        let mut install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: dir.join("game"),
+            client_id: None,
+            runner: Runner::Umu {
+                proton: proton.clone(),
+                prefix: dir.join("prefix"),
+            },
+            umu_id: None,
+            isolated: true,
+        };
+        manifest("4183110");
+        assert_eq!(container(&install), Some("steamrt4"));
+        // umu's own folder, this computer's: a runtime it lacks, if any.
+        if let Some((runtime, appid)) = RUNTIME_APPIDS
+            .iter()
+            .find(|(name, _)| !umu_data().join(name).exists())
+        {
+            manifest(appid);
+            let dirs = Dirs::under(&dir.join("slatty"));
+            let refused = windows_command(&dirs, &install, vec![], dir.clone());
+            assert!(
+                matches!(&refused, Err(Error::Refused(m)) if m.contains(runtime)),
+                "{refused:?}"
+            );
+        }
+        install.isolated = false;
+        assert_eq!(container(&install), None);
+        install.isolated = true;
+        install.platform = Platform::Linux;
+        install.runner = Runner::Native;
+        assert_eq!(container(&install), Some("steamrt3"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

@@ -165,7 +165,9 @@ isolated game:
 
 - the game sees its own folder (writable), its Wine prefix and a home folder of its own; umu's
   runtime, the Proton build, the tool a Linux game runs through and the setup files SlattyLauncher
-  downloads for it are read-only, so a game cannot plant code that would run in other games;
+  downloads for it are read-only, so a game cannot plant code that would run in other games. A
+  runtime umu does not have yet is installed before the launch, outside the sandbox, never during
+  it, where it would be writable;
 - your home folder, your `/tmp`, your other disks and your Steam installation (`~/.steam`,
   `~/.local/share/Steam`: the client's settings and tokens) stay out of view, checked with `/home`
   and a network share each mounted on their own;

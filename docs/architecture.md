@@ -314,7 +314,12 @@ cannot hard-link the runtime across the read-only mount (EXDEV) and copies it: r
 or XFS (an isolated launch took 2.3 s instead of 1.4 s), written in full on ext4 (about 750 MB).
 umu cannot update a runtime it sees read-only, so isolated launches set `UMU_RUNTIME_UPDATE=0`,
 and `runner::refresh_runtimes` runs umu once a day before one, outside bubblewrap, through the
-same runtime tool: umu's `UMU_NO_PROTON` would ask GitHub for umu's Proton releases first. It
+same runtime tool: umu's `UMU_NO_PROTON` would ask GitHub for umu's Proton releases first. The
+runtime the launch runs in (`runner::container`), when umu does not have it yet (a first isolated
+launch, a Proton build needing a newer runtime), is installed then whatever the day: umu would
+install it during the launch, inside the sandbox, where nothing binds it read-only and the game
+could change it. An isolated launch in a runtime still missing is refused
+(`runner::runtime_installed`). It
 gives umu `true` to run, from a folder of SlattyLauncher's own (`umu-runtimes`): umu takes its
 first argument for a program in the working directory when one of that name is there, and the
 command line may be started from a game's folder. The bubblewrap check below runs from `/`, with
