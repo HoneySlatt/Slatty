@@ -143,6 +143,42 @@ fn a_cover_offers_no_install_for_a_product_gog_does_not_offer() {
     assert_eq!(install_dialogs(&app), 0);
 }
 
+/// A long title over a hovered cover takes two lines at most: Play and the game's settings stay on
+/// the cover, the smallest offered (75 %) in the smallest window included.
+#[test]
+fn a_long_title_leaves_a_covers_buttons_on_it() {
+    let mut app = library_app();
+    app.window = Size::new(800.0, 560.0);
+    app.card_width = crate::settings::CoverSize(75).width();
+    app.library.retain(|g| g.id == "3");
+    app.library[0].title = format!("[FAKE] {}", "A very long title ".repeat(11));
+    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    // The game is the first cover of the grid; its buttons take clicks only where they are, on it.
+    let grid = ui
+        .find(iced_test::selector::id(crate::library::GRID))
+        .unwrap()
+        .bounds();
+    for x in (0..20).map(|i| grid.x + 4.0 + i as f32 * 6.0) {
+        for y in (0..30).map(|i| grid.y + 4.0 + i as f32 * 6.0) {
+            ui.point_at(iced::Point::new(x, y));
+            let _ = ui.simulate(iced_test::simulator::click());
+        }
+    }
+    let messages: Vec<Message> = ui.into_messages().collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::Play(id) if id == "3")),
+        "Play"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::OpenDialog(id, Panel::GameSettings) if id == "3")),
+        "settings"
+    );
+}
+
 /// What changes no list (Steam's covers arriving, typing in a dialog, a right click, a dialog
 /// opened) keeps the lists made, each made again in about 2 ms at 11,000 games; a title saved
 /// does not.

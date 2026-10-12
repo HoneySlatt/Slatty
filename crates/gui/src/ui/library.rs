@@ -336,7 +336,10 @@ impl App {
             space().height(Length::Fill),
             container(
                 column![
-                    text(&g.title).size(13).font(semibold()),
+                    // Two lines at most: a longer title would push the buttons off the cover.
+                    container(text(&g.title).size(13).font(semibold()))
+                        .max_height(2.0 * 13.0 * 1.3)
+                        .clip(true),
                     row![settings, space().width(Length::Fill), action].align_y(Alignment::Center),
                 ]
                 .spacing(4),
