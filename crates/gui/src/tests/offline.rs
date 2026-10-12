@@ -742,23 +742,43 @@ fn download_now_during_a_game_starts_its_row_when_the_download_fails_or_is_cut_o
 }
 
 /// Installers cut off because GOG could not be reached go on first once it answers, beside a
-/// download paused on request, as they would after a restart.
+/// download paused on request, as they would after a restart; cut off before their run began
+/// (saved as never started), they wait as never started.
 #[test]
 fn installers_cut_off_by_the_network_go_on_beside_a_paused_download() {
-    let mut app = library_app();
-    app.interrupted
-        .push(("6".into(), crate::Interrupted::Paused));
-    queued_job(&app, "5");
-    app.queue = vec![entry("5")];
-    let _ = app.start_first();
-    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
-    let _ = app.update(Message::Offline(OfflineMsg::Done(
-        "5".into(),
-        Err(Some(("[FAKE] network error".into(), true))),
-    )));
-    assert_eq!(app.queue, [entry("5")]);
-    let _ = app.update(Message::Install(crate::install::InstallMsg::Retry));
-    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    for started in [true, false] {
+        let mut app = library_app();
+        app.interrupted
+            .push(("6".into(), crate::Interrupted::Paused));
+        queued_job(&app, "5");
+        app.queue = vec![entry("5")];
+        let _ = app.start_first();
+        assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+        // As the run leaves it once its folder is made.
+        if started {
+            let db = &app.core.as_ref().unwrap().db;
+            let job = OfflineJob::load(db, "5").unwrap().unwrap();
+            OfflineJob {
+                state: DOWNLOADING.into(),
+                ..job
+            }
+            .save(db)
+            .unwrap();
+        }
+        let _ = app.update(Message::Offline(OfflineMsg::Done(
+            "5".into(),
+            Err(Some(("[FAKE] network error".into(), true))),
+        )));
+        assert_eq!(app.queue, [entry("5")]);
+        let _ = app.update(Message::Install(crate::install::InstallMsg::Retry));
+        let run = app.offline_run.as_ref().is_some_and(|r| r.game_id == "5");
+        assert_eq!(run, started);
+        let jobs = OfflineJob::list(&app.core.as_ref().unwrap().db).unwrap();
+        let waiting = crate::boot::downloads_from(app.queue.clone(), Vec::new(), &jobs);
+        if !started {
+            assert_eq!(app.goes_on, waiting.goes_on, "as after a restart");
+        }
+    }
 }
 
 /// The row Download now asked for during a game starts once the download it paused stopped, though

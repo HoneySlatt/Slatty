@@ -326,8 +326,12 @@ impl App {
                         self.queue.insert(0, entry(&game_id));
                         self.save_queue();
                         // Cut off, it goes on beside a download paused on request, as after a
-                        // restart.
-                        if !self.goes_on.contains(&entry(&game_id)) {
+                        // restart; cut off before it began, it waits as never started.
+                        let started = OfflineJob::load(&core.db, &game_id)
+                            .ok()
+                            .flatten()
+                            .is_some_and(|j| j.state != QUEUED);
+                        if started && !self.goes_on.contains(&entry(&game_id)) {
                             self.goes_on.push(entry(&game_id));
                         }
                         return self.wait_for_gog(e);
