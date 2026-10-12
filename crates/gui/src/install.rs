@@ -214,6 +214,7 @@ impl App {
                     Ok(info) if !auto && self.queue.contains(&game_id) => InstallView::Queued(info),
                     Ok(info) => InstallView::Ready(info),
                     Err(e) => {
+                        self.starting_now.take_if(|id| *id == game_id);
                         if auto {
                             self.notify_error(format!(
                                 "The download of {} could not resume: {e}",
@@ -282,6 +283,8 @@ impl App {
                 let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
                     return Task::none();
                 };
+                // Asked for by Download now: it starts even while a game runs.
+                let now = self.starting_now.take_if(|id| *id == game_id).is_some();
                 let proton = match (info.platform, info.proton.clone()) {
                     (Platform::Linux, _) => PathBuf::new(),
                     (Platform::Windows, Some(proton)) => proton,
@@ -297,7 +300,7 @@ impl App {
                     self.notify_error("The install folder must be an absolute path.".into());
                     return Task::none();
                 }
-                if self.downloads_held() {
+                if self.downloading() || (self.held_for_play() && !now) {
                     return self.enqueue(game_id);
                 }
                 let req = InstallRequest {

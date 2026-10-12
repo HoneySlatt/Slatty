@@ -315,6 +315,8 @@ pub struct App {
     pub drag: Option<downloads::Drag>,
     /// The download the launcher is pausing (its queue entry), to queue again once stopped.
     pub preempted: Option<(String, downloads::Preempt)>,
+    /// The queue entry Download now asked for, which starts even while a game runs.
+    pub starting_now: Option<String>,
     /// Whether downloads pause while a game runs (Settings → Installs).
     pub pause_while_playing: bool,
     /// The couch mode, while on, and where its focus is.
@@ -437,6 +439,7 @@ impl Default for App {
             queue: Vec::new(),
             drag: None,
             preempted: None,
+            starting_now: None,
             pause_while_playing: true,
             couch: None,
             start_planned: HashSet::new(),

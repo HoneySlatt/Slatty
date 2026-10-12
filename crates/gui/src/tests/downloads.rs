@@ -827,6 +827,21 @@ fn an_install_started_while_a_game_runs_waits_in_the_queue() {
 }
 
 #[test]
+fn download_now_starts_a_queued_install_while_a_game_runs() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    play_3(&mut app);
+    for id in ["7", "8"] {
+        ready_to_install(&mut app, id);
+        let _ = app.update(Message::Install(InstallMsg::Start(id.into())));
+    }
+    assert_eq!(app.queue, ["7", "8"]);
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow("8".into())));
+    assert_eq!(app.installing().map(|(id, _, _)| id), Some("8"));
+    assert_eq!(app.queue, ["7"]);
+}
+
+#[test]
 fn downloads_go_on_while_playing_once_turned_off() {
     use super::offline::installing_6;
     use crate::settings::SettingsMsg;

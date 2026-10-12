@@ -57,6 +57,7 @@ impl App {
                 self.drag = None;
                 self.queue.retain(|id| *id != game_id);
                 self.save_queue();
+                self.starting_now.take_if(|id| *id == game_id);
                 self.install_views.remove(&game_id);
                 return self.update_install(InstallMsg::Discard(game_id));
             }
@@ -85,6 +86,7 @@ impl App {
                 };
                 self.drag = None;
                 let entry = self.queue.remove(i);
+                self.starting_now = Some(entry.clone());
                 self.queue.insert(0, entry);
                 self.save_queue();
                 if let Some(running) = self.running_entry() {
