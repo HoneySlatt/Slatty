@@ -339,6 +339,21 @@ fn an_installed_game_plays_from_its_page() {
     assert_eq!(app.selected.as_deref(), Some("3"));
 }
 
+/// Typed on a real keyboard, the search ends with Enter, as it would elsewhere; A on a gamepad
+/// still presses the key with the focus.
+#[test]
+fn enter_on_a_keyboard_ends_the_search() {
+    let mut app = couch_app();
+    key(&mut app, Key::Nav(Nav::Search));
+    key(&mut app, Key::Char('1'));
+    key(&mut app, Key::Nav(Nav::Confirm));
+    assert_eq!(couch(&app).search, "1");
+    assert!(couch(&app).keyboard.is_none());
+    nav(&mut app, Nav::Search);
+    nav(&mut app, Nav::Confirm);
+    assert_eq!(couch(&app).search, "1q", "the key with the focus");
+}
+
 /// A cover tapped above the keyboard opens its game: the keyboard, hidden then, takes no press.
 #[test]
 fn the_keyboard_hidden_by_a_game_page_takes_nothing() {

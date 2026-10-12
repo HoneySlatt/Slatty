@@ -660,8 +660,8 @@ one, X the left one, Y the top one.
 - **Library** shows every game by name. Above the covers (Up from the first row), the shelves
   **All**, **Installed** and **Favorites**, and **Search**, which opens a keyboard on the screen: A
   types the key with the focus, X erases, Y adds a space, B or **Done** closes it, keeping the
-  search. A keyboard types into the search directly; a letter typed from Home or Library starts
-  one.
+  search. A keyboard types into the search directly, and Enter ends it; a letter typed from Home
+  or Library starts one.
 - A game's page has its main button (Play, Stop while it runs, Install, Resume, or where its
   download stands), the favorite, and **Achievements**, a list to scroll. A game that can be
   started several ways asks which the first time, as in the desktop window. **Install** starts at

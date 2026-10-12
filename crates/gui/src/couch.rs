@@ -231,6 +231,12 @@ impl App {
             }
             // A gamepad is read whatever window is in front: a game's moves are not the launcher's.
             CouchMsg::Nav(_) if self.away() => {}
+            // Typed on a real keyboard, the search ends with Enter, as it would elsewhere.
+            CouchMsg::Key(Key::Nav(Nav::Confirm)) if self.typing() => {
+                if let Some(couch) = &mut self.couch {
+                    couch.keyboard = None;
+                }
+            }
             CouchMsg::Nav(nav) | CouchMsg::Key(Key::Nav(nav)) => return self.couch_nav(nav),
             CouchMsg::Key(Key::Char(c)) => return self.typed(c),
             CouchMsg::Key(Key::Erase) => {
