@@ -359,6 +359,26 @@ fn a_steam_game_pauses_the_download_running_until_it_ends() {
     );
 }
 
+/// Steam's games turned off while one of them holds the downloads: they go on.
+#[test]
+fn downloads_held_by_a_steam_game_go_on_once_steam_games_are_off() {
+    use super::offline::{installing_6, paused_install_job};
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    installing_6(&mut app);
+    paused_install_job(&app);
+    let _ = app.update(Message::Steam(SteamMsg::Running([440].into())));
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert_eq!(app.queue, ["6"]);
+    let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
+    assert_eq!(
+        app.auto_resume.as_deref(),
+        Some("6"),
+        "planned, then started"
+    );
+}
+
 /// Steam's achievements, read from the client's files, show in the Achievements tab sorted with
 /// GOG's and on the game's page, without any GOG account; they are never unlocked or cleared by
 /// hand, and a share of players Steam does not know is not made up.

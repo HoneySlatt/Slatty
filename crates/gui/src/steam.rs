@@ -169,6 +169,8 @@ impl App {
                 };
                 self.allow_steam_requests();
                 self.merge_steam();
+                // A Steam game running no longer holds the downloads.
+                return self.start_next();
             }
             SteamMsg::Images(on) => {
                 self.steam.images = on;
