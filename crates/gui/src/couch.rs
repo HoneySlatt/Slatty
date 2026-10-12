@@ -276,6 +276,10 @@ impl App {
                 if let Some(couch) = &mut self.couch {
                     couch.tab = tab;
                 }
+                // Its rows may have changed meanwhile, its focus on another game.
+                if tab == Tab::Home {
+                    return self.home_art();
+                }
             }
             CouchMsg::Shelf(shelf) => {
                 if let Some(couch) = &mut self.couch {
@@ -360,6 +364,9 @@ impl App {
             Nav::PrevTab | Nav::NextTab => {
                 let couch = self.couch.as_mut().expect("couch mode");
                 couch.tab = couch.tab.step(nav == Nav::NextTab);
+                if couch.tab == Tab::Home {
+                    return self.home_art();
+                }
                 Task::none()
             }
             // At a tab, Back has nowhere to go but the menu, and its way out.
@@ -397,7 +404,11 @@ impl App {
             Nav::Left => couch.home_cols[row] = col.saturating_sub(1),
             Nav::Right => couch.home_cols[row] = (col + 1).min(len.saturating_sub(1)),
             Nav::Confirm if len > 0 => return self.update(Message::Select(game(col))),
-            Nav::Action if len > 0 => return self.update(Message::ToggleFavorite(game(col))),
+            // The favorite toggled may change the rows, the focus then on another game.
+            Nav::Action if len > 0 => {
+                let toggled = self.update(Message::ToggleFavorite(game(col)));
+                return Task::batch([toggled, self.home_art()]);
+            }
             _ => return Task::none(),
         }
         self.home_art()

@@ -543,6 +543,55 @@ fn couch_key_art_copies_are_as_wide_as_the_window() {
     ));
 }
 
+/// Home's focus can land on a game without a move, or come back to Home's own width: back from a
+/// game page (whose copy is wider), after a favorite toggled moves it, at a return to the tab. The
+/// copy is asked for then too, once the focus rests.
+#[test]
+fn home_asks_for_its_key_art_copy_wherever_its_focus_lands() {
+    let custom = |app: &mut App, id: &str| {
+        app.customs.insert(
+            id.into(),
+            slatty_core::custom::Custom {
+                background: Some(PathBuf::from(format!("/custom/{id}/art.jpg"))),
+                ..Default::default()
+            },
+        );
+    };
+    // Back from a game page.
+    let mut app = couch_app();
+    app.window = Size::new(1920.0, 1080.0);
+    custom(&mut app, "5");
+    let _ = app.update(Message::Rescaled(1.0));
+    nav(&mut app, Nav::Down);
+    nav(&mut app, Nav::Confirm);
+    let art = PathBuf::from("/custom/5/art.jpg");
+    let page = PathBuf::from("/art/2560/art.jpg");
+    let _ = app.update(Message::ArtScaled(art, 2560, Some(page)));
+    let _ = app.update(Message::Couch(CouchMsg::Rested("5".into())));
+    assert!(app.update(Message::Couch(CouchMsg::Nav(Nav::Back))).units() > 0);
+
+    // A favorite toggled: 5 leaves Favorites, the focus lands on 7.
+    let mut app = couch_app();
+    custom(&mut app, "7");
+    let _ = app.update(Message::Rescaled(1.0));
+    nav(&mut app, Nav::Down);
+    let _ = app.update(Message::Couch(CouchMsg::Rested("5".into())));
+    let toggled = app.update(Message::Couch(CouchMsg::Nav(Nav::Action)));
+    assert_eq!(app.home_focus().unwrap().2.id, "7");
+    assert!(toggled.units() > 0, "a rest for 7");
+
+    // Back at the tab.
+    nav(&mut app, Nav::NextTab);
+    assert!(
+        app.update(Message::Couch(CouchMsg::Nav(Nav::PrevTab)))
+            .units()
+            > 0
+    );
+    nav(&mut app, Nav::NextTab);
+    let tab = app.update(Message::Couch(CouchMsg::Tab(crate::couch::Tab::Home)));
+    assert!(tab.units() > 0);
+}
+
 /// The couch mode's game page draws key art over the whole page, wider than the window when the art
 /// is wide (a Steam hero): its copy is made a step larger, as the desktop's page makes it.
 #[test]

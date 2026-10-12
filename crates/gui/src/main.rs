@@ -1030,6 +1030,8 @@ impl App {
                 self.selected = None;
                 self.panel = None;
                 self.edit = None;
+                // Back on the couch mode's Home, whose copy is narrower than a page's.
+                return self.scale_art();
             }
             Message::OpenPanel(panel) => return self.open_panel(panel),
             // The edit drawer closes like the panels, without saving.
