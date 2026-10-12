@@ -126,7 +126,7 @@ pub async fn install(
             root.display()
         )));
     }
-    let plan = plan_for(
+    let plan = plan_install(
         http,
         tokens,
         &req.game_id,

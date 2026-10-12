@@ -443,6 +443,8 @@ fn the_queue_goes_on_once_nothing_downloads_or_waits() {
     assert!(app.queue.is_empty());
 }
 
+/// A cut-off download GOG refuses to plan for good (a DLC no longer owned) waits for Resume or
+/// Discard rather than being tried again and again, and does not hold the queue meanwhile.
 #[test]
 fn a_cut_off_download_that_cannot_resume_waits_instead_of_being_retried() {
     use crate::Interrupted;
@@ -454,11 +456,11 @@ fn a_cut_off_download_that_cannot_resume_waits_instead_of_being_retried() {
     assert_eq!(app.auto_resume.as_deref(), Some("5"));
     let _ = app.update(Message::Install(InstallMsg::Planned(
         "5".into(),
-        Err("offline".into()),
+        Err("[FAKE] DLC not owned".into()),
     )));
-    assert_eq!(app.interrupted, [("5".to_string(), Interrupted::Paused)]);
-    assert_eq!(app.queue, ["6"], "held by the download waiting");
-    assert!(app.auto_resume.is_none());
+    assert_eq!(app.interrupted, [("5".to_string(), Interrupted::Failed)]);
+    assert!(app.queue.is_empty(), "the queue goes on");
+    assert_eq!(app.auto_resume.as_deref(), Some("6"));
 }
 
 /// After a restart the queue is planned again before it starts: the queue going on meanwhile (a

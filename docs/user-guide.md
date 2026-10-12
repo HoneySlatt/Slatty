@@ -223,7 +223,9 @@ How an install behaves:
 - **Integrity checks.** Every chunk is checked twice against GOG's checksums, before and after
   decompression. A Linux build's files are checked against the installer's CRC-32.
 - **Pause and resume.** Ctrl+C (or Pause in the interface) stops the download. Running the same
-  command again resumes it: files already on disk are re-checked and kept when correct.
+  command again resumes it: files already on disk are re-checked and kept when correct. GOG offers
+  one Linux installer per game at a time: a Linux download resumed after GOG replaced it goes on
+  with the new version.
 - **Safety refusals.** Missing disk space, an existing destination folder, or a file path that
   would escape the game folder are refused before anything is downloaded.
 - `slatty installs` lists installed games and interrupted installs.

@@ -10,7 +10,9 @@ use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::galaxy::GogContent;
 use crate::install::{Install, Platform};
-use crate::installer::{self, DlcSelection, Download, InstallJob, InstallRecord, Progress, linux};
+use crate::installer::{
+    self, DlcSelection, Download, InstallJob, InstallRecord, Progress, linux, no_longer_offered,
+};
 use crate::paths::Dirs;
 use crate::session;
 
@@ -395,11 +397,6 @@ fn installed_build_gone(e: Error) -> Error {
     } else {
         e
     }
-}
-
-/// Whether a plan failed because GOG no longer offers the build it was asked for.
-fn no_longer_offered(e: &Error) -> bool {
-    matches!(e, Error::NotFound(m) if m.contains("no longer offered"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -208,10 +208,10 @@ impl App {
                                 self.title_of(&game_id)
                             ));
                             // It waits for Resume or Discard, rather than being tried again and
-                            // again.
+                            // again, without holding the queue.
                             for (id, kind) in &mut self.interrupted {
                                 if *id == game_id && *kind == crate::Interrupted::Download {
-                                    *kind = crate::Interrupted::Paused;
+                                    *kind = crate::Interrupted::Failed;
                                 }
                             }
                         }
@@ -668,7 +668,7 @@ async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, F
             DlcSelection::AllOwned,
         ),
     };
-    let plan = installer::plan_for(
+    let plan = installer::plan_install(
         &core.http,
         &tokens,
         &game_id,

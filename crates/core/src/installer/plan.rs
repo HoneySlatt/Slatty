@@ -248,6 +248,41 @@ pub async fn plan_for(
     Ok(plan)
 }
 
+/// `plan_for` an install, as chosen in its dialog or started by its job. GOG offers one Linux
+/// installer at a time: an install made for one it has replaced since goes on with the current
+/// one, against which the files already downloaded are checked again anyway.
+pub async fn plan_install(
+    http: &reqwest::Client,
+    tokens: &Tokens,
+    game_id: &str,
+    platform: Platform,
+    language: Option<&str>,
+    build_id: Option<&str>,
+    dlcs: &DlcSelection,
+) -> Result<InstallPlan> {
+    on_offered_build(platform, build_id, |build_id| {
+        plan_for(http, tokens, game_id, platform, language, build_id, dlcs)
+    })
+    .await
+}
+
+/// `plan_on` the build asked for, or on the newest when it is a Linux build GOG no longer offers.
+async fn on_offered_build<'a, T, F: Future<Output = Result<T>>>(
+    platform: Platform,
+    build_id: Option<&'a str>,
+    plan_on: impl Fn(Option<&'a str>) -> F,
+) -> Result<T> {
+    match plan_on(build_id).await {
+        Err(e) if platform == Platform::Linux && no_longer_offered(&e) => plan_on(None).await,
+        planned => planned,
+    }
+}
+
+/// Whether a plan failed because GOG no longer offers the build it was asked for.
+pub(crate) fn no_longer_offered(e: &Error) -> bool {
+    matches!(e, Error::NotFound(m) if m.contains("no longer offered"))
+}
+
 /// Why a game has no Windows build: GOG may offer nothing at all to install for the product.
 async fn no_build(http: &reqwest::Client, game_id: &str) -> Error {
     use crate::library::{NotInstallable, not_installable};
@@ -466,5 +501,38 @@ mod tests {
         // Only betas: the newest of them.
         assert_eq!(super::newest_public(&builds[..1]).unwrap().build_id, "beta");
         assert!(super::newest_public(&[]).is_none());
+    }
+
+    /// GOG offers one Linux installer at a time: an install made for one it has replaced since (a
+    /// queued, paused or cut-off one) goes on with the current one. A Windows build must still be
+    /// offered, and other failures stay what they are.
+    #[tokio::test]
+    async fn an_install_made_for_a_replaced_linux_installer_goes_on_with_the_current_one() {
+        use super::{Error, Platform, on_offered_build};
+        let asked = std::sync::Mutex::new(Vec::new());
+        // Only `linux:1.1` is offered now.
+        let plan_on = |build: Option<&str>| {
+            asked.lock().unwrap().push(build.map(String::from));
+            std::future::ready(match build {
+                Some(b) if b != "linux:1.1" => Err(Error::NotFound(format!(
+                    "build {b} is no longer offered; restart the install"
+                ))),
+                _ => Ok("linux:1.1"),
+            })
+        };
+        let planned = on_offered_build(Platform::Linux, Some("linux:1.0"), &plan_on).await;
+        assert_eq!(planned.unwrap(), "linux:1.1");
+        assert_eq!(
+            *asked.lock().unwrap(),
+            [Some("linux:1.0".to_string()), None]
+        );
+
+        let windows = on_offered_build(Platform::Windows, Some("b1"), &plan_on).await;
+        assert!(matches!(windows, Err(Error::NotFound(_))), "{windows:?}");
+        let refused = on_offered_build(Platform::Linux, Some("linux:1.0"), |_| {
+            std::future::ready(Err::<&str, _>(Error::Refused("[FAKE] not owned".into())))
+        })
+        .await;
+        assert!(matches!(refused, Err(Error::Refused(_))), "{refused:?}");
     }
 }
