@@ -518,8 +518,8 @@ fn home_makes_no_key_art_copy_before_the_focus_rests() {
     assert!(app.update(Message::Image(url, Some(file))).units() > 0);
 }
 
-/// The couch mode draws key art as it is, not enlarged as the desktop's game page does: on a 1080p
-/// television its copy is 1920 pixels wide, not 2560.
+/// The couch mode's Home draws key art as wide as the window, not enlarged as a game page does: on
+/// a 1080p television its copy is 1920 pixels wide, not 2560.
 #[test]
 fn couch_key_art_copies_are_as_wide_as_the_window() {
     let mut app = couch_app();
@@ -537,6 +537,31 @@ fn couch_key_art_copies_are_as_wide_as_the_window() {
     let copy = PathBuf::from("/art/1920/art.jpg");
     let _ = app.update(Message::ArtScaled(art, 1920, Some(copy.clone())));
     let g = app.home_focus().unwrap().2.clone();
+    assert!(matches!(
+        app.hero_art(&g),
+        Some(iced::widget::image::Handle::Path(_, p)) if p == copy
+    ));
+}
+
+/// The couch mode's game page draws key art over the whole page, wider than the window when the art
+/// is wide (a Steam hero): its copy is made a step larger, as the desktop's page makes it.
+#[test]
+fn the_couch_game_page_copies_key_art_a_step_larger() {
+    let mut app = couch_app();
+    app.window = Size::new(1920.0, 1080.0);
+    let art = PathBuf::from("/custom/5/art.jpg");
+    app.customs.insert(
+        "5".into(),
+        slatty_core::custom::Custom {
+            background: Some(art.clone()),
+            ..Default::default()
+        },
+    );
+    let _ = app.update(Message::Rescaled(1.0));
+    let _ = app.update(Message::Select("5".into()));
+    let copy = PathBuf::from("/art/2560/art.jpg");
+    let _ = app.update(Message::ArtScaled(art, 2560, Some(copy.clone())));
+    let g = app.selected_game().unwrap().clone();
     assert!(matches!(
         app.hero_art(&g),
         Some(iced::widget::image::Handle::Path(_, p)) if p == copy
