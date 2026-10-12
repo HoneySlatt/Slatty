@@ -124,7 +124,7 @@ fn temp(name: &str) -> PathBuf {
 }
 
 async fn run_download(fake: &Fake, folder: &Path) -> Result<Vec<PathBuf>> {
-    download(fake, folder, &|_| {}, &CancellationToken::new()).await
+    download(fake, folder, "1", &|_| {}, &CancellationToken::new()).await
 }
 
 #[test]
@@ -250,6 +250,7 @@ async fn installers_are_downloaded_checked_and_named() {
     let files = download(
         &fake,
         &dir,
+        "1",
         &|p| *last.lock().unwrap() = p,
         &CancellationToken::new(),
     )
@@ -273,7 +274,7 @@ async fn installers_are_downloaded_checked_and_named() {
 async fn a_partial_file_is_taken_up_where_it_stopped() {
     let dir = temp("resume");
     let a = data(5000, 3);
-    std::fs::write(dir.join("setup_fake.exe.slatty-dl"), &a[..2100]).unwrap();
+    std::fs::write(dir.join("setup_fake.exe.1.slatty-dl"), &a[..2100]).unwrap();
     let fake = Fake::new(vec![(
         "setup_fake.exe",
         a.clone(),
@@ -331,10 +332,10 @@ async fn a_pause_during_the_check_stops_it() {
     let pause = CancellationToken::new();
     fake.pause_at_sums = Some(pause.clone());
     assert!(matches!(
-        download(&fake, &dir, &|_| {}, &pause).await,
+        download(&fake, &dir, "1", &|_| {}, &pause).await,
         Err(Error::Cancelled)
     ));
-    assert!(dir.join("setup_fake.exe.slatty-dl").exists());
+    assert!(dir.join("setup_fake.exe.1.slatty-dl").exists());
     assert!(!dir.join("setup_fake.exe").exists());
     let fake = Fake::new(vec![("setup_fake.exe", a.clone(), sums)]);
     run_download(&fake, &dir).await.unwrap();
@@ -389,7 +390,7 @@ async fn a_link_in_place_of_the_staged_file_is_not_followed() {
     std::fs::write(&outside, b"[FAKE] keep").unwrap();
     let folder = dir.join("game");
     std::fs::create_dir(&folder).unwrap();
-    std::os::unix::fs::symlink(&outside, folder.join("setup_fake.exe.slatty-dl")).unwrap();
+    std::os::unix::fs::symlink(&outside, folder.join("setup_fake.exe.1.slatty-dl")).unwrap();
     let fake = Fake::new(vec![("setup_fake.exe", data(5000, 9), None)]);
     assert!(run_download(&fake, &folder).await.is_err());
     assert_eq!(std::fs::read(&outside).unwrap(), b"[FAKE] keep");
@@ -452,10 +453,10 @@ async fn a_paused_download_keeps_what_it_has() {
     let cancel = CancellationToken::new();
     cancel.cancel();
     assert!(matches!(
-        download(&fake, &dir, &|_| {}, &cancel).await,
+        download(&fake, &dir, "1", &|_| {}, &cancel).await,
         Err(Error::Cancelled)
     ));
-    assert!(dir.join("setup_fake.exe.slatty-dl").exists());
+    assert!(dir.join("setup_fake.exe.1.slatty-dl").exists());
     assert!(!dir.join("setup_fake.exe").exists());
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -502,17 +503,17 @@ fn a_discarded_job_deletes_only_its_unfinished_files() {
     let kept = dir.join("kept");
     std::fs::create_dir(&kept).unwrap();
     std::fs::write(kept.join("setup_fake.exe"), b"[FAKE] done").unwrap();
-    std::fs::write(kept.join("setup_fake-1.bin.slatty-dl"), b"[FAKE] half").unwrap();
+    std::fs::write(kept.join("setup_fake-1.bin.1.slatty-dl"), b"[FAKE] half").unwrap();
     job(kept.clone()).save(&db).unwrap();
     discard(&db, &dirs, "1").unwrap();
     assert!(OfflineJob::load(&db, "1").unwrap().is_none());
     assert!(kept.join("setup_fake.exe").exists());
-    assert!(!kept.join("setup_fake-1.bin.slatty-dl").exists());
+    assert!(!kept.join("setup_fake-1.bin.1.slatty-dl").exists());
 
     // A folder left empty goes too.
     let emptied = dir.join("emptied");
     std::fs::create_dir(&emptied).unwrap();
-    std::fs::write(emptied.join("setup_fake.exe.slatty-dl"), b"[FAKE] half").unwrap();
+    std::fs::write(emptied.join("setup_fake.exe.1.slatty-dl"), b"[FAKE] half").unwrap();
     job(emptied.clone()).save(&db).unwrap();
     discard(&db, &dirs, "1").unwrap();
     assert!(!emptied.exists());
@@ -573,10 +574,42 @@ async fn a_started_download_whose_folder_is_gone_is_not_made_again() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// Two games whose titles clean to the same folder name share it: removing one's download leaves
+/// the other's unfinished files.
+#[test]
+fn a_discarded_job_leaves_another_games_unfinished_files() {
+    let dir = temp("discard-shared");
+    let dirs = Dirs::under(&dir.join("data"));
+    let db = Db::in_memory().unwrap();
+    let shared = dir.join("[FAKE] Game Gold");
+    std::fs::create_dir(&shared).unwrap();
+    for id in ["1", "2"] {
+        OfflineJob {
+            game_id: id.into(),
+            os: "windows".into(),
+            languages: vec!["en".into()],
+            dlcs: Vec::new(),
+            folder: shared.clone(),
+            state: PAUSED.into(),
+        }
+        .save(&db)
+        .unwrap();
+    }
+    std::fs::write(shared.join("setup_a.exe.1.slatty-dl"), b"[FAKE] half").unwrap();
+    std::fs::write(shared.join("setup_b.exe.2.slatty-dl"), b"[FAKE] half").unwrap();
+    discard(&db, &dirs, "1").unwrap();
+    assert!(!shared.join("setup_a.exe.1.slatty-dl").exists());
+    assert!(shared.join("setup_b.exe.2.slatty-dl").exists());
+    assert!(OfflineJob::load(&db, "2").unwrap().is_some());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
 #[test]
 fn installers_go_into_a_folder_named_after_the_game() {
     assert_eq!(
-        folder_for(Path::new("/x"), "[FAKE] Game: Part 2"),
+        folder_for(Path::new("/x"), "[FAKE] Game: Part 2", "1"),
         Path::new("/x/[FAKE] Game Part 2")
     );
+    // Never the installers folder itself.
+    assert_eq!(folder_for(Path::new("/x"), "..", "1"), Path::new("/x/1"));
 }

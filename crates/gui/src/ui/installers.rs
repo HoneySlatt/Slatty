@@ -150,7 +150,7 @@ impl App {
             "Folder",
             column![
                 text(
-                    offline::folder_for(root, &c.offer.title)
+                    offline::folder_for(root, &c.offer.title, &g.id)
                         .display()
                         .to_string()
                 )

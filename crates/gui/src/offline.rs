@@ -193,7 +193,7 @@ impl App {
                     os: c.os.clone(),
                     languages: c.languages.clone(),
                     dlcs: c.dlcs.clone(),
-                    folder: offline::folder_for(&root, &c.offer.title),
+                    folder: offline::folder_for(&root, &c.offer.title, &game_id),
                     state: QUEUED.into(),
                 };
                 if let Err(e) = job.save(&core.db) {

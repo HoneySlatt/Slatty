@@ -211,9 +211,13 @@ fn parse_offer(raw: &[u8]) -> Result<Offer> {
     })
 }
 
-/// The folder a game's installers go into, under `root`.
-pub fn folder_for(root: &Path, title: &str) -> PathBuf {
-    root.join(folder_name(title))
+/// The folder a game's installers go into, under `root`: named after its title, or its id when
+/// nothing of the title is left for a name.
+pub fn folder_for(root: &Path, title: &str, game_id: &str) -> PathBuf {
+    match folder_name(title) {
+        name if name.is_empty() => root.join(game_id),
+        name => root.join(name),
+    }
 }
 
 /// Installers chosen for download, kept until they are all downloaded so that they resume.
@@ -342,7 +346,7 @@ pub async fn run(
             .map(|f| f.downlink.clone())
             .collect();
         let source = GogInstallers::new(http.clone(), tokens.clone(), Some(dirs), downlinks);
-        download(&source, &job.folder, progress, cancel).await
+        download(&source, &job.folder, &job.game_id, progress, cancel).await
     }
     .await;
     match &result {
@@ -367,21 +371,27 @@ pub fn discard(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
     let Some(job) = OfflineJob::load(db, game_id)? else {
         return Ok(());
     };
-    if let Ok(entries) = std::fs::read_dir(&job.folder) {
-        for e in entries.flatten() {
-            let staged = e
-                .file_name()
-                .to_str()
-                .is_some_and(|n| n.ends_with(DOWNLOAD_SUFFIX));
-            if staged && e.file_type().is_ok_and(|t| !t.is_dir()) {
-                std::fs::remove_file(e.path())
-                    .map_err(|err| Error::io(format!("delete {}", e.path().display()), err))?;
-            }
-        }
-        // Only when nothing else is in it.
-        let _ = std::fs::remove_dir(&job.folder);
-    }
+    remove_staged(&job.folder, game_id)?;
+    // Only when nothing else is in it.
+    let _ = std::fs::remove_dir(&job.folder);
     OfflineJob::delete(db, game_id)
+}
+
+/// Deletes what `game_id`'s downloads left unfinished in `folder`; never another game's, whose
+/// title may give the same folder.
+fn remove_staged(folder: &Path, game_id: &str) -> Result<()> {
+    let ours = format!(".{game_id}{DOWNLOAD_SUFFIX}");
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return Ok(());
+    };
+    for e in entries.flatten() {
+        let staged = e.file_name().to_str().is_some_and(|n| n.ends_with(&ours));
+        if staged && e.file_type().is_ok_and(|t| !t.is_dir()) {
+            std::fs::remove_file(e.path())
+                .map_err(|err| Error::io(format!("delete {}", e.path().display()), err))?;
+        }
+    }
+    Ok(())
 }
 
 /// Held while a game's installers download or are discarded, from any process.
@@ -414,15 +424,17 @@ impl Source for GogInstallers {
     }
 }
 
-/// Downloads every file of `source` into `folder`, each staged under a name of its own, checked,
-/// then renamed. A file already there at its size is kept; one there at another size is not
-/// replaced.
+/// Downloads every file of `source` into `folder`, each staged under a name of its own (its
+/// game's id in it), checked, then renamed. A file already there at its size is kept; one there
+/// at another size is not replaced.
 pub async fn download<S: Source>(
     source: &S,
     folder: &Path,
+    game_id: &str,
     progress: &(dyn Fn(Progress) + Sync),
     cancel: &CancellationToken,
 ) -> Result<Vec<PathBuf>> {
+    let partial_of = |name: &str| folder.join(format!("{name}.{game_id}{DOWNLOAD_SUFFIX}"));
     let mut files: Vec<(usize, String, u64)> = Vec::new();
     for part in 0..source.parts() {
         let name = file_name(&source.name(part).await?)?;
@@ -449,7 +461,7 @@ pub async fn download<S: Source>(
     for (_, name, size) in &files {
         if let Some(have) = there(&folder.join(name), *size)? {
             present += have;
-        } else if let Ok(m) = std::fs::symlink_metadata(partial_of(folder, name)) {
+        } else if let Ok(m) = std::fs::symlink_metadata(partial_of(name)) {
             present += m.len().min(*size);
         }
     }
@@ -466,7 +478,7 @@ pub async fn download<S: Source>(
     for (part, name, size) in files {
         let target = folder.join(&name);
         if there(&target, size)?.is_none() {
-            let partial = partial_of(folder, &name);
+            let partial = partial_of(&name);
             fetch(source, part, size, &partial, &mut p, progress, cancel).await?;
             let sums = match source.checksums(part).await? {
                 Some(xml) => Some(parse_checksums(&xml)?),
@@ -485,10 +497,6 @@ pub async fn download<S: Source>(
         done.push(target);
     }
     Ok(done)
-}
-
-fn partial_of(folder: &Path, name: &str) -> PathBuf {
-    folder.join(format!("{name}{DOWNLOAD_SUFFIX}"))
 }
 
 /// `Some(size)` when `path` is the file at its size, already downloaded; `None` when it is not

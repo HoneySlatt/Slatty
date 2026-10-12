@@ -70,7 +70,7 @@ pub async fn run(ctx: &Ctx, args: InstallersArgs) -> Result<()> {
         Some(d) => std::path::absolute(d)?,
         None => settings::installers_root(&ctx.db)?,
     };
-    let folder = offline::folder_for(&root, &offer.title);
+    let folder = offline::folder_for(&root, &offer.title, &args.game_id);
     if !args.download {
         println!("{}", shown(&offer.title));
         for os in offer.systems() {
