@@ -1,40 +1,36 @@
 # Cloud saves
 
-SlattyLauncher synchronises save folders with GOG's cloud storage. Losing a save is the worst thing a
-launcher can do, so the design favours refusing over guessing. This page describes the rules and
+SlattyLauncher synchronises save folders with GOG's cloud storage. Losing a save is the worst thing
+a launcher can do, so the design favours refusing over guessing. This page describes the rules and
 their known limits.
 
 ## What is synchronised
 
-- For each game, GOG's remote configuration lists the save locations of the Windows build. Each
-  location has a name and a path template such as
-  `<?SAVED_GAMES?>/id Software/DOOM/base`.
-- Templates are resolved inside the game's Wine prefix (`drive_c/users/steamuser/…`), or inside the
-  game folder for `<?INSTALL?>`. Path components are matched case-insensitively, like on Windows.
-- Before a game's first launch its prefix does not exist yet. Checking still works and shows what
-  will be downloaded, but nothing is written: Proton must create the prefix first, so the saves
-  arrive at the first launch, just before the game starts.
-- If GOG enables cloud saves but lists no location, the Galaxy SDK storage folder is used
-  (`<?APPLICATION_DATA_LOCAL?>/GOG.com/Galaxy/Applications/<client id>/Storage/Shared/Files`).
+- For each game, GOG's remote configuration lists the save locations of its Windows build. Each has
+  a name and a path template such as `<?SAVED_GAMES?>/id Software/DOOM/base`.
+- Templates are resolved inside the game's Wine prefix (`drive_c/users/steamuser/…`, or your user
+  name for a game run through Wine alone), or inside the game folder for `<?INSTALL?>`. Path parts
+  are matched case-insensitively, as on Windows.
+- If GOG turns cloud saves on for a game but lists no location, the Galaxy SDK's storage folder is
+  used (`<?APPLICATION_DATA_LOCAL?>/GOG.com/Galaxy/Applications/<client id>/Storage/Shared/Files`).
+- Before a game's first launch its prefix does not exist yet. A check still shows what will be
+  downloaded, but nothing is written: Proton must create the prefix first, so the saves arrive at
+  the first launch, just before the game starts.
 
-Files saved through the Galaxy SDK storage API that live outside these folders are not
-synchronised. Native Linux builds have no documented cloud locations and are not synchronised
-either.
+Not synchronised: files saved through the Galaxy SDK's storage outside these folders; native Linux
+builds (GOG lists no save locations for them); Steam's games (the Steam client syncs them) and
+games added by hand (GOG does not know them); links and names that are not UTF-8 below a save
+folder, which are reported.
 
 ## How a change is detected
 
-Every synchronised file has a history entry for its account, game and location, recorded at the last
-successful sync:
+Every synchronised file has a history entry for its account, game and location, recorded at the
+last successful sync: the SHA-256 of the local content, and the hash GOG listed for the cloud copy.
+On the next sync, each side is compared with that entry: the local file changed if its SHA-256
+differs, the cloud file changed if its listed hash differs. Modification dates are never used.
 
-- the SHA-256 of the local content;
-- the hash GOG listed for the cloud copy.
-
-On the next sync, each side is compared with that entry:
-
-- the local file has changed if its SHA-256 differs;
-- the cloud file has changed if its listed hash differs.
-
-Modification dates are never used to decide.
+"Deleted" below means a file with history that is gone; "missing", a file without history that is
+not there.
 
 | Local | Cloud | Action |
 |---|---|---|
@@ -44,68 +40,74 @@ Modification dates are never used to decide.
 | changed | changed | contents compared: identical files are adopted, different ones are a **conflict** |
 | deleted | unchanged | delete in the cloud (needs permission, see below) |
 | unchanged | deleted | delete locally (needs permission) |
+| deleted | deleted | history forgotten |
 | deleted | changed | **conflict** |
 | changed | deleted | **conflict** |
 | exists | exists, no history | contents compared: identical files are adopted, different ones are a **conflict** |
-| exists | missing, no history | upload |
-| missing | exists, no history | download |
+| exists | missing | upload |
+| missing | exists | download |
 
-## Safety rules
+## What is protected
 
-- **Conflicts never resolve themselves.** Nothing is written, and the launch is stopped. You choose
-  with `--prefer local` or `--prefer remote` (or the buttons in the interface). The version you do
-  not keep is saved in the backups folder.
+- **Conflicts never settle themselves.** A file in conflict is left alone on both sides; the other
+  files of the sync still go up and down. You choose with `--prefer local` or `--prefer remote`
+  (or the buttons of the Cloud saves drawer), which settles every conflict of the game at once, in
+  all its locations. The version you do not keep is saved in the backups.
 - **A local file is never overwritten without a copy.** It is first copied to
   `~/.local/share/slatty/backups/<user>/<game>/<time>/<location>/local/`. The new content is
-  written to a temporary file, then renamed into place.
+  written under a temporary name, then renamed into place.
 - **Nor is a cloud file.** Before an upload replaces it (a game that crashed while saving would
-  otherwise replace a good save in the cloud with a damaged one) or a deletion removes it, the
-  cloud version is downloaded to `…/<location>/remote/` beside the local copies. Backups are never
-  deleted by SlattyLauncher.
-- **Deletions need permission.** They are applied only with `--allow-deletions`, file by file.
-  Two conflicts are the exception: the cloud deleted a file you changed and you keep the cloud's
-  side, or you deleted a file the cloud changed and you keep your side. That choice is the
-  permission; the copy that goes is backed up first.
+  otherwise put a damaged save over a good one) or a deletion removes it, the cloud version is
+  downloaded to `…/<location>/remote/` beside the local copies. Backups are flushed to the disk
+  and never deleted by SlattyLauncher. Each sync that backs up files gets a folder of its own, even
+  two syncs in the same second.
+- **Deletions need permission.** They are applied only with `slatty cloud sync <id>
+  --allow-deletions`, which covers that whole sync; the interface never passes it on its own. Two
+  conflicts are the exception: the cloud deleted a file you changed and you keep the cloud's side,
+  or you deleted a file the cloud changed and you keep yours. That choice is the permission; the
+  copy that goes is backed up first.
 - **A save is checked again just before it is replaced or deleted.** If the game, or anything
-  else, changed or created it while the sync waited on the network, it is left alone and the sync
-  reports it. Nothing is written or deleted through a symbolic link below the save folder. Each
-  sync that backs up files gets its own backup folder, even two syncs in the same second.
-- **A suspicious folder blocks deletions.** In these cases deletions are refused, even with
-  permission:
-  - the local folder is missing or empty while history says it had saves (a new prefix after a
-    reinstall, a folder deleted or moved). The cloud copies are then downloaded back instead, as
-    if the machine were new: a folder that disappeared as a whole was not emptied on purpose;
-  - the cloud is empty while history says it had saves (wrong account, service problem);
-  - the save folder path changed since the last sync, another account synced the same folder
-    since (accounts that own a game share its prefix), or the folder was deleted and made again
-    since (its device and inode changed: a broken prefix deleted outside the launcher, then a game
-    started offline that saved a new game where the progress was). Its history is then ignored,
-    and files that differ become conflicts, so a new game is never uploaded over the progress. A
-    folder moved to another disk or restored from a backup counts as made again, once.
+  else, changed or created it while the sync waited on the network, it is left alone and reported.
+  A deletion held for later is checked again the same way. Nothing is written or deleted through a
+  symbolic link below the save folder.
+- **Uploads check the cloud again.** Just before uploading, the cloud is listed again; a file that
+  changed meanwhile is not overwritten and becomes a conflict at the next sync.
+- **Network failures leave local files untouched**, and history only advances for files actually
+  transferred. An upload the cloud listing could not confirm gets no history; the next sync finds
+  the same content on both sides and adopts it.
 - **History is per account.** Another account never inherits it.
-- **One sync per game at a time.** A lock refuses a second sync on the same game. A check, which
-  writes nothing, does not take it.
-- **Uploads re-check the cloud.** Just before uploading, the cloud is listed again; a file that
-  changed in the meantime is not overwritten and becomes a conflict at the next sync.
-- **Network failures leave local files untouched**, and history only advances for files that were
-  actually transferred. An upload the cloud listing could not confirm gets no history; the next
-  sync finds the same content on both sides and adopts it.
-- **Cloud paths cannot escape the save folder.** A cloud file name containing `..` or an absolute
-  path is left out and reported. So is a whole location whose name, which names its backup folder
-  and its files in the cloud, is not a plain name (`..`, a path).
-- **Case-only duplicates are left out.** `Save.dat` and `save.dat` are one file on Windows, so a
-  pair of them in the cloud is reported instead of being synchronised, and the local file of that
-  name is left alone too (neither uploaded over one of them nor deleted).
-- **What is left out does not block a launch.** Another client, or the game itself, can write such
-  a name: the location's other saves still sync, and the game starts.
+- **One sync per game at a time.** A sync takes the game's lock: it is refused while the game is
+  played, installed, updated or synced elsewhere. A check, which writes nothing, does not take it.
 - **Binary saves are never merged.**
+
+## What is refused or left out
+
+- **A suspicious folder blocks deletions,** even with permission:
+  - the local folder is missing or empty while history says it had saves (a new prefix after a
+    reinstall, a folder deleted or moved). The cloud copies are then downloaded back, as on a new
+    computer: a folder that disappeared as a whole was not emptied on purpose;
+  - the cloud is empty while history says it had saves (another account, a service problem);
+  - the save folder's path changed since the last sync, another account synced the same folder
+    since (accounts that own a game share its prefix), or the folder was deleted and made again
+    since (its device and inode changed). Its history is then ignored, and files that differ become
+    conflicts, so a new game is never uploaded over your progress. A folder moved to another disk
+    or restored from a backup counts as made again, once.
+- **Cloud names that cannot be trusted are left out** and reported: a name containing `..` or an
+  absolute path, and pairs of names that differ only by case (`Save.dat`, `save.dat`: one file on
+  Windows), whose local file is then left alone too. The location's other saves still sync, and
+  the game starts.
+- **A whole location is refused** when its name is not a plain name (it names its backup folder
+  and its files in the cloud), when its template cannot be resolved, when two local files differ
+  only by case, or, for an isolated game, when its folder is reached through a link out of the
+  prefix or game folder.
 
 ## Around a game session
 
-1. **Before launch:** sync. Downloads and uploads that do not conflict are applied. A conflict or an
-   error stops the launch. If the cloud cannot be reached (offline, a dropped connection, a server
-   error or too many requests, for the whole game or one of its locations), the game starts with
-   local saves, and the session says which locations were not synced.
+1. **Before the game starts:** sync. What does not conflict is applied. The launch stops, with the
+   reason, on a conflict, a refusal, a file that failed to transfer or a refused location.
+   It does not stop when the cloud cannot be reached (offline, a dropped connection, a server error
+   or too many requests, for the whole game or one location) or cannot be used (signed out): the
+   game starts with its local saves, and the session says which locations were not synced.
 2. **After the session ends** (every game process has exited): sync again, which uploads what the
    game wrote. A location the cloud could not be reached for is told as not uploaded.
 3. **If the end of the session is uncertain** (the launcher lost track of the game), nothing is
@@ -113,13 +115,15 @@ Modification dates are never used to decide.
 
 ## Known limits
 
-- **Overwrite window.** GOG's storage API is not known to support conditional uploads. A change made
-  by another machine *after* the last check and *before* the upload finishes can be overwritten. The
-  window lasts as long as one upload. A test (`residual_window_after_fresh_listing_is_not_detected`)
-  pins this behaviour so it is not forgotten.
+- **Overwrite window.** GOG's storage API is not known to support conditional uploads. A change
+  made by another computer *after* the last check and *before* the upload finishes can be
+  overwritten. The window lasts as long as one upload. A test
+  (`residual_window_after_fresh_listing_is_not_detected`) pins this behaviour so it is not
+  forgotten.
 - **Ignored marker.** Cloud entries whose hash is `aadd86936a80ee8a369579c3926f1b3c` are ignored, as
   heroic-gogdl does. Their meaning is not known: it is neither an empty file nor an empty gzip
   stream.
 - **Transfer format.** Uploads are gzip-compressed, with the same metadata headers as heroic-gogdl;
   whether GOG requires those headers is not verified. Downloads were verified to arrive
   decompressed.
+- **Memory.** A save is held whole in memory while it transfers.
