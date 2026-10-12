@@ -99,13 +99,16 @@ impl App {
         copy.unwrap_or(art)
     }
 
-    /// Makes the copy of the open game's key art at the window's width, unless made.
+    /// Makes the copy at the window's width of the key art shown, unless made: the open game's,
+    /// else that of the game with the focus on the couch mode's Home.
     pub fn scale_art(&mut self) -> Task<Message> {
         let (Some(core), Some(width)) = (self.core.clone(), self.art_width()) else {
             return Task::none();
         };
-        let Some(image::Handle::Path(_, from)) =
-            self.selected_game().and_then(|g| self.background(g))
+        let Some(image::Handle::Path(_, from)) = self
+            .selected_game()
+            .or_else(|| self.home_focus().map(|(_, _, g)| g))
+            .and_then(|g| self.background(g))
         else {
             return Task::none();
         };

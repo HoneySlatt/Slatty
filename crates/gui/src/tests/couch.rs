@@ -357,6 +357,33 @@ fn the_row_with_the_focus_shows_after_the_window_grows() {
     assert!(render_window(&app).find("[FAKE] Game 50").is_ok());
 }
 
+/// Home's key art is drawn from its copy at the window's width, as a game page's: the original can
+/// be 3840 pixels wide, decoded anew at each move.
+#[test]
+fn home_draws_the_key_art_from_its_copy() {
+    let mut app = couch_app();
+    let art = PathBuf::from("/custom/5/art.jpg");
+    app.customs.insert(
+        "5".into(),
+        slatty_core::custom::Custom {
+            background: Some(art.clone()),
+            ..Default::default()
+        },
+    );
+    let _ = app.update(Message::Rescaled(1.0));
+    // Down to Favorites, on game 5.
+    let moved = app.update(Message::Couch(CouchMsg::Nav(Nav::Down)));
+    assert_eq!(app.home_focus().unwrap().2.id, "5");
+    assert!(moved.units() > 0, "its copy asked for");
+    let copy = PathBuf::from("/art/1920/art.jpg");
+    let _ = app.update(Message::ArtScaled(art, 1920, Some(copy.clone())));
+    let g = app.home_focus().unwrap().2.clone();
+    assert!(matches!(
+        app.hero_art(&g),
+        Some(iced::widget::image::Handle::Path(_, p)) if p == copy
+    ));
+}
+
 /// Back at a tab, with nowhere else to go, opens the menu and its way out; so does a click on the
 /// menu's hint.
 #[test]

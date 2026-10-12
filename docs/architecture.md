@@ -192,8 +192,8 @@ load credentials with `Account::load_for`, which refuses when another account is
   `scaled` makes each cover once at the card's width in pixels (the card's width times the
   window's scale), with Lanczos3, at the lowest priority, four at a time, those in view first, in
   `scaled/<width>/` of the cover's cache; copies of the size before stay, for a window moved
-  between screens. The game page's key art is made at the window's width rounded up to 1920, 2560
-  or 3840 pixels; narrower art is enlarged with Lanczos3 and sharpened with AMD's RCAS (FSR 1),
+  between screens. The key art of the game page, and of the couch mode's Home, is made at the
+  window's width rounded up to 1920, 2560 or 3840 pixels; narrower art is enlarged with Lanczos3 and sharpened with AMD's RCAS (FSR 1),
   up to a 4K screen's pixels. Key art copies take at most 2 GiB, those shown longest ago going
   first, never one shown in this session. Copies of GOG's images go into the account's cache, so
   they go with it.

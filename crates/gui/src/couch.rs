@@ -372,13 +372,17 @@ impl App {
         self.home_art()
     }
 
-    /// Asks for the key art of the game with the focus on the home page, unless it is kept.
+    /// Asks for the key art of the game with the focus on the home page, unless it is kept, and
+    /// for its copy at the window's width.
     pub fn home_art(&mut self) -> Task<Message> {
         if self.couch.is_none() {
             return Task::none();
         }
         let art = self.home_focus().and_then(|(_, _, g)| g.background.clone());
-        self.request_images(art.into_iter().collect())
+        Task::batch([
+            self.request_images(art.into_iter().collect()),
+            self.scale_art(),
+        ])
     }
 
     fn library_nav(&mut self, nav: Nav) -> Task<Message> {
