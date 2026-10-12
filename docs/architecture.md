@@ -144,7 +144,10 @@ SlattyLauncher is already open. The command line still runs beside it.
    - two chunks per file are fetched at once and written at their offset as they arrive, so a late
      chunk does not hold back the following ones;
    - each file is verified first and downloaded only if missing or wrong (four files at once, and
-     a file of 64 MiB or more in parts on up to four threads: MD5 is slower than an SSD reads);
+     a file of 64 MiB or more in parts on up to four threads: MD5 is slower than an SSD reads),
+     each check on a thread of its own at the lowest priority (`fsutil::in_background`): a whole
+     game, 70 GB read again and hashed, kept seven cores busy for 40 s, which then only take the
+     time the desktop and games leave;
    - when a file is replaced (update, repair, resumed install), the file already there is hashed at
      the new chunk offsets, and chunks whose MD5 matches are copied from it and checked again
      instead of downloaded;

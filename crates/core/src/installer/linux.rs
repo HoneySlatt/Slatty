@@ -541,12 +541,10 @@ impl<S: Source> LinuxDownload<'_, S> {
                         return;
                     }
                     let result = async {
-                        let verified = tokio::task::spawn_blocking({
+                        let verified = {
                             let (dest, entry) = (dest.clone(), file.entry.clone());
-                            move || verify_file(&dest, &entry)
-                        })
-                        .await
-                        .expect("verify task panicked")?;
+                            fsutil::in_background(move || verify_file(&dest, &entry)).await?
+                        };
                         if verified {
                             report(1, file.entry.size);
                             return Ok(());

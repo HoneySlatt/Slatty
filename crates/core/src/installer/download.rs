@@ -283,12 +283,10 @@ impl<S: ContentSource> Download<'_, S> {
                         return;
                     }
                     let result = async {
-                        let verified = tokio::task::spawn_blocking({
+                        let verified = {
                             let (dest, file) = (dest.clone(), file.clone());
-                            move || verify_file(&dest, &file)
-                        })
-                        .await
-                        .expect("verify task panicked")?;
+                            fsutil::in_background(move || verify_file(&dest, &file)).await?
+                        };
                         if verified {
                             report(1, file.size());
                             return Ok(());

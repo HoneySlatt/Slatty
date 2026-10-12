@@ -102,9 +102,40 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> Result<()> {
     })
 }
 
+/// Runs `f` on a thread of its own at the lowest priority (nice 19), and the threads it starts:
+/// reading and hashing a whole game (Verify, a resumed download, an update's check) keeps several
+/// cores busy for minutes, and then only takes the time the desktop and games leave. A thread of
+/// its own, as one cannot raise its priority back.
+pub(crate) async fn in_background<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::Builder::new()
+        .name("slatty-check".into())
+        .spawn(move || {
+            // SAFETY: sets the calling thread's nice value, which Linux keeps per thread.
+            unsafe { nix::libc::setpriority(nix::libc::PRIO_PROCESS, 0, 19) };
+            let _ = tx.send(f());
+        })
+        .expect("start a thread");
+    rx.await.expect("background thread panicked")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn background_work_runs_at_the_lowest_priority_and_leaves_the_caller_as_it_was() {
+        // SAFETY: reads the calling thread's nice value.
+        let nice = || unsafe { nix::libc::getpriority(nix::libc::PRIO_PROCESS, 0) };
+        let before = nice();
+        assert_eq!(in_background(nice).await, 19);
+        assert_eq!(
+            in_background(move || std::thread::spawn(nice).join().unwrap()).await,
+            19,
+            "the threads it starts too"
+        );
+        assert_eq!(nice(), before);
+    }
 
     #[test]
     fn sha256_of_empty_input() {
