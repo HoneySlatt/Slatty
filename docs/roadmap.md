@@ -1,87 +1,80 @@
 # Roadmap
 
-There are no dates. Each milestone ends with results checked against GOG and recorded in
+There are no dates. What has been checked against real services, and what not yet, is in
 [compatibility.md](compatibility.md).
 
 ## Done
 
-- **Foundations.**
-  - Nix development shell.
-  - Sign-in and keyring storage.
-  - Library with offline cache.
-  - Supervised game sessions.
-  - Three-way cloud sync.
-  - Comet integration.
-  - Manual achievement management.
-- **Interface redesign.** Library, Achievements, Downloads and Settings tabs; cover grid with
-  shelves, sort, size and filters; game page with key art, play time, cloud and achievement
-  summaries, tools in drawers; favorites; Settings with a side list that follows the scroll.
-- **Customisation.** Built-in themes, a theme file for colours, corners and motion, the interface
-  font, the cover size. Each game's title, sorting title, cover and background can be changed,
-  and a game can be hidden.
-- **Large libraries.** The library and Achievements grids build only the rows in view, so a
-  library of 10,000 games stays fluid.
-- **Interface.** Iced front end covering:
-  - library;
-  - game detail;
-  - play and stop;
-  - cloud status and conflicts;
-  - achievements;
-  - installs;
-  - maintenance;
-  - settings.
-- **Installation.**
-  - Galaxy generation 2 Windows builds: base game, one language.
-  - A download queue, kept across restarts and reordered by dragging.
-  - Native Linux builds from GOG's offline installers, read file by file; a default platform in
-    Settings and a choice per install.
-  - Staged and verified downloads, pause and resume.
-  - Wine prefix created at first launch.
-- **Launching.** A Proton build per game; native Linux games through `steam-run` or umu on NixOS;
-  games with several launch options ask which one at the first Play.
-- **Managed Proton builds.** GE-Proton, Proton-CachyOS and UMU-Proton downloaded from GitHub once
-  turned on, checked against their published sums; `<project>-latest` to follow the newest build,
-  kept up to date once a day at start if asked, never moving back to an older version.
-- **Privacy and security.** Switches for umu's game database, play time reporting and Comet;
-  Comet started only for games that ship the Galaxy SDK; private data folders; no write through
-  a link leading out of a game folder; dependency audit.
-- **Maintenance.** Verify, repair, uninstall.
-- **Updates.** Detect a newer build; update in place, file by file, resumable. Unchanged chunks
-  of changed files are copied locally instead of downloaded. GOG's binary patches (xdelta3) are applied
-  when available. Games on their newest build are updated without asking, one after the other and
-  never while a game runs; an older build chosen is left as it is.
-- **DLC and languages.** Owned DLC installed by default; add, remove or switch language later.
-- **Post-install setup.** GOG script interpreter or setup programs, game-folder dependencies, shared
-  redistributables.
-- **Galaxy dummy service.** Comet's `GalaxyCommunication` service registered in each prefix, for
-  games whose Galaxy SDK needs it to report achievements.
-- **Steam games in the library** (off until turned on). The account signed in to the Steam
-  client, its games, their names and images, play time, last session, achievements and what the
-  client downloads, read from the client's own files; a game Steam runs shown as running; Play,
-  Install, Verify and Uninstall handed to the client; one card for a game owned on both GOG and
-  Steam, GOG's first. Images and data the client has not saved come from Steam's servers once
-  turned on (its Web API with the user's own key). No GOG account needed for them. Left to check
-  with the real client: installs, downloads, a game running, the Web API.
+**Foundations**
+- Sign-in in the system browser, session in the system keyring, refreshed under a lock every
+  process shares.
+- The GOG library with its covers, cached for offline use.
+- Game sessions followed by a supervisor until the last process ends, even when the launcher closes.
+- A command line and an interface on the same core.
+
+**Installing and looking after games**
+- Windows builds from GOG's Galaxy content system (generation 2): DLC and language chosen at
+  install and changed later, any build GOG offers.
+- Native Linux builds from GOG's offline installers, read file by file; a default platform and a
+  choice per install.
+- Staged, verified downloads; a queue reordered by dragging, kept across restarts; resume after a
+  crash, wait while GOG is out of reach.
+- Updates in place, automatic for games on their newest build, with GOG's binary patches and
+  unchanged chunks copied rather than downloaded.
+- Verify, repair, uninstall; post-install setup (GOG's scripts, setup programs, redistributables,
+  game-folder dependencies); Comet's Galaxy service in each prefix.
+
+**Playing**
+- umu and a Proton build per game; native Linux games through `steam-run` or umu's runtime on
+  NixOS; launch options asked at the first Play.
+- Isolation from your files, on by default for Windows games: umu's container with a home of the
+  game's own, tools read-only through bubblewrap, no D-Bus, a process namespace of its own.
+- Proton builds downloaded from GitHub (GE-Proton, Proton-CachyOS, UMU-Proton), checked against
+  their sums, followed as `<project>-latest`, kept up to date and shared with Steam and Heroic once
+  turned on.
+
+**Saves and achievements**
+- Three-way cloud sync on content hashes, conflicts that never settle themselves, a copy of every
+  save replaced or deleted, on either side.
+- Achievements listed, reported as games unlock them through Comet (once turned on), or changed by
+  hand.
+- Play time read from GOG and reported to it, as Galaxy does.
+
+**Interface**
+- Library, Achievements, Downloads and Settings tabs; shelves, sort, search and filters (store,
+  system, achievements, cloud saves), remembered when asked.
+- A game page with key art, play time, cloud and achievement cards, and its tools in drawers.
+- Notifications in the window and on the desktop.
+- Built-in themes, a theme file, the font and the cover size; each game's title, sorting title,
+  cover and background (from a file or SteamGridDB), and hidden games.
+- Fluid at 10,000 games: only the rows in view are built, lists kept, images shown from files at
+  the size they are drawn.
+
+**Beyond GOG**
+- Steam's games in the same library, read from the client's files and run through it; one card for
+  a game owned on both stores; images and data the client lacks from Steam's servers once turned
+  on. No GOG account needed for them.
+- Games from no store, added by their program, a Windows installer or a Linux installer or archive.
+- GOG games installed by another tool, imported from their folder or from Heroic.
+
+**Privacy, security and packaging**
+- Switches for every third party, off until turned on; private data folders; no write through a
+  link leading out of a game folder; a review before publication, and a dependency audit.
+- A Nix package with `steam-run-free`, a desktop entry and AppStream data.
 
 ## Planned
 
-- **Gamepad navigation.** A couch mode.
-- **Translations of the interface.** It is in English for now.
-- **More runners.** System Wine.
-- **Game isolation.** Games run in umu's container with a home folder of their own, Windows games
-  by default; the switches are in Game settings and Settings → Privacy. Checked with the container
-  and with Hollow Knight, Firewatch and Cyberpunk 2077 (graphics, sound, gamepad, cloud saves,
-  Proton's fixes; see [compatibility](compatibility.md)). The D-Bus session and system buses are
-  kept out; since 2026-10-11 the tools games run through are read-only to them and the user's
-  processes hidden, checked with the container but not yet with a real game. Left: an achievement
-  through Comet, a game with a Proton fix of its own, a Linux game.
-- **Packaging.** A Nix package (bringing `steam-run-free` for native games), then other
-  distributions.
-- **Windows host support.** The core avoids Linux-only assumptions outside the session supervisor
-  and the runners.
+- **A couch mode** for the gamepad, apart from the current interface.
+- **Translations** of the interface, in English for now.
+- **Steam downloads** followed more exactly while the client downloads.
+- **Packaging** for other distributions, with the icon and the window identifier a desktop needs.
+- **More runners**: Wine without Proton for the games SlattyLauncher installs (it exists for
+  imported games).
+- **Windows hosts**, some day: the core relies on Linux in many places today.
 
 ## Out of scope
 
 Store purchases, friends and chat, multiplayer services, an in-game overlay, mods, plugins.
-SlattyLauncher has no friends or chat feature; Comet, which it starts for achievements, still
-subscribes to those topics on GOG for the account (see [SECURITY.md](../SECURITY.md#comet)).
+SlattyLauncher has no friends or chat feature; Comet, which it starts for achievements once turned
+on, still subscribes to those topics on GOG for the account (see
+[SECURITY.md](../SECURITY.md#comet)).
