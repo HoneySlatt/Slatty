@@ -249,6 +249,12 @@ impl App {
                         .into_iter()
                         .map(|g| (store::steam_id(g.app_id), Some(g))),
                 );
+                // The install asked of Steam shows: followed as any other from now on.
+                if self.steam.expecting.is_some_and(|(app, _)| {
+                    read.get(&store::steam_id(app)).is_some_and(Option::is_some)
+                }) {
+                    self.steam.expecting = None;
+                }
                 let told = self.steam_installed(read);
                 if std::mem::take(&mut self.steam.read_installed_again) {
                     return Task::batch([told, self.read_steam_installed()]);
@@ -402,9 +408,10 @@ impl App {
                 }
             }
             SteamMsg::Asked(Ok(())) => {}
-            // Steam was not reached: nothing is starting.
+            // Steam was not reached: nothing is starting, nor installing.
             SteamMsg::Asked(Err(e)) => {
                 self.steam.starting = None;
+                self.steam.expecting = None;
                 self.notify_error(e);
             }
             SteamMsg::WebApi(on) => {

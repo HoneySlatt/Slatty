@@ -664,6 +664,39 @@ fn an_install_asked_of_steam_is_followed_before_the_focus_comes_back() {
     assert!(!app.steam.reading_installed, "once");
 }
 
+/// An install asked of Steam is followed, every few seconds, only while it may still show up: not
+/// once Steam could not be reached, nor once a read of every library found it already there.
+#[test]
+fn an_install_asked_of_steam_stops_being_followed_once_it_cannot_come_or_came() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let ask = |app: &mut App| {
+        let _ = app.update(Message::Steam(SteamMsg::Ask(
+            "steam-620".into(),
+            Action::Install,
+        )));
+        assert!(app.steam.expecting.is_some());
+    };
+    ask(&mut app);
+    let _ = app.update(Message::Steam(SteamMsg::Asked(Err(
+        "[FAKE] no Steam".into()
+    ))));
+    assert!(app.steam.expecting.is_none(), "Steam not reached");
+    assert_eq!(app.steam_downloads_every(), None);
+
+    ask(&mut app);
+    let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        620,
+        1 << 30,
+        true,
+        None,
+    )])));
+    assert!(app.steam.expecting.is_none(), "found ready");
+    assert_eq!(app.steam_downloads_every(), None);
+}
+
 /// A read of every library folder takes away only the games it knew of as it began: not a game
 /// asked of Steam whose own manifest was found meanwhile; nor a game Steam downloads, which a
 /// library drive away for a moment would hide: the read of its own manifest tells when it goes.
