@@ -179,7 +179,21 @@ pub async fn run_installer(
     };
     let _busy = crate::lock::game(dirs, &install.game_id)?;
     let busy = crate::lock::session(dirs, &install.game_id);
-    if let Some(init) = crate::runner::prefix_init_spec(dirs, &install)? {
+    // As before a launch: a runtime umu lacks is installed now, outside the sandbox, rather than
+    // the installer refused (`runner::runtime_installed`).
+    if install.isolated {
+        crate::runner::refresh_runtimes(db, dirs, crate::runner::container(&install)).await;
+    }
+    // Nothing is installed in the prefix yet: it goes, with its mark, if the installer cannot run.
+    let discard = || {
+        if let Some(prefix) = install.runner.prefix() {
+            let _ = std::fs::remove_dir_all(prefix);
+        }
+        let _ = std::fs::remove_file(installer_file(dirs, &install.game_id));
+    };
+    if let Some(init) =
+        crate::runner::prefix_init_spec(dirs, &install).inspect_err(|_| discard())?
+    {
         let log = crate::logs::of_game(dirs, "prefix", &install.game_id);
         crate::logs::start_run(&log);
         let outcome = SessionHandle::start(supervisor, &init, &log, Some(&busy))
@@ -187,11 +201,7 @@ pub async fn run_installer(
             .wait()
             .await?;
         if !outcome.clean || !crate::runner::prefix_ready(&install) {
-            // Nothing was installed in it yet.
-            if let Some(prefix) = install.runner.prefix() {
-                let _ = std::fs::remove_dir_all(prefix);
-            }
-            let _ = std::fs::remove_file(installer_file(dirs, &install.game_id));
+            discard();
             return Err(Error::Refused(format!(
                 "the Wine prefix could not be created; see {}",
                 log.display()
@@ -203,7 +213,8 @@ pub async fn run_installer(
         &install,
         vec![installer.display().to_string()],
         folder,
-    )?;
+    )
+    .inspect_err(|_| discard())?;
     let log = crate::logs::of_game(dirs, "setup", &install.game_id);
     crate::logs::start_run(&log);
     SessionHandle::start(supervisor, &spec, &log, Some(&busy))
@@ -1751,6 +1762,36 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(refused.contains(".tar.gz"), "{refused}");
+    }
+
+    /// A Windows installer refused before it starts (here, isolated through a Proton build umu
+    /// would start outside its container) leaves nothing behind: neither a prefix nor the mark of a
+    /// game waiting to be added, which no one could discard, the caller never told its id. umu is
+    /// not run: the day's refresh of its runtimes counts as done.
+    #[tokio::test]
+    async fn an_installer_refused_before_it_starts_leaves_nothing() {
+        let f = fake("installer-refused");
+        crate::settings::set_umu_runtimes_checked_at(&f.db, chrono::Utc::now().timestamp())
+            .unwrap();
+        let installer = f.root.join("setup/[FAKE] setup.exe");
+        std::fs::create_dir_all(installer.parent().unwrap()).unwrap();
+        std::fs::write(&installer, b"MZ\x90\0").unwrap();
+        let supervisor = f.root.join("[FAKE] supervisor");
+        let refused = run_installer(
+            &f.db,
+            &f.dirs,
+            &supervisor,
+            &installer,
+            Some(f.proton.clone()),
+            true,
+        )
+        .await;
+        assert!(
+            matches!(&refused, Err(Error::Refused(m)) if m.contains("outside umu's container")),
+            "{refused:?}"
+        );
+        assert!(!installer_file(&f.dirs, "local-1").exists());
+        assert!(!prefix_of(&f.dirs, "local-1").exists());
     }
 
     /// Only a folder an earlier attempt left is said to be one to remove: a name the disk refuses

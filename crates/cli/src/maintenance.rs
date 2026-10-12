@@ -388,6 +388,15 @@ pub async fn setup(ctx: &Ctx, args: SetupArgs) -> Result<()> {
             println!("A step failed again: the setup is left as it is; `--force` runs it again.")
         }
     };
+    // As before a launch: a runtime umu lacks is installed now, outside the sandbox.
+    if install.isolated {
+        slatty_core::runner::refresh_runtimes(
+            &ctx.db,
+            &ctx.dirs,
+            slatty_core::runner::container(&install),
+        )
+        .await;
+    }
     let ran = slatty_core::setup::run(
         &ctx.dirs,
         &ctx.http,
