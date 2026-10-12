@@ -1085,10 +1085,14 @@ impl App {
             Message::Play(game_id) => return self.start_game(game_id),
             Message::LaunchAs(game_id, choice) => {
                 self.launch_prompt = None;
+                self.forget_launch_focus();
                 self.choose_launch(&game_id, choice);
                 return self.start_game(game_id);
             }
-            Message::CancelLaunch => self.launch_prompt = None,
+            Message::CancelLaunch => {
+                self.launch_prompt = None;
+                self.forget_launch_focus();
+            }
             Message::Installability(id, Ok(answer)) => {
                 self.installability.insert(id, answer);
             }

@@ -576,6 +576,13 @@ impl App {
         Task::none()
     }
 
+    /// The launch question answered, however: the next one starts on its first way.
+    pub fn forget_launch_focus(&mut self) {
+        if let Some(couch) = &mut self.couch {
+            couch.launch = 0;
+        }
+    }
+
     /// The question asked the first time a game that can be started several ways is played.
     fn launch_nav(&mut self, game_id: String, nav: Nav) -> Task<Message> {
         let ways = self
@@ -590,12 +597,8 @@ impl App {
         match nav {
             Nav::Up => couch.launch = at.saturating_sub(1),
             Nav::Down => couch.launch = (at + 1).min(ways.len().saturating_sub(1)),
-            Nav::Back => {
-                couch.launch = 0;
-                return self.update(Message::CancelLaunch);
-            }
+            Nav::Back => return self.update(Message::CancelLaunch),
             Nav::Confirm => {
-                couch.launch = 0;
                 return self.update(match ways.into_iter().nth(at) {
                     Some(way) => Message::LaunchAs(game_id, way),
                     None => Message::CancelLaunch,

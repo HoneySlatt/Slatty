@@ -616,6 +616,23 @@ fn the_keyboard_hidden_by_a_game_page_takes_nothing() {
     );
 }
 
+/// A way clicked or tapped in the launch question leaves its focus for the next question back on
+/// the first way.
+#[test]
+fn the_launch_question_starts_on_the_first_way_each_time() {
+    let mut app = couch_app();
+    app.launch_options.insert(
+        "3".into(),
+        vec!["[FAKE] Game 3".into(), "[FAKE] Settings".into()],
+    );
+    let _ = app.update(Message::Select("3".into()));
+    nav(&mut app, Nav::Confirm);
+    nav(&mut app, Nav::Down);
+    assert_eq!(couch(&app).launch, 1);
+    let _ = app.update(Message::LaunchAs("3".into(), "[FAKE] Settings".into()));
+    assert_eq!(couch(&app).launch, 0);
+}
+
 /// A notice (an install that cannot start, Steam not reached) closes with B, before anything else
 /// B does; the hints say so.
 #[test]
