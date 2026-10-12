@@ -270,6 +270,21 @@ async fn installers_are_downloaded_checked_and_named() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// GOG replaced an installer while its download was paused: once the new one is downloaded, what
+/// was left of the old one goes, not another game's.
+#[tokio::test]
+async fn what_a_replaced_installer_left_goes_once_all_is_downloaded() {
+    let dir = temp("replaced");
+    std::fs::write(dir.join("setup_fake_1.0.exe.1.slatty-dl"), b"[FAKE] old").unwrap();
+    std::fs::write(dir.join("setup_other.exe.2.slatty-dl"), b"[FAKE] other").unwrap();
+    let fake = Fake::new(vec![("setup_fake_1.1.exe", data(5000, 25), None)]);
+    run_download(&fake, &dir).await.unwrap();
+    assert!(!dir.join("setup_fake_1.0.exe.1.slatty-dl").exists());
+    assert!(dir.join("setup_other.exe.2.slatty-dl").exists());
+    assert!(dir.join("setup_fake_1.1.exe").exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
 #[tokio::test]
 async fn a_partial_file_is_taken_up_where_it_stopped() {
     let dir = temp("resume");

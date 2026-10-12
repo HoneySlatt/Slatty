@@ -496,6 +496,8 @@ pub async fn download<S: Source>(
         progress(p);
         done.push(target);
     }
+    // All there: what is left unfinished is an installer GOG has since replaced.
+    let _ = remove_staged(folder, game_id);
     Ok(done)
 }
 
