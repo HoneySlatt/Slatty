@@ -151,6 +151,9 @@ pub async fn install(
     });
     // A queued install has not started: a folder already where it goes is not its own.
     let job_resumed = job.as_ref().is_some_and(|j| !j.is_queued());
+    if job_resumed {
+        drop_replaced(build_id, &plan.build.build_id, &partial)?;
+    }
     if let Some(held) = held_on_start(job.as_ref(), &plan) {
         crate::settings::set_held_back(db, &req.game_id, held)?;
     }
@@ -272,6 +275,17 @@ pub async fn install(
         dependencies: plan.meta.dependencies.clone(),
     });
     Ok(install)
+}
+
+/// Deletes the partial folder of a download resumed on another build than it started with: a
+/// Linux installer GOG has replaced since (`plan_install`). Not all of what it staged is the new
+/// installer's, and none of it would be recorded: it starts again, as a discarded one would.
+fn drop_replaced(started: Option<&str>, planned: &str, partial: &Path) -> Result<()> {
+    if started.is_none_or(|b| b == planned) || !partial.is_dir() {
+        return Ok(());
+    }
+    std::fs::remove_dir_all(partial)
+        .map_err(|e| Error::io(format!("delete {}", partial.display()), e))
 }
 
 /// The partial folder of a resumed install is gone and the game folder it became exists: the

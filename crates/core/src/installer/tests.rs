@@ -1370,6 +1370,24 @@ fn a_folder_slatty_did_not_publish_is_never_adopted() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// A Linux download resumed on GOG's current installer, the one it started with replaced since:
+/// what it staged is not all the new installer's, and none of it would be recorded, so it starts
+/// again. One resumed on the build it started with keeps what it downloaded.
+#[test]
+fn a_download_resumed_on_a_replaced_installer_starts_again() {
+    let root = std::env::temp_dir().join(format!("slatty-replaced-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let partial = partial_dir(&root, "Game");
+    std::fs::create_dir_all(&partial).unwrap();
+    std::fs::write(partial.join("[FAKE] old.pak"), "1.0").unwrap();
+    drop_replaced(Some("linux:1.0"), "linux:1.0", &partial).unwrap();
+    drop_replaced(None, "linux:1.1", &partial).unwrap();
+    assert!(partial.join("[FAKE] old.pak").exists(), "the same build");
+    drop_replaced(Some("linux:1.0"), "linux:1.1", &partial).unwrap();
+    assert!(!partial.exists(), "the installer replaced");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn jobs_left_behind_by_a_registered_install_are_forgotten() {
     use crate::install::{Install, Platform};
