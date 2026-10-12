@@ -196,6 +196,29 @@ fn installers_wait_in_the_queue_behind_a_running_install() {
     assert!(ui.find("[FAKE] Game 5 · offline installers").is_ok());
 }
 
+/// GOG's offline installers name some languages with codes of their own ("jp", "br"): they show
+/// by their names.
+#[test]
+fn the_drawer_names_languages_gog_gives_its_own_codes() {
+    let mut app = library_app();
+    open(&mut app, "5", Some(Panel::Installers));
+    app.installers_root = "/tmp/[FAKE] installers".into();
+    let offer = Offer {
+        title: "[FAKE] Game 5".into(),
+        installers: vec![
+            installer("windows", "en", 1 << 30),
+            installer("windows", "jp", 1 << 30),
+            installer("windows", "br", 1 << 30),
+        ],
+        dlcs: Vec::new(),
+    };
+    let _ = app.update(Message::Offline(OfflineMsg::Offered("5".into(), Ok(offer))));
+    let mut ui = render(&app);
+    assert!(ui.find("Japanese").is_ok());
+    assert!(ui.find("Portuguese (Brazil)").is_ok());
+    assert!(ui.find("jp").is_err());
+}
+
 /// The command line downloading the same game's installers keeps its job: the drawer says so.
 #[test]
 fn installers_downloading_from_the_command_line_are_not_asked_again() {

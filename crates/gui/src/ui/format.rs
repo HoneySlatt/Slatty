@@ -121,7 +121,8 @@ impl std::fmt::Display for Language {
     }
 }
 
-/// "French" for "fr-FR"; the code itself when it is not known.
+/// "French" for "fr-FR"; the code itself when it is not known. GOG's offline installers name some
+/// languages with codes of their own ("jp", "br"), as lgogdownloader lists them.
 pub fn language_name(code: &str) -> String {
     let name = match code.to_ascii_lowercase().as_str() {
         // Builds without language packs: the game holds its languages and offers them itself.
@@ -131,17 +132,17 @@ pub fn language_name(code: &str) -> String {
         "fr-fr" | "fr" => "French",
         "de-de" | "de" => "German",
         "es-es" | "es" => "Spanish",
-        "es-mx" => "Spanish (Latin America)",
+        "es-mx" | "es_mx" => "Spanish (Latin America)",
         "it-it" | "it" => "Italian",
         "pl-pl" | "pl" => "Polish",
         "ru-ru" | "ru" => "Russian",
-        "pt-br" => "Portuguese (Brazil)",
+        "pt-br" | "br" => "Portuguese (Brazil)",
         "pt-pt" | "pt" => "Portuguese",
-        "zh-hans" | "zh-cn" => "Chinese (Simplified)",
+        "zh-hans" | "zh-cn" | "cn" => "Chinese (Simplified)",
         "zh-hant" | "zh-tw" => "Chinese (Traditional)",
-        "ja-jp" | "ja" => "Japanese",
+        "ja-jp" | "ja" | "jp" => "Japanese",
         "ko-kr" | "ko" => "Korean",
-        "cs-cz" | "cs" => "Czech",
+        "cs-cz" | "cs" | "cz" => "Czech",
         "hu-hu" | "hu" => "Hungarian",
         "tr-tr" | "tr" => "Turkish",
         "uk-ua" | "uk" => "Ukrainian",
@@ -150,9 +151,9 @@ pub fn language_name(code: &str) -> String {
         "da-dk" | "da" => "Danish",
         "fi-fi" | "fi" => "Finnish",
         "nb-no" | "no" => "Norwegian",
-        "el-gr" | "el" => "Greek",
+        "el-gr" | "el" | "gk" => "Greek",
         "ro-ro" | "ro" => "Romanian",
-        "bg-bg" | "bg" => "Bulgarian",
+        "bg-bg" | "bg" | "bl" => "Bulgarian",
         "sk-sk" | "sk" => "Slovak",
         "ar" | "ar-sa" => "Arabic",
         "he-il" | "he" => "Hebrew",
