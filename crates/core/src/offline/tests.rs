@@ -487,6 +487,60 @@ fn a_discarded_job_deletes_only_its_unfinished_files() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// A started download whose installers folder is gone (its drive unplugged, its share not
+/// mounted) fails rather than fill the empty mount point; a new one makes its folders.
+#[tokio::test]
+async fn a_started_download_whose_folder_is_gone_is_not_made_again() {
+    let dir = temp("unplugged");
+    let dirs = Dirs::under(&dir.join("data"));
+    let db = Db::in_memory().unwrap();
+    // Nothing reaches GOG: the request would go through a closed port.
+    let http = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+        .build()
+        .unwrap();
+    let tokens = Tokens {
+        user_id: "1".into(),
+        access_token: crate::secret::Secret::new("[FAKE]"),
+        refresh_token: crate::secret::Secret::new("[FAKE]"),
+        expires_at: i64::MAX,
+    };
+    let job = OfflineJob {
+        game_id: "1".into(),
+        os: "windows".into(),
+        languages: vec!["en".into()],
+        dlcs: Vec::new(),
+        folder: dir.join("drive/GOG/[FAKE] Game"),
+        state: DOWNLOADING.into(),
+    };
+    job.save(&db).unwrap();
+    let run = |job: OfflineJob| {
+        let (db, dirs, http, tokens) = (&db, &dirs, &http, &tokens);
+        async move {
+            run(
+                db,
+                dirs,
+                http,
+                tokens,
+                &job,
+                &|_| {},
+                &CancellationToken::new(),
+            )
+            .await
+        }
+    };
+    assert!(matches!(run(job.clone()).await, Err(Error::NotFound(_))));
+    assert!(!dir.join("drive").exists());
+    assert_eq!(OfflineJob::load(&db, "1").unwrap().unwrap().state, FAILED);
+    // A job never started goes on (here to GOG, out of reach).
+    let queued = OfflineJob {
+        state: crate::installer::QUEUED.into(),
+        ..job
+    };
+    assert!(!matches!(run(queued).await, Err(Error::NotFound(_))));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
 #[test]
 fn installers_go_into_a_folder_named_after_the_game() {
     assert_eq!(

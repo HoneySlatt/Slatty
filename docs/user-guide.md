@@ -461,10 +461,11 @@ many such installers hold every language of the game, chosen in its own options.
 The installers go into a folder named after the game, under the installers folder
 (**Settings → Installs**, `GOG` in your download folder until changed). They download through the
 Downloads tab's queue, one download at a time with the installs, and resume where they stopped
-after a pause, a closed window or a crash. Each file is checked against the MD5 sums GOG keeps
-for it before it takes its name; parts found damaged are downloaded again. A file already in the
-folder at its size is kept, and one there at another size is never replaced. **Remove** in the
-Downloads tab deletes only the files left unfinished.
+after a pause, a closed window or a crash; if the installers folder is gone by then (a drive
+unplugged), they stop as failed rather than start over on another disk. Each file is checked
+against the MD5 sums GOG keeps for it before it takes its name; parts found damaged are
+downloaded again. A file already in the folder at its size is kept, and one there at another size
+is never replaced. **Remove** in the Downloads tab deletes only the files left unfinished.
 
 ```sh
 slatty installers <id>                             # what GOG offers

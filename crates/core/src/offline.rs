@@ -20,7 +20,7 @@ use crate::auth::Tokens;
 use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::installer::linux::{GogInstallers, Source as Bytes};
-use crate::installer::{DOWNLOADING, FAILED, PAUSED, Progress, folder_name, free_space};
+use crate::installer::{DOWNLOADING, FAILED, PAUSED, Progress, QUEUED, folder_name, free_space};
 use crate::paths::Dirs;
 use crate::{fsutil, http};
 
@@ -313,6 +313,18 @@ pub async fn run(
 ) -> Result<Vec<PathBuf>> {
     let _busy = lock(dirs, &job.game_id)?;
     let mut job = job.clone();
+    // The installers folder a started download was going into is gone, its drive unplugged or its
+    // share not mounted: starting again would fill the empty mount point instead.
+    let root = job.folder.parent().unwrap_or(&job.folder);
+    if job.state != QUEUED && !root.is_dir() {
+        let missing = Error::NotFound(format!(
+            "{} is missing: is its drive mounted?",
+            root.display()
+        ));
+        job.state = FAILED.into();
+        job.save(db)?;
+        return Err(missing);
+    }
     job.state = DOWNLOADING.into();
     job.save(db)?;
     let result = async {
