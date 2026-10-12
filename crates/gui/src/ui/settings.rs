@@ -80,7 +80,8 @@ impl App {
                 Section::Privacy => self.privacy_rows(wide),
                 Section::Advanced => self.advanced_rows(wide),
                 Section::About => vec![note(format!(
-                    "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL)",
+                    "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL) \
+                     · image sharpening from AMD FidelityFX FSR 1 (MIT)",
                     env!("CARGO_PKG_VERSION")
                 ))],
             };
