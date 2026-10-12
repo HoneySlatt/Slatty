@@ -64,6 +64,8 @@ impl App {
                 slatty_core::session::playtime(&core.db, Some(&info.user_id)).unwrap_or_default();
         }
         self.account_epoch += 1;
+        // Asked again for this account, whose answer the old one's would never have been.
+        self.offline_views.clear();
         // Its cache is its own again, work of before included.
         self.forgotten.retain(|id| *id != info.user_id);
         self.account = Some(info);
@@ -146,6 +148,8 @@ impl App {
         self.achievements.clear();
         self.pending_change = None;
         self.cloud.clear();
+        // What GOG offers to download depends on the account (its DLC).
+        self.offline_views.clear();
         // Found with the account signed out; its check's answer is dropped with its other work.
         self.updates.waiting.clear();
         self.updates.checking = false;

@@ -138,14 +138,15 @@ impl App {
                 self.offline_views
                     .insert(game_id.clone(), OfflineView::Loading);
                 let id = game_id.clone();
-                return Task::perform(
+                // An answer for an account since signed out is dropped.
+                return self.account_task(Task::perform(
                     async move {
                         let mut account = Account::load(&core.db, &core.dirs).await.map_err(err)?;
                         let tokens = account.tokens(&core.http).await.map_err(err)?.clone();
                         offline::offer(&core.http, &tokens, &id).await.map_err(err)
                     },
                     move |r| Message::Offline(OfflineMsg::Offered(game_id, r)),
-                );
+                ));
             }
             OfflineMsg::Offered(game_id, result) => {
                 let view = match result {

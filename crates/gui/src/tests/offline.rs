@@ -196,6 +196,16 @@ fn installers_wait_in_the_queue_behind_a_running_install() {
     assert!(ui.find("[FAKE] Game 5 · offline installers").is_ok());
 }
 
+/// What GOG offered an account (its DLC among them) goes with it: the next account's drawer asks
+/// again.
+#[test]
+fn the_installers_offered_go_with_the_account() {
+    let mut app = library_app();
+    offered(&mut app);
+    app.logged_out();
+    assert!(app.offline_views.is_empty());
+}
+
 /// Download, as the drawer says when nothing downloads, starts beside a download paused on request
 /// and before the queue it holds.
 #[test]
