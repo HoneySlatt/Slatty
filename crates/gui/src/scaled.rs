@@ -139,9 +139,16 @@ impl App {
         };
         let ai = self.ai();
         let with_ai = ai.is_some();
+        let shared = self.core.as_ref().map(|c| c.dirs.cache.clone());
+        let folders: Vec<PathBuf> = [shared, self.account_cache()]
+            .into_iter()
+            .flatten()
+            .map(|c| c.join("art"))
+            .collect();
         Task::perform(
             slatty_core::fsutil::in_background(move || {
                 let (mut made, failed) = make_copies(std::slice::from_ref(&job), ai.as_ref());
+                trim(&folders, ART_BUDGET);
                 let made = vec![(String::new(), job.source, made.pop().flatten())];
                 Batch {
                     width,
@@ -206,6 +213,11 @@ impl App {
         } else {
             width.to_string()
         }
+    }
+
+    fn account_cache(&self) -> Option<PathBuf> {
+        let core = self.core.as_ref()?;
+        Some(core.dirs.account_cache(&self.account.as_ref()?.user_id))
     }
 
     /// The cache an image's copies go to: the account's for GOG's images, which forgetting the
@@ -413,6 +425,41 @@ impl App {
     }
 }
 
+/// The most the key art copies take: about 1 to 2 MB each at 3840 pixels, more than a thousand
+/// games' key art, where every game of a library of 10,000 would take 10 to 20 GB.
+const ART_BUDGET: u64 = 2 << 30;
+
+/// Deletes the key art copies in `folders` (`<folder>/<width>/<copy>`) shown longest ago, until
+/// they take a tenth less than `budget`, once they take more.
+fn trim(folders: &[PathBuf], budget: u64) {
+    let mut copies: Vec<(std::time::SystemTime, u64, PathBuf)> = folders
+        .iter()
+        .filter_map(|f| std::fs::read_dir(f).ok())
+        .flatten()
+        .flatten()
+        .filter_map(|width| std::fs::read_dir(width.path()).ok())
+        .flatten()
+        .flatten()
+        .filter_map(|copy| {
+            let meta = copy.metadata().ok().filter(|m| m.is_file())?;
+            Some((meta.modified().ok()?, meta.len(), copy.path()))
+        })
+        .collect();
+    let mut taken: u64 = copies.iter().map(|(_, len, _)| len).sum();
+    if taken <= budget {
+        return;
+    }
+    copies.sort();
+    for (_, len, path) in copies {
+        if taken <= budget - budget / 10 {
+            break;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            taken -= len;
+        }
+    }
+}
+
 /// Where the upscaler works, a folder per batch.
 pub fn work_folder(dirs: &slatty_core::paths::Dirs) -> PathBuf {
     dirs.cache.join("upscale")
@@ -566,6 +613,13 @@ fn plan(job: &Job, ai: bool) -> Plan {
         let made = name.with_extension(ext);
         // Empty: written just before the computer stopped, never synced.
         if std::fs::metadata(&made).is_ok_and(|m| m.is_file() && m.len() > 0) {
+            // Key art shown again is the last `trim` deletes.
+            if job.enlarge {
+                let _ = std::fs::File::options()
+                    .write(true)
+                    .open(&made)
+                    .and_then(|f| f.set_modified(std::time::SystemTime::now()));
+            }
             return Plan::Done(Some(made));
         }
     }
@@ -894,6 +948,54 @@ mod tests {
         let (made, failed) = make_copies(&jobs, Some(&ai(true, false)));
         assert_eq!(failed.as_deref(), Some("[FAKE] no device"));
         assert_eq!(made[0], Some(None), "shown as it is");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Over the budget, the key art shown longest ago goes first, until a tenth below it; key art
+    /// shown again counts as shown last.
+    #[test]
+    fn key_art_shown_longest_ago_goes_once_over_the_budget() {
+        let dir = std::env::temp_dir().join(format!("slatty-trim-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (shared, account) = (dir.join("cache/art"), dir.join("cache/1/art"));
+        let at = |n: u64| std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(n);
+        let copies = [
+            (shared.join("3840/old.jpg"), 1),
+            (account.join("1920-ai/older.jpg"), 0),
+            (account.join("3840/new.jpg"), 3),
+            (shared.join("2560/newer.jpg"), 4),
+        ];
+        for (path, when) in &copies {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, [0u8; 100]).unwrap();
+            let f = std::fs::File::options().write(true).open(path).unwrap();
+            f.set_modified(at(*when)).unwrap();
+        }
+        let folders = [shared.clone(), account.clone()];
+        trim(&folders, 400);
+        assert!(copies.iter().all(|(p, _)| p.exists()), "within the budget");
+        trim(&folders, 300);
+        // 400 bytes over 300: down to 270, so the two shown longest ago go.
+        assert!(!copies[1].0.exists() && !copies[0].0.exists());
+        assert!(copies[2].0.exists() && copies[3].0.exists());
+
+        // Key art shown again: its copy is the last to go.
+        let art = dir.join("art.jpg");
+        write(
+            &art,
+            ::image::RgbImage::new(1920, 620).into(),
+            ::image::ImageFormat::Jpeg,
+        );
+        let made = scaled_copy(&art, 3840, &account.join("3840"), true).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&made)
+            .unwrap()
+            .set_modified(at(2))
+            .unwrap();
+        scaled_copy(&art, 3840, &account.join("3840"), true).unwrap();
+        let shown = std::fs::metadata(&made).unwrap().modified().unwrap();
+        assert!(shown > at(1_000_000_000));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

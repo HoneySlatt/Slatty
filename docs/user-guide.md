@@ -802,7 +802,7 @@ window is enlarged with Lanczos3 and AMD's RCAS sharpening instead.
 | `~/.local/share/slatty/backups/` | Copies made before any save is replaced or a prefix deleted |
 | `~/.local/share/slatty/diagnostics/` | Cloud copies downloaded by `slatty cloud diff` |
 | `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | Comet's data and configuration |
-| `~/.cache/slatty/<user id>/` | Library and covers, and in `scaled/<width>/` and `art/<width>/` the covers and key art made at the size they are drawn; safe to delete |
+| `~/.cache/slatty/<user id>/` | Library and covers, and in `scaled/<width>/` and `art/<width>/` the covers and key art made at the size they are drawn (key art at most 2 GB, here and below together, the one shown longest ago going first); safe to delete |
 | `~/.cache/slatty/scaled/<width>/`, `~/.cache/slatty/art/<width>/` | The same for Steam's images and those you chose (`<width>-ai` when made with Enhance images with AI); safe to delete |
 | `~/.cache/slatty/upscale-shaders/` | The upscaler's shaders, compiled once; safe to delete |
 | `~/.cache/slatty/steam/` | Images of Steam's games downloaded from Steam's image servers, once turned on; safe to delete |
