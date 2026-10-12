@@ -63,6 +63,21 @@ impl App {
         Some((self.card_width * self.scaled.scale?).round() as u32)
     }
 
+    /// The cover of a game drawn `width` wide, in the window's units: the grid's copy when it is
+    /// as wide, else the cover itself, which an enlarged copy would show softer (the couch mode's
+    /// covers are larger than the grid's).
+    pub fn cover_at(&self, game_id: &str, width: f32) -> Option<image::Handle> {
+        let copy_wide_enough = self
+            .scaled_width()
+            .zip(self.scaled.scale)
+            .is_some_and(|(made, scale)| made as f32 >= width * scale);
+        if copy_wide_enough {
+            self.grid_cover(game_id)
+        } else {
+            self.cover(game_id)
+        }
+    }
+
     /// The cover the grid shows for a game: its copy at the card's size once made.
     pub fn grid_cover(&self, game_id: &str) -> Option<image::Handle> {
         let cover = self.cover(game_id)?;

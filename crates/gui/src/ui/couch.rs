@@ -198,7 +198,7 @@ impl App {
         focused: bool,
     ) -> Element<'a, Message> {
         let (width, height) = (width - 2.0 * RING, (width - 2.0 * RING) * 4.0 / 3.0);
-        let art: Element<'a, Message> = match self.grid_cover(&g.id) {
+        let art: Element<'a, Message> = match self.cover_at(&g.id, width) {
             Some(h) => image(h)
                 .content_fit(ContentFit::Cover)
                 .width(width)

@@ -214,7 +214,7 @@ files (`image::Handle::from_path`, files named after their format): never keep i
 `App`, which held about 880 MB of covers at 10,000 games. The grid draws covers through
 `App::grid_cover` and the game page its key art through `App::shown_art`, which give the copy
 `scaled.rs` made at the size drawn once it exists: a new place showing a cover or key art goes
-through them too. Work that reads many files or keeps the processor busy (checking game files,
+through them too (`App::cover_at` for covers drawn larger than the grid's, as in the couch mode). Work that reads many files or keeps the processor busy (checking game files,
 making those copies) runs at the lowest priority through `fsutil::in_background`.
 
 ## Tests

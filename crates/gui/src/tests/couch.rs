@@ -357,6 +357,31 @@ fn the_row_with_the_focus_shows_after_the_window_grows() {
     assert!(render_window(&app).find("[FAKE] Game 50").is_ok());
 }
 
+/// The couch mode's covers are larger than the desktop grid's: the copies made for the grid would
+/// be enlarged, softly, so the couch mode draws the cover itself.
+#[test]
+fn couch_covers_are_not_enlarged_from_the_grids_copies() {
+    let mut app = couch_app();
+    app.card_width = 150.0;
+    let cover = PathBuf::from("/covers/5.jpg");
+    let copy = PathBuf::from("/scaled/150/5.jpg");
+    app.covers
+        .insert("5".into(), iced::widget::image::Handle::from_path(&cover));
+    let _ = app.update(Message::Rescaled(1.0));
+    let _ = app.update(Message::CoversScaled(
+        150,
+        vec![("5".into(), cover.clone(), Some(copy.clone()))],
+    ));
+    let path = |h: Option<iced::widget::image::Handle>| match h {
+        Some(iced::widget::image::Handle::Path(_, p)) => p,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(path(app.grid_cover("5")), copy, "the desktop's grid");
+    assert_eq!(path(app.cover_at("5", app.couch_card())), cover);
+    // Drawn no wider than the copy (Downloads' small covers): the copy.
+    assert_eq!(path(app.cover_at("5", 66.0)), copy);
+}
+
 /// Home's key art is drawn from its copy at the window's width, as a game page's: the original can
 /// be 3840 pixels wide, decoded anew at each move.
 #[test]
