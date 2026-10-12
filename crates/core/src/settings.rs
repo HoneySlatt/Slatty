@@ -31,7 +31,6 @@ const STEAM_IMAGES: &str = "steam_images";
 const STEAM_WEB_API: &str = "steam_web_api";
 const TWIN_PLAYTIME: &str = "twin_playtime";
 const REMEMBER_FILTERS: &str = "remember_filters";
-const ENHANCE_IMAGES: &str = "enhance_images";
 const LIBRARY_FILTERS: &str = "library_filters";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
@@ -335,15 +334,6 @@ pub fn set_library_sort(db: &Db, sort: &str) -> Result<()> {
     db.set_setting(LIBRARY_SORT, Some(sort))
 }
 
-/// Whether covers and key art are enhanced with AI on the graphics card. Off until turned on.
-pub fn enhance_images(db: &Db) -> Result<bool> {
-    Ok(db.setting(ENHANCE_IMAGES)?.as_deref() == Some("on"))
-}
-
-pub fn set_enhance_images(db: &Db, on: bool) -> Result<()> {
-    db.set_setting(ENHANCE_IMAGES, Some(if on { "on" } else { "off" }))
-}
-
 /// Whether the library's filters are kept for the next start. Off until turned on.
 pub fn remember_filters(db: &Db) -> Result<bool> {
     Ok(db.setting(REMEMBER_FILTERS)?.as_deref() == Some("on"))
@@ -517,14 +507,6 @@ fn home() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn images_are_not_enhanced_until_turned_on() {
-        let db = Db::in_memory().unwrap();
-        assert!(!enhance_images(&db).unwrap());
-        set_enhance_images(&db, true).unwrap();
-        assert!(enhance_images(&db).unwrap());
-    }
 
     #[test]
     fn filters_are_forgotten_until_asked_to_remember_them() {

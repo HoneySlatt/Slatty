@@ -22,7 +22,6 @@ mod tests;
 mod theme;
 mod ui;
 mod updates;
-mod upscale;
 mod work;
 
 use std::collections::{HashMap, HashSet};
@@ -472,14 +471,12 @@ pub enum Message {
     OpenPanel(Panel),
     ClosePanel,
     Cover(String, Option<PathBuf>),
-    /// Covers made for the grid.
-    CoversScaled(scaled::Batch),
+    /// Covers made at this width for the grid: per game, the cover and its copy, if any.
+    CoversScaled(u32, Vec<(String, PathBuf, Option<PathBuf>)>),
     /// The window's scale, known or changed.
     Rescaled(f32),
-    /// Key art made for the game page.
-    ArtScaled(scaled::Batch),
-    /// The images a game left, asked again.
-    ScaleAgain,
+    /// Key art made at this width: the source and its copy, if any.
+    ArtScaled(PathBuf, u32, Option<PathBuf>),
     /// The covers found in the account's cache at start, by game id.
     CachedCovers(HashMap<String, PathBuf>),
     /// How these installed games can be started, read from their folders; then the game whose
@@ -571,7 +568,6 @@ impl Message {
                 | Message::CoversScaled(..)
                 | Message::Rescaled(_)
                 | Message::ArtScaled(..)
-                | Message::ScaleAgain
                 | Message::Steam(steam::SteamMsg::Cover(..))
                 | Message::CachedCovers(_)
                 | Message::Image(..)
@@ -704,11 +700,6 @@ impl App {
         let task = self.handle(message);
         // Whatever ended (a game, an install, an update) may let a waiting update start.
         let task = Task::batch([task, self.next_update()]);
-        // The upscaler stops while a game runs.
-        let playing = self.play.is_some() || !self.steam.running.is_empty();
-        self.scaled
-            .game
-            .store(playing, std::sync::atomic::Ordering::Relaxed);
         let now = self.location();
         if now != shown {
             self.now = Instant::now();
@@ -812,8 +803,6 @@ impl App {
                 // Achievements and cloud saves filters wait for GOG's data: the library, set
                 // below, reads what is missing.
                 self.remember_filters = boot.remember_filters;
-                self.scaled.enhance = boot.enhance_images;
-                self.scaled.upscaler = boot.upscaler.map(std::sync::Arc::new);
                 if let Some(filters) = boot.filters {
                     self.filters = filters;
                 }
@@ -986,10 +975,9 @@ impl App {
                 let missing = self.covers_cached(found);
                 return Task::batch([missing, self.scale_covers(None)]);
             }
-            Message::CoversScaled(batch) => return self.covers_scaled(batch),
-            Message::ScaleAgain => return self.scale_again(),
+            Message::CoversScaled(width, made) => self.covers_scaled(width, made),
             Message::Rescaled(scale) => return self.rescaled(scale),
-            Message::ArtScaled(batch) => return self.art_scaled(batch),
+            Message::ArtScaled(from, width, copy) => self.art_scaled(from, width, copy),
             Message::LaunchOptions(read, play) => {
                 self.launch_options.extend(read);
                 if let Some(game_id) = play {

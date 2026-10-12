@@ -249,8 +249,6 @@ pub enum SettingsMsg {
     TwinPlaytime(TwinPlaytimeChoice),
     /// Whether the library's filters are kept for the next start.
     RememberFilters(bool),
-    /// Whether covers and key art are enhanced with AI.
-    EnhanceImages(bool),
     /// A part of the page, chosen in its side list: shown at the top.
     Show(Section),
     /// Where that part starts, below the first one, once measured.
@@ -413,12 +411,6 @@ impl App {
             SettingsMsg::Measured(section, y) => {
                 let i = Section::ALL.iter().position(|s| *s == section).unwrap_or(0);
                 self.settings_view.tops[i] = Some(y);
-            }
-            SettingsMsg::EnhanceImages(on) => {
-                if let Err(e) = settings::set_enhance_images(&core.db, on) {
-                    self.notify_error(e.to_string());
-                }
-                return self.set_enhance(on);
             }
             SettingsMsg::RememberFilters(on) => {
                 self.remember_filters = on;

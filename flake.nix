@@ -37,14 +37,12 @@
         let
           # Programs the launcher starts, found in PATH: umu and Proton run Windows games,
           # bubblewrap holds isolated ones, Comet reports achievements, steam-run-free gives native
-          # games the usual Linux layout NixOS lacks, and Real-ESRGAN enhances images once Enhance
-          # images with AI is on.
+          # games the usual Linux layout NixOS lacks.
           tools = with pkgs; [
             umu-launcher
             bubblewrap
             comet-gog
             steam-run-free
-            realesrgan-ncnn-vulkan
           ];
         in
         pkgs.rustPlatform.buildRustPackage {
@@ -100,8 +98,6 @@
             umu-launcher
             # Isolated games run inside it, with umu's runtime and Proton read-only.
             bubblewrap
-            # Enhance images with AI.
-            realesrgan-ncnn-vulkan
           ];
           buildInputs = runtimeLibs pkgs;
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (runtimeLibs pkgs);

@@ -964,28 +964,7 @@ impl App {
                 "The default look is in use. Create the theme file to change colours, corners and \
                  the page transition."
             }),
-            self.enhance_row(wide),
         ]
-    }
-
-    fn enhance_row(&self, wide: bool) -> Element<'_, Message> {
-        let found = self.scaled.upscaler.is_some();
-        let toggle = toggler(self.scaled.enhance && found)
-            .on_toggle_maybe(found.then_some(|v| Message::Settings(SettingsMsg::EnhanceImages(v))))
-            .size(22);
-        let what = if found {
-            "Cleans and enlarges covers and key art with Real-ESRGAN on the graphics card, once \
-             each, never while a game runs. About a second per key art; it may smooth grain and \
-             change small details."
-        } else {
-            "Needs realesrgan-ncnn-vulkan and bubblewrap, which the Nix package provides."
-        };
-        setting(
-            wide,
-            "Enhance images with AI",
-            column![toggle, note(what)].spacing(8).into(),
-            None,
-        )
     }
 }
 
