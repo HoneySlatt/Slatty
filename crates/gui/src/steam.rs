@@ -223,7 +223,8 @@ impl App {
                 ]);
             }
             SteamMsg::Loaded(_) => {}
-            SteamMsg::Cover(id, Some(path)) if self.steam.on => {
+            // From Steam's image servers: not once that is turned off while it came.
+            SteamMsg::Cover(id, Some(path)) if self.steam.on && self.steam.images => {
                 self.covers
                     .insert(id.clone(), iced::widget::image::Handle::from_path(&path));
                 self.steam.covers.insert(id, path);

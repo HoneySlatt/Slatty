@@ -200,6 +200,19 @@ fn images_from_steams_servers_once_turned_on() {
             .contains("https://images.gog.com/[FAKE].jpg")
     );
 
+    // Turned off while a cover was on its way: it is not shown once it comes.
+    let _ = app.update(Message::Steam(SteamMsg::Images(false)));
+    app.covers.remove("steam-620");
+    let _ = app.update(Message::Steam(SteamMsg::Cover(
+        "steam-620".into(),
+        Some(cover.clone()),
+    )));
+    assert!(
+        !app.covers.contains_key("steam-620"),
+        "Images from Steam off"
+    );
+    let _ = app.update(Message::Steam(SteamMsg::Images(true)));
+
     assert!(app.steam_images_allowed());
     let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
     let _ = app.update(Message::Steam(SteamMsg::Cover(
