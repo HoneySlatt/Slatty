@@ -308,6 +308,10 @@ impl App {
         }
         for (id, from, copy) in made {
             self.scaled.pending.remove(&from);
+            // Of a cover replaced since: the new one's copy may be there already.
+            if !matches!(self.cover(&id), Some(image::Handle::Path(_, path)) if path == from) {
+                continue;
+            }
             let copy = copy.map(image::Handle::from_path);
             self.scaled.ready.insert(id, (from, copy));
         }

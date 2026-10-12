@@ -471,6 +471,38 @@ fn the_grid_shows_covers_made_at_the_cards_size() {
     assert_eq!(shown(&app), cover);
 }
 
+/// The copy of a cover replaced since, arriving late, never takes the place of the new cover's.
+#[test]
+fn a_late_copy_of_a_replaced_cover_is_dropped() {
+    let mut app = library_app();
+    app.card_width = 150.0;
+    let (old, new) = (
+        PathBuf::from("/covers/7.jpg"),
+        PathBuf::from("/custom/7.jpg"),
+    );
+    app.covers
+        .insert("7".into(), iced::widget::image::Handle::from_path(&old));
+    let _ = app.update(Message::Rescaled(2.0));
+    app.customs.insert(
+        "7".into(),
+        slatty_core::custom::Custom {
+            cover: Some(new.clone()),
+            ..Default::default()
+        },
+    );
+    let made = |from: &PathBuf, copy: &str| {
+        Message::CoversScaled(300, vec![("7".into(), from.clone(), Some(copy.into()))])
+    };
+    let _ = app.update(made(&new, "/scaled/300/new.jpg"));
+    let _ = app.update(made(&old, "/scaled/300/old.jpg"));
+    match app.grid_cover("7") {
+        Some(iced::widget::image::Handle::Path(_, path)) => {
+            assert_eq!(path, PathBuf::from("/scaled/300/new.jpg"));
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
 /// Copies made for an account are forgotten with it, and those arriving after it was signed out
 /// are dropped: they may be in its cache, which forgetting it deleted.
 #[test]
