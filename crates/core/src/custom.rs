@@ -79,8 +79,6 @@ fn read(r: &rusqlite::Row<'_>, first: usize) -> rusqlite::Result<Custom> {
     })
 }
 
-/// Saves a game's customisation. A game with nothing left customised is forgotten, along with its
-/// copied images.
 /// Forgets what was made of a game no longer in the library (a game added by hand, removed), its
 /// images with it.
 pub fn forget(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
@@ -96,6 +94,8 @@ pub fn forget(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
     }
 }
 
+/// Saves a game's customisation. A game with nothing left customised is forgotten, along with its
+/// copied images.
 pub fn save(db: &Db, dirs: &Dirs, game_id: &str, changes: Changes) -> Result<Custom> {
     crate::store::of(game_id)?;
     let old = get(db, game_id)?;

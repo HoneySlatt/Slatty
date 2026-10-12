@@ -667,9 +667,6 @@ impl App {
         .into()
     }
 
-    /// What a Steam game's page says of Steam, in place of GOG's cloud and achievements cards.
-    /// What runs a Steam game, in a few words as the cloud card says its state; the reason the
-    /// GOG build is the safer choice on hover. Its icon goes when a drawer narrows the card.
     /// What a game added by hand is: the user's files, isolated or not, and nothing of GOG's.
     fn added_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let isolated = self.installs.get(&g.id).is_some_and(|i| i.isolated);
@@ -725,6 +722,9 @@ impl App {
         .into()
     }
 
+    /// What a Steam game's page says of Steam, in place of GOG's cloud and achievements cards:
+    /// what runs it, in a few words as the cloud card says its state; the reason the GOG build is
+    /// the safer choice on hover. Its icon goes when a drawer narrows the card.
     fn steam_card(&self) -> Element<'_, Message> {
         let card = responsive(move |size| {
             let content = row![]
