@@ -30,6 +30,8 @@ const STEAM_GAMES: &str = "steam_games";
 const STEAM_IMAGES: &str = "steam_images";
 const STEAM_WEB_API: &str = "steam_web_api";
 const TWIN_PLAYTIME: &str = "twin_playtime";
+const REMEMBER_FILTERS: &str = "remember_filters";
+const LIBRARY_FILTERS: &str = "library_filters";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -332,6 +334,24 @@ pub fn set_library_sort(db: &Db, sort: &str) -> Result<()> {
     db.set_setting(LIBRARY_SORT, Some(sort))
 }
 
+/// Whether the library's filters are kept for the next start. Off until turned on.
+pub fn remember_filters(db: &Db) -> Result<bool> {
+    Ok(db.setting(REMEMBER_FILTERS)?.as_deref() == Some("on"))
+}
+
+pub fn set_remember_filters(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(REMEMBER_FILTERS, Some(if on { "on" } else { "off" }))
+}
+
+/// The library's filters kept for the next start, by name; `None` for none kept.
+pub fn library_filters(db: &Db) -> Result<Option<String>> {
+    db.setting(LIBRARY_FILTERS)
+}
+
+pub fn set_library_filters(db: &Db, filters: Option<&str>) -> Result<()> {
+    db.set_setting(LIBRARY_FILTERS, filters)
+}
+
 /// Built-in theme the interface starts from, by name; `None` for its own.
 pub fn interface_theme(db: &Db) -> Result<Option<String>> {
     db.setting(INTERFACE_THEME)
@@ -487,6 +507,22 @@ fn home() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn filters_are_forgotten_until_asked_to_remember_them() {
+        let db = Db::in_memory().unwrap();
+        assert!(!remember_filters(&db).unwrap());
+        assert_eq!(library_filters(&db).unwrap(), None);
+        set_remember_filters(&db, true).unwrap();
+        set_library_filters(&db, Some("steam,linux")).unwrap();
+        assert!(remember_filters(&db).unwrap());
+        assert_eq!(
+            library_filters(&db).unwrap().as_deref(),
+            Some("steam,linux")
+        );
+        set_library_filters(&db, None).unwrap();
+        assert_eq!(library_filters(&db).unwrap(), None);
+    }
 
     #[test]
     fn notifications_are_on_until_turned_off_kind_by_kind() {

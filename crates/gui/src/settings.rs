@@ -247,6 +247,8 @@ pub enum SettingsMsg {
     Platform(PlatformChoice),
     /// Play time shown for a game owned on GOG and on Steam.
     TwinPlaytime(TwinPlaytimeChoice),
+    /// Whether the library's filters are kept for the next start.
+    RememberFilters(bool),
     /// A part of the page, chosen in its side list: shown at the top.
     Show(Section),
     /// Where that part starts, below the first one, once measured.
@@ -409,6 +411,13 @@ impl App {
             SettingsMsg::Measured(section, y) => {
                 let i = Section::ALL.iter().position(|s| *s == section).unwrap_or(0);
                 self.settings_view.tops[i] = Some(y);
+            }
+            SettingsMsg::RememberFilters(on) => {
+                self.remember_filters = on;
+                if let Err(e) = settings::set_remember_filters(&core.db, on) {
+                    self.notify_error(e.to_string());
+                }
+                self.keep_filters();
             }
             SettingsMsg::UmuLookup(on) => {
                 self.umu_lookup = on;

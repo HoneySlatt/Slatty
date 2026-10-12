@@ -714,7 +714,8 @@ Runners, Appearance, Notifications, Privacy, Advanced, About); choosing one brin
 scrolls. **Steam** is described in [Steam games](#steam-games). **Account** shows who is signed in, with
 Log out, and Forget account, which asks first, then does what `slatty auth logout --forget` does
 (see [Signing in](#signing-in)). **Library** shows how many games you own on GOG and when the list was refreshed, with Refresh
-library, and the size of the covers; with Steam's games on, **Play time on both** says what a
+library, the size of the covers, and **Remember filters** (off until turned on), which keeps the
+library's filters as you left them for the next start; with Steam's games on, **Play time on both** says what a
 game owned on GOG and on Steam shows: both added up (the default), or one store's.
 **Installs** holds:
 

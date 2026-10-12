@@ -15,7 +15,7 @@ use slatty_core::paths::Dirs;
 use slatty_core::session::{self, Playtime};
 use tokio::sync::Semaphore;
 
-use crate::{Core, InstallSummary, Interrupted, Sort, err};
+use crate::{Core, Filters, InstallSummary, Interrupted, Sort, err};
 
 #[derive(Debug, Clone)]
 pub struct Boot {
@@ -66,6 +66,8 @@ pub struct Boot {
     pub sort_keys: Vec<(String, crate::library::NaturalKey)>,
     pub cover_width: Option<f32>,
     pub sort: Option<Sort>,
+    pub remember_filters: bool,
+    pub filters: Option<Filters>,
 }
 
 pub fn summary(r: &InstallRecord) -> InstallSummary {
@@ -204,6 +206,7 @@ async fn boot() -> Result<Boot, String> {
     let sort = slatty_core::settings::library_sort(&db)
         .map_err(err)?
         .and_then(|s| Sort::from_key(&s));
+    let (remember_filters, filters) = crate::library::kept_filters(&db).map_err(err)?;
     let playtime =
         session::playtime(&db, account.as_ref().map(|a| a.user_id.as_str())).map_err(err)?;
     InstallJob::forget_finished(&db).map_err(err)?;
@@ -269,6 +272,8 @@ async fn boot() -> Result<Boot, String> {
         sort_keys,
         cover_width,
         sort,
+        remember_filters,
+        filters,
     })
 }
 

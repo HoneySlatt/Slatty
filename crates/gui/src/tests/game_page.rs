@@ -277,7 +277,7 @@ fn added_windows_game() -> Install {
 }
 
 /// What start-up read: these installs, and the games of the sessions left without an end.
-fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
+pub(super) fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
     Message::Booted(Ok(Box::new(crate::boot::Boot {
         core: core(),
         account: None,
@@ -315,6 +315,8 @@ fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
         sort_keys: Vec::new(),
         cover_width: None,
         sort: None,
+        remember_filters: false,
+        filters: None,
     })))
 }
 

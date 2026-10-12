@@ -423,6 +423,44 @@ fn store_filters_keep_the_games_of_the_stores_ticked() {
     );
 }
 
+/// With Remember filters on, the filters are kept as they change and come back at the next start;
+/// off, nothing is kept and the library starts unfiltered.
+#[test]
+fn filters_are_remembered_only_when_asked() {
+    use crate::settings::SettingsMsg;
+    let mut app = library_app();
+    let kept = |app: &App| crate::library::kept_filters(&app.core.as_ref().unwrap().db).unwrap();
+    let steam_on_linux = Filters {
+        steam: true,
+        linux: true,
+        ..Default::default()
+    };
+    let _ = app.update(Message::SetFilters(steam_on_linux));
+    assert_eq!(kept(&app), (false, None));
+
+    let _ = app.update(Message::Settings(SettingsMsg::RememberFilters(true)));
+    assert_eq!(kept(&app), (true, Some(steam_on_linux)), "the filters set");
+    let gog = Filters {
+        gog: true,
+        ..Default::default()
+    };
+    let _ = app.update(Message::SetFilters(gog));
+    assert_eq!(kept(&app), (true, Some(gog)));
+
+    let mut next = App::default();
+    let Message::Booted(Ok(mut boot)) = super::game_page::booted(Vec::new(), &[]) else {
+        unreachable!()
+    };
+    (boot.remember_filters, boot.filters) = kept(&app);
+    let _ = next.update(Message::Booted(Ok(boot)));
+    assert!(next.remember_filters);
+    assert_eq!(next.filters, gog);
+
+    let _ = app.update(Message::Settings(SettingsMsg::RememberFilters(false)));
+    assert_eq!(kept(&app), (false, None));
+    assert_eq!(app.filters, gog, "the filters shown stay");
+}
+
 #[test]
 fn shelves_filters_and_sort_select_games() {
     let mut app = library_app();

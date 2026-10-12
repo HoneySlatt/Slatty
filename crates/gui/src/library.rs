@@ -9,9 +9,10 @@ use std::rc::Rc;
 
 use iced::Task;
 use iced::futures::{SinkExt, Stream, StreamExt};
+use slatty_core::db::Db;
 use slatty_core::library::{self, LibraryCache, LibraryGame};
 use slatty_core::overview::{self, GameOverview};
-use slatty_core::settings::TwinPlaytime;
+use slatty_core::settings::{self, TwinPlaytime};
 use slatty_core::store::{self, Store};
 
 use crate::work::tokens_for;
@@ -104,6 +105,48 @@ impl Filters {
     pub fn any(&self) -> bool {
         *self != Filters::default()
     }
+
+    fn flags(&mut self) -> [(&'static str, &mut bool); 7] {
+        [
+            ("gog", &mut self.gog),
+            ("steam", &mut self.steam),
+            ("added", &mut self.added),
+            ("windows", &mut self.windows),
+            ("linux", &mut self.linux),
+            ("achievements", &mut self.achievements),
+            ("cloud-saves", &mut self.cloud_saves),
+        ]
+    }
+
+    /// How they are kept in the settings: the names of those on, comma-separated.
+    fn key(mut self) -> String {
+        let on: Vec<&str> = self
+            .flags()
+            .into_iter()
+            .filter(|(_, on)| **on)
+            .map(|(name, _)| name)
+            .collect();
+        on.join(",")
+    }
+
+    fn from_key(key: &str) -> Filters {
+        let mut f = Filters::default();
+        for (name, on) in f.flags() {
+            *on = key.split(',').any(|k| k == name);
+        }
+        f
+    }
+}
+
+/// Whether the filters are kept for the next start, and those kept.
+pub fn kept_filters(db: &Db) -> slatty_core::error::Result<(bool, Option<Filters>)> {
+    if !settings::remember_filters(db)? {
+        return Ok((false, None));
+    }
+    Ok((
+        true,
+        settings::library_filters(db)?.map(|k| Filters::from_key(&k)),
+    ))
 }
 
 impl App {
@@ -159,10 +202,25 @@ impl App {
 
     pub fn set_filters(&mut self, f: Filters) -> Task<Message> {
         self.filters = f;
+        if self.remember_filters {
+            self.keep_filters();
+        }
         if (f.achievements || f.cloud_saves) && !self.overview_complete() {
             return self.scan_overview(false);
         }
         Task::none()
+    }
+
+    /// Keeps the filters shown for the next start, or none once Remember filters is off. Kept as
+    /// they change rather than on quitting, which a session closing or a crash would skip.
+    pub fn keep_filters(&mut self) {
+        let Some(core) = &self.core else {
+            return;
+        };
+        let key = self.remember_filters.then(|| self.filters.key());
+        if let Err(e) = settings::set_library_filters(&core.db, key.as_deref()) {
+            self.notify_error(e.to_string());
+        }
     }
 
     /// Saved once the scan is done: writing the cache after each game stalls the interface.

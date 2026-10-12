@@ -799,6 +799,16 @@ impl App {
                 )),
                 None,
             ),
+            setting(
+                wide,
+                "Remember filters",
+                switch(
+                    self.remember_filters,
+                    SettingsMsg::RememberFilters,
+                    "The library's filters stay as you left them at the next start.",
+                ),
+                None,
+            ),
         ];
         // Only Steam's games make a game owned on both.
         if self.steam.on {

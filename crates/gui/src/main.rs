@@ -226,6 +226,8 @@ pub struct App {
     pub achievements_view: Option<iced::widget::scrollable::Viewport>,
     pub filters: Filters,
     pub filters_open: bool,
+    /// Whether the filters are kept for the next start (Settings → Library).
+    pub remember_filters: bool,
     pub selected: Option<String>,
     pub panel: Option<Panel>,
     /// Game whose achievements fill the Achievements tab.
@@ -355,6 +357,7 @@ impl Default for App {
             achievements_view: None,
             filters: Filters::default(),
             filters_open: false,
+            remember_filters: false,
             selected: None,
             panel: None,
             achievements_game: None,
@@ -777,6 +780,12 @@ impl App {
                 self.sort_keys.fill(boot.sort_keys);
                 if let Some(sort) = boot.sort {
                     self.sort = sort;
+                }
+                // Achievements and cloud saves filters wait for GOG's data: the library, set
+                // below, reads what is missing.
+                self.remember_filters = boot.remember_filters;
+                if let Some(filters) = boot.filters {
+                    self.filters = filters;
                 }
                 if let Some(width) = boot.cover_width {
                     self.card_width = width.clamp(COVER_WIDTHS.0, COVER_WIDTHS.1);
