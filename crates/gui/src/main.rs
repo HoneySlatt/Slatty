@@ -14,6 +14,7 @@ mod notify;
 mod play;
 mod presets;
 mod runners;
+mod scaled;
 mod settings;
 mod steam;
 #[cfg(test)]
@@ -239,6 +240,8 @@ pub struct App {
     pub overview: HashMap<String, GameOverview>,
     pub overview_busy: bool,
     pub covers: HashMap<String, image::Handle>,
+    /// The grid's covers made at the size they are drawn.
+    pub scaled: scaled::ScaledCovers,
     pub images: HashMap<String, image::Handle>,
     pub images_requested: HashSet<String>,
     pub notice: Option<Notice>,
@@ -368,6 +371,7 @@ impl Default for App {
             overview: HashMap::new(),
             overview_busy: false,
             covers: HashMap::new(),
+            scaled: Default::default(),
             images: HashMap::new(),
             images_requested: HashSet::new(),
             notice: None,
@@ -467,6 +471,10 @@ pub enum Message {
     OpenPanel(Panel),
     ClosePanel,
     Cover(String, Option<PathBuf>),
+    /// Covers made at this width for the grid: per game, the cover and its copy, if any.
+    CoversScaled(u32, Vec<(String, PathBuf, Option<PathBuf>)>),
+    /// The window's scale, known or changed.
+    Rescaled(f32),
     /// The covers found in the account's cache at start, by game id.
     CachedCovers(HashMap<String, PathBuf>),
     /// How these installed games can be started, read from their folders; then the game whose
@@ -518,10 +526,11 @@ pub enum Message {
 }
 
 /// The window gaining or losing the focus, as a message; its other events send none.
-fn focus_message((_, event): (iced::window::Id, iced::window::Event)) -> Option<Message> {
+fn window_message((_, event): (iced::window::Id, iced::window::Event)) -> Option<Message> {
     match event {
         iced::window::Event::Focused => Some(Message::Notify(notify::NotifyMsg::Focus(true))),
         iced::window::Event::Unfocused => Some(Message::Notify(notify::NotifyMsg::Focus(false))),
+        iced::window::Event::Rescaled(scale) => Some(Message::Rescaled(scale)),
         _ => None,
     }
 }
@@ -554,6 +563,8 @@ impl Message {
                 | Message::Frame(_)
                 | Message::WindowResized(_)
                 | Message::Cover(..)
+                | Message::CoversScaled(..)
+                | Message::Rescaled(_)
                 | Message::Steam(steam::SteamMsg::Cover(..))
                 | Message::CachedCovers(_)
                 | Message::Image(..)
@@ -621,10 +632,15 @@ impl App {
     fn boot() -> (Self, Task<Message>) {
         (
             App::default(),
-            Task::perform(
-                async { boot::started().await.map(Box::new) },
-                Message::Booted,
-            ),
+            Task::batch([
+                Task::perform(
+                    async { boot::started().await.map(Box::new) },
+                    Message::Booted,
+                ),
+                iced::window::latest()
+                    .and_then(iced::window::scale_factor)
+                    .map(Message::Rescaled),
+            ]),
         )
     }
 
@@ -665,7 +681,7 @@ impl App {
             downloads,
             steam_games,
             steam_downloads,
-            iced::window::events().filter_map(focus_message),
+            iced::window::events().filter_map(window_message),
             keyboard::listen().filter_map(key_message),
             iced::window::close_requests().map(|_| Message::CloseRequested),
             iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),
@@ -944,10 +960,17 @@ impl App {
                 self.edit = None;
             }
             Message::Cover(id, Some(path)) => {
-                self.covers.insert(id, image::Handle::from_path(path));
+                self.covers
+                    .insert(id.clone(), image::Handle::from_path(path));
+                return self.scale_covers(Some(vec![id]));
             }
             Message::Cover(_, None) => {}
-            Message::CachedCovers(found) => return self.covers_cached(found),
+            Message::CachedCovers(found) => {
+                let missing = self.covers_cached(found);
+                return Task::batch([missing, self.scale_covers(None)]);
+            }
+            Message::CoversScaled(width, made) => self.covers_scaled(width, made),
+            Message::Rescaled(scale) => return self.rescaled(scale),
             Message::LaunchOptions(read, play) => {
                 self.launch_options.extend(read);
                 if let Some(game_id) = play {

@@ -333,7 +333,12 @@ impl App {
                 }
             }
             EditMsg::Cancel => self.edit = None,
-            EditMsg::Save => self.save_edit(),
+            EditMsg::Save => {
+                let game_id = self.edit.as_ref().map(|d| d.game_id.clone());
+                self.save_edit();
+                // A cover chosen or reset: the grid's copy is made from it.
+                return self.scale_covers(game_id.map(|id| vec![id]));
+            }
         }
         Task::none()
     }

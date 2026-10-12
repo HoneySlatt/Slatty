@@ -226,6 +226,7 @@ impl App {
                 return Task::batch([
                     self.read_steam_installed(),
                     self.download_covers(),
+                    self.scale_covers(None),
                     count_achievements(apps),
                     self.fetch_owned(),
                 ]);
@@ -235,7 +236,8 @@ impl App {
             SteamMsg::Cover(id, Some(path)) if self.steam.on && self.steam.images => {
                 self.covers
                     .insert(id.clone(), iced::widget::image::Handle::from_path(&path));
-                self.steam.covers.insert(id, path);
+                self.steam.covers.insert(id.clone(), path);
+                return self.scale_covers(Some(vec![id]));
             }
             SteamMsg::Cover(..) => {}
             SteamMsg::Installed(games) if self.steam.on => {

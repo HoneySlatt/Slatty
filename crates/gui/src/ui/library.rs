@@ -270,7 +270,7 @@ impl App {
     }
 
     pub(super) fn card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let art: Element<'_, Message> = match self.cover(&g.id) {
+        let art: Element<'_, Message> = match self.grid_cover(&g.id) {
             Some(h) => image(h)
                 .content_fit(ContentFit::Cover)
                 .width(Length::Fill)

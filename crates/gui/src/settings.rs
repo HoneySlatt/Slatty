@@ -517,6 +517,7 @@ impl App {
                 if let Err(e) = settings::set_cover_width(&core.db, self.card_width) {
                     self.notify_error(e.to_string());
                 }
+                return self.resize_covers();
             }
             SettingsMsg::Preset(preset) => {
                 if let Err(e) = settings::set_interface_theme(&core.db, preset.key()) {

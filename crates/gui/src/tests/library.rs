@@ -423,6 +423,54 @@ fn store_filters_keep_the_games_of_the_stores_ticked() {
     );
 }
 
+/// The grid shows a cover's copy made at the card's size once it arrives, for the cover it was
+/// made from and the size it was made at; a copy made at another size is dropped.
+#[test]
+fn the_grid_shows_covers_made_at_the_cards_size() {
+    let mut app = library_app();
+    app.card_width = 150.0;
+    let cover = PathBuf::from("/covers/7.jpg");
+    let copy = PathBuf::from("/scaled/300/7.jpg");
+    app.covers
+        .insert("7".into(), iced::widget::image::Handle::from_path(&cover));
+    let shown = |app: &App| match app.grid_cover("7") {
+        Some(iced::widget::image::Handle::Path(_, path)) => path,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(shown(&app), cover, "the cover until its copy is made");
+
+    // Made only once the window's scale is known.
+    let _ = app.update(Message::Rescaled(2.0));
+    let _ = app.update(Message::CoversScaled(
+        300,
+        vec![("7".into(), cover.clone(), Some(copy.clone()))],
+    ));
+    assert_eq!(shown(&app), copy);
+
+    // Another cover chosen since: shown as it is until its own copy is made.
+    let mine = PathBuf::from("/custom/7/cover.jpg");
+    app.customs.insert(
+        "7".into(),
+        slatty_core::custom::Custom {
+            cover: Some(mine.clone()),
+            ..Default::default()
+        },
+    );
+    assert_eq!(shown(&app), mine);
+    app.customs.clear();
+
+    // Larger covers: made again; one made at the old size and arriving late is dropped.
+    let _ = app.update(Message::Settings(crate::settings::SettingsMsg::CoverSize(
+        crate::settings::CoverSize(130),
+    )));
+    assert_eq!(shown(&app), cover);
+    let _ = app.update(Message::CoversScaled(
+        300,
+        vec![("7".into(), cover.clone(), Some(copy))],
+    ));
+    assert_eq!(shown(&app), cover);
+}
+
 /// With Remember filters on, the filters are kept as they change and come back at the next start;
 /// off, nothing is kept and the library starts unfiltered.
 #[test]
