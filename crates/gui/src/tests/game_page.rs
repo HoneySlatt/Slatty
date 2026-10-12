@@ -487,6 +487,20 @@ fn play_waits_for_the_game_folder_read_after_start() {
     assert!(app.play.is_some());
 }
 
+/// While that folder is read (a drive waking up takes seconds), the game page says the game is
+/// starting, and Play cannot be pressed again meanwhile.
+#[test]
+fn play_says_starting_while_the_game_folder_is_read() {
+    let mut app = library_app();
+    open(&mut app, "3", None);
+    let _ = app.update(Message::Play("3".into()));
+    assert_eq!(app.launch_reading.as_deref(), Some("3"));
+    let mut ui = render(&app);
+    assert!(ui.find("Play").is_err());
+    ui.click("Starting…").unwrap();
+    assert!(ui.into_messages().next().is_none(), "nothing to press");
+}
+
 #[test]
 fn a_game_with_several_launch_options_asks_once_which_to_start() {
     let mut app = library_app();

@@ -270,6 +270,8 @@ impl App {
                     None,
                     false,
                 )
+            } else if self.launch_reading.as_deref() == Some(g.id.as_str()) {
+                big(Icon::Play, "Starting…".into(), None, false)
             } else {
                 big(
                     Icon::Play,
