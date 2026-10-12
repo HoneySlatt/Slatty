@@ -689,8 +689,9 @@ enum ImageSource {
     SteamGridDb,
 }
 
-/// Widest image kept: key art is drawn at most window-wide.
-const IMAGE_MAX_WIDTH: u32 = 2560;
+/// Widest image kept: key art is drawn at most window-wide, and a 4K screen is 3840 pixels wide.
+/// At 2560, key art shown on a screen 2880 pixels wide was made smaller, then larger again.
+const IMAGE_MAX_WIDTH: u32 = 3840;
 
 /// Scales an image wider than `IMAGE_MAX_WIDTH` down to it, in the cache, once, so it is decoded
 /// quickly and fills less graphics memory: some of GOG's key art is 7184 pixels wide, about 100 MB
@@ -711,8 +712,12 @@ fn fit_image(path: PathBuf) -> PathBuf {
     let Some(full) = reader().and_then(|r| r.decode().ok()) else {
         return path;
     };
-    // Area averaging: quick, and smooth when shrinking.
-    let fitted = full.thumbnail(IMAGE_MAX_WIDTH, u32::MAX);
+    // Once per image: the sharpest of the filters `image` offers rather than the quickest.
+    let fitted = full.resize(
+        IMAGE_MAX_WIDTH,
+        u32::MAX,
+        image::imageops::FilterType::Lanczos3,
+    );
     let mut out = Vec::new();
     // Key art is JPEG; anything with transparency stays lossless.
     let (written, ext) = if fitted.color().has_alpha() {
@@ -968,7 +973,8 @@ mod tests {
     fn oversized_images_are_scaled_down_once_in_the_cache() {
         let dir = std::env::temp_dir().join(format!("slatty-fit-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let small = jpeg(1920, 1080);
+        // As wide as a screen of 2880 pixels shows it: kept whole.
+        let small = jpeg(2880, 1080);
         std::fs::write(dir.join("small.jpg"), &small).unwrap();
         assert_eq!(fit_image(dir.join("small.jpg")), dir.join("small.jpg"));
         assert_eq!(
@@ -985,7 +991,7 @@ mod tests {
             "the cache holds the small copy"
         );
         let size = image::open(&fitted).unwrap();
-        assert_eq!((size.width(), size.height()), (2560, 670));
+        assert_eq!((size.width(), size.height()), (3840, 1005));
         assert_eq!(fit_image(fitted.clone()), fitted, "scaled once");
 
         // An opaque PNG goes back to the cache as a JPEG, under a name that says so.
@@ -996,7 +1002,7 @@ mod tests {
         std::fs::write(dir.join("logo.png"), png).unwrap();
         assert_eq!(fit_image(dir.join("logo.png")), dir.join("logo.jpg"));
         assert!(!dir.join("logo.png").exists());
-        assert_eq!(image::open(dir.join("logo.jpg")).unwrap().width(), 2560);
+        assert_eq!(image::open(dir.join("logo.jpg")).unwrap().width(), 3840);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
