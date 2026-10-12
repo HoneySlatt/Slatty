@@ -17,7 +17,7 @@
           sourceRoot = "source/dummy-service";
           buildPhase = "$CC -O2 -static communication.c -o GalaxyCommunication.exe";
           installPhase = "install -Dm644 GalaxyCommunication.exe $out/share/slatty/GalaxyCommunication.exe";
-          meta.license = pkgs.lib.licenses.asl20;
+          meta.license = pkgs.comet-gog.meta.license;
         };
       # Loaded by the interface at run time (window, input, graphics, the file chooser).
       runtimeLibs =
