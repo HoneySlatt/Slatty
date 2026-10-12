@@ -116,6 +116,7 @@ pub async fn run(ctx: &Ctx, args: InstallersArgs) -> Result<()> {
         }
         args.dlc.clone()
     };
+    // Run again after a pause, it is taken up as started: its folder is checked to be still there.
     let job = OfflineJob {
         game_id: args.game_id.clone(),
         os: os.into(),
@@ -123,7 +124,8 @@ pub async fn run(ctx: &Ctx, args: InstallersArgs) -> Result<()> {
         dlcs,
         folder,
         state: QUEUED.into(),
-    };
+    }
+    .taken_up(&ctx.db)?;
     println!(
         "Downloading the {os} installers of {} into {}. Ctrl+C pauses; run the same command to \
          resume.",

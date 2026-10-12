@@ -353,6 +353,11 @@ fn resumed_installers_start_beside_a_paused_install_and_stay_resumed() {
     let _ = app.update(Message::Offline(OfflineMsg::Resume("5".into())));
     assert!(app.offline_run.is_none());
     assert_eq!(app.queue, [entry("5")]);
+    // Saved as started: its run checks that its folder is still there (a drive unplugged).
+    assert_eq!(
+        OfflineJob::load(&db, "5").unwrap().unwrap().state,
+        DOWNLOADING
+    );
     let (queue, stopped) = crate::boot::downloads_from(
         app.queue.clone(),
         Vec::new(),

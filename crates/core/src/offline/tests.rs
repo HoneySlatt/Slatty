@@ -535,6 +535,29 @@ fn jobs_are_kept_until_forgotten() {
     assert!(other.save(&db).is_err());
 }
 
+/// The same download asked for again (the command run again after a pause) keeps its state, so
+/// that its run checks its folder is still there; one into another folder starts anew.
+#[test]
+fn a_download_asked_for_again_keeps_its_state() {
+    let db = Db::in_memory().unwrap();
+    let job = |folder: &str, state: &str| OfflineJob {
+        game_id: "1".into(),
+        os: "windows".into(),
+        languages: vec!["en".into()],
+        dlcs: Vec::new(),
+        folder: PathBuf::from(folder),
+        state: state.into(),
+    };
+    job("/tmp/[FAKE] Game", PAUSED).save(&db).unwrap();
+    let asked = job("/tmp/[FAKE] Game", crate::installer::QUEUED);
+    assert_eq!(asked.taken_up(&db).unwrap().state, PAUSED);
+    let elsewhere = job("/tmp/[FAKE] Other", crate::installer::QUEUED);
+    assert_eq!(
+        elsewhere.taken_up(&db).unwrap().state,
+        crate::installer::QUEUED
+    );
+}
+
 /// The interface asking for a game's installers while the command line downloads them leaves the
 /// command line's job as it is.
 #[test]
@@ -646,12 +669,17 @@ async fn a_started_download_whose_folder_is_gone_is_not_made_again() {
     assert!(matches!(run(job.clone()).await, Err(Error::NotFound(_))));
     assert!(!dir.join("drive").exists());
     assert_eq!(OfflineJob::load(&db, "1").unwrap().unwrap().state, FAILED);
-    // A job never started goes on (here to GOG, out of reach).
+    // A job never started goes on (here to GOG, out of reach), its folder made first: stopped
+    // before a byte came, it is taken up again rather than taken for a drive gone.
     let queued = OfflineJob {
         state: crate::installer::QUEUED.into(),
         ..job
     };
     assert!(!matches!(run(queued).await, Err(Error::NotFound(_))));
+    assert!(dir.join("drive/GOG/[FAKE] Game").is_dir());
+    let cut_off = OfflineJob::load(&db, "1").unwrap().unwrap();
+    assert_eq!(cut_off.state, DOWNLOADING);
+    assert!(!matches!(run(cut_off).await, Err(Error::NotFound(_))));
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

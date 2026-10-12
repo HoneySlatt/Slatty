@@ -8,7 +8,7 @@ use std::time::Instant;
 use iced::Task;
 use iced::futures::Stream;
 use slatty_core::account::Account;
-use slatty_core::installer::{Progress, QUEUED};
+use slatty_core::installer::{DOWNLOADING, Progress, QUEUED};
 use slatty_core::offline::{self, Offer, OfflineJob};
 use tokio_util::sync::CancellationToken;
 
@@ -324,11 +324,12 @@ impl App {
                 }
             }
             OfflineMsg::Resume(game_id) => {
-                // Saved, so that it still waits in the queue after a restart.
+                // Saved as started, as if cut off: it still waits first after a restart, and its
+                // run checks that its folder is still there (a drive unplugged).
                 let saved = OfflineJob::load(&core.db, &game_id).and_then(|job| {
                     job.map_or(Ok(()), |job| {
                         OfflineJob {
-                            state: QUEUED.into(),
+                            state: DOWNLOADING.into(),
                             ..job
                         }
                         .save_if_idle(&core.db, &core.dirs)

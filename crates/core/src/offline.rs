@@ -284,6 +284,18 @@ impl OfflineJob {
         Ok(stmt.query_map([], row)?.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// `self` asked for again: a started download of the game into the same folder keeps its
+    /// state, so that its run checks the folder is still there (a drive unplugged).
+    pub fn taken_up(mut self, db: &Db) -> Result<Self> {
+        if let Some(saved) = Self::load(db, &self.game_id)?
+            && saved.folder == self.folder
+            && saved.state != QUEUED
+        {
+            self.state = saved.state;
+        }
+        Ok(self)
+    }
+
     /// `save`, refused while the game's installers download, from this process or another: that
     /// download's own job is not replaced.
     pub fn save_if_idle(&self, db: &Db, dirs: &Dirs) -> Result<()> {
@@ -330,13 +342,13 @@ pub async fn run(
 ) -> Result<Vec<PathBuf>> {
     let _busy = lock(dirs, &job.game_id)?;
     let mut job = job.clone();
-    // The installers folder a started download was going into is gone, its drive unplugged or its
-    // share not mounted: starting again would fill the empty mount point instead.
-    let root = job.folder.parent().unwrap_or(&job.folder);
-    if job.state != QUEUED && !root.is_dir() {
+    // The folder a started download was going into is gone, its drive unplugged or its share not
+    // mounted: starting again would fill the empty mount point instead. Every run makes its
+    // folder first, so a started one had it.
+    if job.state != QUEUED && !job.folder.is_dir() {
         let missing = Error::NotFound(format!(
             "{} is missing: is its drive mounted?",
-            root.display()
+            job.folder.display()
         ));
         job.state = FAILED.into();
         job.save(db)?;
@@ -345,6 +357,7 @@ pub async fn run(
     job.state = DOWNLOADING.into();
     job.save(db)?;
     let result = async {
+        crate::paths::ensure_dir(&job.folder)?;
         let offer = offer(http, tokens, &job.game_id).await?;
         let chosen = offer.chosen(&job.os, &job.languages, &job.dlcs);
         if chosen.is_empty() {
