@@ -52,7 +52,7 @@ fn queued_job(app: &App, game_id: &str) {
     OfflineJob {
         game_id: game_id.into(),
         os: "windows".into(),
-        language: "en".into(),
+        languages: vec!["en".into()],
         dlcs: Vec::new(),
         folder: "/tmp/[FAKE] installers/[FAKE] Game".into(),
         state: QUEUED.into(),
@@ -108,30 +108,65 @@ fn the_drawer_offers_each_system_with_its_languages_and_dlc() {
         "a folder of the game's own"
     );
     assert!(ui.find("Download").is_ok());
-    drop(ui);
+    // Each language GOG offers, to tick.
+    ui.click("French").unwrap();
+    assert!(ui.into_messages().any(|m| matches!(
+        m,
+        Message::Offline(OfflineMsg::ToggleLanguage(id, l)) if id == "5" && l == "fr"
+    )));
     let c = choice(&app);
-    assert_eq!((c.os.as_str(), c.language.as_str()), ("windows", "en"));
+    assert_eq!(
+        (c.os.as_str(), c.languages.as_slice()),
+        ("windows", &["en".to_string()][..])
+    );
     assert_eq!(c.dlcs, ["50"]);
     assert_eq!(c.size(), 4 << 30);
 
-    let _ = app.update(Message::Offline(OfflineMsg::Language(
-        "5".into(),
-        "fr".into(),
-    )));
+    let toggle = |app: &mut App, l: &str| {
+        let _ = app.update(Message::Offline(OfflineMsg::ToggleLanguage(
+            "5".into(),
+            l.into(),
+        )));
+    };
+    toggle(&mut app, "fr");
+    assert_eq!(choice(&app).languages, ["en", "fr"]);
+    assert_eq!(
+        choice(&app).size(),
+        7 << 30,
+        "the game in both, the DLC in English"
+    );
+    toggle(&mut app, "en");
     let _ = app.update(Message::Offline(OfflineMsg::ToggleDlc(
         "5".into(),
         "50".into(),
     )));
     assert_eq!(choice(&app).size(), 3 << 30);
+    // The last language stays.
+    toggle(&mut app, "fr");
+    assert_eq!(choice(&app).languages, ["fr"]);
     // Linux has no French installer, and no DLC.
     let _ = app.update(Message::Offline(OfflineMsg::System(
         "5".into(),
         "linux".into(),
     )));
     let c = choice(&app);
-    assert_eq!((c.os.as_str(), c.language.as_str()), ("linux", "en"));
+    assert_eq!(
+        (c.os.as_str(), c.languages.as_slice()),
+        ("linux", &["en".to_string()][..])
+    );
     assert!(c.dlcs.is_empty());
-    assert!(render(&app).find("[FAKE] Extra").is_err());
+    let mut ui = render(&app);
+    assert!(ui.find("[FAKE] Extra").is_err());
+    // One language only: named, not offered as a choice.
+    assert!(ui.find("French").is_err());
+    assert!(
+        ui.find(
+            "GOG offers these installers in this language only. Many hold every language of the \
+             game, chosen in its own options."
+        )
+        .is_ok()
+    );
+    snapshot(&mut ui, "installers-one-language");
 }
 
 #[test]
@@ -269,7 +304,7 @@ fn start_up_resumes_installers_cut_off_first_and_keeps_the_stopped_ones_apart() 
     let job = |id: &str, state: &str| OfflineJob {
         game_id: id.into(),
         os: "windows".into(),
-        language: "en".into(),
+        languages: vec!["en".into()],
         dlcs: Vec::new(),
         folder: PathBuf::new(),
         state: state.into(),

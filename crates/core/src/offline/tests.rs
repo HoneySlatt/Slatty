@@ -150,15 +150,26 @@ fn every_system_and_the_dlc_with_installers_are_offered() {
     assert_eq!(offer.dlcs[0].id, "2");
     assert_eq!(offer.dlcs_for("windows").count(), 1);
     assert_eq!(offer.dlcs_for("mac").count(), 0);
+    let languages = |chosen: Vec<&Installer>| -> Vec<String> {
+        chosen.iter().map(|i| i.language.clone()).collect()
+    };
+    let langs = |l: &[&str]| -> Vec<String> { l.iter().map(|l| l.to_string()).collect() };
     // The DLC has no French installer: its English one comes with the French game.
-    let chosen = offer.chosen("windows", "fr", &["2".into()]);
-    assert_eq!(
-        chosen.iter().map(|i| &i.language).collect::<Vec<_>>(),
-        ["fr", "en"]
-    );
+    let chosen = offer.chosen("windows", &langs(&["fr"]), &["2".into()]);
+    assert_eq!(languages(chosen.clone()), ["fr", "en"]);
     assert_eq!(chosen[1].files[0].downlink, "https://api.gog.com/d/5");
-    assert!(offer.chosen("linux", "en", &[]).is_empty());
-    assert_eq!(offer.chosen("mac", "en", &["2".into()]).len(), 1);
+    // Several languages: the game's in each, the DLC's in those it has.
+    assert_eq!(
+        languages(offer.chosen("windows", &langs(&["en", "fr"]), &["2".into()])),
+        ["en", "fr", "en"]
+    );
+    // None of those offered: English.
+    assert_eq!(
+        languages(offer.chosen("windows", &langs(&["de"]), &[])),
+        ["en"]
+    );
+    assert!(offer.chosen("linux", &langs(&["en"]), &[]).is_empty());
+    assert_eq!(offer.chosen("mac", &langs(&["en"]), &["2".into()]).len(), 1);
 }
 
 #[test]
@@ -388,7 +399,7 @@ fn jobs_are_kept_until_forgotten() {
     let job = OfflineJob {
         game_id: "1".into(),
         os: "windows".into(),
-        language: "fr".into(),
+        languages: vec!["fr".into(), "de".into()],
         dlcs: vec!["2".into(), "3".into()],
         folder: PathBuf::from("/tmp/[FAKE] Game"),
         state: crate::installer::QUEUED.into(),
@@ -416,7 +427,7 @@ fn a_discarded_job_deletes_only_its_unfinished_files() {
     let job = |folder: PathBuf| OfflineJob {
         game_id: "1".into(),
         os: "windows".into(),
-        language: "en".into(),
+        languages: vec!["en".into()],
         dlcs: Vec::new(),
         folder,
         state: PAUSED.into(),

@@ -1,4 +1,4 @@
-//! The Installers drawer: GOG's offline installers of a game, chosen by system and language, to
+//! The Installers drawer: GOG's offline installers of a game, chosen by system and languages, to
 //! download and keep.
 
 use crate::theme::text;
@@ -82,20 +82,33 @@ impl App {
         .font(theme::font())
         .padding([10, 14])
         .width(Length::Fill);
-        let id = g.id.clone();
-        let languages: Vec<Language> = c
-            .offer
-            .languages(&c.os)
-            .into_iter()
-            .map(|l| Language(l.into()))
-            .collect();
-        let language = pick_list(languages, Some(Language(c.language.clone())), move |l| {
-            Message::Offline(OfflineMsg::Language(id.clone(), l.0))
-        })
-        .style(theme::select)
-        .font(theme::font())
-        .padding([10, 14])
-        .width(Length::Fill);
+        // GOG often makes one set of installers holding every language, listed in one.
+        let offered = c.offer.languages(&c.os);
+        let language: Element<'a, Message> = match offered.as_slice() {
+            [only] => column![
+                text(language_name(only)).size(15),
+                note(
+                    "GOG offers these installers in this language only. Many hold every \
+                     language of the game, chosen in its own options."
+                ),
+            ]
+            .spacing(10)
+            .into(),
+            _ => Column::with_children(offered.into_iter().map(|l| {
+                let (id, language) = (g.id.clone(), l.to_string());
+                checkbox(c.languages.iter().any(|c| c == l))
+                    .label(language_name(l))
+                    .text_size(14)
+                    .font(theme::font())
+                    .on_toggle(move |_| {
+                        Message::Offline(OfflineMsg::ToggleLanguage(id.clone(), language.clone()))
+                    })
+                    .into()
+            }))
+            .push(note("A DLC without these languages comes in English."))
+            .spacing(10)
+            .into(),
+        };
         let mut sections = vec![
             titled(
                 Icon::Package,
@@ -108,17 +121,7 @@ impl App {
                 .into(),
                 0.0,
             ),
-            titled(
-                Icon::Globe,
-                "Language",
-                column![
-                    language,
-                    note("A DLC without this language comes in English."),
-                ]
-                .spacing(10)
-                .into(),
-                0.0,
-            ),
+            titled(Icon::Globe, "Languages", language, 0.0),
         ];
         let dlcs: Vec<&offline::Dlc> = c.offer.dlcs_for(&c.os).collect();
         if !dlcs.is_empty() {

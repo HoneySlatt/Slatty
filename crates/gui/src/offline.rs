@@ -34,7 +34,8 @@ pub fn of_entry(entry: &str) -> Option<&str> {
 pub struct Choice {
     pub offer: Offer,
     pub os: String,
-    pub language: String,
+    /// Never empty.
+    pub languages: Vec<String>,
     pub dlcs: Vec<String>,
 }
 
@@ -44,34 +45,45 @@ impl Choice {
         let mut choice = Choice {
             offer,
             os: String::new(),
-            language: "en".into(),
+            languages: vec!["en".into()],
             dlcs: Vec::new(),
         };
         choice.set_system(os);
         choice
     }
 
-    /// Another system: the language chosen if it has it, else English, else its first; and every
-    /// DLC it has installers for.
+    /// Another system: the languages chosen it has, else English, else its first; and every DLC
+    /// it has installers for.
     fn set_system(&mut self, os: &str) {
-        let languages = self.offer.languages(os);
-        if !languages.contains(&self.language.as_str()) {
-            self.language = if languages.contains(&"en") {
-                "en".into()
+        let offered = self.offer.languages(os);
+        self.languages.retain(|l| offered.contains(&l.as_str()));
+        if self.languages.is_empty() {
+            let first = if offered.contains(&"en") {
+                Some("en")
             } else {
-                languages
-                    .first()
-                    .map_or_else(String::new, |l| l.to_string())
+                offered.first().copied()
             };
+            self.languages.extend(first.map(String::from));
         }
         self.dlcs = self.offer.dlcs_for(os).map(|d| d.id.clone()).collect();
         self.os = os.into();
     }
 
+    /// Adds or takes away a language, but never the last one.
+    fn toggle_language(&mut self, language: String) {
+        match self.languages.iter().position(|l| *l == language) {
+            Some(_) if self.languages.len() == 1 => {}
+            Some(i) => {
+                self.languages.remove(i);
+            }
+            None => self.languages.push(language),
+        }
+    }
+
     /// The download, as GOG's API rounds the sizes.
     pub fn size(&self) -> u64 {
         self.offer
-            .chosen(&self.os, &self.language, &self.dlcs)
+            .chosen(&self.os, &self.languages, &self.dlcs)
             .iter()
             .map(|i| i.size())
             .sum()
@@ -101,7 +113,7 @@ pub enum OfflineMsg {
     Load(String),
     Offered(String, Result<Offer, String>),
     System(String, String),
-    Language(String, String),
+    ToggleLanguage(String, String),
     ToggleDlc(String, String),
     /// Puts the choice made in the drawer in the queue.
     Download(String),
@@ -150,9 +162,9 @@ impl App {
                     c.set_system(&os);
                 }
             }
-            OfflineMsg::Language(game_id, language) => {
+            OfflineMsg::ToggleLanguage(game_id, language) => {
                 if let Some(OfflineView::Ready(c)) = self.offline_views.get_mut(&game_id) {
-                    c.language = language;
+                    c.toggle_language(language);
                 }
             }
             OfflineMsg::ToggleDlc(game_id, dlc) => {
@@ -179,7 +191,7 @@ impl App {
                 let job = OfflineJob {
                     game_id: game_id.clone(),
                     os: c.os.clone(),
-                    language: c.language.clone(),
+                    languages: c.languages.clone(),
                     dlcs: c.dlcs.clone(),
                     folder: offline::folder_for(&root, &c.offer.title),
                     state: QUEUED.into(),

@@ -77,7 +77,7 @@ that have some, and the folder they would go into, and downloads nothing.
 |---|---|
 | `--download` | Downloads them, each file checked against GOG's MD5 sums |
 | `--os windows\|linux\|mac` | Which system's installers. Default: Windows |
-| `--language <code>` | A language GOG offers them in (`fr`), as listed. Default: English, which a DLC without the language comes in |
+| `--language <code>…` | One or more languages GOG offers them in (`fr de`), as listed. Default: English, which a DLC without those languages comes in |
 | `--no-dlc` | The game's installer only. By default those of every DLC GOG offers one for come with it |
 | `--dlc <id>…` | Only these DLC |
 | `--dir <folder>` | The folder that receives the game's folder of installers. Remembered as the default, which is `GOG` in your download folder |

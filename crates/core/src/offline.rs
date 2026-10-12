@@ -96,31 +96,39 @@ impl Offer {
             .filter(move |d| d.installers.iter().any(|i| i.os == os))
     }
 
-    /// The installers to download: the game's for `os` in `language`, and the one of each DLC in
-    /// `dlcs`, in `language` when it has it.
-    pub fn chosen(&self, os: &str, language: &str, dlcs: &[String]) -> Vec<&Installer> {
-        let Some(game) = pick(&self.installers, os, language) else {
-            return Vec::new();
-        };
-        std::iter::once(game)
+    /// The installers to download: the game's for `os` in each of `languages`, and those of each
+    /// DLC in `dlcs`, in the languages it has.
+    pub fn chosen(&self, os: &str, languages: &[String], dlcs: &[String]) -> Vec<&Installer> {
+        let game = pick(&self.installers, os, languages);
+        if game.is_empty() {
+            return game;
+        }
+        game.into_iter()
             .chain(
                 self.dlcs
                     .iter()
                     .filter(|d| dlcs.contains(&d.id))
-                    .filter_map(|d| pick(&d.installers, os, language)),
+                    .flat_map(|d| pick(&d.installers, os, languages)),
             )
             .collect()
     }
 }
 
-/// The installer for `os` in `language`, else in English, else the first.
-fn pick<'a>(installers: &'a [Installer], os: &str, language: &str) -> Option<&'a Installer> {
-    let mut of_os = installers.iter().filter(|i| i.os == os);
-    of_os
-        .clone()
-        .find(|i| i.language.eq_ignore_ascii_case(language))
-        .or_else(|| of_os.clone().find(|i| i.language == "en"))
-        .or_else(|| of_os.next())
+/// The installers for `os` in `languages`; when it has none of them, the English one, else the
+/// first.
+fn pick<'a>(installers: &'a [Installer], os: &str, languages: &[String]) -> Vec<&'a Installer> {
+    let of_os = || installers.iter().filter(|i| i.os == os);
+    let wanted: Vec<&Installer> = of_os()
+        .filter(|i| languages.iter().any(|l| i.language.eq_ignore_ascii_case(l)))
+        .collect();
+    if !wanted.is_empty() {
+        return wanted;
+    }
+    of_os()
+        .find(|i| i.language == "en")
+        .or_else(|| of_os().next())
+        .into_iter()
+        .collect()
 }
 
 pub async fn offer(http: &Client, tokens: &Tokens, game_id: &str) -> Result<Offer> {
@@ -213,7 +221,8 @@ pub fn folder_for(root: &Path, title: &str) -> PathBuf {
 pub struct OfflineJob {
     pub game_id: String,
     pub os: String,
-    pub language: String,
+    /// Kept in the `language` column, separated by commas.
+    pub languages: Vec<String>,
     pub dlcs: Vec<String>,
     /// The game's own folder, where its installers go.
     pub folder: PathBuf,
@@ -233,7 +242,7 @@ impl OfflineJob {
             params![
                 self.game_id,
                 self.os,
-                self.language,
+                self.languages.join(","),
                 self.dlcs.join(","),
                 self.folder.to_string_lossy(),
                 self.state,
@@ -274,16 +283,17 @@ impl OfflineJob {
 }
 
 fn row(r: &rusqlite::Row) -> rusqlite::Result<OfflineJob> {
+    let list = |s: String| {
+        s.split(',')
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect()
+    };
     Ok(OfflineJob {
         game_id: r.get(0)?,
         os: r.get(1)?,
-        language: r.get(2)?,
-        dlcs: r
-            .get::<_, String>(3)?
-            .split(',')
-            .filter(|s| !s.is_empty())
-            .map(String::from)
-            .collect(),
+        languages: list(r.get(2)?),
+        dlcs: list(r.get(3)?),
         folder: PathBuf::from(r.get::<_, String>(4)?),
         state: r.get(5)?,
     })
@@ -307,7 +317,7 @@ pub async fn run(
     job.save(db)?;
     let result = async {
         let offer = offer(http, tokens, &job.game_id).await?;
-        let chosen = offer.chosen(&job.os, &job.language, &job.dlcs);
+        let chosen = offer.chosen(&job.os, &job.languages, &job.dlcs);
         if chosen.is_empty() {
             return Err(Error::NotFound(format!(
                 "GOG offers no {} installer of {}",

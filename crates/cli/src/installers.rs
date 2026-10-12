@@ -26,9 +26,9 @@ pub struct InstallersArgs {
     /// System the installers are for
     #[arg(long, value_enum, default_value = "windows")]
     os: System,
-    /// Language code, e.g. fr (English when GOG has no installer in it)
-    #[arg(long, default_value = "en")]
-    language: String,
+    /// Language codes, e.g. fr de (English when GOG has none of them)
+    #[arg(long, num_args = 1.., value_name = "CODE", default_value = "en")]
+    language: Vec<String>,
     /// Only the game's installer (by default those of every DLC GOG offers one for come with it)
     #[arg(long, conflicts_with = "dlc")]
     no_dlc: bool,
@@ -119,7 +119,7 @@ pub async fn run(ctx: &Ctx, args: InstallersArgs) -> Result<()> {
     let job = OfflineJob {
         game_id: args.game_id.clone(),
         os: os.into(),
-        language: args.language.clone(),
+        languages: args.language.clone(),
         dlcs,
         folder,
         state: QUEUED.into(),

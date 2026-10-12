@@ -447,8 +447,10 @@ slatty uninstall <id> [--delete-prefix]
 
 GOG lets you keep the setup programs of the games you own, which install them without GOG or any
 launcher. For a GOG game, installed or not, **Manage** (⋮) → **Download installers…** opens
-**Offline installers**: choose the system (Windows, Linux or macOS, as GOG offers them), the
-language and the DLC, then **Download**. A DLC without the language chosen comes in English.
+**Offline installers**: choose the system (Windows, Linux or macOS, as GOG offers them), one or
+more languages and the DLC, then **Download**. A DLC without the languages chosen comes in
+English. When GOG offers the installers in one language only, it is named rather than offered:
+many such installers hold every language of the game, chosen in its own options.
 
 The installers go into a folder named after the game, under the installers folder
 (**Settings → Installs**, `GOG` in your download folder until changed). They download through the
@@ -460,7 +462,7 @@ Downloads tab deletes only the files left unfinished.
 
 ```sh
 slatty installers <id>                             # what GOG offers
-slatty installers <id> --download --os linux --language fr
+slatty installers <id> --download --os linux --language fr de
 ```
 
 ## Steam games
