@@ -96,7 +96,7 @@ impl App {
                 container(
                     Column::new()
                         .push(note(
-                            "Only files installed by slatty are deleted; anything else in the \
+                            "Only files installed by SlattyLauncher are deleted; anything else in the \
                              folder is kept. The Wine prefix holds most local saves.",
                         ))
                         .push(choice(

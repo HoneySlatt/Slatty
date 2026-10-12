@@ -470,7 +470,7 @@ fn uninstall_notice(added: bool, r: &UninstallReport) -> String {
             format!("{} other file(s) kept in its folder.", r.kept.len())
         } else {
             format!(
-                "{} file(s) not installed by slatty kept in the game folder.",
+                "{} file(s) not installed by SlattyLauncher kept in the game folder.",
                 r.kept.len()
             )
         });

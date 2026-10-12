@@ -39,7 +39,8 @@ fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, 
             )
         } else {
             format!(
-                "{} was not installed by slatty; use `forget` to drop it without touching its files",
+                "{} was not installed by SlattyLauncher; use `forget` to drop it without touching \
+                 its files",
                 install.title
             )
         })

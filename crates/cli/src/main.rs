@@ -32,7 +32,7 @@ enum Command {
     /// Game library
     #[command(subcommand)]
     Library(library::LibraryCommand),
-    /// Download, verify and register a Windows build (Galaxy depots)
+    /// Download, verify and register a game's Windows or Linux build
     Install(install::InstallArgs),
     /// Register a game that is already installed
     Import(games::ImportArgs),
@@ -45,11 +45,11 @@ enum Command {
     Installs,
     /// Show the command that would launch a game
     LaunchSpec { game_id: String },
-    /// Remove a game from slatty's records; files, prefix and saves are left untouched
+    /// Remove a game from SlattyLauncher's records; files, prefix and saves are left untouched
     Forget { game_id: String },
     /// Show whether a game runs isolated from your files, or change it
     Isolation(games::IsolationArgs),
-    /// Delete a game installed by slatty (saves are kept unless asked otherwise)
+    /// Delete a game installed by SlattyLauncher (saves are kept unless asked otherwise)
     Uninstall(maintenance::UninstallArgs),
     /// Check an installed game's files, optionally repairing them
     Verify(maintenance::VerifyArgs),

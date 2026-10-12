@@ -21,8 +21,10 @@ pub struct ImportArgs {
     /// Import a game installed by Heroic (read-only)
     #[arg(long, value_name = "GAME_ID", conflicts_with = "dir")]
     from_heroic: Option<String>,
+    /// GOG product id of the game, needed for a native Linux build
     #[arg(long)]
     game_id: Option<String>,
+    /// How the game runs: native (a Linux build), umu (Proton) or wine
     #[arg(long, value_enum)]
     runner: Option<RunnerKind>,
     /// Proton directory (contains the `proton` script)
@@ -159,7 +161,7 @@ pub fn forget(ctx: &Ctx, game_id: &str) -> Result<()> {
     get(ctx, game_id)?;
     let install = slatty_core::maintenance::forget(&ctx.db, &ctx.dirs, game_id)?;
     println!(
-        "{} is no longer managed by slatty: {} and its prefix are untouched.",
+        "{} is no longer managed by SlattyLauncher: {} and its prefix are untouched.",
         shown(&install.title),
         shown(install.path.display())
     );

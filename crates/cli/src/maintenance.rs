@@ -38,7 +38,9 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
         shown(&install.title),
         shown(install.path.display())
     );
-    println!("Only files installed by slatty are deleted; anything else in that folder is kept.");
+    println!(
+        "Only files installed by SlattyLauncher are deleted; anything else in that folder is kept."
+    );
     match (args.delete_prefix, install.runner.prefix()) {
         (true, Some(p)) => println!(
             "The Wine prefix {} is deleted after its saves (users folder, registry, ProgramData) \
@@ -56,7 +58,7 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
     println!("{} file(s) removed.", r.removed_files);
     if !r.kept.is_empty() {
         println!(
-            "Kept in {} (not installed by slatty):",
+            "Kept in {} (not installed by SlattyLauncher):",
             install.path.display()
         );
         // Named by the game, which writes its folder.
@@ -196,7 +198,7 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
                 ),
                 Err(slatty_core::Error::Refused(_)) => {
                     println!(
-                        "{:>12}  {:<40} not installed by slatty",
+                        "{:>12}  {:<40} not installed by SlattyLauncher",
                         install.game_id,
                         shown(&install.title)
                     )
@@ -308,7 +310,9 @@ pub async fn content(ctx: &Ctx, args: ContentArgs) -> Result<()> {
     }
     if !args.add_dlc.is_empty() || !args.remove_dlc.is_empty() {
         let record = slatty_core::installer::InstallRecord::load(&ctx.dirs, &args.game_id)?
-            .ok_or_else(|| anyhow::anyhow!("{} was not installed by slatty", args.game_id))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("{} was not installed by SlattyLauncher", args.game_id)
+            })?;
         let mut dlcs: Vec<String> = record
             .dlcs
             .into_iter()
