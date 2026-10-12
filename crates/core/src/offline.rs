@@ -435,30 +435,50 @@ pub async fn download<S: Source>(
     cancel: &CancellationToken,
 ) -> Result<Vec<PathBuf>> {
     let partial_of = |name: &str| folder.join(format!("{name}.{game_id}{DOWNLOAD_SUFFIX}"));
-    let mut files: Vec<(usize, String, u64)> = Vec::new();
+    let mut files: Vec<(usize, String, u64, Option<Checksums>)> = Vec::new();
     for part in 0..source.parts() {
         let name = file_name(&source.name(part).await?)?;
         let size = source.size(part).await?;
         // GOG lists an installer under each language it speaks: one file, downloaded once.
-        match files.iter().find(|(_, n, _)| *n == name) {
-            Some((_, _, s)) if *s == size => {}
+        match files.iter().find(|(_, n, _, _)| *n == name) {
+            Some((_, _, s, _)) if *s == size => continue,
             Some(_) => {
                 return Err(Error::parse(
                     "listing installers",
                     format!("two files are named {name}"),
                 ));
             }
-            None => files.push((part, name, size)),
+            None => {}
         }
+        // Read with the link, before any bytes: their signed address does not last, and sums that
+        // cannot be read stop the download before it fetches gigabytes for nothing.
+        let sums = if there(&folder.join(&name), size)?.is_some() {
+            None
+        } else {
+            match source.checksums(part).await? {
+                Some(xml) => Some(parse_checksums(&xml)?),
+                None => None,
+            }
+        };
+        if sums
+            .as_ref()
+            .is_some_and(|s| s.chunks.iter().any(|c| c.to >= size))
+        {
+            return Err(Error::parse(
+                "reading an installer's checksums",
+                "a chunk past the end of the file",
+            ));
+        }
+        files.push((part, name, size, sums));
     }
     crate::paths::ensure_dir(folder)?;
     let mut p = Progress {
         files_total: files.len(),
-        bytes_total: files.iter().map(|(_, _, size)| size).sum(),
+        bytes_total: files.iter().map(|(_, _, size, _)| size).sum(),
         ..Progress::default()
     };
     let mut present = 0;
-    for (_, name, size) in &files {
+    for (_, name, size, _) in &files {
         if let Some(have) = there(&folder.join(name), *size)? {
             present += have;
         } else if let Ok(m) = std::fs::symlink_metadata(partial_of(name)) {
@@ -475,17 +495,13 @@ pub async fn download<S: Source>(
         )));
     }
     let mut done = Vec::new();
-    for (part, name, size) in files {
+    for (part, name, size, sums) in files {
         let target = folder.join(&name);
         if there(&target, size)?.is_none() {
             let partial = partial_of(&name);
             fetch(source, part, size, &partial, &mut p, progress, cancel).await?;
-            let sums = match source.checksums(part).await? {
-                Some(xml) => Some(parse_checksums(&xml)?),
-                None => None,
-            };
             if let Some(sums) = sums {
-                check(source, part, size, &partial, &sums, cancel).await?;
+                check(source, part, &partial, &sums, cancel).await?;
             }
             std::fs::rename(&partial, &target)
                 .map_err(|e| Error::io(format!("rename {}", partial.display()), e))?;
@@ -658,17 +674,10 @@ fn is_md5(s: &str) -> bool {
 async fn check<S: Source>(
     source: &S,
     part: usize,
-    size: u64,
     partial: &Path,
     sums: &Checksums,
     cancel: &CancellationToken,
 ) -> Result<()> {
-    if sums.chunks.iter().any(|c| c.to >= size) {
-        return Err(Error::parse(
-            "reading an installer's checksums",
-            "a chunk past the end of the file",
-        ));
-    }
     let mut bad = damaged(partial, sums, cancel).await?;
     if bad.as_ref().is_some_and(|b| !b.is_empty()) {
         let file = std::fs::OpenOptions::new()

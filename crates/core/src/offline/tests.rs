@@ -12,8 +12,6 @@ struct Fake {
     drop_once: Mutex<Option<(usize, u64)>>,
     corrupt_once: Mutex<Option<(usize, u64)>>,
     opened: Mutex<Vec<(usize, u64, u64)>>,
-    /// Cancelled as the sums are asked for: Pause pressed once the file is downloaded.
-    pause_at_sums: Option<CancellationToken>,
 }
 
 impl Fake {
@@ -26,7 +24,6 @@ impl Fake {
             drop_once: Mutex::new(None),
             corrupt_once: Mutex::new(None),
             opened: Mutex::new(Vec::new()),
-            pause_at_sums: None,
         }
     }
 }
@@ -76,9 +73,6 @@ impl Source for Fake {
     }
 
     async fn checksums(&self, part: usize) -> Result<Option<Vec<u8>>> {
-        if let Some(pause) = &self.pause_at_sums {
-            pause.cancel();
-        }
         Ok(self.files[part].2.clone().map(String::into_bytes))
     }
 }
@@ -343,11 +337,16 @@ async fn a_pause_during_the_check_stops_it() {
     let dir = temp("check-paused");
     let a = data(5000, 24);
     let sums = Some(xml("setup_fake.exe", &a, 1024));
-    let mut fake = Fake::new(vec![("setup_fake.exe", a.clone(), sums.clone())]);
+    let fake = Fake::new(vec![("setup_fake.exe", a.clone(), sums.clone())]);
     let pause = CancellationToken::new();
-    fake.pause_at_sums = Some(pause.clone());
+    // Pressed once every byte is there.
+    let pressed = |p: Progress| {
+        if p.bytes_done == p.bytes_total {
+            pause.cancel();
+        }
+    };
     assert!(matches!(
-        download(&fake, &dir, "1", &|_| {}, &pause).await,
+        download(&fake, &dir, "1", &pressed, &pause).await,
         Err(Error::Cancelled)
     ));
     assert!(dir.join("setup_fake.exe.1.slatty-dl").exists());
@@ -359,6 +358,25 @@ async fn a_pause_during_the_check_stops_it() {
         fake.opened.lock().unwrap().is_empty(),
         "nothing downloaded again"
     );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// GOG's sums are read with each file's link, before any bytes: their signed address does not
+/// last, and sums that cannot be read stop the download before it fetches gigabytes for nothing.
+#[tokio::test]
+async fn sums_that_cannot_be_read_stop_the_download_before_it_begins() {
+    let dir = temp("sums-first");
+    let a = data(5000, 26);
+    let fake = Fake::new(vec![
+        (
+            "setup_fake.exe",
+            a.clone(),
+            Some(xml("setup_fake.exe", &a, 1024)),
+        ),
+        ("setup_fake-1.bin", a, Some("<broken>".into())),
+    ]);
+    assert!(run_download(&fake, &dir).await.is_err());
+    assert!(fake.opened.lock().unwrap().is_empty(), "nothing downloaded");
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
