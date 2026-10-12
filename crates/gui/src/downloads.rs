@@ -103,9 +103,12 @@ impl App {
         Task::none()
     }
 
-    /// Whether downloads wait for the game running to close (Settings → Installs).
+    /// Whether downloads wait for the game running to close (Settings → Installs): one started
+    /// here, or a Steam game the client runs.
     pub fn held_for_play(&self) -> bool {
-        self.pause_while_playing && self.play.as_ref().is_some_and(|p| p.running)
+        self.pause_while_playing
+            && (self.play.as_ref().is_some_and(|p| p.running)
+                || (self.steam.on && !self.steam.running.is_empty()))
     }
 
     /// Whether a download started now would wait in the queue.

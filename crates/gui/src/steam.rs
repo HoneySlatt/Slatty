@@ -373,12 +373,19 @@ impl App {
             SteamMsg::Running(apps) => {
                 let now: BTreeSet<String> = apps.into_iter().map(store::steam_id).collect();
                 let ended: Vec<String> = self.steam.running.difference(&now).cloned().collect();
+                let was_playing = !self.steam.running.is_empty();
                 self.steam.running = now;
                 if self.steam.starting.as_ref().is_some_and(|(id, asked)| {
                     self.steam.running.contains(id) || asked.elapsed() > START_WAIT
                 }) {
                     self.steam.starting = None;
                 }
+                // Downloads wait while a game runs (Settings → Installs), a Steam game too.
+                let downloads = match (was_playing, self.steam.running.is_empty()) {
+                    (false, false) => self.hold_for_play(),
+                    (true, true) => self.start_next(),
+                    _ => Task::none(),
+                };
                 // Steam records the session as the game ends, and the achievements it unlocked;
                 // the window may have the focus back later, which reads the play times again too.
                 if !ended.is_empty() {
@@ -388,7 +395,7 @@ impl App {
                         .iter()
                         .filter_map(|g| store::steam_app(&g.id))
                         .collect();
-                    let mut tasks = vec![read_played(), count_achievements(apps)];
+                    let mut tasks = vec![read_played(), count_achievements(apps), downloads];
                     for id in ended {
                         self.achievements.remove(&id);
                         let shown = [&self.selected, &self.achievements_game]
@@ -400,6 +407,7 @@ impl App {
                     }
                     return Task::batch(tasks);
                 }
+                return downloads;
             }
             // Steam's own window takes over; what it installs or removes shows once the launcher's
             // window has the focus again (`NotifyMsg::Focus`), and a game it was asked to install

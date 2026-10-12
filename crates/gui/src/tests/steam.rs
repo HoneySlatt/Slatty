@@ -332,6 +332,33 @@ fn a_steam_game_shows_as_running_while_steam_runs_it() {
     assert!(render(&app).find("Play").is_ok());
 }
 
+/// Downloads pause while a Steam game runs too (Settings → Installs), and go on once it ends.
+#[test]
+fn a_steam_game_pauses_the_download_running_until_it_ends() {
+    use super::offline::{installing_6, paused_install_job};
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    installing_6(&mut app);
+    paused_install_job(&app);
+    let _ = app.update(Message::Steam(SteamMsg::Running([440].into())));
+    assert!(matches!(
+        app.install_views.get("6"),
+        Some(InstallView::Running { cancel, .. }) if cancel.is_cancelled()
+    ));
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert_eq!(app.queue, ["6"], "first in the queue");
+    // Still running at the next look: nothing starts.
+    let _ = app.update(Message::Steam(SteamMsg::Running([440].into())));
+    assert!(app.auto_resume.is_none());
+    let _ = app.update(Message::Steam(SteamMsg::Running(Default::default())));
+    assert_eq!(
+        app.auto_resume.as_deref(),
+        Some("6"),
+        "planned, then started"
+    );
+}
+
 /// Steam's achievements, read from the client's files, show in the Achievements tab sorted with
 /// GOG's and on the game's page, without any GOG account; they are never unlocked or cleared by
 /// hand, and a share of players Steam does not know is not made up.
