@@ -231,6 +231,11 @@ pub enum SettingsMsg {
     SaveRoot,
     BrowseRoot,
     BrowsedRoot(Option<PathBuf>),
+    /// The folder offline installers go into, handled as the installation path.
+    InstallersRootInput(String),
+    SaveInstallersRoot,
+    BrowseInstallersRoot,
+    BrowsedInstallersRoot(Option<PathBuf>),
     Proton(ProtonChoice),
     /// Writes the default theme to the theme file, to start a custom one from.
     CreateTheme,
@@ -332,6 +337,39 @@ impl App {
                 return self.update_settings(SettingsMsg::SaveRoot);
             }
             SettingsMsg::BrowsedRoot(None) => {}
+            SettingsMsg::InstallersRootInput(v) => {
+                let path = PathBuf::from(v.trim());
+                self.installers_root = v;
+                if path.is_absolute() {
+                    let _ = settings::set_installers_root(&core.db, &path);
+                }
+            }
+            SettingsMsg::SaveInstallersRoot => {
+                let path = PathBuf::from(self.installers_root.trim());
+                if !path.is_absolute() {
+                    self.notify_error("The installers folder must be absolute.".into());
+                } else if let Err(e) = settings::set_installers_root(&core.db, &path) {
+                    self.notify_error(e.to_string());
+                }
+            }
+            SettingsMsg::BrowseInstallersRoot => {
+                let start = PathBuf::from(self.installers_root.trim());
+                return Task::perform(
+                    async move {
+                        let mut dialog = rfd::AsyncFileDialog::new().set_title("Installers folder");
+                        if start.is_dir() {
+                            dialog = dialog.set_directory(&start);
+                        }
+                        dialog.pick_folder().await.map(|f| f.path().to_path_buf())
+                    },
+                    |picked| Message::Settings(SettingsMsg::BrowsedInstallersRoot(picked)),
+                );
+            }
+            SettingsMsg::BrowsedInstallersRoot(Some(folder)) => {
+                self.installers_root = folder.display().to_string();
+                return self.update_settings(SettingsMsg::SaveInstallersRoot);
+            }
+            SettingsMsg::BrowsedInstallersRoot(None) => {}
             SettingsMsg::Proton(choice) => {
                 match settings::set_default_proton(&core.db, &choice.0) {
                     Ok(()) => self.proton = Some(choice.0),

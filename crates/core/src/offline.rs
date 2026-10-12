@@ -301,13 +301,7 @@ pub async fn run(
     progress: &(dyn Fn(Progress) + Sync),
     cancel: &CancellationToken,
 ) -> Result<Vec<PathBuf>> {
-    crate::paths::check_game_id(&job.game_id)?;
-    let _busy = crate::lock::try_acquire(
-        &dirs
-            .locks()
-            .join(format!("installers-{}.lock", job.game_id)),
-    )?
-    .ok_or_else(|| Error::Refused("the installers of this game are already downloading".into()))?;
+    let _busy = lock(dirs, &job.game_id)?;
     let mut job = job.clone();
     job.state = DOWNLOADING.into();
     job.save(db)?;
@@ -342,6 +336,37 @@ pub async fn run(
         }
     }
     result
+}
+
+/// Forgets `game_id`'s job and deletes what it left unfinished, the staged files in its folder;
+/// the installers already downloaded stay.
+pub fn discard(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
+    let _busy = lock(dirs, game_id)?;
+    let Some(job) = OfflineJob::load(db, game_id)? else {
+        return Ok(());
+    };
+    if let Ok(entries) = std::fs::read_dir(&job.folder) {
+        for e in entries.flatten() {
+            let staged = e
+                .file_name()
+                .to_str()
+                .is_some_and(|n| n.ends_with(DOWNLOAD_SUFFIX));
+            if staged && e.file_type().is_ok_and(|t| !t.is_dir()) {
+                std::fs::remove_file(e.path())
+                    .map_err(|err| Error::io(format!("delete {}", e.path().display()), err))?;
+            }
+        }
+        // Only when nothing else is in it.
+        let _ = std::fs::remove_dir(&job.folder);
+    }
+    OfflineJob::delete(db, game_id)
+}
+
+/// Held while a game's installers download or are discarded, from any process.
+fn lock(dirs: &Dirs, game_id: &str) -> Result<crate::lock::FileLock> {
+    crate::paths::check_game_id(game_id)?;
+    crate::lock::try_acquire(&dirs.locks().join(format!("installers-{game_id}.lock")))?
+        .ok_or_else(|| Error::Refused("the installers of this game are downloading".into()))
 }
 
 /// Files to download whole: their bytes, names and GOG's sums.

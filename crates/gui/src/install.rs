@@ -136,7 +136,7 @@ pub enum InstallMsg {
 
 impl App {
     /// The downloads wait for GOG, said once as they start waiting.
-    fn wait_for_gog(&mut self, e: String) -> Task<Message> {
+    pub(crate) fn wait_for_gog(&mut self, e: String) -> Task<Message> {
         let told = if !std::mem::replace(&mut self.waiting_told, true) {
             self.notify(
                 Kind::Downloads,
@@ -286,7 +286,7 @@ impl App {
                     self.notify_error("The install folder must be an absolute path.".into());
                     return Task::none();
                 }
-                if self.installing().is_some() {
+                if self.downloading() {
                     return self.enqueue(game_id);
                 }
                 let req = InstallRequest {
@@ -849,7 +849,9 @@ impl App {
         tasks.push(self.start_next());
         // The installs still waiting are planned, for their size.
         for game_id in self.queue.clone() {
-            tasks.push(self.update_install(InstallMsg::Prepare(game_id, None)));
+            if crate::offline::of_entry(&game_id).is_none() {
+                tasks.push(self.update_install(InstallMsg::Prepare(game_id, None)));
+            }
         }
         Task::batch(tasks)
     }

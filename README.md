@@ -33,6 +33,8 @@ files by default.
 - Every file checked against GOG's checksums; the game folder appears only once all are right.
 - Updates in place (automatically for games on their newest build), with GOG's binary patches when
   there are; DLC and language changes; verify, repair and uninstall.
+- GOG's offline installers kept in a folder, for Windows, Linux or macOS, checked against GOG's
+  MD5 sums.
 
 **Playing**
 - Windows games through [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and

@@ -1,4 +1,5 @@
-//! The Manage drawer: verify, repair, update and uninstall an installed game.
+//! The Manage drawer: verify, repair, update and uninstall an installed game, and download GOG's
+//! offline installers of any GOG game.
 
 use crate::theme::text;
 use iced::widget::{Column, button, column, container, row, scrollable};
@@ -11,7 +12,7 @@ use super::note;
 use crate::icons::Icon;
 use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, tokens};
-use crate::{App, Message};
+use crate::{App, Message, Panel};
 
 type Style = fn(&iced::Theme, button::Status) -> button::Style;
 
@@ -34,6 +35,9 @@ impl App {
         let id = || g.id.clone();
         if slatty_core::store::is_local(&g.id) {
             return self.manage_added(g, view.is_some_and(|v| v.confirm_uninstall), busy);
+        }
+        if !self.installs.contains_key(&g.id) {
+            return self.offline_section(g);
         }
         let on = |msg| (!busy).then(|| Message::Maintenance(msg));
         let files = column![
@@ -85,6 +89,7 @@ impl App {
                     .into(),
             );
         }
+        sections.push(self.offline_section(g));
         let uninstall = if view.is_some_and(|v| v.confirm_uninstall && !v.busy) {
             column![
                 note(
@@ -124,6 +129,34 @@ impl App {
             0.0,
         ));
         stacked(sections)
+    }
+
+    /// GOG's offline installers, opened in their own drawer, and where their download stands.
+    fn offline_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let status = if self.offline_run.as_ref().is_some_and(|r| r.game_id == g.id) {
+            "Downloading, in the Downloads tab."
+        } else if self.queue.contains(&crate::offline::entry(&g.id)) {
+            "Waiting in the Downloads tab."
+        } else if self.offline_stopped.iter().any(|(id, _)| *id == g.id) {
+            "Stopped: resume it in the Downloads tab."
+        } else {
+            "GOG's setup programs, kept in a folder to install the game without GOG."
+        };
+        titled(
+            Icon::Download,
+            "Offline installers",
+            column![
+                action(
+                    "Download installers…",
+                    Some(Message::OpenPanel(Panel::Installers)),
+                    theme::tonal
+                ),
+                note(status),
+            ]
+            .spacing(10)
+            .into(),
+            0.0,
+        )
     }
 
     /// A game added by hand: nothing to verify or update from GOG, only taking it out of the

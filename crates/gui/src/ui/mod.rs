@@ -10,6 +10,7 @@ pub mod format;
 mod game;
 mod game_settings;
 mod install;
+mod installers;
 mod library;
 mod manage;
 mod panels;

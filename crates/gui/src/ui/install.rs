@@ -380,7 +380,7 @@ impl App {
         info: &'a PlanInfo,
         wide: bool,
     ) -> Element<'a, Message> {
-        let busy = self.installing().is_some();
+        let busy = self.downloading();
         let width = if wide { Length::Fill } else { Length::Shrink };
         // While another game downloads, Start puts this one in the queue.
         let start = button(
@@ -419,7 +419,13 @@ impl App {
                 "{title} is downloading; this one waits in the queue until it is done."
             )))
         } else {
-            None
+            self.offline_run.as_ref().map(|run| {
+                note(format!(
+                    "The installers of {} are downloading; this one waits in the queue until \
+                     they are done.",
+                    self.title_of(&run.game_id)
+                ))
+            })
         };
         if wide {
             column![]

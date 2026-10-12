@@ -409,6 +409,39 @@ fn jobs_are_kept_until_forgotten() {
 }
 
 #[test]
+fn a_discarded_job_deletes_only_its_unfinished_files() {
+    let dir = temp("discard");
+    let dirs = Dirs::under(&dir.join("data"));
+    let db = Db::in_memory().unwrap();
+    let job = |folder: PathBuf| OfflineJob {
+        game_id: "1".into(),
+        os: "windows".into(),
+        language: "en".into(),
+        dlcs: Vec::new(),
+        folder,
+        state: PAUSED.into(),
+    };
+    let kept = dir.join("kept");
+    std::fs::create_dir(&kept).unwrap();
+    std::fs::write(kept.join("setup_fake.exe"), b"[FAKE] done").unwrap();
+    std::fs::write(kept.join("setup_fake-1.bin.slatty-dl"), b"[FAKE] half").unwrap();
+    job(kept.clone()).save(&db).unwrap();
+    discard(&db, &dirs, "1").unwrap();
+    assert!(OfflineJob::load(&db, "1").unwrap().is_none());
+    assert!(kept.join("setup_fake.exe").exists());
+    assert!(!kept.join("setup_fake-1.bin.slatty-dl").exists());
+
+    // A folder left empty goes too.
+    let emptied = dir.join("emptied");
+    std::fs::create_dir(&emptied).unwrap();
+    std::fs::write(emptied.join("setup_fake.exe.slatty-dl"), b"[FAKE] half").unwrap();
+    job(emptied.clone()).save(&db).unwrap();
+    discard(&db, &dirs, "1").unwrap();
+    assert!(!emptied.exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn installers_go_into_a_folder_named_after_the_game() {
     assert_eq!(
         folder_for(Path::new("/x"), "[FAKE] Game: Part 2"),

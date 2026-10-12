@@ -124,6 +124,7 @@ The interface follows Iced's state, message, update and view split:
 | `library` | Library sync, covers and images, shelves, sort and filters, kept lists and sort keys |
 | `scaled` | Covers and key art drawn from copies made at the size they are shown |
 | `install`, `downloads` | The Install drawer, the download, the queue |
+| `offline` | Offline installers: their drawer's choices, their download through the queue (entries `installers:<id>`) |
 | `maintenance`, `updates` | Verify, repair, uninstall, content changes; automatic updates |
 | `play`, `cloud`, `achievements` | A game session, cloud saves, achievements |
 | `steam` | Steam's games beside GOG's |
@@ -132,7 +133,7 @@ The interface follows Iced's state, message, update and view split:
 | `notify` | Cards in the window, desktop notifications |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress |
 | `theme`, `presets`, `icons` | Design tokens and widget styles, built-in themes, Lucide icons |
-| `ui/*` | The views: top bar and layers (`mod`), building blocks (`widgets`), pages (`library`, `game`, `achievements`, `settings`, `downloads`), drawers and dialogs (`install`, `game_settings`, `manage`, `cloud`, `edit`, `add`, `panels`), text shown to the user (`format`), `even_grid`, `pointer` |
+| `ui/*` | The views: top bar and layers (`mod`), building blocks (`widgets`), pages (`library`, `game`, `achievements`, `settings`, `downloads`), drawers and dialogs (`install`, `installers`, `game_settings`, `manage`, `cloud`, `edit`, `add`, `panels`), text shown to the user (`format`), `even_grid`, `pointer` |
 
 Views never name a colour: every colour, radius and motion comes from `theme::tokens()`, a built-in
 theme (`presets`) with `~/.config/slatty/theme.toml` over it ([theming](theming.md)).

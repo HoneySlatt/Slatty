@@ -11,6 +11,7 @@ mod library;
 mod login;
 mod maintenance;
 mod notify;
+mod offline;
 mod play;
 mod presets;
 mod runners;
@@ -157,6 +158,8 @@ pub enum Panel {
     Install,
     GameSettings,
     Manage,
+    /// GOG's offline installers, to download and keep.
+    Installers,
     Cloud,
     Achievements,
     Session,
@@ -309,6 +312,13 @@ pub struct App {
     pub drag: Option<downloads::Drag>,
     /// Installs finished since the start, the latest first, with their size.
     pub completed: Vec<(String, u64)>,
+    /// What GOG offers to download for the games whose Installers drawer opened.
+    pub offline_views: HashMap<String, offline::OfflineView>,
+    pub offline_run: Option<offline::OfflineRun>,
+    /// Installers paused, or stopped by the error given.
+    pub offline_stopped: Vec<(String, Option<String>)>,
+    /// Folder the installers go into, as typed.
+    pub installers_root: String,
     /// How the user renamed or illustrated games, and GOG's own titles to go back to.
     pub customs: HashMap<String, slatty_core::custom::Custom>,
     pub gog_titles: HashMap<String, String>,
@@ -416,6 +426,10 @@ impl Default for App {
             queue: Vec::new(),
             drag: None,
             completed: Vec::new(),
+            offline_views: HashMap::new(),
+            offline_run: None,
+            offline_stopped: Vec::new(),
+            installers_root: String::new(),
             customs: HashMap::new(),
             gog_titles: HashMap::new(),
             sort_keys: Default::default(),
@@ -507,6 +521,7 @@ pub enum Message {
     Install(InstallMsg),
     Notify(notify::NotifyMsg),
     Downloads(downloads::DownloadsMsg),
+    Offline(offline::OfflineMsg),
     Maintenance(MaintenanceMsg),
     Settings(SettingsMsg),
     Runners(runners::RunnersMsg),
@@ -575,6 +590,7 @@ impl Message {
                 | Message::Image(..)
                 | Message::Key(_)
                 | Message::Install(InstallMsg::Progress(..))
+                | Message::Offline(offline::OfflineMsg::Progress(..))
                 | Message::Maintenance(MaintenanceMsg::Progress(..))
                 | Message::Runners(runners::RunnersMsg::Progress(..))
                 // What arrives just after start, read off the interface thread, leaves the lists
@@ -764,6 +780,8 @@ impl App {
                 self.core = Some(boot.core);
                 self.account = boot.account;
                 self.library_root = boot.library_root.display().to_string();
+                self.installers_root = boot.installers_root.display().to_string();
+                self.offline_stopped = boot.offline_stopped;
                 self.proton = boot.proton;
                 self.runners.downloads = boot.proton_downloads;
                 self.runners.downloaded = boot.downloaded_protons;
@@ -1044,6 +1062,7 @@ impl App {
             }
             Message::Install(msg) => return self.update_install(msg),
             Message::Downloads(msg) => return self.update_downloads(msg),
+            Message::Offline(msg) => return self.update_offline(msg),
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Runners(msg) => return self.update_runners(msg),
@@ -1160,6 +1179,13 @@ impl App {
             work.push(format!(
                 "Downloading {title} ({:.0}%). It stops here and resumes where it stopped when SlattyLauncher starts again.",
                 ui::format::fraction(p) * 100.0
+            ));
+        }
+        if let Some(run) = &self.offline_run {
+            work.push(format!(
+                "Downloading the installers of {} ({:.0}%). It stops here and resumes where it stopped when SlattyLauncher starts again.",
+                self.title_of(&run.game_id),
+                ui::format::fraction(run.progress) * 100.0
             ));
         }
         for (id, m) in &self.maintenance {
@@ -1311,6 +1337,14 @@ impl App {
                     .is_none_or(|m| m.content.is_none() && !m.busy) =>
             {
                 self.update_maintenance(MaintenanceMsg::LoadContent(id))
+            }
+            Panel::Installers
+                if !matches!(
+                    self.offline_views.get(&id),
+                    Some(offline::OfflineView::Loading | offline::OfflineView::Ready(_))
+                ) =>
+            {
+                self.update_offline(offline::OfflineMsg::Load(id))
             }
             Panel::Achievements => match self.achievements.get(&id) {
                 Some(Loadable::Ready(list)) => self.request_images(achievement_icons(list, true)),

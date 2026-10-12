@@ -1,6 +1,6 @@
-//! The download queue: installs chosen while another one downloads, started one after the other
-//! in an order that can be changed. Each waits as an install job in the `queued` state, so the
-//! queue outlives a restart; its order is kept in the settings.
+//! The download queue: installs and offline installers chosen while another download runs, started
+//! one after the other in an order that can be changed. Each waits as an install or offline job in
+//! the `queued` state, so the queue outlives a restart; its order is kept in the settings.
 
 use std::path::PathBuf;
 
@@ -8,6 +8,7 @@ use iced::Task;
 use slatty_core::installer::{InstallJob, QUEUED};
 
 use crate::install::{InstallMsg, InstallView};
+use crate::offline::{OfflineMsg, of_entry};
 use crate::{App, Message, Panel};
 
 /// Height of a queue row and the space between two, which tell a row from a pointer position.
@@ -36,6 +37,9 @@ impl App {
     pub fn update_downloads(&mut self, msg: DownloadsMsg) -> Task<Message> {
         match msg {
             DownloadsMsg::Remove(game_id) => {
+                if let Some(id) = of_entry(&game_id) {
+                    return self.update_offline(OfflineMsg::Remove(id.to_owned()));
+                }
                 self.drag = None;
                 self.queue.retain(|id| *id != game_id);
                 self.save_queue();
@@ -133,10 +137,7 @@ impl App {
     pub fn start_next(&mut self) -> Task<Message> {
         // One being planned to start is as good as downloading. Waiting for GOG, the queue is
         // tried again by itself (`InstallMsg::Retry`).
-        if self.installing().is_some()
-            || self.auto_resume.is_some()
-            || self.downloads_waiting.is_some()
-        {
+        if self.downloading() || self.auto_resume.is_some() || self.downloads_waiting.is_some() {
             return Task::none();
         }
         let waiting = |kind| {
@@ -156,12 +157,20 @@ impl App {
             }
             return self.update_install(InstallMsg::Prepare(game_id, None));
         }
-        if waiting(crate::Interrupted::Paused).is_some() || self.queue.is_empty() {
+        let paused = waiting(crate::Interrupted::Paused).is_some()
+            || self
+                .offline_stopped
+                .iter()
+                .any(|(_, failed)| failed.is_none());
+        if paused || self.queue.is_empty() {
             return Task::none();
         }
         self.drag = None;
         let game_id = self.queue.remove(0);
         self.save_queue();
+        if let Some(id) = of_entry(&game_id) {
+            return self.update_offline(OfflineMsg::Start(id.to_owned()));
+        }
         match self.install_views.remove(&game_id) {
             Some(InstallView::Queued(info)) => {
                 self.install_views

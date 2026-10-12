@@ -10,6 +10,7 @@ use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::install::Platform;
 use slatty_core::installer::Progress;
 use slatty_core::library::{LibraryGame, NotInstallable};
+use slatty_core::store::Store;
 
 use super::format::*;
 use super::panels::runner_label;
@@ -32,16 +33,19 @@ impl App {
     /// Key art with the title and Play across the window, the summary cards below it.
     pub fn game_page<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let mut tools = row![].spacing(6);
+        let tool = |ic, panel| {
+            button(icon(ic, 20.0, tokens().text))
+                .padding(8)
+                .on_press(Message::OpenPanel(panel))
+                .style(theme::ghost)
+        };
         if self.installs.contains_key(&g.id) {
-            let tool = |ic, panel| {
-                button(icon(ic, 20.0, tokens().text))
-                    .padding(8)
-                    .on_press(Message::OpenPanel(panel))
-                    .style(theme::ghost)
-            };
             tools = tools
                 .push(tool(Icon::SlidersHorizontal, Panel::GameSettings))
                 .push(tool(Icon::EllipsisVertical, Panel::Manage));
+        } else if slatty_core::store::of(&g.id).is_ok_and(|s| s == Store::Gog) {
+            // Not installed: its offline installers can still be kept.
+            tools = tools.push(tool(Icon::EllipsisVertical, Panel::Manage));
         }
         let back = button(
             row![

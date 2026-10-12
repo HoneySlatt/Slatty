@@ -15,6 +15,7 @@ use crate::downloads::{DownloadsMsg, ROW_HEIGHT, ROW_SPACING};
 use crate::icons::{Icon, icon};
 use crate::install::{Cancelling, InstallMsg, InstallView};
 use crate::maintenance::MaintenanceMsg;
+use crate::offline::{OfflineMsg, OfflineRun, OfflineView, of_entry};
 use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Interrupted, Message, Panel};
 
@@ -42,7 +43,10 @@ impl App {
             .iter()
             .filter_map(|(id, g)| Some((id, g.update.as_ref().filter(|u| u.started)?)))
             .collect();
-        let active = usize::from(self.installing().is_some()) + stopped.len() + steam.len();
+        let active = usize::from(self.downloading())
+            + stopped.len()
+            + self.offline_stopped.len()
+            + steam.len();
         let header = column![
             text("Downloads").size(32).font(bold()),
             text(format!(
@@ -59,8 +63,14 @@ impl App {
         if let Some((id, _, _)) = self.installing() {
             downloading = downloading.push(self.download_card(id));
         }
+        if let Some(run) = &self.offline_run {
+            downloading = downloading.push(self.offline_card(run));
+        }
         for (id, kind) in &stopped {
             downloading = downloading.push(self.stopped_card(id, *kind));
+        }
+        for (id, error) in &self.offline_stopped {
+            downloading = downloading.push(self.offline_stopped_card(id, error.as_deref()));
         }
         if let Some(e) = &self.downloads_waiting {
             downloading = downloading.push(
@@ -280,9 +290,115 @@ impl App {
         .into()
     }
 
+    /// Offline installers downloading: progress, speed, time left and Pause.
+    fn offline_card<'a>(&'a self, run: &'a OfflineRun) -> Element<'a, Message> {
+        let p = run.progress;
+        let speed = run.rate.received_per_second();
+        let left = run
+            .rate
+            .per_second()
+            .filter(|s| *s > 0.0)
+            .map(|s| p.bytes_total.saturating_sub(p.bytes_done) as f64 / s);
+        let stat = |s: String| text(s).size(15).width(Length::Fill);
+        let details = column![
+            row![
+                column![
+                    text(self.title_of(&run.game_id)).size(20).font(semibold()),
+                    row![
+                        icon(Icon::Folder, 16.0, tokens().muted),
+                        text(format!("Offline installers, into {}", run.folder.display()))
+                            .size(14)
+                            .color(tokens().muted)
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+                ]
+                .spacing(6)
+                .width(Length::Fill),
+                round_button(
+                    Icon::Pause,
+                    Message::Offline(OfflineMsg::Pause(run.game_id.clone()))
+                ),
+            ]
+            .align_y(Alignment::Start),
+            row![
+                progress_bar(0.0..=1.0, fraction(p))
+                    .girth(10)
+                    .style(theme::progress),
+                text(format!("{:.0}%", fraction(p) * 100.0))
+                    .size(16)
+                    .font(semibold())
+                    .width(56)
+                    .align_x(Alignment::End),
+            ]
+            .spacing(14)
+            .align_y(Alignment::Center),
+            row![
+                stat(amount(p)),
+                vertical_rule(18.0),
+                stat(speed.map_or_else(|| "—".into(), slatty_core::units::speed)),
+                vertical_rule(18.0),
+                stat(left.map_or_else(
+                    || "Estimating…".into(),
+                    |s| format!("{} remaining", remaining(s))
+                )),
+            ]
+            .spacing(20)
+            .align_y(Alignment::Center),
+        ]
+        .spacing(16)
+        .width(Length::Fill);
+        container(
+            row![self.cover_art(&run.game_id, 124.0), details]
+                .spacing(24)
+                .align_y(Alignment::Center),
+        )
+        .padding(16)
+        .width(Length::Fill)
+        .style(theme::card)
+        .into()
+    }
+
+    /// Offline installers paused or stopped by an error: resumed or removed from here.
+    fn offline_stopped_card<'a>(
+        &'a self,
+        id: &'a str,
+        error: Option<&'a str>,
+    ) -> Element<'a, Message> {
+        let status = match error {
+            None => "Offline installers paused. They resume where they stopped.".to_string(),
+            Some(e) => format!("Offline installers failed: {e}"),
+        };
+        container(
+            row![
+                self.cover_art(id, 48.0),
+                column![
+                    text(self.title_of(id)).size(16).font(semibold()),
+                    note(status),
+                ]
+                .spacing(4)
+                .width(Length::Fill),
+                button(text("Resume").size(14))
+                    .padding([10, 18])
+                    .on_press(Message::Offline(OfflineMsg::Resume(id.to_string())))
+                    .style(theme::primary),
+                button(text("Remove").size(14))
+                    .padding([10, 18])
+                    .on_press(Message::Offline(OfflineMsg::Remove(id.to_string())))
+                    .style(theme::tonal),
+            ]
+            .spacing(16)
+            .align_y(Alignment::Center),
+        )
+        .padding([12, 16])
+        .width(Length::Fill)
+        .style(theme::card)
+        .into()
+    }
+
     /// A download stopped before its end: resumed or discarded from here.
     fn stopped_card<'a>(&'a self, id: &'a str, kind: Interrupted) -> Element<'a, Message> {
-        let busy = self.installing().is_some();
+        let busy = self.downloading();
         container(
             row![
                 self.cover_art(id, 48.0),
@@ -320,46 +436,66 @@ impl App {
     /// leaving it drops the row where it was.
     fn queue_list(&self) -> Element<'_, Message> {
         let moving = self.drag.map(|d| d.to);
-        let rows = self.queue_order().into_iter().enumerate().map(|(i, id)| {
-            let size = match self.install_views.get(id) {
-                Some(InstallView::Queued(info) | InstallView::Ready(info)) => {
-                    human_size(info.total_download())
-                }
-                _ => "—".into(),
-            };
-            let handle =
-                mouse_area(container(icon(Icon::GripVertical, 20.0, tokens().muted)).center(36))
-                    .on_press(Message::Downloads(DownloadsMsg::Grab(i)))
-                    .interaction(iced::mouse::Interaction::Grab);
-            container(
-                row![
-                    handle,
-                    text((i + 1).to_string())
-                        .size(15)
-                        .color(tokens().muted)
-                        .width(24),
-                    self.cover_art(id, 40.0),
-                    row_title(self.title_of(id)),
-                    text(size).size(15),
-                    round_button(
-                        Icon::X,
-                        Message::Downloads(DownloadsMsg::Remove(id.to_string()))
+        let rows = self
+            .queue_order()
+            .into_iter()
+            .enumerate()
+            .map(|(i, entry)| {
+                // Offline installers are known by their game, their size once their drawer read it.
+                let (id, title, size) = match of_entry(entry) {
+                    Some(id) => (
+                        id,
+                        format!("{} · offline installers", self.title_of(id)),
+                        match self.offline_views.get(id) {
+                            Some(OfflineView::Ready(c)) => human_size(c.size()),
+                            _ => "—".into(),
+                        },
                     ),
-                ]
-                .spacing(16)
-                .align_y(Alignment::Center),
-            )
-            .padding([0, 12])
-            .height(ROW_HEIGHT)
-            .width(Length::Fill)
-            .center_y(ROW_HEIGHT)
-            .style(if moving == Some(i) {
-                theme::outlined
-            } else {
-                theme::card
-            })
-            .into()
-        });
+                    None => (
+                        entry,
+                        self.title_of(entry),
+                        match self.install_views.get(entry) {
+                            Some(InstallView::Queued(info) | InstallView::Ready(info)) => {
+                                human_size(info.total_download())
+                            }
+                            _ => "—".into(),
+                        },
+                    ),
+                };
+                let handle = mouse_area(
+                    container(icon(Icon::GripVertical, 20.0, tokens().muted)).center(36),
+                )
+                .on_press(Message::Downloads(DownloadsMsg::Grab(i)))
+                .interaction(iced::mouse::Interaction::Grab);
+                container(
+                    row![
+                        handle,
+                        text((i + 1).to_string())
+                            .size(15)
+                            .color(tokens().muted)
+                            .width(24),
+                        self.cover_art(id, 40.0),
+                        row_title(title),
+                        text(size).size(15),
+                        round_button(
+                            Icon::X,
+                            Message::Downloads(DownloadsMsg::Remove(entry.to_string()))
+                        ),
+                    ]
+                    .spacing(16)
+                    .align_y(Alignment::Center),
+                )
+                .padding([0, 12])
+                .height(ROW_HEIGHT)
+                .width(Length::Fill)
+                .center_y(ROW_HEIGHT)
+                .style(if moving == Some(i) {
+                    theme::outlined
+                } else {
+                    theme::card
+                })
+                .into()
+            });
         let area = mouse_area(Column::with_children(rows).spacing(ROW_SPACING));
         // Only while a row is moved: each message rebuilds the page, and the pointer moves often.
         if self.drag.is_some() {

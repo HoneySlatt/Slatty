@@ -293,6 +293,7 @@ mod install;
 mod library;
 mod maintenance;
 mod notify;
+mod offline;
 mod runners;
 mod settings;
 mod steam;

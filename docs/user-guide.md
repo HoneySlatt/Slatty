@@ -14,6 +14,7 @@ guide follows the window, and gives the command where there is one.
 - [Achievements](#achievements)
 - [Updates, languages and DLC](#updates-languages-and-dlc)
 - [Verify, repair, uninstall](#verify-repair-uninstall)
+- [Offline installers](#offline-installers)
 - [Steam games](#steam-games)
 - [Games added by hand](#games-added-by-hand)
 - [Games installed elsewhere](#games-installed-elsewhere)
@@ -122,7 +123,7 @@ The tools open in drawers beside the page:
 |---|---|
 | Install button | Version, download and disk size, free space, platform, folder, language, DLC, Proton and game version; Start or Discard |
 | Sliders (top right, installed games) | **Game settings**: folder, launch option, Proton build, isolation, game version, language and DLC |
-| ⋮ (top right, installed games) | **Manage**: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused |
+| ⋮ (top right, GOG games and games added by hand) | **Manage**: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused. For a GOG game, installed or not, **Download installers…** opens **Offline installers** (see [Offline installers](#offline-installers)) |
 | Cloud saves card | Status, save folder, what a sync would do, **Check**, **Sync now**, conflict choices |
 | Achievements card | Every achievement, from the most common to the rarest, with Unlock and Clear once allowed |
 | **Details**, under Play | **Session**: each step of the launch and of the session, and **Stop game** while it runs |
@@ -154,11 +155,12 @@ and cloud saves is read from GOG in the background and kept; **Refresh** reads i
 
 ### Downloads tab
 
-- **Downloading**: the install in progress, with its folder, progress, size written, speed and
-  time left, **Pause** and **Cancel**; and the downloads paused, cut off or failed, with
-  **Resume** and **Discard**.
-- **Queue**: installs started while another one downloads (the button then reads **Add to
-  queue**). Each starts once the ones before it are done, failed or cancelled. Drag a row by its
+- **Downloading**: the install or the offline installers in progress, with their folder, progress,
+  size written, speed and time left, **Pause** (and **Cancel** for an install); and the downloads
+  paused, cut off or failed, with **Resume** and **Discard** (**Remove** for installers).
+- **Queue**: installs and offline installers started while another download runs (the button then
+  reads **Add to queue**). One download runs at a time. Each starts once the ones before it are
+  done, failed or cancelled. Drag a row by its
   handle to reorder, or remove it with ×. Pausing the running download holds the queue. The queue
   is kept when SlattyLauncher closes and goes on at the next start.
 - **Updates**: games waiting for their automatic update, and the one being applied.
@@ -441,6 +443,26 @@ slatty verify <id> [--repair]
 slatty uninstall <id> [--delete-prefix]
 ```
 
+## Offline installers
+
+GOG lets you keep the setup programs of the games you own, which install them without GOG or any
+launcher. For a GOG game, installed or not, **Manage** (⋮) → **Download installers…** opens
+**Offline installers**: choose the system (Windows, Linux or macOS, as GOG offers them), the
+language and the DLC, then **Download**. A DLC without the language chosen comes in English.
+
+The installers go into a folder named after the game, under the installers folder
+(**Settings → Installs**, `GOG` in your download folder until changed). They download through the
+Downloads tab's queue, one download at a time with the installs, and resume where they stopped
+after a pause, a closed window or a crash. Each file is checked against the MD5 sums GOG keeps
+for it before it takes its name; parts found damaged are downloaded again. A file already in the
+folder at its size is kept, and one there at another size is never replaced. **Remove** in the
+Downloads tab deletes only the files left unfinished.
+
+```sh
+slatty installers <id>                             # what GOG offers
+slatty installers <id> --download --os linux --language fr
+```
+
 ## Steam games
 
 The games of the account signed in to the Steam client can show beside GOG's: turn on **Steam
@@ -627,11 +649,12 @@ Settings lists its parts on the left; the list follows the page as it scrolls.
 | Setting | Default | What it does |
 |---|---|---|
 | **Default installation path** | `~/Games/GOG` | Where new games go. Type it or **Browse**; saved once it is an absolute path |
+| **Installers folder** | `GOG` in your download folder | Where [offline installers](#offline-installers) go, each game's in a folder of its own. Saved like the installation path |
 | **Default platform** | Windows | The build installed for a game GOG offers on both |
 | **Default Proton** | | The build new Windows games start with. Each game can use another |
 | **Update games automatically** | On | See [Updates](#updates) |
 
-`slatty install --dir` and `--proton` set the same defaults.
+`slatty install --dir` and `--proton`, and `slatty installers --dir`, set the same defaults.
 
 ### Runners
 

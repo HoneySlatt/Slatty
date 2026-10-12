@@ -23,6 +23,8 @@ There are no dates. What has been checked against real services, and what not ye
   unchanged chunks copied rather than downloaded.
 - Verify, repair, uninstall; post-install setup (GOG's scripts, setup programs, redistributables,
   game-folder dependencies); Comet's Galaxy service in each prefix.
+- GOG's offline installers downloaded to keep, through the same queue, checked against GOG's MD5
+  sums (not yet checked against GOG's services).
 
 **Playing**
 - umu and a Proton build per game; native Linux games through `steam-run` or umu's runtime on

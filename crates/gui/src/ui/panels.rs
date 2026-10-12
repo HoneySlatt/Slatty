@@ -36,6 +36,7 @@ impl App {
             Panel::Install => self.install_drawer(page, g),
             Panel::GameSettings => self.game_settings_drawer(page, g),
             Panel::Manage => self.manage_drawer(page, g),
+            Panel::Installers => self.installers_drawer(page, g),
             Panel::Cloud => self.cloud_drawer(page, g),
             Panel::Achievements => self.achievements_drawer(page, g),
             Panel::Session => self.session_drawer(page, g),

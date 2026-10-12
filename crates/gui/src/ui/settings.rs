@@ -829,17 +829,20 @@ impl App {
 
     fn installs_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         let protons = self.proton_offers();
-        let browse = button(
-            row![
-                icon(Icon::FolderOpen, 16.0, tokens().text),
-                text("Browse").size(14)
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center),
-        )
-        .padding([8, 16])
-        .on_press(Message::Settings(SettingsMsg::BrowseRoot))
-        .style(theme::tonal);
+        let browse = |msg| {
+            button(
+                row![
+                    icon(Icon::FolderOpen, 16.0, tokens().text),
+                    text("Browse").size(14)
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            )
+            .padding([8, 16])
+            .on_press(Message::Settings(msg))
+            .style(theme::tonal)
+            .into()
+        };
         vec![
             setting(
                 wide,
@@ -851,7 +854,19 @@ impl App {
                     .font(theme::font())
                     .padding([8, 12])
                     .into(),
-                Some(browse.into()),
+                Some(browse(SettingsMsg::BrowseRoot)),
+            ),
+            setting(
+                wide,
+                "Installers folder",
+                text_input("/home/…/Downloads/GOG", &self.installers_root)
+                    .on_input(|v| Message::Settings(SettingsMsg::InstallersRootInput(v)))
+                    .on_submit(Message::Settings(SettingsMsg::SaveInstallersRoot))
+                    .style(theme::field)
+                    .font(theme::font())
+                    .padding([8, 12])
+                    .into(),
+                Some(browse(SettingsMsg::BrowseInstallersRoot)),
             ),
             setting(
                 wide,

@@ -7,15 +7,16 @@ use std::sync::Arc;
 use slatty_core::account::{Account, AccountInfo};
 use slatty_core::db::Db;
 use slatty_core::install::{Install, Platform};
-use slatty_core::installer::{InstallJob, InstallRecord};
+use slatty_core::installer::{DOWNLOADING, FAILED, InstallJob, InstallRecord, PAUSED, QUEUED};
 use slatty_core::library::LibraryCache;
 use slatty_core::lock::FileLock;
+use slatty_core::offline::OfflineJob;
 use slatty_core::overview::{self, GameOverview};
 use slatty_core::paths::Dirs;
 use slatty_core::session::{self, Playtime};
 use tokio::sync::Semaphore;
 
-use crate::{Core, Filters, InstallSummary, Interrupted, Sort, err};
+use crate::{Core, Filters, InstallSummary, Interrupted, Sort, err, offline};
 
 #[derive(Debug, Clone)]
 pub struct Boot {
@@ -27,6 +28,7 @@ pub struct Boot {
     pub launch_choices: HashMap<String, String>,
     pub interrupted: Vec<String>,
     pub library_root: PathBuf,
+    pub installers_root: PathBuf,
     pub default_platform: Platform,
     pub twin_playtime: slatty_core::settings::TwinPlaytime,
     pub umu_lookup: bool,
@@ -61,6 +63,8 @@ pub struct Boot {
     pub overview: HashMap<String, GameOverview>,
     pub jobs: Vec<(String, Interrupted)>,
     pub queue: Vec<String>,
+    /// Offline installers paused, or stopped by an error.
+    pub offline_stopped: Vec<(String, Option<String>)>,
     pub customs: HashMap<String, slatty_core::custom::Custom>,
     /// What each game sorts by, made here rather than in the first view (10 ms at 10,000 games).
     pub sort_keys: Vec<(String, crate::library::NaturalKey)>,
@@ -75,6 +79,48 @@ pub fn summary(r: &InstallRecord) -> InstallSummary {
         version: r.version.clone(),
         size: r.files.iter().map(|f| f.size).sum(),
     }
+}
+
+/// The queue, from its saved order and the queued jobs (one missing from it goes last), and the
+/// offline installers paused or failed. Installers cut off go first: they resume by themselves.
+pub(crate) fn downloads_from(
+    saved: Vec<String>,
+    queued: Vec<InstallJob>,
+    offline: &[OfflineJob],
+) -> (Vec<String>, Vec<(String, Option<String>)>) {
+    let offline_in = |state: &str| -> Vec<String> {
+        offline
+            .iter()
+            .filter(|j| j.state == state)
+            .map(|j| offline::entry(&j.game_id))
+            .collect()
+    };
+    let mut queue: Vec<String> = saved
+        .into_iter()
+        .filter(|id| match offline::of_entry(id) {
+            Some(_) => offline_in(QUEUED).contains(id),
+            None => queued.iter().any(|j| &j.game_id == id),
+        })
+        .collect();
+    for id in queued
+        .into_iter()
+        .map(|j| j.game_id)
+        .chain(offline_in(QUEUED))
+    {
+        if !queue.contains(&id) {
+            queue.push(id);
+        }
+    }
+    queue.splice(0..0, offline_in(DOWNLOADING));
+    let stopped = offline
+        .iter()
+        .filter(|j| j.state == PAUSED || j.state == FAILED)
+        .map(|j| {
+            let failed = (j.state == FAILED).then(|| "It stopped on an error.".to_string());
+            (j.game_id.clone(), failed)
+        })
+        .collect();
+    (queue, stopped)
 }
 
 /// The interface's own lock, held until it closes.
@@ -218,17 +264,12 @@ async fn boot() -> Result<Boot, String> {
         .iter()
         .map(|j| (j.game_id.clone(), Interrupted::of(j)))
         .collect();
-    // The queue in its saved order; a queued job missing from it goes last.
-    let mut queue: Vec<String> = slatty_core::settings::download_queue(&db)
-        .map_err(err)?
-        .into_iter()
-        .filter(|id| queued.iter().any(|j| &j.game_id == id))
-        .collect();
-    for j in queued {
-        if !queue.contains(&j.game_id) {
-            queue.push(j.game_id);
-        }
-    }
+    let (queue, offline_stopped) = downloads_from(
+        slatty_core::settings::download_queue(&db).map_err(err)?,
+        queued,
+        &OfflineJob::list(&db).map_err(err)?,
+    );
+    let installers_root = slatty_core::settings::installers_root(&db).map_err(err)?;
     let core = Core {
         dirs,
         db: Arc::new(db),
@@ -244,6 +285,7 @@ async fn boot() -> Result<Boot, String> {
         records,
         interrupted,
         library_root,
+        installers_root,
         proton,
         proton_downloads,
         downloaded_protons,
@@ -268,6 +310,7 @@ async fn boot() -> Result<Boot, String> {
         overview,
         jobs,
         queue,
+        offline_stopped,
         customs,
         sort_keys,
         cover_width,

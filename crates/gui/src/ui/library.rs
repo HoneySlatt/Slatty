@@ -150,7 +150,7 @@ impl App {
 
     /// Downloads and updates left unfinished, with the way to resume or drop each one.
     pub(super) fn interrupted_card(&self) -> Element<'_, Message> {
-        let busy = self.installing().is_some();
+        let busy = self.downloading();
         let rows = self.interrupted.iter().map(|(id, kind)| {
             let title = self.title_of(id);
             let working = self.maintenance.get(id).is_some_and(|m| m.busy);
