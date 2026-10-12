@@ -376,7 +376,7 @@ pub(super) fn download_banner<'a>(id: &str, title: &str, p: Progress) -> Element
                 .length(260)
                 .girth(8)
                 .style(theme::progress),
-            text(format!("{:.0} %", fraction(p) * 100.0)).size(14),
+            text(format!("{:.0}%", fraction(p) * 100.0)).size(14),
         ]
         .spacing(12)
         .align_y(Alignment::Center),

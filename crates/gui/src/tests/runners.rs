@@ -123,7 +123,7 @@ fn the_newest_builds_can_be_installed_and_a_download_followed_and_stopped() {
     )));
     {
         let mut ui = render_window(&app);
-        assert!(ui.find("Downloading 50 %").is_ok());
+        assert!(ui.find("Downloading 50%").is_ok());
         assert!(ui.find("Stop").is_ok());
     }
     let cancel = app.runners.installing.as_ref().unwrap().2.clone();
@@ -189,7 +189,7 @@ fn followed_builds_are_kept_up_to_date_once_turned_on() {
     )));
     {
         let mut ui = render_window(&app);
-        assert!(ui.find("GE-Proton11-7-x86_64: Downloading 30 %").is_ok());
+        assert!(ui.find("GE-Proton11-7-x86_64: Downloading 30%").is_ok());
         assert!(ui.find("Stop").is_ok());
     }
     let _ = app.update(Message::Runners(RunnersMsg::Updated(Ok((

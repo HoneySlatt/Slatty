@@ -571,10 +571,10 @@ fn stage_text(stage: Option<Stage>) -> String {
     match stage {
         None => "Starting…".into(),
         Some(Stage::Downloading { done, total }) => {
-            format!("Downloading {} %", percent(done, total))
+            format!("Downloading {}%", percent(done, total))
         }
         Some(Stage::Verifying) => "Checking the sum…".into(),
-        Some(Stage::Unpacking { done, total }) => format!("Unpacking {} %", percent(done, total)),
+        Some(Stage::Unpacking { done, total }) => format!("Unpacking {}%", percent(done, total)),
     }
 }
 

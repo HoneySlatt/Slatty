@@ -194,7 +194,7 @@ fn closing_asks_first_only_when_something_is_running() {
     let mut ui = render(&app);
     assert!(
         ui.find(
-            "Downloading [FAKE] Game 5 (50 %). It stops here and resumes where it stopped when SlattyLauncher starts again."
+            "Downloading [FAKE] Game 5 (50%). It stops here and resumes where it stopped when SlattyLauncher starts again."
         )
         .is_ok()
     );

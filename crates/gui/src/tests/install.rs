@@ -127,7 +127,7 @@ fn running_install_shows_progress_and_can_pause() {
     settle(&mut app);
     let mut ui = render(&app);
     assert!(ui.find("1.1 GB / 4.3 GB · 60.0 Mbps").is_ok());
-    assert!(ui.find("25 %").is_ok(), "at the end of the bar");
+    assert!(ui.find("25%").is_ok(), "at the end of the bar");
     snapshot(&mut ui, "install-running");
     ui.click("Pause").unwrap();
     assert!(

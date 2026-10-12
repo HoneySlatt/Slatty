@@ -264,7 +264,7 @@ impl App {
                 big(
                     Icon::Download,
                     format!(
-                        "Updating {:.0} %",
+                        "Updating {:.0}%",
                         progress.map(fraction).unwrap_or_default() * 100.0
                     ),
                     None,
@@ -913,7 +913,7 @@ pub(super) fn download_controls<'a>(
             progress_bar(0.0..=1.0, fraction(progress))
                 .girth(8)
                 .style(theme::progress),
-            text(format!("{:.0} %", fraction(progress) * 100.0))
+            text(format!("{:.0}%", fraction(progress) * 100.0))
                 .size(14)
                 .font(semibold())
                 // A fixed width, so the bar keeps its length as the digits change.

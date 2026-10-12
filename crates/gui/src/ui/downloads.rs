@@ -159,7 +159,7 @@ impl App {
                             progress_bar(0.0..=1.0, fraction(progress))
                                 .girth(10)
                                 .style(theme::progress),
-                            text(format!("Updating {:.0} %", fraction(progress) * 100.0))
+                            text(format!("Updating {:.0}%", fraction(progress) * 100.0))
                                 .size(15)
                                 .width(Length::Shrink),
                         ]
@@ -245,7 +245,7 @@ impl App {
                 progress_bar(0.0..=1.0, fraction(p))
                     .girth(10)
                     .style(theme::progress),
-                text(format!("{:.0} %", fraction(p) * 100.0))
+                text(format!("{:.0}%", fraction(p) * 100.0))
                     .size(16)
                     .font(semibold())
                     .width(56)

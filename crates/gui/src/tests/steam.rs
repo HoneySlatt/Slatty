@@ -461,7 +461,7 @@ fn a_download_steam_makes_shows_until_it_is_done() {
     app.unfocused = false;
     app.steam.download_moved = moved;
     let _ = app.update(Message::Select("steam-620".into()));
-    assert!(render(&app).find("Downloading 25 %").is_ok());
+    assert!(render(&app).find("Downloading 25%").is_ok());
     app.selected = None;
     app.page = Page::Downloads;
     {
@@ -822,7 +822,7 @@ fn of_two_downloads_steam_began_the_one_waiting_its_turn_says_so() {
         "it wrote"
     );
     let _ = app.update(Message::Select("steam-620".into()));
-    assert!(render(&app).find("Downloading 25 %").is_ok());
+    assert!(render(&app).find("Downloading 25%").is_ok());
     let _ = app.update(Message::Select("steam-440".into()));
     assert!(render(&app).find("Queued in Steam").is_ok());
 }

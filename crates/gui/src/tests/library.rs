@@ -144,7 +144,7 @@ fn a_cover_offers_no_install_for_a_product_gog_does_not_offer() {
 }
 
 /// A long title over a hovered cover takes two lines at most: Play and the game's settings stay on
-/// the cover, the smallest offered (75 %) in the smallest window included.
+/// the cover, the smallest offered (75%) in the smallest window included.
 #[test]
 fn a_long_title_leaves_a_covers_buttons_on_it() {
     let mut app = library_app();

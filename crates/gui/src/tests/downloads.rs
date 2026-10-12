@@ -324,7 +324,7 @@ fn downloads_keep_a_readable_width_on_a_wide_window() {
     let mut ui = Simulator::with_size(settings(), app.window, app.view());
     snapshot(&mut ui, "downloads-wide");
     // The share done, at the end of the progress bar.
-    let done = ui.find("0 %").unwrap().bounds();
+    let done = ui.find("0%").unwrap().bounds();
     assert!(done.x + done.width < 1700.0, "{done:?}");
 }
 

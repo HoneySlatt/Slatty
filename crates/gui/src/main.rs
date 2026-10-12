@@ -1158,7 +1158,7 @@ impl App {
         let mut work = Vec::new();
         if let Some((_, title, p)) = self.installing() {
             work.push(format!(
-                "Downloading {title} ({:.0} %). It stops here and resumes where it stopped when SlattyLauncher starts again.",
+                "Downloading {title} ({:.0}%). It stops here and resumes where it stopped when SlattyLauncher starts again.",
                 ui::format::fraction(p) * 100.0
             ));
         }

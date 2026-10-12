@@ -76,7 +76,7 @@ fn games_found_with_an_update_are_updated_one_after_the_other() {
 
     // Its page shows it updating instead of Play.
     open(&mut app, "3", None);
-    assert!(render(&app).find("Updating 0 %").is_ok());
+    assert!(render(&app).find("Updating 0%").is_ok());
     app.selected = None;
     app.page = Page::Downloads;
     {

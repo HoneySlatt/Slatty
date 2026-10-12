@@ -26,7 +26,7 @@ impl fmt::Display for ProtonChoice {
 
 /// Cover sizes offered, in percent of the usual width.
 pub const COVER_SIZES: [u16; 7] = [75, 85, 100, 115, 130, 145, 160];
-/// Width of a cover at 100 %, in pixels.
+/// Width of a cover at 100%, in pixels.
 const COVER_WIDTH: f32 = 150.0;
 
 /// A cover size, in percent.
@@ -52,7 +52,7 @@ impl CoverSize {
 
 impl fmt::Display for CoverSize {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} %", self.0)
+        write!(f, "{}%", self.0)
     }
 }
 
