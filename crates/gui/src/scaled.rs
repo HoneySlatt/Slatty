@@ -10,6 +10,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use iced::Task;
 use iced::widget::image;
@@ -49,6 +50,8 @@ pub struct ScaledCovers {
     /// Per key art and width: its copy, or `None` to show it as it is.
     art: HashMap<(PathBuf, u32), Option<image::Handle>>,
     art_pending: HashSet<(PathBuf, u32)>,
+    /// When the first key art copy was asked for: those shown since are kept (`trim`).
+    session: Option<SystemTime>,
 }
 
 impl App {
@@ -123,12 +126,17 @@ impl App {
             .flatten()
             .map(|c| c.join("art"))
             .collect();
+        // Before the copy's own time, even on a file system that keeps times to two seconds.
+        let session = *self
+            .scaled
+            .session
+            .get_or_insert_with(|| SystemTime::now() - Duration::from_secs(10));
         self.with_account(Task::perform(
             {
                 let from = from.clone();
                 slatty_core::fsutil::in_background(move || {
                     let copy = scaled_copy(&from, width, &dir, true);
-                    trim(&folders, ART_BUDGET);
+                    trim(&folders, ART_BUDGET, session);
                     copy
                 })
             },
@@ -387,8 +395,9 @@ pub fn scaled_copy(source: &Path, width: u32, dir: &Path, enlarge: bool) -> Opti
 const ART_BUDGET: u64 = 2 << 30;
 
 /// Deletes the key art copies in `folders` (`<folder>/<width>/<copy>`) shown longest ago, until
-/// they take a tenth less than `budget`, once they take more.
-fn trim(folders: &[PathBuf], budget: u64) {
+/// they take a tenth less than `budget`, once they take more. Those shown since `session` began
+/// stay: the session draws them from their file, and would not make them again.
+fn trim(folders: &[PathBuf], budget: u64, session: SystemTime) {
     let mut copies: Vec<(std::time::SystemTime, u64, PathBuf)> = folders
         .iter()
         .filter_map(|f| std::fs::read_dir(f).ok())
@@ -407,8 +416,8 @@ fn trim(folders: &[PathBuf], budget: u64) {
         return;
     }
     copies.sort();
-    for (_, len, path) in copies {
-        if taken <= budget - budget / 10 {
+    for (shown, len, path) in copies {
+        if taken <= budget - budget / 10 || shown >= session {
             break;
         }
         if std::fs::remove_file(&path).is_ok() {
@@ -585,11 +594,15 @@ mod tests {
             f.set_modified(at(*when)).unwrap();
         }
         let folders = [shared.clone(), account.clone()];
-        trim(&folders, 400);
+        trim(&folders, 400, at(10));
         assert!(copies.iter().all(|(p, _)| p.exists()), "within the budget");
-        trim(&folders, 300);
-        // 400 bytes over 300: down to 270, so the two shown longest ago go.
-        assert!(!copies[1].0.exists() && !copies[0].0.exists());
+        // Shown since the launcher started: the session still draws them from those files.
+        trim(&folders, 100, at(1));
+        assert!(!copies[1].0.exists(), "shown before");
+        assert!(copies[0].0.exists() && copies[2].0.exists() && copies[3].0.exists());
+        trim(&folders, 250, at(10));
+        // 300 bytes over 250: down to 225, so the one shown longest ago goes.
+        assert!(!copies[0].0.exists());
         assert!(copies[2].0.exists() && copies[3].0.exists());
 
         // Key art shown again: its copy is the last to go.
