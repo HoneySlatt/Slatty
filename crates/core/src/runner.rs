@@ -76,7 +76,11 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
                 Some(Wrapper::Umu(_, tool)) => Some(tool.clone()),
                 _ => None,
             };
+            let steam_run = matches!(wrapper, Some(Wrapper::SteamRun(_)));
             let (mut program, mut args, mut env) = native_command(&script, wrapper);
+            if steam_run {
+                env.extend(steam_run_temp(std::env::vars()));
+            }
             // An AppImage mounts itself through FUSE, which neither the container nor every system
             // offers: it unpacks itself instead.
             if added && crate::added::is_appimage(&script) {
@@ -139,6 +143,21 @@ enum Wrapper {
 
 /// How to start a native game's script: inside `wrapper` when there is one, else through the
 /// interpreter its first line names, found in PATH by name when that path does not exist.
+/// The temporary folders to give a game started through `steam-run`, which mounts an empty `/tmp`
+/// of its own: one under `/tmp` the user's environment names (`nix develop`'s
+/// `/tmp/nix-shell.*`) does not exist there, and a game writing there failed at once (a launcher
+/// falling back to `nix-shell`). Those become `/tmp`; others are seen as they are.
+fn steam_run_temp(vars: impl IntoIterator<Item = (String, String)>) -> Vec<(String, String)> {
+    vars.into_iter()
+        .filter(|(k, v)| {
+            ["TMPDIR", "TMP", "TEMP", "TEMPDIR"].contains(&k.as_str())
+                && Path::new(v).starts_with("/tmp")
+                && Path::new(v) != Path::new("/tmp")
+        })
+        .map(|(k, _)| (k, "/tmp".into()))
+        .collect()
+}
+
 fn native_command(
     script: &Path,
     wrapper: Option<Wrapper>,
@@ -1635,6 +1654,22 @@ mod tests {
         assert!(env.contains(&("PROTONPATH".into(), tool.display().to_string())));
         assert!(env.iter().all(|(k, _)| k != "UMU_NO_PROTON"));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn steam_run_is_given_a_temporary_folder_it_has() {
+        let vars = [
+            ("TMPDIR", "/tmp/nix-shell.aBc123"),
+            ("TMP", "/tmp/"),
+            ("TEMP", "/var/tmp/mine"),
+            ("TEMPDIR", "/tmpfoo"),
+            ("HOME", "/tmp/home"),
+        ]
+        .map(|(k, v)| (k.to_string(), v.to_string()));
+        assert_eq!(
+            steam_run_temp(vars),
+            [("TMPDIR".to_string(), "/tmp".to_string())]
+        );
     }
 
     /// Proton's fixes for a game target the game: DOOM's adds `+r_renderAPI 1` to every program

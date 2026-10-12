@@ -186,7 +186,8 @@ builds (`Unsupported OS`):
    never made.
 4. The staged folder, its publication, the record and the job are those of a Windows build. The
    game is registered with `Runner::Native` and starts through `start.sh`: on NixOS inside `steam-run`
-   when present, else inside umu's Steam Linux Runtime 3.0 (sniper), through a compatibility tool
+   when present (which mounts an empty `/tmp` of its own: a temporary folder under `/tmp` the
+   environment names, `nix develop`'s `/tmp/nix-shell.*`, becomes `/tmp`, `runner::steam_run_temp`), else inside umu's Steam Linux Runtime 3.0 (sniper), through a compatibility tool
    of SlattyLauncher's own (`runner::runtime_tool`, made again before each launch, read-only to
    an isolated game) rather than umu's `UMU_NO_PROTON`, which asks GitHub for umu's Proton
    releases at each launch and uses a tool of umu's an isolated game could change; on
