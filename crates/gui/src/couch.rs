@@ -246,6 +246,16 @@ impl App {
             CouchMsg::Key(Key::Char(c)) => return self.typed(c),
             CouchMsg::Key(Key::Erase) => {
                 if !self.typing() {
+                    // Back, but not at a tab, where Back opens the menu: one Backspace too many
+                    // after a search would open it, and the next Enter leave the couch mode.
+                    let at_tab = self.selected.is_none()
+                        && self.notice.is_none()
+                        && self.quit_confirm.is_none()
+                        && self.launch_prompt.is_none()
+                        && self.couch.as_ref().is_some_and(|c| c.menu.is_none());
+                    if at_tab {
+                        return Task::none();
+                    }
                     return self.couch_nav(Nav::Back);
                 }
                 if let Some(couch) = &mut self.couch {

@@ -498,6 +498,22 @@ fn the_hints_follow_the_focus_onto_the_shelves() {
     assert!(ui.find("Favorite").is_err());
 }
 
+/// Backspace goes back as B does, but at a tab, where B opens the menu, it does nothing: one too
+/// many after a search would open the menu, and the next Enter leave the couch mode.
+#[test]
+fn backspace_at_a_tab_opens_no_menu() {
+    let mut app = couch_app();
+    key(&mut app, Key::Char('a'));
+    key(&mut app, Key::Nav(Nav::Confirm));
+    assert!(couch(&app).keyboard.is_none());
+    key(&mut app, Key::Erase);
+    assert_eq!(couch(&app).menu, None);
+    // On a game's page it still goes back.
+    let _ = app.update(Message::Select("3".into()));
+    key(&mut app, Key::Erase);
+    assert_eq!(app.selected, None);
+}
+
 /// Arrows and Enter alone (a television's remote, which sends keys) still type on the keyboard on
 /// the screen: Enter ends the search only after letters typed.
 #[test]
