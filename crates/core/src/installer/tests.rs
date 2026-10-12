@@ -1376,13 +1376,16 @@ fn an_install_cut_off_after_publishing_is_checked_where_it_landed() {
     let root = std::env::temp_dir().join(format!("slatty-published-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let (partial, target) = (partial_dir(&root, "Game"), root.join("Game"));
-    mark_staged(&partial, "1").unwrap();
+    mark_staged(&partial, "1", "b").unwrap();
     assert!(
         !published_unregistered(true, &partial, &target, "1"),
         "still downloading"
     );
     // Another product going into a folder of the same name: not its download.
-    assert!(matches!(mark_staged(&partial, "2"), Err(Error::Refused(_))));
+    assert!(matches!(
+        mark_staged(&partial, "2", "b"),
+        Err(Error::Refused(_))
+    ));
     std::fs::rename(&partial, &target).unwrap();
     assert!(published_unregistered(true, &partial, &target, "1"));
     assert!(
@@ -1440,10 +1443,29 @@ fn a_download_resumed_on_a_replaced_installer_starts_again() {
     let partial = partial_dir(&root, "Game");
     std::fs::create_dir_all(&partial).unwrap();
     std::fs::write(partial.join("[FAKE] old.pak"), "1.0").unwrap();
-    drop_replaced(Some("linux:1.0"), "linux:1.0", &partial).unwrap();
-    drop_replaced(None, "linux:1.1", &partial).unwrap();
+    drop_replaced(&partial, "1", Some("linux:1.0"), "linux:1.0").unwrap();
+    drop_replaced(&partial, "1", None, "linux:1.1").unwrap();
     assert!(partial.join("[FAKE] old.pak").exists(), "the same build");
-    drop_replaced(Some("linux:1.0"), "linux:1.1", &partial).unwrap();
+    drop_replaced(&partial, "1", Some("linux:1.0"), "linux:1.1").unwrap();
+    assert!(!partial.exists(), "the installer replaced");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// Resumed from the queue, a download's job names the build planned when it was queued, GOG's new
+/// installer: the partial folder's mark still tells the one it started with, so its files, some
+/// of the same size as the new installer's, are not taken for the new one's.
+#[test]
+fn a_queued_download_on_a_replaced_installer_starts_again() {
+    let root = std::env::temp_dir().join(format!("slatty-queued-replaced-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let partial = partial_dir(&root, "Game");
+    mark_staged(&partial, "1", "linux:1.0").unwrap();
+    std::fs::write(partial.join("[FAKE] old.pak"), "1.0").unwrap();
+    drop_replaced(&partial, "2", None, "linux:1.1").unwrap();
+    assert!(partial.exists(), "another game's download is not dropped");
+    drop_replaced(&partial, "1", None, "linux:1.0").unwrap();
+    assert!(partial.exists(), "the build it started with");
+    drop_replaced(&partial, "1", None, "linux:1.1").unwrap();
     assert!(!partial.exists(), "the installer replaced");
     std::fs::remove_dir_all(root).unwrap();
 }

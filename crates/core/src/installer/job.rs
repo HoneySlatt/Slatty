@@ -17,14 +17,15 @@ pub fn partial_dir(root: &Path, directory: &str) -> PathBuf {
     root.join(format!(".{directory}{PARTIAL_SUFFIX}"))
 }
 
-/// Written into a partial folder as its download starts, with the game's id, carried into the game
-/// folder by the rename and removed once the game is registered: a game folder holding it was
-/// published by SlattyLauncher for that game and is finished by resuming its job; one without it,
-/// or with another game's id (two products sharing a folder name), is not its own, never adopted.
+/// Written into a partial folder as its download starts, with the game's id, then the build on a
+/// line of its own, carried into the game folder by the rename and removed once the game is
+/// registered: a game folder holding it was published by SlattyLauncher for that game and is
+/// finished by resuming its job; one without it, or with another game's id (two products sharing a
+/// folder name), is not its own, never adopted.
 pub const STAGED_MARK: &str = ".slatty-staged";
 
 /// Makes `partial` with its mark, or keeps them as an earlier attempt for the same game left them.
-pub(crate) fn mark_staged(partial: &Path, game_id: &str) -> Result<()> {
+pub(crate) fn mark_staged(partial: &Path, game_id: &str, build_id: &str) -> Result<()> {
     use std::io::Write;
     crate::paths::ensure_dir(partial)?;
     let mark = partial.join(STAGED_MARK);
@@ -34,7 +35,7 @@ pub(crate) fn mark_staged(partial: &Path, game_id: &str) -> Result<()> {
         .open(&mark)
     {
         Ok(mut file) => file
-            .write_all(game_id.as_bytes())
+            .write_all(format!("{game_id}\n{build_id}").as_bytes())
             .map_err(|e| Error::io(format!("write {}", mark.display()), e)),
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
             if staged_here(partial, game_id) {
@@ -52,9 +53,28 @@ pub(crate) fn mark_staged(partial: &Path, game_id: &str) -> Result<()> {
 
 /// Whether SlattyLauncher published `target` for `game_id` (see `STAGED_MARK`).
 pub(crate) fn staged_here(target: &Path, game_id: &str) -> bool {
-    let mark = target.join(STAGED_MARK);
-    std::fs::symlink_metadata(&mark).is_ok_and(|m| m.is_file() && m.len() <= 64)
-        && std::fs::read(&mark).is_ok_and(|id| id == game_id.as_bytes())
+    staged_mark(target).is_some_and(|(id, _)| id == game_id)
+}
+
+/// The build `partial` was started with for `game_id`, as its mark says; `None` for a mark an
+/// earlier version wrote, without it, or another game's.
+pub(crate) fn staged_build(partial: &Path, game_id: &str) -> Option<String> {
+    staged_mark(partial)
+        .filter(|(id, _)| id == game_id)
+        .and_then(|(_, build)| build)
+}
+
+fn staged_mark(folder: &Path) -> Option<(String, Option<String>)> {
+    let mark = folder.join(STAGED_MARK);
+    if !std::fs::symlink_metadata(&mark).is_ok_and(|m| m.is_file() && m.len() <= 256) {
+        return None;
+    }
+    let text = String::from_utf8(std::fs::read(&mark).ok()?).ok()?;
+    let (id, build) = match text.split_once('\n') {
+        Some((id, build)) => (id, Some(build.to_owned())),
+        None => (text.as_str(), None),
+    };
+    Some((id.to_owned(), build))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

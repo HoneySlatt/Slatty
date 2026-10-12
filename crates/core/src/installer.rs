@@ -151,9 +151,12 @@ pub async fn install(
     });
     // A queued install has not started: a folder already where it goes is not its own.
     let job_resumed = job.as_ref().is_some_and(|j| !j.is_queued());
-    if job_resumed {
-        drop_replaced(build_id, &plan.build.build_id, &partial)?;
-    }
+    drop_replaced(
+        &partial,
+        &req.game_id,
+        build_id.filter(|_| job_resumed),
+        &plan.build.build_id,
+    )?;
     if let Some(held) = held_on_start(job.as_ref(), &plan) {
         crate::settings::set_held_back(db, &req.game_id, held)?;
     }
@@ -175,7 +178,7 @@ pub async fn install(
     let result = async {
         // A folder already where the game goes is refused by the download below, unmarked.
         if !resumed_published && !target.exists() {
-            mark_staged(&partial, &req.game_id)?;
+            mark_staged(&partial, &req.game_id, &plan.build.build_id)?;
         }
         if plan.platform == Platform::Linux {
             let source = linux::GogInstallers::new(
@@ -279,8 +282,17 @@ pub async fn install(
 
 /// Deletes the partial folder of a download resumed on another build than it started with: a
 /// Linux installer GOG has replaced since (`plan_install`). Not all of what it staged is the new
-/// installer's, and none of it would be recorded: it starts again, as a discarded one would.
-fn drop_replaced(started: Option<&str>, planned: &str, partial: &Path) -> Result<()> {
+/// installer's, and none of it would be recorded: it starts again, as a discarded one would. The
+/// build it started with is the one its mark names, else, for a mark without one, `job_build`,
+/// that of the job resumed.
+fn drop_replaced(
+    partial: &Path,
+    game_id: &str,
+    job_build: Option<&str>,
+    planned: &str,
+) -> Result<()> {
+    let marked = staged_build(partial, game_id);
+    let started = marked.as_deref().or(job_build);
     if started.is_none_or(|b| b == planned) || !partial.is_dir() {
         return Ok(());
     }
