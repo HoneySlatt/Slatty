@@ -12,7 +12,7 @@ use crate::install::size;
 
 #[derive(Subcommand)]
 pub enum ProtonCommand {
-    /// List the Proton builds on this computer, those slatty downloaded first
+    /// List the Proton builds on this computer, those SlattyLauncher downloaded first
     List,
     /// Allow or forbid listing and downloading Proton builds from GitHub (off until turned on)
     Downloads {
@@ -26,7 +26,7 @@ pub enum ProtonCommand {
         #[arg(value_enum)]
         source: SourceArg,
     },
-    /// Delete a build slatty downloaded (refused while a game or the default uses it)
+    /// Delete a build SlattyLauncher downloaded (refused while a game or the default uses it)
     Remove { name: String },
     /// Update, at most once a day at start, the builds games follow as <project>-latest (off
     /// until turned on)

@@ -142,7 +142,7 @@ fn confirm() -> Result<bool> {
 
 #[derive(Args)]
 pub struct UpdateArgs {
-    /// Game to update; without it, every game installed by slatty is checked
+    /// Game to update; without it, every game installed by SlattyLauncher is checked
     game_id: Option<String>,
     /// Only report whether an update is available
     #[arg(long)]
