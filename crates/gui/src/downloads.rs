@@ -94,6 +94,12 @@ impl App {
                     self.preempted = Some((running.clone(), Preempt::StartNow));
                     return self.pause_entry(&running);
                 }
+                // One pausing for a game makes way for the row asked for, which starts once it
+                // stopped, game or not.
+                if let Some((_, why)) = &mut self.preempted {
+                    *why = Preempt::StartNow;
+                    return Task::none();
+                }
                 // One pausing on request: once paused.
                 if self.downloading() {
                     return Task::none();
