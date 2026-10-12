@@ -340,7 +340,8 @@ pub struct Patched {
 }
 
 /// Applies every patch whose source is on disk exactly as GOG expects and whose target belongs to
-/// the new build. Other files, and any patch that fails, are left for the normal download.
+/// the new build, calling `begin` before each. Other files, and any patch that fails, are left for
+/// the normal download.
 pub async fn apply_all<S: ContentSource>(
     source: &S,
     patches: &[FilePatch],
@@ -348,6 +349,7 @@ pub async fn apply_all<S: ContentSource>(
     old: &InstallRecord,
     dir: &Path,
     cancel: &CancellationToken,
+    begin: &(dyn Fn() -> Result<()> + Sync),
 ) -> Result<Patched> {
     let lower = |p: &Path| p.to_string_lossy().to_lowercase();
     let targets: HashMap<String, &PathBuf> = set.files.iter().map(|(p, _)| (lower(p), p)).collect();
@@ -388,6 +390,7 @@ pub async fn apply_all<S: ContentSource>(
         if md5.as_deref() != Some(patch.md5_source.as_str()) {
             continue;
         }
+        begin()?;
         let delta = partial_path(&dst).with_extension("slatty-delta");
         let result = async {
             download_delta(source, patch, &delta).await?;

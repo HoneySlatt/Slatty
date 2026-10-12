@@ -166,6 +166,7 @@ impl Env {
             &self.record,
             &self.root,
             &CancellationToken::new(),
+            &|| Ok(()),
         )
         .await
         .unwrap()

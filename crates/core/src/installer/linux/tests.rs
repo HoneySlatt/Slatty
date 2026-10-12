@@ -638,6 +638,59 @@ async fn a_repair_never_makes_folders_through_a_folder_the_game_replaced() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// An update notes itself just before the first file or link it changes, and not while it only
+/// checks them: paused then, it leaves the game playable.
+#[tokio::test]
+async fn an_update_notes_itself_only_before_changing_a_file_or_link() {
+    let source = Fake::new(vec![game(&big()), dlc()]);
+    let set = LinuxSet::new(&parts(&source).await).unwrap();
+    let root = temp("noted");
+    let target = root.join("Game");
+    let dl = LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &plenty,
+    };
+    dl.run(&set, &root.join(".p"), &target).await.unwrap();
+    let seen = Mutex::new(Vec::new());
+    let begin = || {
+        let link = std::fs::read_link(target.join("game/lib/libfoo.so")).unwrap();
+        let lang = std::fs::read(target.join("game/lang.txt")).unwrap();
+        seen.lock().unwrap().push((lang, link));
+        Ok(())
+    };
+    let first_seen = || {
+        std::mem::take(&mut *seen.lock().unwrap())
+            .into_iter()
+            .next()
+    };
+    dl.replace_bad(&set, &target, &begin).await.unwrap();
+    assert_eq!(first_seen(), None, "nothing to change");
+
+    std::fs::remove_file(target.join("game/lib/libfoo.so")).unwrap();
+    std::os::unix::fs::symlink("elsewhere", target.join("game/lib/libfoo.so")).unwrap();
+    dl.replace_bad(&set, &target, &begin).await.unwrap();
+    assert_eq!(
+        first_seen(),
+        Some((b"en+dlc".to_vec(), PathBuf::from("elsewhere"))),
+        "noted before the link changes"
+    );
+
+    std::fs::write(target.join("game/lang.txt"), b"[FAKE] damaged").unwrap();
+    dl.replace_bad(&set, &target, &begin).await.unwrap();
+    assert_eq!(
+        first_seen(),
+        Some((b"[FAKE] damaged".to_vec(), PathBuf::from("libfoo.so.1"))),
+        "noted before the file changes"
+    );
+    assert_eq!(
+        std::fs::read(target.join("game/lang.txt")).unwrap(),
+        b"en+dlc"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[tokio::test]
 async fn links_chained_out_of_the_game_are_removed_and_never_written_through() {
     let link = |name, target: &'static [u8]| File {

@@ -161,7 +161,7 @@ impl<S: ContentSource> Download<'_, S> {
         }
         crate::paths::ensure_dir(partial)?;
         self.check_space(set, partial)?;
-        self.fill(set, partial, true).await?;
+        self.fill(set, partial, true, &|| Ok(())).await?;
         for dir in &set.dirs {
             crate::paths::ensure_dir(&partial.join(dir))?;
         }
@@ -182,15 +182,25 @@ impl<S: ContentSource> Download<'_, S> {
         repair: bool,
     ) -> Result<Checked> {
         if repair {
-            self.check_space(set, dir)?;
+            return self.replace_bad(set, dir, &|| Ok(())).await;
         }
-        let checked = self.fill(set, dir, repair).await?;
-        if repair {
-            for d in &set.dirs {
-                let d = dir.join(d);
-                refuse_outside(dir, &d)?;
-                crate::paths::ensure_dir(&d)?;
-            }
+        self.fill(set, dir, false, &|| Ok(())).await
+    }
+
+    /// Checks an installed game in place and re-downloads its bad files, calling `begin` before
+    /// each one is replaced.
+    pub(crate) async fn replace_bad(
+        &self,
+        set: &FileSet,
+        dir: &Path,
+        begin: &(dyn Fn() -> Result<()> + Sync),
+    ) -> Result<Checked> {
+        self.check_space(set, dir)?;
+        let checked = self.fill(set, dir, true, begin).await?;
+        for d in &set.dirs {
+            let d = dir.join(d);
+            refuse_outside(dir, &d)?;
+            crate::paths::ensure_dir(&d)?;
         }
         Ok(checked)
     }
@@ -219,8 +229,14 @@ impl<S: ContentSource> Download<'_, S> {
     }
 
     /// Verifies every file under `dir`; returns those that were missing or wrong.
-    /// With `download`, they are fetched again (atomically replaced).
-    async fn fill(&self, set: &FileSet, dir: &Path, download: bool) -> Result<Checked> {
+    /// With `download`, they are fetched again (atomically replaced), `begin` called before each.
+    async fn fill(
+        &self,
+        set: &FileSet,
+        dir: &Path,
+        download: bool,
+        begin: &(dyn Fn() -> Result<()> + Sync),
+    ) -> Result<Checked> {
         let bad: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
         let reused = AtomicU64::new(0);
         let total = Progress {
@@ -277,6 +293,7 @@ impl<S: ContentSource> Download<'_, S> {
                         bad.lock().unwrap().push(rel.clone());
                         if download {
                             refuse_outside(dir, &dest)?;
+                            begin()?;
                             let local = self
                                 .download_file(&dest, file, &|n| report(0, n), network)
                                 .await?;

@@ -437,7 +437,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         }
         crate::paths::ensure_dir(partial)?;
         self.check_space(set, partial)?;
-        let (_, skipped) = self.fill(set, partial, true).await?;
+        let (_, skipped) = self.fill(set, partial, true, &|| Ok(())).await?;
         std::fs::rename(partial, target).map_err(|e| {
             Error::io(
                 format!("publish {} as {}", partial.display(), target.display()),
@@ -456,9 +456,21 @@ impl<S: Source> LinuxDownload<'_, S> {
         repair: bool,
     ) -> Result<Checked> {
         if repair {
-            self.check_space(set, dir)?;
+            return self.replace_bad(set, dir, &|| Ok(())).await;
         }
-        Ok(self.fill(set, dir, repair).await?.0)
+        Ok(self.fill(set, dir, false, &|| Ok(())).await?.0)
+    }
+
+    /// Checks an installed game in place and downloads its bad files again, calling `begin`
+    /// before each file or link is changed.
+    pub(crate) async fn replace_bad(
+        &self,
+        set: &LinuxSet,
+        dir: &Path,
+        begin: &(dyn Fn() -> Result<()> + Sync),
+    ) -> Result<Checked> {
+        self.check_space(set, dir)?;
+        Ok(self.fill(set, dir, true, begin).await?.0)
     }
 
     pub(crate) fn check_space(&self, set: &LinuxSet, dir: &Path) -> Result<()> {
@@ -484,7 +496,14 @@ impl<S: Source> LinuxDownload<'_, S> {
         Ok(())
     }
 
-    async fn fill(&self, set: &LinuxSet, dir: &Path, download: bool) -> Result<(Checked, usize)> {
+    /// With `download`, `begin` is called before each file or link is changed.
+    async fn fill(
+        &self,
+        set: &LinuxSet,
+        dir: &Path,
+        download: bool,
+        begin: &(dyn Fn() -> Result<()> + Sync),
+    ) -> Result<(Checked, usize)> {
         let bad = std::sync::Mutex::new(Vec::new());
         let total = Progress {
             files_total: set.files.len(),
@@ -534,6 +553,7 @@ impl<S: Source> LinuxDownload<'_, S> {
                         bad.lock().unwrap().push(file.path.clone());
                         if download {
                             refuse_outside(dir, &dest)?;
+                            begin()?;
                             self.download_file(&dest, file, &|n| report(0, n), network)
                                 .await?;
                         }
@@ -558,7 +578,7 @@ impl<S: Source> LinuxDownload<'_, S> {
             if self.cancel.is_cancelled() {
                 return Err(Error::Cancelled);
             }
-            match self.place_link(dir, link, download).await? {
+            match self.place_link(dir, link, download, begin).await? {
                 LinkState::Right => {}
                 LinkState::Wrong => bad.lock().unwrap().push(link.path.clone()),
                 LinkState::Outside => skipped += 1,
@@ -573,6 +593,7 @@ impl<S: Source> LinuxDownload<'_, S> {
             };
             if !leads_inside(dir, &dest.parent().unwrap_or(dir).join(&target)) {
                 if download {
+                    begin()?;
                     std::fs::remove_file(&dest)
                         .map_err(|e| Error::io(format!("delete {}", dest.display()), e))?;
                 }
@@ -601,9 +622,15 @@ impl<S: Source> LinuxDownload<'_, S> {
         ))
     }
 
-    /// Checks a symbolic link and, with `download`, makes it right. A link out of the game folder
-    /// is never made.
-    async fn place_link(&self, dir: &Path, link: &LinuxFile, download: bool) -> Result<LinkState> {
+    /// Checks a symbolic link and, with `download`, makes it right, calling `begin` before. A link
+    /// out of the game folder is never made.
+    async fn place_link(
+        &self,
+        dir: &Path,
+        link: &LinuxFile,
+        download: bool,
+        begin: &(dyn Fn() -> Result<()> + Sync),
+    ) -> Result<LinkState> {
         let raw = self.read_data(link).await?;
         let target = PathBuf::from(String::from_utf8_lossy(&raw).into_owned());
         let dest = dir.join(&link.path);
@@ -613,6 +640,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         if !stays_inside(&link.path, &target) {
             // Nor is an older copy of it kept.
             if download && std::fs::read_link(&dest).is_ok() {
+                begin()?;
                 std::fs::remove_file(&dest)
                     .map_err(|e| Error::io(format!("delete {}", dest.display()), e))?;
             }
@@ -622,6 +650,7 @@ impl<S: Source> LinuxDownload<'_, S> {
             return Ok(LinkState::Right);
         }
         if download {
+            begin()?;
             if let Some(parent) = dest.parent() {
                 crate::paths::ensure_dir(parent)?;
             }

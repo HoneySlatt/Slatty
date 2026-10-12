@@ -517,10 +517,11 @@ pub async fn reconfigure(
         dlcs: selected.clone(),
         proton: None,
     };
-    // Noted just before the first file changes: a change refused before (not enough space, GOG
-    // not answering) leaves the game as it was, playable. Held back is noted then too, so a change
-    // cut off and finished later keeps it: an older build chosen is not updated without asking;
-    // the newest is. A language or DLC change leaves it.
+    // Noted just before the first file changes: a change refused or paused before (not enough
+    // space, GOG not answering, a pause while the installed files are checked) leaves the game as
+    // it was, playable. Held back is noted then too, so a change cut off and finished later keeps
+    // it: an older build chosen is not updated without asking; the newest is. A language or DLC
+    // change leaves it.
     let begin = || {
         if pending.is_none()
             && let Some(held) = held_after(&change, plan.is_newest())
@@ -540,8 +541,9 @@ pub async fn reconfigure(
         };
         let applied = async {
             dl.check_space(&set, &install.path)?;
+            let begin = once(&begin);
+            let checked = dl.replace_bad(&set, &install.path, &begin).await?;
             begin()?;
-            let checked = dl.check_installed(&set, &install.path, true).await?;
             let kept: HashSet<&Path> = set
                 .files
                 .iter()
@@ -653,6 +655,8 @@ async fn windows_reconfigure(
     Ok((applied, installer::recorded_files(&set)))
 }
 
+/// Brings the files under `dir` from `old` to `set`. `begin` is called once: just before the first
+/// file changes, or once every file is checked when none has to.
 pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
     dl: &Download<'_, S>,
     set: &installer::FileSet,
@@ -663,9 +667,11 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
 ) -> Result<UpdateReport> {
     // Refused before anything changes when the disk cannot hold the new files.
     dl.check_space(set, dir)?;
+    let begin = once(begin);
+    let patched =
+        crate::patches::apply_all(dl.source, patches, set, old, dir, &dl.cancel, &begin).await?;
+    let checked = dl.replace_bad(set, dir, &begin).await?;
     begin()?;
-    let patched = crate::patches::apply_all(dl.source, patches, set, old, dir, &dl.cancel).await?;
-    let checked = dl.check_installed(set, dir, true).await?;
     // Windows sees differently cased paths as one file.
     let kept: HashSet<String> = set
         .files
@@ -683,6 +689,19 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
         removed,
         ..Default::default()
     })
+}
+
+/// `begin`, run by the first call only, or by the next ones until it succeeds.
+fn once(begin: &(dyn Fn() -> Result<()> + Sync)) -> impl Fn() -> Result<()> + Sync + '_ {
+    let begun = std::sync::Mutex::new(false);
+    move || {
+        let mut begun = begun.lock().unwrap();
+        if !*begun {
+            begin()?;
+            *begun = true;
+        }
+        Ok(())
+    }
 }
 
 /// Deletes the files slatty installed before that the game no longer has, and the folders they

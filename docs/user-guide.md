@@ -421,8 +421,8 @@ An update compares each file of the new build with the one on disk:
 
 If an update is interrupted, the game cannot be launched until `slatty update <game-id>` completes
 it. The command resumes with the same build and only downloads what is still missing. An update
-refused before any file changes (not enough disk space, GOG not answering) leaves the game playable
-as it was. The space check counts a file that keeps its size as already there, and each replaced
+refused or paused before any file changes (not enough disk space, GOG not answering, paused while it
+checks the installed files) leaves the game playable as it was. The space check counts a file that keeps its size as already there, and each replaced
 file is written beside the old one before it takes its place: an update that changes large files
 without changing their size can still run out of space part way. It then stops, and resumes once
 space is freed.

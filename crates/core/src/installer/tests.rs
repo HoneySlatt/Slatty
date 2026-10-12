@@ -819,6 +819,63 @@ async fn an_update_without_room_changes_nothing_and_is_not_noted() {
     );
 }
 
+/// An update paused before any file changed (as it starts, or while it checks the installed files)
+/// is not noted as started: the game stays playable rather than wait for an update that changed
+/// nothing.
+#[tokio::test]
+async fn an_update_paused_before_any_file_changed_is_not_noted() {
+    let env = Env::new("update-paused");
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    let game = env.target();
+    // Already on the build it is updated to.
+    let set = collect_files(&env.source, &env.depots).await.unwrap();
+    let record = InstallRecord {
+        build_id: "b1".into(),
+        version: "1.0".into(),
+        language: "en-US".into(),
+        path: Some(game.clone()),
+        dlcs: vec![],
+        setup_build: None,
+        setup_failures: 0,
+        files: recorded_files(&set),
+    };
+    let begun = AtomicUsize::new(0);
+    let begin = || {
+        begun.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    };
+    let update = |cancel: CancellationToken, pause_as_checking: bool| {
+        let (source, set, record, game, begin) = (&env.source, &set, &record, &game, &begin);
+        async move {
+            let token = cancel.clone();
+            let progress = move |_: Progress| {
+                if pause_as_checking {
+                    token.cancel();
+                }
+            };
+            let free_space = |_: &Path| Ok(PLENTY);
+            let dl = Download {
+                source,
+                cancel,
+                progress: &progress,
+                free_space: &free_space,
+            };
+            crate::maintenance::apply_update(&dl, set, record, game, &[], begin).await
+        }
+    };
+
+    let paused = CancellationToken::new();
+    paused.cancel();
+    let before = update(paused, false).await;
+    assert!(matches!(before, Err(Error::Cancelled)), "{before:?}");
+    let checking = update(CancellationToken::new(), true).await;
+    assert!(matches!(checking, Err(Error::Cancelled)), "{checking:?}");
+    assert_eq!(begun.load(Ordering::SeqCst), 0, "nothing noted");
+    // Not paused: noted once every file is checked, for its record to be rewritten.
+    update(CancellationToken::new(), false).await.unwrap();
+    assert_eq!(begun.load(Ordering::SeqCst), 1);
+}
+
 #[tokio::test]
 async fn chunks_moved_inside_a_changed_file_are_reused() {
     let mut env = Env::new("moved");

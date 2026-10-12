@@ -233,7 +233,10 @@ runs it.
 - another language;
 - another set of DLC, the last two staying on the installed build.
 
-It records an "updating" job with the target build, language and DLC. Then:
+It records an "updating" job with the target build, language and DLC just before the first file
+changes (`begin`), or once every file is checked when none has to: a change refused or paused before
+(not enough space, GOG not answering, a pause while the installed files are checked) leaves the game
+as it was, playable. Then:
 
 1. The new file list is checked in place with the same fill routine as installs and repairs: only
    files that are missing or differ are downloaded, each written to a temporary name and renamed.
