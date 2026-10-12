@@ -391,3 +391,15 @@ fn a_steamgriddb_failure_is_said_in_the_picker() {
     edit(&mut app, EditMsg::ClosePicker);
     assert!(app.edit.as_ref().unwrap().picker.is_none());
 }
+
+/// SteamGridDB's thumbnails show signed out of GOG too (a library of Steam's games or games added
+/// by hand): they go to the cache every account shares, as Steam's images do.
+#[test]
+fn steamgriddb_thumbnails_are_fetched_without_a_gog_account() {
+    let mut app = library_app();
+    app.logged_out();
+    let thumb = "https://cdn2.steamgriddb.com/thumb/[FAKE].jpg".to_string();
+    let task = app.request_images(vec![thumb.clone()]);
+    assert_eq!(task.units(), 1);
+    assert!(app.images_requested.contains(&thumb));
+}

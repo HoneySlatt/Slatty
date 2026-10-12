@@ -3,11 +3,14 @@
 //! only once the user turns it on and gives their own API key, which stays in the keyring and goes
 //! in a header, never in a URL.
 
+use std::path::PathBuf;
+
 use reqwest::Client;
 use serde::Deserialize;
 
 use crate::error::{Error, Result};
 use crate::http;
+use crate::paths::Dirs;
 use crate::secret::Secret;
 
 /// Name of the API key in the keyring.
@@ -117,7 +120,26 @@ pub async fn download(http: &Client, url: &str) -> Result<Vec<u8>> {
     http::bytes(http.get(url), "downloading SteamGridDB art").await
 }
 
-fn from_steamgriddb(url: &str) -> bool {
+/// The file of a thumbnail in SlattyLauncher's cache, downloaded when missing: shared by every
+/// account, as Steam's images are, it tells nothing of one and shows signed out of GOG too. Only
+/// from SteamGridDB's own servers.
+pub async fn thumbnail(http: &Client, dirs: &Dirs, url: &str) -> Result<PathBuf> {
+    if !from_steamgriddb(url) {
+        return Err(Error::Refused(format!("{url} is not on SteamGridDB")));
+    }
+    let name = crate::fsutil::sha256_hex(url.as_bytes());
+    crate::library::cached(
+        http,
+        dirs.cache.join("steamgriddb"),
+        name,
+        url,
+        "downloading SteamGridDB art",
+    )
+    .await
+}
+
+/// Whether `url` is on SteamGridDB's own servers, over HTTPS.
+pub fn from_steamgriddb(url: &str) -> bool {
     url::Url::parse(url).is_ok_and(|u| {
         u.scheme() == "https"
             && u.host_str()
@@ -130,6 +152,27 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::*;
+
+    /// A thumbnail is asked of SteamGridDB's own servers alone, over HTTPS: any other address is
+    /// refused before a request (here, to an address that cannot answer).
+    #[tokio::test]
+    async fn a_thumbnail_comes_from_steamgriddb_alone() {
+        let http = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+            .build()
+            .unwrap();
+        let dirs = Dirs::under(std::path::Path::new("/nonexistent/[FAKE]"));
+        for url in [
+            "https://elsewhere.example/thumb/a.jpg",
+            "http://cdn2.steamgriddb.com/thumb/a.jpg",
+        ] {
+            let refused = thumbnail(&http, &dirs, url).await;
+            assert!(
+                matches!(refused, Err(Error::Refused(_))),
+                "{url}: {refused:?}"
+            );
+        }
+    }
 
     /// Answers one request with `status` and `body`, and hands back the request it received.
     async fn serve(

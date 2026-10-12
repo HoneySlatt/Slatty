@@ -369,23 +369,32 @@ impl App {
         let (steam, gog): (Vec<String>, Vec<String>) = wanted
             .into_iter()
             .partition(|u| slatty_core::steam::library::is_server_image(u));
+        // SteamGridDB's thumbnails (Edit game) tell nothing of the account either.
+        let (grids, gog): (Vec<String>, Vec<String>) = gog
+            .into_iter()
+            .partition(|u| slatty_core::steamgriddb::from_steamgriddb(u));
         let allowed = self.steam.images_allowed.clone();
-        let fetch = |core: Core, url: String, user_id: Option<String>| {
+        let fetch = |core: Core, url: String, from: ImageSource| {
             let key = url.clone();
             let allowed = allowed.clone();
             Task::perform(
                 async move {
                     let _permit = core.downloads.acquire().await.ok()?;
-                    let path = match user_id {
-                        Some(user_id) => {
+                    let path = match from {
+                        ImageSource::Gog(user_id) => {
                             library::image(&core.http, &core.dirs, &user_id, &url).await
                         }
                         // Turned off while waiting its turn: not asked.
-                        None if !allowed.load(std::sync::atomic::Ordering::Relaxed) => {
+                        ImageSource::Steam
+                            if !allowed.load(std::sync::atomic::Ordering::Relaxed) =>
+                        {
                             return None;
                         }
-                        None => {
+                        ImageSource::Steam => {
                             slatty_core::steam::library::image(&core.http, &core.dirs, &url).await
+                        }
+                        ImageSource::SteamGridDb => {
+                            slatty_core::steamgriddb::thumbnail(&core.http, &core.dirs, &url).await
                         }
                     };
                     let path = path.ok()?;
@@ -396,19 +405,23 @@ impl App {
                 move |path| Message::Image(key, path),
             )
         };
-        let steam = Task::batch(steam.into_iter().map(|url| fetch(core.clone(), url, None)));
+        let shared = Task::batch(
+            (steam.into_iter().map(|url| (url, ImageSource::Steam)))
+                .chain(grids.into_iter().map(|url| (url, ImageSource::SteamGridDb)))
+                .map(|(url, from)| fetch(core.clone(), url, from)),
+        );
         let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
             // Asked again once signed in.
             for url in &gog {
                 self.images_requested.remove(url);
             }
-            return steam;
+            return shared;
         };
         let gog = Task::batch(
             gog.into_iter()
-                .map(|url| fetch(core.clone(), url, Some(user_id.clone()))),
+                .map(|url| fetch(core.clone(), url, ImageSource::Gog(user_id.clone()))),
         );
-        Task::batch([steam, self.account_task(gog)])
+        Task::batch([shared, self.account_task(gog)])
     }
 
     pub fn set_library(&mut self, cache: LibraryCache) -> Task<Message> {
@@ -593,6 +606,14 @@ fn overview_stream(core: Core, user_id: String, ids: Vec<String>) -> impl Stream
         }
         let _ = output.send(Message::OverviewDone).await;
     })
+}
+
+/// Where an image comes from, and so which cache keeps it: the account's for GOG's, the one every
+/// account shares for Steam's image servers and SteamGridDB's thumbnails.
+enum ImageSource {
+    Gog(String),
+    Steam,
+    SteamGridDb,
 }
 
 /// Widest image kept: key art is drawn at most window-wide.

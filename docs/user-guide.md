@@ -794,6 +794,7 @@ corners and the page transition. See [theming](theming.md).
 | `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | Comet's data and configuration |
 | `~/.cache/slatty/<user id>/` | Library and covers; safe to delete |
 | `~/.cache/slatty/steam/` | Images of Steam's games downloaded from Steam's image servers, once turned on; safe to delete |
+| `~/.cache/slatty/steamgriddb/` | Thumbnails Edit game showed from SteamGridDB, once turned on; safe to delete |
 | `~/.local/state/slatty/logs/` | Game, prefix creation, setup, Galaxy service and Comet logs: the last run of each and the two before (`.1`, `.2`); a game's go when it is uninstalled |
 
 Read a log before sharing it: a game's log holds whatever the game printed, which can include a
