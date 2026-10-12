@@ -1,8 +1,11 @@
-//! Covers of the library grid made at the size they are drawn. Iced draws an image larger than its
-//! place by reading four of its pixels for each one shown, with no smaller copies to read from: a
-//! cover two or three times as wide as its card shows grainy, its fine lines broken. Each one is
-//! made once at the card's widest, in pixels, with Lanczos3, off the interface thread at the lowest
-//! priority, kept in the cache, and shown in place of the original once made.
+//! Covers of the library grid and the game page's key art made at the size they are drawn. Iced
+//! draws an image larger than its place by reading four of its pixels for each one shown, with no
+//! smaller copies to read from: a cover two or three times as wide as its card shows grainy, its
+//! fine lines broken. And it enlarges one smaller than its place by blending its four nearest
+//! pixels, softly: key art of 1920 pixels across a screen of 3840. Each one is made once at the
+//! size drawn, in pixels, with Lanczos3 (and AMD's RCAS sharpening, FSR 1's, when enlarged), off the
+//! interface thread at the lowest priority, kept in the cache, and shown in place of the original
+//! once made.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -21,6 +24,14 @@ const PER_MESSAGE: usize = 16;
 /// A cover at most this much wider than its card is shown as it is: drawn smaller by less than
 /// that, it loses no pixel.
 const KEPT_UP_TO: f32 = 1.2;
+/// Key art at most this much narrower than its place is shown as it is.
+const ENLARGED_FROM: f32 = 1.05;
+/// The widths key art is made at: the window's, rounded up to one of these, so that resizing the
+/// window makes none again. Wider windows enlarge the widest themselves: one of 3840 pixels takes
+/// about 33 MB once decoded.
+const ART_WIDTHS: [u32; 3] = [1920, 2560, 3840];
+/// The game page draws its key art this much wider than the window (`ui::game::hero`).
+const ART_ENLARGED: f32 = 1.06;
 
 #[derive(Default)]
 pub struct ScaledCovers {
@@ -31,6 +42,9 @@ pub struct ScaledCovers {
     /// Covers being made, so that none is asked twice.
     pending: HashSet<PathBuf>,
     limit: Option<Arc<Semaphore>>,
+    /// Per key art and width: its copy, or `None` to show it as it is.
+    art: HashMap<(PathBuf, u32), Option<image::Handle>>,
+    art_pending: HashSet<(PathBuf, u32)>,
 }
 
 impl App {
@@ -51,13 +65,77 @@ impl App {
         }
     }
 
+    /// The width in pixels key art is made at (`ART_WIDTHS`).
+    fn art_width(&self) -> Option<u32> {
+        let drawn = self.window.width * self.scaled.scale? * ART_ENLARGED;
+        Some(
+            ART_WIDTHS
+                .into_iter()
+                .find(|w| *w as f32 >= drawn)
+                .unwrap_or(ART_WIDTHS[ART_WIDTHS.len() - 1]),
+        )
+    }
+
+    /// The key art drawn for `art`: its copy at the window's width once made.
+    pub fn shown_art(&self, art: image::Handle) -> image::Handle {
+        let copy = match (&art, self.art_width()) {
+            (image::Handle::Path(_, path), Some(width)) => self
+                .scaled
+                .art
+                .get(&(path.clone(), width))
+                .cloned()
+                .flatten(),
+            _ => None,
+        };
+        copy.unwrap_or(art)
+    }
+
+    /// Makes the copy of the open game's key art at the window's width, unless made.
+    pub fn scale_art(&mut self) -> Task<Message> {
+        let (Some(core), Some(width)) = (self.core.clone(), self.art_width()) else {
+            return Task::none();
+        };
+        let Some(image::Handle::Path(_, from)) =
+            self.selected_game().and_then(|g| self.background(g))
+        else {
+            return Task::none();
+        };
+        let key = (from.clone(), width);
+        if self.scaled.art.contains_key(&key) || !self.scaled.art_pending.insert(key) {
+            return Task::none();
+        }
+        let dir = self
+            .account
+            .as_ref()
+            .map(|a| core.dirs.account_cache(&a.user_id))
+            .filter(|c| from.starts_with(c))
+            .unwrap_or_else(|| core.dirs.cache.clone())
+            .join("art")
+            .join(width.to_string());
+        Task::perform(
+            {
+                let from = from.clone();
+                slatty_core::fsutil::in_background(move || scaled_copy(&from, width, &dir, true))
+            },
+            move |copy| Message::ArtScaled(from.clone(), width, copy),
+        )
+    }
+
+    pub fn art_scaled(&mut self, from: PathBuf, width: u32, copy: Option<PathBuf>) {
+        let key = (from, width);
+        self.scaled.art_pending.remove(&key);
+        self.scaled
+            .art
+            .insert(key, copy.map(image::Handle::from_path));
+    }
+
     /// The window's scale is known, or changed.
     pub fn rescaled(&mut self, scale: f32) -> Task<Message> {
         if self.scaled.scale == Some(scale) {
             return Task::none();
         }
         self.scaled.scale = Some(scale);
-        self.resize_covers()
+        Task::batch([self.resize_covers(), self.scale_art()])
     }
 
     /// The covers' size changed (the window's scale, Settings → Library): all are made again.
@@ -161,7 +239,7 @@ impl App {
                                     _ => &shared,
                                 };
                                 let dir = cache.join("scaled").join(width.to_string());
-                                let copy = scaled_copy(&from, width, &dir);
+                                let copy = scaled_copy(&from, width, &dir, false);
                                 (id, from, copy)
                             })
                             .collect()
@@ -197,12 +275,13 @@ fn prune(folders: &[PathBuf], width: u32) {
 }
 
 /// The copy of `source` `width` pixels wide in `dir`, made unless an earlier one is there; `None`
-/// when `source` is shown as it is (`KEPT_UP_TO`) or cannot be read. Named after the width and the
-/// source's path, size and modification time, so a changed cover is made again.
-pub fn scaled_copy(source: &Path, width: u32, dir: &Path) -> Option<PathBuf> {
+/// when `source` is shown as it is (`KEPT_UP_TO`, and `ENLARGED_FROM` with `enlarge`; a narrower
+/// one without) or cannot be read. Named after the width and the source's path, size and
+/// modification time, so a changed cover is made again.
+pub fn scaled_copy(source: &Path, width: u32, dir: &Path, enlarge: bool) -> Option<PathBuf> {
     let meta = std::fs::metadata(source).ok()?;
     let id = format!(
-        "{width}\n{}\n{}\n{:?}",
+        "{width}\n{enlarge}\n{}\n{}\n{:?}",
         source.display(),
         meta.len(),
         meta.modified().ok()
@@ -222,7 +301,9 @@ pub fn scaled_copy(source: &Path, width: u32, dir: &Path) -> Option<PathBuf> {
             .ok()
     };
     let (source_width, _) = reader()?.into_dimensions().ok()?;
-    if source_width as f32 <= width as f32 * KEPT_UP_TO {
+    let ratio = width as f32 / source_width as f32;
+    let enlarged = enlarge && ratio > ENLARGED_FROM;
+    if !enlarged && ratio * KEPT_UP_TO >= 1.0 {
         return None;
     }
     let small =
@@ -230,6 +311,7 @@ pub fn scaled_copy(source: &Path, width: u32, dir: &Path) -> Option<PathBuf> {
             .decode()
             .ok()?
             .resize(width, u32::MAX, ::image::imageops::FilterType::Lanczos3);
+    let small = if enlarged { rcas(&small) } else { small };
     let mut out = Vec::new();
     let (written, ext) = if small.color().has_alpha() {
         let png = small.write_to(
@@ -255,6 +337,46 @@ pub fn scaled_copy(source: &Path, width: u32, dir: &Path) -> Option<PathBuf> {
     Some(made)
 }
 
+/// AMD FidelityFX RCAS, FSR 1's sharpening, at its usual strength (0.2 stops): gives an enlarged
+/// image back the edges Lanczos3 softens, without the halos of an unsharp mask. Ported from
+/// `ffx_fsr1.h` (MIT licence), on the processor. Transparency is kept as it was.
+fn rcas(image: &::image::DynamicImage) -> ::image::DynamicImage {
+    const LIMIT: f32 = 0.25 - 1.0 / 16.0;
+    let strength = (-0.2f32).exp2();
+    let src = image.to_rgba32f();
+    let (w, h) = src.dimensions();
+    let at = |x: i64, y: i64| {
+        let x = x.clamp(0, w as i64 - 1) as u32;
+        let y = y.clamp(0, h as i64 - 1) as u32;
+        src.get_pixel(x, y).0
+    };
+    let mut out = src.clone();
+    for (x, y, pixel) in out.enumerate_pixels_mut() {
+        let (x, y) = (x as i64, y as i64);
+        let (n, w_, e, s) = (at(x, y - 1), at(x - 1, y), at(x + 1, y), at(x, y + 1));
+        let c = pixel.0;
+        let mut lobe = f32::MIN;
+        for i in 0..3 {
+            let min = n[i].min(w_[i]).min(e[i]).min(s[i]);
+            let max = n[i].max(w_[i]).max(e[i]).max(s[i]);
+            let hit_min = min / (4.0 * max).max(1e-6);
+            let hit_max = (1.0 - max) / (4.0 * min - 4.0).min(-1e-6);
+            lobe = lobe.max((-hit_min).max(hit_max));
+        }
+        let lobe = (-LIMIT).max(lobe.min(0.0)) * strength;
+        let scale = 1.0 / (4.0 * lobe + 1.0);
+        for i in 0..3 {
+            pixel.0[i] = ((lobe * (n[i] + w_[i] + e[i] + s[i]) + c[i]) * scale).clamp(0.0, 1.0);
+        }
+    }
+    let sharpened = ::image::DynamicImage::ImageRgba32F(out);
+    if image.color().has_alpha() {
+        ::image::DynamicImage::ImageRgba8(sharpened.to_rgba8())
+    } else {
+        ::image::DynamicImage::ImageRgb8(sharpened.to_rgb8())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,10 +399,10 @@ mod tests {
         let jpeg = ::image::ImageFormat::Jpeg;
         write(&cover, ::image::RgbImage::new(600, 900).into(), jpeg);
 
-        let made = scaled_copy(&cover, 225, &copies).unwrap();
+        let made = scaled_copy(&cover, 225, &copies, false).unwrap();
         assert_eq!(::image::image_dimensions(&made).unwrap(), (225, 338));
         let first = std::fs::metadata(&made).unwrap().modified().unwrap();
-        assert_eq!(scaled_copy(&cover, 225, &copies), Some(made.clone()));
+        assert_eq!(scaled_copy(&cover, 225, &copies, false), Some(made.clone()));
         assert_eq!(
             std::fs::metadata(&made).unwrap().modified().unwrap(),
             first,
@@ -289,23 +411,59 @@ mod tests {
 
         // A cover changed since: made again, under another name.
         write(&cover, ::image::RgbImage::new(342, 482).into(), jpeg);
-        let again = scaled_copy(&cover, 225, &copies).unwrap();
+        let again = scaled_copy(&cover, 225, &copies, false).unwrap();
         assert_ne!(again, made);
         assert_eq!(::image::image_dimensions(&again).unwrap().0, 225);
 
         // At most a fifth wider than the card: shown as it is.
-        assert_eq!(scaled_copy(&cover, 300, &copies), None);
+        assert_eq!(scaled_copy(&cover, 300, &copies, false), None);
 
         // Transparency stays.
         let logo = dir.join("2.png");
         let png = ::image::ImageFormat::Png;
         write(&logo, ::image::RgbaImage::new(600, 900).into(), png);
-        let made = scaled_copy(&logo, 150, &copies).unwrap();
+        let made = scaled_copy(&logo, 150, &copies, false).unwrap();
         assert_eq!(made.extension().unwrap(), "png");
         assert!(::image::open(&made).unwrap().color().has_alpha());
 
-        assert_eq!(scaled_copy(&dir.join("missing.jpg"), 150, &copies), None);
+        assert_eq!(
+            scaled_copy(&dir.join("missing.jpg"), 150, &copies, false),
+            None
+        );
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn key_art_narrower_than_its_place_is_enlarged_and_sharpened() {
+        let dir = std::env::temp_dir().join(format!("slatty-enlarge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (art, copies) = (dir.join("art.jpg"), dir.join("art"));
+        let jpeg = ::image::ImageFormat::Jpeg;
+        write(&art, ::image::RgbImage::new(1920, 620).into(), jpeg);
+
+        let made = scaled_copy(&art, 3840, &copies, true).unwrap();
+        assert_eq!(::image::image_dimensions(&made).unwrap(), (3840, 1240));
+        // Nearly as wide as its place: shown as it is.
+        assert_eq!(scaled_copy(&art, 2000, &copies, true), None);
+        // A cover is never enlarged.
+        assert_eq!(scaled_copy(&art, 3840, &copies, false), None);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// RCAS steepens an edge, leaves a flat area and transparency as they were.
+    #[test]
+    fn rcas_sharpens_edges_only() {
+        let edge = ::image::RgbaImage::from_fn(8, 8, |x, _| {
+            let v = if x < 4 { 60 } else { 200 };
+            ::image::Rgba([v, v, v, 128])
+        });
+        let sharp = rcas(&edge.into()).to_rgba8();
+        let (dark, light) = (sharp.get_pixel(3, 4), sharp.get_pixel(4, 4));
+        assert!(dark[0] < 60 && light[0] > 200, "{dark:?} {light:?}");
+        assert_eq!(sharp.get_pixel(0, 4)[0], 60);
+        assert_eq!(sharp.get_pixel(7, 4)[0], 200);
+        assert_eq!(dark[3], 128);
     }
 
     #[test]

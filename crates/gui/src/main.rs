@@ -475,6 +475,8 @@ pub enum Message {
     CoversScaled(u32, Vec<(String, PathBuf, Option<PathBuf>)>),
     /// The window's scale, known or changed.
     Rescaled(f32),
+    /// Key art made at this width: the source and its copy, if any.
+    ArtScaled(PathBuf, u32, Option<PathBuf>),
     /// The covers found in the account's cache at start, by game id.
     CachedCovers(HashMap<String, PathBuf>),
     /// How these installed games can be started, read from their folders; then the game whose
@@ -565,6 +567,7 @@ impl Message {
                 | Message::Cover(..)
                 | Message::CoversScaled(..)
                 | Message::Rescaled(_)
+                | Message::ArtScaled(..)
                 | Message::Steam(steam::SteamMsg::Cover(..))
                 | Message::CachedCovers(_)
                 | Message::Image(..)
@@ -940,7 +943,10 @@ impl App {
             Message::ToggleFilters => self.filters_open = !self.filters_open,
             Message::SetFilters(f) => return self.set_filters(f),
             Message::ToggleFavorite(id) => self.toggle_favorite(id),
-            Message::Select(id) => return self.open_game(id, None),
+            Message::Select(id) => {
+                let open = self.open_game(id, None);
+                return Task::batch([open, self.scale_art()]);
+            }
             Message::SelectWith(id, panel) => return self.open_game(id, Some(panel)),
             Message::OpenAchievements(id) => return self.open_achievements(id),
             Message::Avatar(Some(url)) => {
@@ -971,6 +977,7 @@ impl App {
             }
             Message::CoversScaled(width, made) => self.covers_scaled(width, made),
             Message::Rescaled(scale) => return self.rescaled(scale),
+            Message::ArtScaled(from, width, copy) => self.art_scaled(from, width, copy),
             Message::LaunchOptions(read, play) => {
                 self.launch_options.extend(read);
                 if let Some(game_id) = play {
@@ -995,6 +1002,7 @@ impl App {
                     self.art_shown = Self::fade_in(self.now);
                 }
                 self.images.insert(url, image::Handle::from_path(path));
+                return self.scale_art();
             }
             Message::Image(url, None) => {
                 self.images_requested.remove(&url);
@@ -1052,6 +1060,7 @@ impl App {
                 self.window = size;
                 // The parts of the Settings page moved.
                 self.settings_view.tops = Default::default();
+                return self.scale_art();
             }
             Message::Frame(now) => self.now = now,
             Message::DismissNotice => self.notice = None,

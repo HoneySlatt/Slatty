@@ -136,7 +136,7 @@ impl App {
             .as_ref()
             .is_some_and(|u| self.images_requested.contains(u));
         match self.background(g) {
-            Some(h) => Some(h),
+            Some(h) => Some(self.shown_art(h)),
             None if downloading => None,
             None => self.cover(&g.id),
         }

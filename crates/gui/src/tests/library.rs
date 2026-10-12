@@ -471,6 +471,32 @@ fn the_grid_shows_covers_made_at_the_cards_size() {
     assert_eq!(shown(&app), cover);
 }
 
+/// The game page draws its key art from the copy made at the window's width, rounded up to 1920,
+/// 2560 or 3840 pixels; another width draws the original until its own copy is made.
+#[test]
+fn key_art_is_drawn_from_its_copy_at_the_windows_width() {
+    let mut app = library_app();
+    app.window = Size::new(1800.0, 1000.0);
+    let art = PathBuf::from("/images/art.jpg");
+    let original = iced::widget::image::Handle::from_path(&art);
+    let drawn = |app: &App| match app.shown_art(original.clone()) {
+        iced::widget::image::Handle::Path(_, path) => path,
+        other => panic!("{other:?}"),
+    };
+    // 1800 × 1.5 × 1.06 = 2862 pixels: made at 3840.
+    let _ = app.update(Message::Rescaled(1.5));
+    let copy = PathBuf::from("/art/3840/art.jpg");
+    let _ = app.update(Message::ArtScaled(art.clone(), 3840, Some(copy.clone())));
+    assert_eq!(drawn(&app), copy);
+
+    // 1200 × 1.5 × 1.06 = 1908 pixels: 1920, not made yet.
+    let _ = app.update(Message::WindowResized(Size::new(1200.0, 800.0)));
+    assert_eq!(drawn(&app), art);
+    // Made as it is (`None`): the original.
+    let _ = app.update(Message::ArtScaled(art.clone(), 1920, None));
+    assert_eq!(drawn(&app), art);
+}
+
 /// With Remember filters on, the filters are kept as they change and come back at the next start;
 /// off, nothing is kept and the library starts unfiltered.
 #[test]

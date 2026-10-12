@@ -336,8 +336,9 @@ impl App {
             EditMsg::Save => {
                 let game_id = self.edit.as_ref().map(|d| d.game_id.clone());
                 self.save_edit();
-                // A cover chosen or reset: the grid's copy is made from it.
-                return self.scale_covers(game_id.map(|id| vec![id]));
+                // A cover or key art chosen or reset: their copies are made from them.
+                let covers = self.scale_covers(game_id.map(|id| vec![id]));
+                return Task::batch([covers, self.scale_art()]);
             }
         }
         Task::none()

@@ -795,8 +795,8 @@ corners and the page transition. See [theming](theming.md).
 | `~/.local/share/slatty/backups/` | Copies made before any save is replaced or a prefix deleted |
 | `~/.local/share/slatty/diagnostics/` | Cloud copies downloaded by `slatty cloud diff` |
 | `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | Comet's data and configuration |
-| `~/.cache/slatty/<user id>/` | Library and covers, and in `scaled/<width>/` the covers made at the size the grid draws them; safe to delete |
-| `~/.cache/slatty/scaled/<width>/` | The same for Steam's covers and those you chose; safe to delete |
+| `~/.cache/slatty/<user id>/` | Library and covers, and in `scaled/<width>/` and `art/<width>/` the covers and key art made at the size they are drawn; safe to delete |
+| `~/.cache/slatty/scaled/<width>/`, `~/.cache/slatty/art/<width>/` | The same for Steam's images and those you chose; safe to delete |
 | `~/.cache/slatty/steam/` | Images of Steam's games downloaded from Steam's image servers, once turned on; safe to delete |
 | `~/.cache/slatty/steamgriddb/` | Thumbnails Edit game showed from SteamGridDB, once turned on; safe to delete |
 | `~/.local/state/slatty/logs/` | Game, prefix creation, setup, Galaxy service and Comet logs: the last run of each and the two before (`.1`, `.2`); a game's go when it is uninstalled |
