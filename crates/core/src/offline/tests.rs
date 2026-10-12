@@ -535,6 +535,39 @@ fn jobs_are_kept_until_forgotten() {
     assert!(other.save(&db).is_err());
 }
 
+/// The interface asking for a game's installers while the command line downloads them leaves the
+/// command line's job as it is.
+#[test]
+fn a_job_is_not_replaced_while_its_installers_download() {
+    let dir = temp("busy");
+    let dirs = Dirs::under(&dir.join("data"));
+    let db = Db::in_memory().unwrap();
+    let running = OfflineJob {
+        game_id: "1".into(),
+        os: "windows".into(),
+        languages: vec!["en".into()],
+        dlcs: Vec::new(),
+        folder: dir.join("[FAKE] Game"),
+        state: DOWNLOADING.into(),
+    };
+    running.save(&db).unwrap();
+    let asked = OfflineJob {
+        os: "linux".into(),
+        state: crate::installer::QUEUED.into(),
+        ..running.clone()
+    };
+    let busy = lock(&dirs, "1").unwrap();
+    assert!(matches!(
+        asked.save_if_idle(&db, &dirs),
+        Err(Error::Refused(_))
+    ));
+    assert_eq!(OfflineJob::load(&db, "1").unwrap(), Some(running));
+    drop(busy);
+    asked.save_if_idle(&db, &dirs).unwrap();
+    assert_eq!(OfflineJob::load(&db, "1").unwrap(), Some(asked));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
 #[test]
 fn a_discarded_job_deletes_only_its_unfinished_files() {
     let dir = temp("discard");

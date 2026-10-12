@@ -197,7 +197,8 @@ impl App {
                     folder: offline::folder_for(&root, &c.offer.title, &game_id),
                     state: QUEUED.into(),
                 };
-                if let Err(e) = job.save(&core.db) {
+                // Not over the command line's own job while it downloads them.
+                if let Err(e) = job.save_if_idle(&core.db, &core.dirs) {
                     self.notify_error(e.to_string());
                     return Task::none();
                 }
@@ -330,7 +331,7 @@ impl App {
                             state: QUEUED.into(),
                             ..job
                         }
-                        .save(&core.db)
+                        .save_if_idle(&core.db, &core.dirs)
                     })
                 });
                 if let Err(e) = saved {

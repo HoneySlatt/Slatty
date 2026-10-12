@@ -284,6 +284,13 @@ impl OfflineJob {
         Ok(stmt.query_map([], row)?.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// `save`, refused while the game's installers download, from this process or another: that
+    /// download's own job is not replaced.
+    pub fn save_if_idle(&self, db: &Db, dirs: &Dirs) -> Result<()> {
+        let _busy = lock(dirs, &self.game_id)?;
+        self.save(db)
+    }
+
     /// Forgets the job; what it downloaded stays.
     pub fn delete(db: &Db, game_id: &str) -> Result<()> {
         db.conn()

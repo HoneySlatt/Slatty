@@ -196,6 +196,22 @@ fn installers_wait_in_the_queue_behind_a_running_install() {
     assert!(ui.find("[FAKE] Game 5 · offline installers").is_ok());
 }
 
+/// The command line downloading the same game's installers keeps its job: the drawer says so.
+#[test]
+fn installers_downloading_from_the_command_line_are_not_asked_again() {
+    let mut app = library_app();
+    let core = app.core.clone().unwrap();
+    open(&mut app, "5", Some(Panel::Installers));
+    offered(&mut app);
+    let busy =
+        slatty_core::lock::try_acquire(&core.dirs.locks().join("installers-5.lock")).unwrap();
+    let _ = app.update(Message::Offline(OfflineMsg::Download("5".into())));
+    assert!(OfflineJob::load(&core.db, "5").unwrap().is_none());
+    assert!(app.queue.is_empty() && app.offline_run.is_none());
+    assert!(app.notice.as_ref().is_some_and(|n| n.error));
+    drop(busy);
+}
+
 /// What GOG offered an account (its DLC among them) goes with it: the next account's drawer asks
 /// again.
 #[test]
