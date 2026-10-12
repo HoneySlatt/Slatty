@@ -191,7 +191,13 @@ impl App {
         }))
         .spacing(18)
         .max_width(720);
-        container(content).padding(60).center_x(Length::Fill).into()
+        // The window's height: the layers over the page (the quit dialog, notification cards)
+        // take the size of the page under them.
+        container(content)
+            .padding(60)
+            .center_x(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 }
 impl App {

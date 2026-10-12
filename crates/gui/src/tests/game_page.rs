@@ -231,7 +231,17 @@ fn closing_from_the_sign_in_page_asks_first_too() {
     let _ = app.update(Message::CloseRequested);
     let mut ui = render(&app);
     assert!(ui.find("Sign in to GOG").is_ok(), "over the sign-in page");
-    assert!(ui.find("Quit SlattyLauncher?").is_ok());
+    // Where it sits over the library: the page fills the window, as the layers over it do.
+    let mut library = library_app();
+    library.quit_confirm = app.quit_confirm.clone();
+    let over_library = render(&library)
+        .find("Quit SlattyLauncher?")
+        .unwrap()
+        .bounds();
+    assert_eq!(
+        ui.find("Quit SlattyLauncher?").unwrap().bounds(),
+        over_library
+    );
     ui.click("Keep running").unwrap();
     for m in ui.into_messages().collect::<Vec<_>>() {
         let _ = app.update(m);
