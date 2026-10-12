@@ -317,6 +317,9 @@ pub struct App {
     pub preempted: Option<(String, downloads::Preempt)>,
     /// The queue entry Download now asked for, which starts even while a game runs.
     pub starting_now: Option<String>,
+    /// The queue entry Download now stopped, while the row it started runs: when that row is
+    /// paused on request, it goes on by itself.
+    pub made_way: Option<String>,
     /// The queue entries of downloads the launcher stopped (paused for a game or for Download now,
     /// cut off by a close): each goes on by itself, first in line, even while a download paused on
     /// request holds the rest of the queue. An install keeps its mark while planned to start, until
@@ -445,6 +448,7 @@ impl Default for App {
             drag: None,
             preempted: None,
             starting_now: None,
+            made_way: None,
             goes_on: Vec::new(),
             pause_while_playing: true,
             couch: None,

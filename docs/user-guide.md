@@ -167,7 +167,8 @@ and cloud saves is read from GOG in the background and kept; **Refresh** reads i
   then goes on by itself. While a game runs, downloads wait for it to close (**Pause downloads
   while playing**, Settings → Installs); a Steam game too, once SlattyLauncher sees Steam run it
   (it looks while a game it started runs, and as its window comes to the front). Pausing the
-  running download yourself holds the queue.
+  running download yourself holds the queue; when Download now started it, the download it paused
+  goes on all the same.
   The queue is kept when SlattyLauncher closes and goes on at the next start.
 - **Updates**: games waiting for their automatic update, and the one being applied.
 - **Completed**: installs finished since SlattyLauncher started, with **Play**.

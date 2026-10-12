@@ -232,11 +232,14 @@ impl App {
         }
         // The row Download now asked for goes before it; taken out, the stopped download waits as
         // if paused for a game. The game may have closed before the download stopped.
-        let next = match why {
+        let asked = match why {
             Preempt::StartNow => self.start_asked(),
             Preempt::Play => None,
+        };
+        if asked.is_some() {
+            self.made_way = Some(entry.to_owned());
         }
-        .unwrap_or_else(|| self.start_next());
+        let next = asked.unwrap_or_else(|| self.start_next());
         // An install is planned again, for its size in the queue.
         let plan = match of_entry(entry) {
             Some(_) => Task::none(),
@@ -372,6 +375,13 @@ impl App {
         Some(self.start_first())
     }
 
+    /// Lets the download Download now stopped go on, now that the row it started is paused on
+    /// request; the rest of the queue waits for the pause. `None` when there is none, first in line.
+    pub(crate) fn start_made_way(&mut self) -> Option<Task<Message>> {
+        let entry = self.made_way.take()?;
+        (self.queue.first() == Some(&entry)).then(|| self.start_next())
+    }
+
     /// Starts the first download of the queue, whatever waits beside it.
     pub(crate) fn start_first(&mut self) -> Task<Message> {
         if self.queue.is_empty() {
@@ -380,6 +390,7 @@ impl App {
         self.drag = None;
         let game_id = self.queue.remove(0);
         self.save_queue();
+        self.made_way.take_if(|e| *e == game_id);
         // An install keeps its pass until it runs (`InstallMsg::Start`): planned first, it goes
         // back first in the queue when GOG cannot be reached.
         if let Some(id) = of_entry(&game_id) {

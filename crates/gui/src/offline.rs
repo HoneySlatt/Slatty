@@ -296,6 +296,8 @@ impl App {
                     return next;
                 }
                 self.preempted.take_if(|(e, _)| *e == entry(&game_id));
+                // Ended otherwise than paused on request, the queue goes on as usual.
+                let made_way = self.made_way.take();
                 match result {
                     Ok(files) => {
                         self.downloads_waiting = None;
@@ -315,10 +317,15 @@ impl App {
                         return Task::batch([done, next]);
                     }
                     // Paused: the queue waits too, as for an install, unless the launcher paused
-                    // it (`requeue_preempted`); what Download now asked for meanwhile starts.
+                    // it (`requeue_preempted`); what Download now asked for meanwhile starts, else
+                    // the download Download now stopped for it goes on.
                     Err(None) => {
                         self.offline_stopped.push((game_id, None));
-                        return self.start_asked().unwrap_or_else(Task::none);
+                        self.made_way = made_way;
+                        return self
+                            .start_asked()
+                            .or_else(|| self.start_made_way())
+                            .unwrap_or_else(Task::none);
                     }
                     // GOG out of reach: it keeps its place, and the queue waits for GOG.
                     Err(Some((e, true))) => {

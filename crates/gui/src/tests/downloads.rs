@@ -1165,10 +1165,10 @@ fn a_stopped_download_gog_could_not_plan_still_goes_on() {
     assert!(app.goes_on.is_empty());
 }
 
-/// Pausing the download Download now started holds the queue, as the user guide says, the download
-/// it stopped included: that one goes on at the next start, or once asked for.
+/// Pausing the download Download now started lets the download it stopped go on by itself; the rest
+/// of the queue waits for the pause, a download resumed meanwhile included.
 #[test]
-fn pausing_the_download_download_now_started_holds_the_one_it_stopped() {
+fn pausing_the_download_download_now_started_lets_the_one_it_stopped_go_on() {
     use super::offline::{installing_6, paused_install_job, queued_job};
     use crate::downloads::DownloadsMsg;
     use crate::offline::{OfflineMsg, entry};
@@ -1182,8 +1182,58 @@ fn pausing_the_download_download_now_started_holds_the_one_it_stopped() {
     assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
     let _ = app.update(Message::Offline(OfflineMsg::Pause("5".into())));
     let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
-    assert_eq!(app.queue, ["6"]);
-    assert!(app.auto_resume.is_none() && app.installing().is_none());
+    assert_eq!(
+        app.auto_resume.as_deref(),
+        Some("6"),
+        "the one it stopped goes on"
+    );
+
+    // The row started an install, the download stopped installers: the same.
+    let mut app = library_app();
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.start_next();
+    ready_to_install(&mut app, "7");
+    let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow("7".into())));
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    assert!(app.installing().is_some_and(|(id, _, _)| id == "7"));
+    let _ = app.update(Message::Install(InstallMsg::Pause("7".into())));
+    // Saved paused, as the install leaves it.
+    let db = app.core.as_ref().unwrap().db.clone();
+    let job = slatty_core::installer::InstallJob::load(&db, "7")
+        .unwrap()
+        .unwrap();
+    slatty_core::installer::InstallJob {
+        state: slatty_core::installer::PAUSED.into(),
+        ..job
+    }
+    .save(&db)
+    .unwrap();
+    let _ = app.update(Message::Install(InstallMsg::Done("7".into(), Err(None))));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+
+    // A download resumed while another runs waits for a pause of that one.
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    queued_job(&app, "9");
+    let db = app.core.as_ref().unwrap().db.clone();
+    let job = slatty_core::offline::OfflineJob::load(&db, "9")
+        .unwrap()
+        .unwrap();
+    slatty_core::offline::OfflineJob {
+        state: slatty_core::installer::PAUSED.into(),
+        ..job
+    }
+    .save(&db)
+    .unwrap();
+    app.offline_stopped.push(("9".into(), None));
+    let _ = app.update(Message::Offline(OfflineMsg::Resume("9".into())));
+    assert_eq!(app.queue, [entry("9")]);
+    let _ = app.update(Message::Install(InstallMsg::Pause("6".into())));
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert!(app.offline_run.is_none(), "held by the pause");
 }
 
 /// Download now pressed while a download pauses on request starts its row once that one is

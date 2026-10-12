@@ -527,6 +527,7 @@ impl App {
                     Task::none()
                 };
                 // What Download now asked for while it ended goes first, game or not.
+                self.made_way = None;
                 let next = self.start_asked().unwrap_or_else(|| self.start_next());
                 return Task::batch([read, done, cloud, next]);
             }
@@ -537,11 +538,16 @@ impl App {
                 }
                 self.sync_interrupted(&game_id);
                 let plan = self.update_install(InstallMsg::Prepare(game_id, None));
-                // What Download now asked for while it was pausing starts, now that it is paused.
-                let next = self.start_asked().unwrap_or_else(Task::none);
+                // What Download now asked for while it was pausing starts, now that it is paused;
+                // else the download Download now stopped for it goes on.
+                let next = self
+                    .start_asked()
+                    .or_else(|| self.start_made_way())
+                    .unwrap_or_else(Task::none);
                 return Task::batch([plan, next]);
             }
             InstallMsg::Done(game_id, Err(Some(Failure(e, temporary)))) => {
+                self.made_way = None;
                 self.preempted.take_if(|(e, _)| *e == game_id);
                 self.sync_interrupted(&game_id);
                 // Left cut off because GOG could not be reached: it resumes first once GOG answers,
