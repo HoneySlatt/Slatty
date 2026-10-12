@@ -7,8 +7,10 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use iced::Task;
+use slatty_core::installer::Progress;
 use slatty_core::library::LibraryGame;
 
+use crate::downloads::{DownloadsMsg, Preempt};
 use crate::install::{InstallMsg, InstallView};
 use crate::library::{Filters, Shelf, Sort};
 use crate::offline::{OfflineMsg, of_entry};
@@ -839,32 +841,47 @@ impl App {
                 done as f32 / total as f32
             }
         };
-        if let Some((id, title, p)) = self.installing() {
-            rows.push(DownloadRow {
-                game_id: id.to_string(),
-                title: title.to_string(),
-                status: format!(
+        // A download the launcher pauses takes a moment to stop: said at once, with nothing to
+        // press meanwhile.
+        let running = |entry: &str, p: Progress, pause: Message| match self
+            .preempted
+            .as_ref()
+            .filter(|(e, _)| e == entry)
+        {
+            Some((_, Preempt::StartNow)) => ("Pausing…".to_string(), Vec::new()),
+            Some((_, Preempt::Play)) => ("Pausing while a game runs…".to_string(), Vec::new()),
+            None => (
+                format!(
                     "Downloading {:.0}%",
                     percent(p.bytes_done, p.bytes_total) * 100.0
                 ),
+                vec![("Pause", pause)],
+            ),
+        };
+        if let Some((id, title, p)) = self.installing() {
+            let (status, buttons) =
+                running(id, p, Message::Install(InstallMsg::Pause(id.to_string())));
+            rows.push(DownloadRow {
+                game_id: id.to_string(),
+                title: title.to_string(),
+                status,
                 progress: Some(percent(p.bytes_done, p.bytes_total)),
-                buttons: vec![("Pause", Message::Install(InstallMsg::Pause(id.to_string())))],
+                buttons,
             });
         }
         if let Some(run) = &self.offline_run {
             let p = run.progress;
+            let (status, buttons) = running(
+                &crate::offline::entry(&run.game_id),
+                p,
+                Message::Offline(OfflineMsg::Pause(run.game_id.clone())),
+            );
             rows.push(DownloadRow {
                 game_id: run.game_id.clone(),
                 title: format!("{} · offline installers", self.title_of(&run.game_id)),
-                status: format!(
-                    "Downloading {:.0}%",
-                    percent(p.bytes_done, p.bytes_total) * 100.0
-                ),
+                status,
                 progress: Some(percent(p.bytes_done, p.bytes_total)),
-                buttons: vec![(
-                    "Pause",
-                    Message::Offline(OfflineMsg::Pause(run.game_id.clone())),
-                )],
+                buttons,
             });
         }
         for (id, kind) in &self.interrupted {
@@ -897,6 +914,9 @@ impl App {
                 ],
             });
         }
+        // While the download running stops for Download now, the row asked for is starting, and
+        // no other is asked for meanwhile.
+        let starting = matches!(self.preempted, Some((_, Preempt::StartNow)));
         for (place, entry) in self.queue.iter().enumerate() {
             let (id, title) = match of_entry(entry) {
                 Some(id) => (
@@ -914,21 +934,30 @@ impl App {
                 }
                 _ => String::new(),
             };
+            let remove = (
+                "Remove",
+                Message::Downloads(DownloadsMsg::Remove(entry.clone())),
+            );
+            let (status, buttons) = match (starting, place) {
+                (true, 0) => ("Starting…".to_string(), Vec::new()),
+                (true, _) => (format!("Queued, {} in line{size}", place + 1), vec![remove]),
+                (false, _) => (
+                    format!("Queued, {} in line{size}", place + 1),
+                    vec![
+                        (
+                            "Download now",
+                            Message::Downloads(DownloadsMsg::StartNow(entry.clone())),
+                        ),
+                        remove,
+                    ],
+                ),
+            };
             rows.push(DownloadRow {
                 game_id: id,
                 title,
-                status: format!("Queued, {} in line{size}", place + 1),
+                status,
                 progress: None,
-                buttons: vec![
-                    (
-                        "Download now",
-                        Message::Downloads(crate::downloads::DownloadsMsg::StartNow(entry.clone())),
-                    ),
-                    (
-                        "Remove",
-                        Message::Downloads(crate::downloads::DownloadsMsg::Remove(entry.clone())),
-                    ),
-                ],
+                buttons,
             });
         }
         rows

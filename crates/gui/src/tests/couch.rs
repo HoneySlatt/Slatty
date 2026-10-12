@@ -281,6 +281,27 @@ fn installs_asked_one_after_the_other_all_start() {
     assert_eq!(app.queue, ["7"], "the second waits for the first");
 }
 
+/// The download running takes a moment to stop for Download now: the tab says so at once, and
+/// offers nothing that would undo it meanwhile.
+#[test]
+fn the_downloads_tab_shows_a_download_stopping_for_another() {
+    use super::offline::installing_6;
+    use crate::downloads::DownloadsMsg;
+    let mut app = couch_app();
+    installing_6(&mut app);
+    app.queue = vec!["7".into(), "8".into()];
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow("7".into())));
+    let rows = app.download_rows();
+    assert_eq!(rows[0].status, "Pausing…");
+    assert!(rows[0].buttons.is_empty());
+    let seven = rows.iter().find(|r| r.game_id == "7").unwrap();
+    assert_eq!(seven.status, "Starting…");
+    assert!(
+        rows.iter()
+            .all(|r| r.buttons.iter().all(|(label, _)| *label != "Download now"))
+    );
+}
+
 #[test]
 fn a_download_discarded_while_resuming_is_not_started_by_its_plan() {
     let mut app = couch_app();
