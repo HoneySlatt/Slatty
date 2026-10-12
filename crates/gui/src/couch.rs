@@ -302,6 +302,10 @@ impl App {
         let Some(couch) = &self.couch else {
             return Task::none();
         };
+        // The notice's own Close is out of the focus's way.
+        if nav == Nav::Back && self.notice.take().is_some() {
+            return Task::none();
+        }
         if self.quit_confirm.is_some() {
             return self.quit_nav(nav);
         }

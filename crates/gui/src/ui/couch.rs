@@ -149,12 +149,24 @@ impl App {
                 (Glyph::Menu, "Menu"),
             ]
         };
-        let hints = hints.iter().map(|(g, label)| {
-            row![glyph(*g), text(*label).size(16).color(tokens().muted)]
-                .spacing(8)
-                .align_y(Alignment::Center)
-                .into()
-        });
+        // B closes a notice first.
+        let notice = self
+            .notice
+            .is_some()
+            .then_some((Glyph::B, "Close the notice"));
+        let hints = notice
+            .iter()
+            .chain(
+                hints
+                    .iter()
+                    .filter(|(g, _)| notice.is_none() || !matches!(g, Glyph::B)),
+            )
+            .map(|(g, label)| {
+                row![glyph(*g), text(*label).size(16).color(tokens().muted)]
+                    .spacing(8)
+                    .align_y(Alignment::Center)
+                    .into()
+            });
         container(Row::with_children(hints).spacing(28))
             .padding([0.0, MARGIN])
             .width(Length::Fill)

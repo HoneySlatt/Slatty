@@ -339,6 +339,22 @@ fn an_installed_game_plays_from_its_page() {
     assert_eq!(app.selected.as_deref(), Some("3"));
 }
 
+/// A notice (an install that cannot start, Steam not reached) closes with B, before anything else
+/// B does; the hints say so.
+#[test]
+fn a_notice_closes_with_b() {
+    let mut app = couch_app();
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    app.notice = Some(crate::Notice {
+        error: true,
+        text: "[FAKE] cannot be installed".into(),
+    });
+    assert!(render(&app).find("Close the notice").is_ok());
+    nav(&mut app, Nav::Back);
+    assert!(app.notice.is_none());
+    assert_eq!(couch(&app).tab, Tab::Library, "nothing else");
+}
+
 #[test]
 fn a_game_started_several_ways_asks_which() {
     let mut app = couch_app();
