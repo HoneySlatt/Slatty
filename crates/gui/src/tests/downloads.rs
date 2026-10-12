@@ -957,6 +957,44 @@ fn download_now_taken_out_while_a_download_pauses_for_a_game_starts_nothing() {
     assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
 }
 
+/// A download the launcher stopped, still in the saved queue after a restart, that GOG refuses to
+/// plan for good at its turn waits among those stopped, with Resume and Discard, as one cut off
+/// does.
+#[test]
+fn a_stopped_download_that_cannot_resume_after_a_restart_is_listed_as_failed() {
+    use slatty_core::installer::{DOWNLOADING, FAILED, InstallJob};
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    InstallJob {
+        game_id: "6".into(),
+        build_id: "1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 6".into(),
+        state: DOWNLOADING.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    let waiting =
+        crate::boot::downloads_from(vec!["6".into()], InstallJob::list(&db).unwrap(), &[]);
+    app.queue = waiting.queue;
+    app.goes_on = waiting.goes_on;
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("6"));
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "6".into(),
+        Err("[FAKE] DLC not owned".into()),
+    )));
+    assert_eq!(InstallJob::load(&db, "6").unwrap().unwrap().state, FAILED);
+    assert!(app.queue.is_empty());
+    assert_eq!(
+        app.interrupted,
+        [("6".to_string(), crate::Interrupted::Failed)]
+    );
+}
+
 /// Download now pressed while a download pauses on request starts its row once that one is
 /// paused, a game running or not, as it does when nothing downloads.
 #[test]

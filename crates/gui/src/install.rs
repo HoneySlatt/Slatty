@@ -238,6 +238,11 @@ impl App {
                                     self.notify_error(e.to_string());
                                 }
                             }
+                            // One the launcher stopped waited in the queue, not among those
+                            // stopped: listed there now, as at the next start.
+                            if !self.interrupted.iter().any(|(id, _)| *id == game_id) {
+                                self.sync_interrupted(&game_id);
+                            }
                         }
                         InstallView::Failed(e)
                     }
