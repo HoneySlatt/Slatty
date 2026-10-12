@@ -560,6 +560,9 @@ impl Message {
                 // play times unless the library is sorted by them (`App::playtimes_fetched`).
                 | Message::LaunchOptions(..)
                 | Message::PlaytimesFetched(_)
+                // A game read by a scan of GOG's data, which forgets the lists itself when what
+                // they go by changed (`App::overview_fetched`).
+                | Message::OverviewFetched(..)
                 // Notification cards come and go, and the window's focus with them.
                 | Message::Notify(_)
                 // Which games Steam runs, looked at every two seconds while one does, and when

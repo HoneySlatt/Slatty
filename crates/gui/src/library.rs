@@ -169,8 +169,16 @@ impl App {
             if o.playtime_minutes.is_none() {
                 o.playtime_minutes = self.overview.get(&id).and_then(|k| k.playtime_minutes);
             }
+            // What the lists go by (filters, order, the Achievements tab): a scan reads every game
+            // again, mostly as it was (`Message::keeps_lists`).
+            let listed = |o: &GameOverview| (o.achievements, o.cloud_saves, o.playtime_minutes);
+            if listed(&self.overview.get(&id).cloned().unwrap_or_default()) != listed(&o) {
+                self.lists.clear();
+            }
             self.overview.insert(id, o);
         }
+        // How many games were read, shown while the scan runs.
+        self.lists.overview_read.take();
     }
 
     pub fn overview_done(&mut self) {

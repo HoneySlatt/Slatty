@@ -506,6 +506,32 @@ fn a_play_time_not_read_again_is_kept() {
     assert_eq!(app.overview["3"].achievements, Some((1, 4)));
 }
 
+/// A scan reads every game again: one read as it was leaves the lists as they were (making them
+/// takes 2 ms at 10,000 games, for each game read), one whose achievements changed is listed anew.
+#[test]
+fn a_game_read_again_as_it_was_leaves_the_lists_as_they_were() {
+    let mut app = library_app();
+    app.page = Page::Achievements;
+    let epoch = app.account_epoch;
+    let read = |achievements| {
+        let overview = GameOverview {
+            achievements,
+            checked: true,
+            ..Default::default()
+        };
+        let read = Message::OverviewFetched("3".into(), Ok(overview));
+        Message::AccountResult(epoch, Box::new(read))
+    };
+    let _ = app.update(read(Some((1, 4))));
+    let _ = app.view();
+    assert!(app.lists.achievements.borrow().is_some());
+    let _ = app.update(read(Some((1, 4))));
+    assert!(app.lists.achievements.borrow().is_some(), "kept");
+    let _ = app.update(read(Some((2, 4))));
+    assert!(app.lists.achievements.borrow().is_none(), "made again");
+    assert!(render(&app).find("2 / 4").is_ok());
+}
+
 #[test]
 fn a_new_page_fades_in_then_stops_drawing_frames() {
     use std::time::Duration;
@@ -717,6 +743,27 @@ fn library_at_10000_games() {
     }
     app.page = Page::Achievements;
     time(&app, "achievements tab");
+    // A scan of GOG's data (Refresh) reads every game again: a message for each, then a view.
+    for page in [Page::Library, Page::Achievements] {
+        app.page = page;
+        let ids: Vec<String> = app
+            .library
+            .iter()
+            .take(1_000)
+            .map(|g| g.id.clone())
+            .collect();
+        let t = std::time::Instant::now();
+        for id in ids {
+            let read = app.overview.get(&id).cloned().unwrap_or_default();
+            let read = Message::OverviewFetched(id, Ok(read));
+            let _ = app.update(Message::AccountResult(app.account_epoch, Box::new(read)));
+            let _ = app.view();
+        }
+        println!(
+            "{page:?}, a game read again by a scan: {:?} per message and view",
+            t.elapsed() / 1_000
+        );
+    }
     // Laying out, beyond building: each page at 10,000 games against the same page at 14, both
     // timed alike (the median of a few windows, which carry the test renderer's own start-up).
     let laid_out = |app: &App| {
