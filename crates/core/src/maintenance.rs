@@ -137,25 +137,19 @@ pub(crate) fn delete_listed(
         remove_empty_dirs(root)?;
         report.kept = leftovers(root, root);
         if report.kept.is_empty() {
-            let delete = |dir: &Path, link: bool| {
-                if link {
-                    std::fs::remove_file(dir)
-                } else {
-                    std::fs::remove_dir(dir)
-                }
-                .map_err(|e| Error::io(format!("delete {}", dir.display()), e))
-            };
-            // A folder moved elsewhere and linked back: the folder it leads to, now empty, then
-            // the link (which `remove_dir` refuses).
-            if std::fs::symlink_metadata(root).is_ok_and(|m| m.is_symlink()) {
-                if let Ok(real) = root.canonicalize() {
-                    delete(&real, false)?;
-                }
-                delete(root, true)?;
+            // The emptied folder can stay (a mount point, a parent that cannot be written): the
+            // game's files are gone all the same, and the game is uninstalled.
+            report.folder_removed = if std::fs::symlink_metadata(root).is_ok_and(|m| m.is_symlink())
+            {
+                // A folder moved elsewhere and linked back: the folder it leads to, now empty,
+                // then the link (which `remove_dir` refuses).
+                let real = root
+                    .canonicalize()
+                    .is_ok_and(|real| std::fs::remove_dir(real).is_ok());
+                std::fs::remove_file(root).is_ok() && real
             } else {
-                delete(root, false)?;
-            }
-            report.folder_removed = true;
+                std::fs::remove_dir(root).is_ok()
+            };
         }
     } else {
         report.folder_removed = true;
@@ -971,6 +965,25 @@ mod tests {
         assert!(r.folder_removed);
         assert!(!elsewhere.exists());
         assert!(std::fs::symlink_metadata(env.game()).is_err());
+        assert!(Install::get(&env.db, "1").unwrap().is_none());
+    }
+
+    /// A game's folder emptied of its files but that cannot be removed (a mount point, a parent
+    /// that cannot be written) stays: the game is uninstalled all the same, rather than left
+    /// installed without its files, every attempt failing the same way.
+    #[test]
+    fn a_game_whose_emptied_folder_cannot_be_removed_is_uninstalled() {
+        use std::os::unix::fs::PermissionsExt;
+        let env = Env::new("folder-stays", true);
+        std::fs::remove_dir_all(env.game().join("saves")).unwrap();
+        let parent = env.game().parent().unwrap().to_path_buf();
+        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let r = uninstall(&env.db, &env.dirs, "1", false);
+        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let r = r.unwrap();
+        assert_eq!(r.removed_files, 2);
+        assert!(!r.folder_removed, "the empty folder stays");
+        assert!(env.game().is_dir());
         assert!(Install::get(&env.db, "1").unwrap().is_none());
     }
 
