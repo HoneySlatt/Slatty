@@ -263,7 +263,7 @@ impl App {
                 return self.press_key();
             }
             CouchMsg::Install(game_id) => {
-                self.start_planned = Some(game_id.clone());
+                self.start_planned.insert(game_id.clone());
                 return self.update_install(InstallMsg::Prepare(game_id, None));
             }
             CouchMsg::Achievements => {

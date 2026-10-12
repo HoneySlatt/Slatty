@@ -190,11 +190,14 @@ impl App {
                 if matches!(
                     self.install_views.get(&game_id),
                     Some(InstallView::Running { .. })
-                ) => {}
+                ) =>
+            {
+                self.start_planned.remove(&game_id);
+            }
             InstallMsg::Planned(game_id, result) => {
                 let auto = self.auto_resume.take_if(|id| *id == game_id).is_some();
                 // Asked from the couch mode: with the default choices, as soon as planned.
-                let start = self.start_planned.take_if(|id| *id == game_id).is_some();
+                let start = self.start_planned.remove(&game_id);
                 if let (true, Err(e)) = (start, &result) {
                     self.notify_error(format!(
                         "{} cannot be installed: {e}",

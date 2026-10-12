@@ -319,8 +319,8 @@ pub struct App {
     pub pause_while_playing: bool,
     /// The couch mode, while on, and where its focus is.
     pub couch: Option<couch::Couch>,
-    /// A game asked to install from the couch mode: it starts once planned.
-    pub start_planned: Option<String>,
+    /// Games asked to install from the couch mode: each starts once planned.
+    pub start_planned: HashSet<String>,
     /// Installs finished since the start, the latest first, with their size.
     pub completed: Vec<(String, u64)>,
     /// What GOG offers to download for the games whose Installers drawer opened.
@@ -439,7 +439,7 @@ impl Default for App {
             preempted: None,
             pause_while_playing: true,
             couch: None,
-            start_planned: None,
+            start_planned: HashSet::new(),
             completed: Vec::new(),
             offline_views: HashMap::new(),
             offline_run: None,

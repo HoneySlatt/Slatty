@@ -225,7 +225,7 @@ fn a_game_not_installed_installs_with_the_defaults() {
     assert!(ui.find("Install").is_ok());
     drop(ui);
     nav(&mut app, Nav::Confirm);
-    assert_eq!(app.start_planned.as_deref(), Some("5"));
+    assert!(app.start_planned.contains("5"));
     assert!(matches!(
         app.install_views.get("5"),
         Some(InstallView::Planning)
@@ -241,7 +241,7 @@ fn a_game_not_installed_installs_with_the_defaults() {
         app.install_views.get("5"),
         Some(InstallView::Running { .. })
     ));
-    assert_eq!(app.start_planned, None);
+    assert!(app.start_planned.is_empty());
 }
 
 #[test]
@@ -257,6 +257,28 @@ fn an_install_that_cannot_be_planned_says_why() {
         app.install_views.get("5"),
         Some(InstallView::Running { .. })
     ));
+}
+
+/// Two installs asked before GOG answered for the first: both start, one after the other.
+#[test]
+fn installs_asked_one_after_the_other_all_start() {
+    let mut app = couch_app();
+    let _ = app.update(Message::Couch(CouchMsg::Install("5".into())));
+    let _ = app.update(Message::Couch(CouchMsg::Install("7".into())));
+    for id in ["5", "7"] {
+        let _ = app.update(Message::Install(InstallMsg::Planned(
+            id.into(),
+            Ok(crate::install::PlanInfo {
+                title: format!("[FAKE] Game {id}"),
+                ..fake_plan()
+            }),
+        )));
+    }
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Running { .. })
+    ));
+    assert_eq!(app.queue, ["7"], "the second waits for the first");
 }
 
 #[test]
