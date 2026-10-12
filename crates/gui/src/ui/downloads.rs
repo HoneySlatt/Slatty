@@ -339,10 +339,7 @@ impl App {
                         .color(tokens().muted)
                         .width(24),
                     self.cover_art(id, 40.0),
-                    text(self.title_of(id))
-                        .size(16)
-                        .font(semibold())
-                        .width(Length::Fill),
+                    row_title(self.title_of(id)),
                     text(size).size(15),
                     round_button(
                         Icon::X,
@@ -392,10 +389,7 @@ impl App {
         container(
             row![
                 self.cover_art(id, 40.0),
-                text(self.title_of(id))
-                    .size(16)
-                    .font(semibold())
-                    .width(Length::Fill),
+                row_title(self.title_of(id)),
                 text(human_size(size)).size(15).width(110),
                 row![
                     icon(Icon::CircleCheck, 18.0, tokens().success),
@@ -433,7 +427,7 @@ impl App {
             row![
                 self.cover_art(id, 40.0),
                 column![
-                    text(self.title_of(id)).size(16).font(semibold()),
+                    row_title(self.title_of(id)),
                     progress_bar(0.0..=1.0, share)
                         .girth(6)
                         .style(theme::progress),
@@ -474,6 +468,15 @@ impl App {
                 .into(),
         }
     }
+}
+
+/// A game's title in a row of fixed height: two lines at most, so that a long one stays inside.
+fn row_title<'a>(title: String) -> Element<'a, Message> {
+    container(text(title).size(16).font(semibold()))
+        .width(Length::Fill)
+        .max_height(2.0 * 16.0 * 1.3)
+        .clip(true)
+        .into()
 }
 
 /// A section title with a rule running to the right edge.

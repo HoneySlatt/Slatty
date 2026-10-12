@@ -77,6 +77,24 @@ fn a_card_goes_after_one_wait_of_its_own() {
     assert_eq!(ticks, none, "no tick while it shows");
 }
 
+/// A long notification stays a small card: its title takes two lines at most, its text four.
+#[test]
+fn a_long_notification_stays_a_small_card() {
+    let mut app = library_app();
+    let title = "[FAKE] The very long title of a game ".repeat(5);
+    let _ = app.notify(
+        Kind::Updates,
+        Some("3"),
+        format!("{title}updated"),
+        format!("{title}: {}", "a long reason given by GOG ".repeat(10)),
+    );
+    let mut ui = render(&app);
+    let heading = ui.find(app.toasts[0].title.as_str()).unwrap().bounds();
+    assert!(heading.height <= 2.0 * 15.0 * 1.3 + 0.5, "{heading:?}");
+    let body = ui.find(app.toasts[0].body.as_str()).unwrap().bounds();
+    assert!(body.height <= 4.0 * 13.0 * 1.3 + 0.5, "{body:?}");
+}
+
 /// The page a card opens goes back to the library where it was scrolled.
 #[test]
 fn a_game_opened_from_a_card_goes_back_to_where_the_library_was() {

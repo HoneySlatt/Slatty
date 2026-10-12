@@ -153,9 +153,15 @@ impl App {
             let card = row![]
                 .push(cover)
                 .push(
+                    // Two lines of title and four of text at most: a long title or reason would
+                    // make the card tall enough to cover the page.
                     column![
-                        text(&t.title).size(15).font(theme::semibold()),
-                        text(&t.body).size(13).color(tokens().muted),
+                        container(text(&t.title).size(15).font(theme::semibold()))
+                            .max_height(2.0 * 15.0 * 1.3)
+                            .clip(true),
+                        container(text(&t.body).size(13).color(tokens().muted))
+                            .max_height(4.0 * 13.0 * 1.3)
+                            .clip(true),
                     ]
                     .spacing(3)
                     .width(Length::Fill),

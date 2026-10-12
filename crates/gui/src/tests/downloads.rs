@@ -240,6 +240,62 @@ fn downloads_keep_a_readable_width_on_a_wide_window() {
     assert!(done.x + done.width < 1700.0, "{done:?}");
 }
 
+/// At the smallest window, a long title stays inside its row, two lines at most: queued, in Steam
+/// and completed alike.
+#[test]
+fn a_long_title_stays_inside_its_download_row() {
+    use crate::downloads::ROW_HEIGHT;
+    use iced_test::selector::Candidate;
+    use slatty_core::steam::local::{Installed, Update};
+    let long = |what: &str| format!("[FAKE] {what} {}", "with a very long title ".repeat(8));
+    let mut app = library_app();
+    app.window = Size::new(800.0, 560.0);
+    app.page = Page::Downloads;
+    app.library[4].title = long("Queued");
+    app.queue = vec!["5".into()];
+    app.library[5].title = long("Completed");
+    app.completed = vec![("6".into(), 1 << 30)];
+    app.steam.on = true;
+    app.steam.games = vec![LibraryGame {
+        title: long("In Steam"),
+        ..fake_game("steam-620", "")
+    }];
+    app.steam.installed.insert(
+        "steam-620".into(),
+        Installed {
+            app_id: 620,
+            name: "[FAKE] 620".into(),
+            dir: "/games/steamapps/common/620".into(),
+            size: 0,
+            ready: false,
+            update: Some(Update {
+                done: 1_000,
+                total: 4_000,
+                stage_total: 0,
+                started: true,
+                paused: false,
+            }),
+        },
+    );
+    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let (mut rows, mut titles) = (Vec::new(), Vec::new());
+    let _ = ui.find(|candidate: Candidate<'_>| -> Option<()> {
+        match candidate {
+            Candidate::Container { bounds, .. } if bounds.height == ROW_HEIGHT => rows.push(bounds),
+            Candidate::Text {
+                content, bounds, ..
+            } if content.contains("with a very long title") => titles.push(bounds),
+            _ => {}
+        }
+        None
+    });
+    assert_eq!(titles.len(), 3, "{titles:?}");
+    for title in titles {
+        assert!(title.height <= 2.0 * 16.0 * 1.3 + 0.5, "{title:?}");
+        assert!(rows.iter().any(|row| title.is_within(row)), "{title:?}");
+    }
+}
+
 #[test]
 fn installs_started_during_a_download_wait_in_a_queue_that_can_be_reordered() {
     use crate::downloads::{DownloadsMsg, ROW_HEIGHT, ROW_SPACING};
