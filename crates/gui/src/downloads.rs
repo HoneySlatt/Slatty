@@ -112,9 +112,24 @@ impl App {
         self.downloading() || self.held_for_play()
     }
 
-    /// Pauses the download running while a game runs; it goes back first in the queue.
+    /// Pauses the download running while a game runs; it goes back first in the queue. One about to
+    /// start once planned waits too: first in the queue, or among those stopped if it was cut off.
     pub fn hold_for_play(&mut self) -> Task<Message> {
-        if !self.held_for_play() || self.preempted.is_some() {
+        if !self.held_for_play() {
+            return Task::none();
+        }
+        if let Some(id) = self.auto_resume.take() {
+            let cut_off = self
+                .interrupted
+                .iter()
+                .any(|(i, k)| *i == id && *k == crate::Interrupted::Download);
+            if !cut_off && !self.queue.contains(&id) {
+                self.drag = None;
+                self.queue.insert(0, id);
+                self.save_queue();
+            }
+        }
+        if self.preempted.is_some() {
             return Task::none();
         }
         let Some(running) = self.running_entry() else {

@@ -841,6 +841,45 @@ fn download_now_starts_a_queued_install_while_a_game_runs() {
     assert_eq!(app.queue, ["7"]);
 }
 
+/// A game started while the first of the queue was being planned to start: it waits, still first.
+#[test]
+fn a_download_planned_as_a_game_starts_keeps_its_place() {
+    let mut app = library_app();
+    app.queue = vec!["5".into(), "6".into()];
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("5"));
+    play_3(&mut app);
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(fake_plan()),
+    )));
+    assert!(app.installing().is_none());
+    assert_eq!(app.queue, ["5", "6"]);
+    // And it starts first once the game closes.
+    let _ = app.update(Message::Playing(crate::play::PlayMsg::Done(Ok(()))));
+    assert_eq!(app.installing().map(|(id, _, _)| id), Some("5"));
+    assert_eq!(app.queue, ["6"]);
+
+    // A download cut off waits among those stopped, and resumes once the game closes.
+    let mut app = library_app();
+    app.interrupted = vec![("5".into(), crate::Interrupted::Download)];
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("5"));
+    play_3(&mut app);
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(fake_plan()),
+    )));
+    assert!(app.installing().is_none());
+    assert!(app.queue.is_empty());
+    let _ = app.update(Message::Playing(crate::play::PlayMsg::Done(Ok(()))));
+    assert_eq!(
+        app.auto_resume.as_deref(),
+        Some("5"),
+        "planned again, then started"
+    );
+}
+
 #[test]
 fn downloads_go_on_while_playing_once_turned_off() {
     use super::offline::installing_6;
