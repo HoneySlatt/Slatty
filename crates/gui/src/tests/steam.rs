@@ -677,6 +677,24 @@ fn an_install_asked_of_steam_is_followed_before_the_focus_comes_back() {
     assert!(!app.steam.reading_installed, "once");
 }
 
+/// The client's list of games unreadable for a moment (Steam rewriting it as it updates a game)
+/// leaves the games shown as they were for the same account, rather than none until the next
+/// start.
+#[test]
+fn steams_games_stay_when_its_list_cannot_be_read_again() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let shown = app.steam.games.len();
+    assert!(shown > 0);
+    let mut unreadable = steam_library();
+    unreadable.games.clear();
+    unreadable.unreadable = Some("[FAKE] cut short".into());
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(unreadable))));
+    assert_eq!(app.steam.games.len(), shown);
+    assert!(app.library.iter().any(|g| g.id == "steam-440"));
+}
+
 /// An install asked of Steam is followed, every few seconds, only while it may still show up: not
 /// once Steam could not be reached, nor once a read of every library found it already there.
 #[test]

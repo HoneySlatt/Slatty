@@ -183,6 +183,14 @@ impl App {
                     return load(on);
                 }
             }
+            // The client's list of games unreadable for a moment (Steam rewriting it as it updates
+            // a game): the games shown stay, for the same account, until the next read.
+            SteamMsg::Loaded(Some(library))
+                if self.steam.on
+                    && library.unreadable.is_some()
+                    && library.games.is_empty()
+                    && !self.steam.games.is_empty()
+                    && self.steam.account == Some(library.user.id64) => {}
             SteamMsg::Loaded(Some(library)) if self.steam.on => {
                 // Another account signed in to Steam: the achievements read were the other's.
                 if self.steam.account.is_some_and(|a| a != library.user.id64) {
