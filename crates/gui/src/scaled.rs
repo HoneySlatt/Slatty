@@ -30,6 +30,10 @@ const ENLARGED_FROM: f32 = 1.05;
 /// window makes none again. Wider windows enlarge the widest themselves: one of 3840 pixels takes
 /// about 33 MB once decoded.
 const ART_WIDTHS: [u32; 3] = [1920, 2560, 3840];
+/// The most pixels key art is enlarged to, those of a 4K screen at 16:10: sharpening holds four
+/// floats a pixel twice, about 300 MB. Taller key art, of which the page shows a band, is shown as
+/// it is.
+const ENLARGED_PIXELS: f32 = 3840.0 * 2400.0;
 /// The game page draws its key art this much wider than the window (`ui::game::hero`).
 const ART_ENLARGED: f32 = 1.06;
 
@@ -339,10 +343,12 @@ pub fn scaled_copy(source: &Path, width: u32, dir: &Path, enlarge: bool) -> Opti
             .with_guessed_format()
             .ok()
     };
-    let (source_width, _) = reader()?.into_dimensions().ok()?;
+    let (source_width, source_height) = reader()?.into_dimensions().ok()?;
     let ratio = width as f32 / source_width as f32;
     let enlarged = enlarge && ratio > ENLARGED_FROM;
-    if !enlarged && ratio * KEPT_UP_TO >= 1.0 {
+    if !enlarged && ratio * KEPT_UP_TO >= 1.0
+        || enlarged && width as f32 * source_height as f32 * ratio > ENLARGED_PIXELS
+    {
         return None;
     }
     let small =
@@ -522,6 +528,24 @@ mod tests {
         assert_eq!(scaled_copy(&art, 2000, &copies, true), None);
         // A cover is never enlarged.
         assert_eq!(scaled_copy(&art, 3840, &copies, false), None);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Tall key art (a background chosen by hand, a phone's wallpaper) would take gigabytes once
+    /// enlarged to the window's width: it is shown as it is.
+    #[test]
+    fn tall_key_art_is_not_enlarged_past_a_screens_pixels() {
+        let dir = std::env::temp_dir().join(format!("slatty-tall-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (art, copies) = (dir.join("tall.jpg"), dir.join("art"));
+        write(
+            &art,
+            ::image::RgbImage::new(300, 1000).into(),
+            ::image::ImageFormat::Jpeg,
+        );
+        assert_eq!(scaled_copy(&art, 1920, &copies, true), None);
+        assert!(!copies.exists());
         std::fs::remove_dir_all(dir).unwrap();
     }
 
