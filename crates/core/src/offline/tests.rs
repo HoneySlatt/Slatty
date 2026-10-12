@@ -787,6 +787,37 @@ async fn a_download_whose_folder_could_not_be_made_makes_it_once_it_can() {
     assert!(made);
 }
 
+/// Removing one game's download keeps the folder another game's download goes into, even empty:
+/// that one, started, would take it for a drive gone. Alone, an emptied folder goes.
+#[test]
+fn a_discarded_job_keeps_a_folder_another_download_goes_into() {
+    let dir = temp("discard-kept");
+    let dirs = Dirs::under(&dir.join("data"));
+    let db = Db::in_memory().unwrap();
+    let shared = dir.join("[FAKE] Game Gold");
+    std::fs::create_dir(&shared).unwrap();
+    for (id, state) in [("1", PAUSED), ("2", DOWNLOADING)] {
+        OfflineJob {
+            game_id: id.into(),
+            os: "windows".into(),
+            languages: vec!["en".into()],
+            dlcs: Vec::new(),
+            folder: shared.clone(),
+            state: state.into(),
+        }
+        .save(&db)
+        .unwrap();
+    }
+    std::fs::write(shared.join("setup_a.exe.5000.1.slatty-dl"), b"[FAKE] half").unwrap();
+    discard(&db, &dirs, "1").unwrap();
+    let kept = shared.is_dir();
+    discard(&db, &dirs, "2").unwrap();
+    let gone = !shared.exists();
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(kept);
+    assert!(gone);
+}
+
 /// Two games whose titles clean to the same folder name share it: removing one's download leaves
 /// the other's unfinished files.
 #[test]

@@ -176,7 +176,7 @@ show game titles and achievement names on a lock screen.
   its name only once checked against the MD5 sums GOG keeps for it (the whole file, and its parts
   to download again what is damaged); a file GOG keeps no sums for, and one already in the folder
   at its size, are taken on their size. Another file of the same name is never replaced, and
-  removing a download deletes only what it left unfinished. A download whose installers folder is
+  removing a download deletes only what it left unfinished. A started download whose folder is
   gone (a drive unplugged) stops rather than start over on another disk.
 
 ### Sizes

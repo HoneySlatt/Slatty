@@ -400,8 +400,14 @@ pub fn discard(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
         return Ok(());
     };
     remove_staged(&job.folder, game_id)?;
-    // Only when nothing else is in it.
-    let _ = std::fs::remove_dir(&job.folder);
+    // Only when nothing else is in it, and no other download goes into it: started, that one would
+    // take it for a drive gone.
+    let shared = OfflineJob::list(db)?
+        .iter()
+        .any(|j| j.game_id != game_id && j.folder == job.folder);
+    if !shared {
+        let _ = std::fs::remove_dir(&job.folder);
+    }
     OfflineJob::delete(db, game_id)
 }
 
