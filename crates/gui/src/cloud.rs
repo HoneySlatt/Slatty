@@ -122,6 +122,8 @@ impl App {
         result: Result<CloudResult, String>,
     ) -> Task<Message> {
         let last_sync = self.cloud.get(&game_id).and_then(|c| c.last_sync.clone());
+        // What a check that failed leaves as it was: whether the game started once.
+        let launched = self.cloud.get(&game_id).is_some_and(|c| c.launched);
         let synced = request != CloudRequest::Check && result.is_ok();
         let view = match result {
             Ok(r) => CloudView {
@@ -137,6 +139,7 @@ impl App {
                 lines: vec![format!("Error: {e}")],
                 status: Some(CloudStatus::Problem),
                 last_sync,
+                launched,
                 ..Default::default()
             },
         };

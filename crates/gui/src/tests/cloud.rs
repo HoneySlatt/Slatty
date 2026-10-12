@@ -50,6 +50,19 @@ fn the_cloud_card_reads_nothing_of_the_prefix_as_it_draws() {
             .find("2 file(s) downloaded at first launch")
             .is_ok()
     );
+    // A check that fails (offline after a session) leaves what was known of the game as it was:
+    // started before, not a game whose saves come at its first launch.
+    let _ = app.update(Message::CloudDone(
+        "3".into(),
+        CloudRequest::Check,
+        Ok(checked(true)),
+    ));
+    let _ = app.update(Message::CloudDone(
+        "3".into(),
+        CloudRequest::Check,
+        Err("[FAKE] offline".into()),
+    ));
+    assert!(app.cloud["3"].launched);
 }
 
 /// GOG keeps no cloud saves of a Linux build: a check asked for one (as the end of a session asks,
