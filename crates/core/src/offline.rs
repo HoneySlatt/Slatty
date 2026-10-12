@@ -473,7 +473,7 @@ pub async fn download<S: Source>(
                 None => None,
             };
             if let Some(sums) = sums {
-                check(source, part, size, &partial, &sums).await?;
+                check(source, part, size, &partial, &sums, cancel).await?;
             }
             std::fs::rename(&partial, &target)
                 .map_err(|e| Error::io(format!("rename {}", partial.display()), e))?;
@@ -651,6 +651,7 @@ async fn check<S: Source>(
     size: u64,
     partial: &Path,
     sums: &Checksums,
+    cancel: &CancellationToken,
 ) -> Result<()> {
     if sums.chunks.iter().any(|c| c.to >= size) {
         return Err(Error::parse(
@@ -658,7 +659,7 @@ async fn check<S: Source>(
             "a chunk past the end of the file",
         ));
     }
-    let mut bad = damaged(partial, sums).await?;
+    let mut bad = damaged(partial, sums, cancel).await?;
     if bad.as_ref().is_some_and(|b| !b.is_empty()) {
         let file = std::fs::OpenOptions::new()
             .write(true)
@@ -678,7 +679,7 @@ async fn check<S: Source>(
         }
         file.sync_all()
             .map_err(|e| Error::io(format!("sync {}", partial.display()), e))?;
-        bad = damaged(partial, sums).await?;
+        bad = damaged(partial, sums, cancel).await?;
     }
     if bad.is_some() {
         let _ = std::fs::remove_file(partial);
@@ -691,27 +692,27 @@ async fn check<S: Source>(
 }
 
 /// `None` when `path` matches `sums`; else the parts that do not, empty when only the whole is
-/// wrong. Read at the lowest priority.
-async fn damaged(path: &Path, sums: &Checksums) -> Result<Option<Vec<Chunk>>> {
-    let (path, sums) = (path.to_path_buf(), sums.clone());
+/// wrong. The parts are summed only when the whole is wrong. Read at the lowest priority; a pause
+/// stops it between reads.
+async fn damaged(
+    path: &Path,
+    sums: &Checksums,
+    cancel: &CancellationToken,
+) -> Result<Option<Vec<Chunk>>> {
+    let (path, sums, cancel) = (path.to_path_buf(), sums.clone(), cancel.clone());
     fsutil::in_background(move || {
-        let read = |e| Error::io(format!("read {}", path.display()), e);
-        let mut file = std::fs::File::open(&path).map_err(read)?;
         let mut whole = Md5::new();
+        read_through(&path, &cancel, |piece| whole.update(piece))?;
+        if fsutil::hex(&whole.finalize()) == sums.md5 {
+            return Ok(None);
+        }
         let mut bad = Vec::new();
         let mut at = 0u64;
-        let mut buf = vec![0u8; 1 << 20];
         // The chunks follow each other from the start; bytes between or after them count only in
         // the whole.
         let mut chunks = sums.chunks.iter().peekable();
         let mut current: Option<(&Chunk, Md5)> = None;
-        loop {
-            let n = file.read(&mut buf).map_err(read)?;
-            if n == 0 {
-                break;
-            }
-            whole.update(&buf[..n]);
-            let mut piece = &buf[..n];
+        read_through(&path, &cancel, |mut piece| {
             while !piece.is_empty() {
                 if current.is_none()
                     && let Some(c) = chunks.next_if(|c| c.from <= at)
@@ -740,10 +741,31 @@ async fn damaged(path: &Path, sums: &Checksums) -> Result<Option<Vec<Chunk>>> {
                     }
                 }
             }
-        }
-        Ok((fsutil::hex(&whole.finalize()) != sums.md5 || !bad.is_empty()).then_some(bad))
+        })?;
+        Ok(Some(bad))
     })
     .await
+}
+
+/// Gives `each` the bytes of `path` in order, until its end or `cancel`.
+fn read_through(
+    path: &Path,
+    cancel: &CancellationToken,
+    mut each: impl FnMut(&[u8]),
+) -> Result<()> {
+    let read = |e| Error::io(format!("read {}", path.display()), e);
+    let mut file = std::fs::File::open(path).map_err(read)?;
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        if cancel.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        let n = file.read(&mut buf).map_err(read)?;
+        if n == 0 {
+            return Ok(());
+        }
+        each(&buf[..n]);
+    }
 }
 
 /// A file's name as the CDN serves it: decoded, and only a name, never a path.

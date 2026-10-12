@@ -12,6 +12,8 @@ struct Fake {
     drop_once: Mutex<Option<(usize, u64)>>,
     corrupt_once: Mutex<Option<(usize, u64)>>,
     opened: Mutex<Vec<(usize, u64, u64)>>,
+    /// Cancelled as the sums are asked for: Pause pressed once the file is downloaded.
+    pause_at_sums: Option<CancellationToken>,
 }
 
 impl Fake {
@@ -24,6 +26,7 @@ impl Fake {
             drop_once: Mutex::new(None),
             corrupt_once: Mutex::new(None),
             opened: Mutex::new(Vec::new()),
+            pause_at_sums: None,
         }
     }
 }
@@ -73,6 +76,9 @@ impl Source for Fake {
     }
 
     async fn checksums(&self, part: usize) -> Result<Option<Vec<u8>>> {
+        if let Some(pause) = &self.pause_at_sums {
+            pause.cancel();
+        }
         Ok(self.files[part].2.clone().map(String::into_bytes))
     }
 }
@@ -310,6 +316,32 @@ async fn a_damaged_part_is_downloaded_again() {
     assert_eq!(
         *fake.opened.lock().unwrap(),
         [(0, 0, 5000), (0, 2048, 3072)]
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// Pause pressed while a downloaded file is checked stops the check at once: the file waits under
+/// its staged name, and is checked again when resumed.
+#[tokio::test]
+async fn a_pause_during_the_check_stops_it() {
+    let dir = temp("check-paused");
+    let a = data(5000, 24);
+    let sums = Some(xml("setup_fake.exe", &a, 1024));
+    let mut fake = Fake::new(vec![("setup_fake.exe", a.clone(), sums.clone())]);
+    let pause = CancellationToken::new();
+    fake.pause_at_sums = Some(pause.clone());
+    assert!(matches!(
+        download(&fake, &dir, &|_| {}, &pause).await,
+        Err(Error::Cancelled)
+    ));
+    assert!(dir.join("setup_fake.exe.slatty-dl").exists());
+    assert!(!dir.join("setup_fake.exe").exists());
+    let fake = Fake::new(vec![("setup_fake.exe", a.clone(), sums)]);
+    run_download(&fake, &dir).await.unwrap();
+    assert_eq!(std::fs::read(dir.join("setup_fake.exe")).unwrap(), a);
+    assert!(
+        fake.opened.lock().unwrap().is_empty(),
+        "nothing downloaded again"
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
