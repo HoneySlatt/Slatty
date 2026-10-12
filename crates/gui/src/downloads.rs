@@ -127,19 +127,21 @@ impl App {
 
     /// Pauses the download running while a game runs; it goes back first in the queue. One about to
     /// start once planned waits too: first in the queue, or among those stopped if it was cut off.
+    /// The automatic update being applied pauses as well (`hold_update`).
     pub fn hold_for_play(&mut self) -> Task<Message> {
         if !self.held_for_play() {
             return Task::none();
         }
+        let update = self.hold_update();
         self.put_back_planned(0);
         if self.preempted.is_some() {
-            return Task::none();
+            return update;
         }
         let Some(running) = self.running_entry() else {
-            return Task::none();
+            return update;
         };
         self.preempted = Some((running.clone(), Preempt::Play));
-        self.pause_entry(&running)
+        Task::batch([update, self.pause_entry(&running)])
     }
 
     /// The download about to start once planned, put back to wait: at `at` in the queue, or among

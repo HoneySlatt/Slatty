@@ -306,8 +306,10 @@ impl App {
                     self.notify_error("The game is running.".into());
                     return Task::none();
                 }
-                // A change asked for here replaces the automatic update the game was waiting for.
+                // A change asked for here replaces the automatic update the game was waiting for,
+                // or that paused for a game.
                 self.updates.waiting.retain(|w| *w != game_id);
+                self.updates.held.take_if(|h| *h == game_id);
                 let view = self.maintenance.entry(game_id.clone()).or_default();
                 view.update_available = false;
                 view.content = None;
@@ -438,9 +440,13 @@ impl App {
                     Err(None) => Task::none(),
                 };
                 let read = Task::batch([self.refresh_record(&game_id), told]);
+                let held = self.updates.held.as_deref() == Some(game_id.as_str());
                 let view = self.maintenance.entry(game_id).or_default();
                 view.finish(vec![match result {
                     Ok(summary) => summary,
+                    Err(None) if held => {
+                        "Paused while a game runs: it goes on once the game closes.".into()
+                    }
                     Err(None) => "Paused. Apply it again to resume.".into(),
                     Err(Some(e)) => format!("Update failed: {e}. Run it again to resume."),
                 }]);

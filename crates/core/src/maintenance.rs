@@ -311,6 +311,20 @@ pub(crate) const UPDATING: &str = "updating";
 /// by itself.
 pub(crate) const UPDATE_PAUSED: &str = "updating-paused";
 
+/// Takes a change paused for a game, not on request, as cut off: it is resumed by itself, at the
+/// next start too.
+pub fn resume_later(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
+    let _busy = crate::lock::game(dirs, game_id)?;
+    if let Some(job) = InstallJob::load(db, game_id)?.filter(|j| j.state == UPDATE_PAUSED) {
+        InstallJob {
+            state: UPDATING.into(),
+            ..job
+        }
+        .save(db)?;
+    }
+    Ok(())
+}
+
 /// Build id of an update, language or DLC change that started but did not finish.
 pub fn update_pending(db: &Db, game_id: &str) -> Result<Option<String>> {
     Ok(InstallJob::load(db, game_id)?
@@ -1341,5 +1355,32 @@ mod tests {
             env.game().join("Game.exe").exists(),
             "a refusal must not leave a half-done uninstall"
         );
+    }
+
+    /// An update the interface paused for a game is taken as cut off, resumed by itself (at the
+    /// next start too), rather than as paused on request; one paused on request before stays so
+    /// only until then.
+    #[test]
+    fn an_update_paused_for_a_game_resumes_by_itself() {
+        let env = Env::new("paused-for-a-game", true);
+        let job = |state: &str| InstallJob {
+            game_id: "1".into(),
+            build_id: "2".into(),
+            language: "en-US".into(),
+            root: env.root.join("games"),
+            directory: "Game".into(),
+            state: state.into(),
+            dlcs: Vec::new(),
+            proton: None,
+        };
+        job(UPDATE_PAUSED).save(&env.db).unwrap();
+        resume_later(&env.db, &env.dirs, "1").unwrap();
+        let saved = InstallJob::load(&env.db, "1").unwrap().unwrap();
+        assert_eq!(saved.state, UPDATING);
+        // Nothing to take up for a game that has no change under way.
+        InstallJob::delete(&env.db, "1").unwrap();
+        resume_later(&env.db, &env.dirs, "1").unwrap();
+        assert!(InstallJob::load(&env.db, "1").unwrap().is_none());
+        let _ = std::fs::remove_dir_all(&env.root);
     }
 }

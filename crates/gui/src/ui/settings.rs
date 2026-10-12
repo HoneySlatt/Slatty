@@ -914,8 +914,9 @@ impl App {
                         .on_toggle(|on| Message::Settings(SettingsMsg::PauseWhilePlaying(on)))
                         .size(22),
                     note(
-                        "The download running pauses when a game starts, and goes on where it \
-                         stopped once the game closes. Download now still starts one at once.",
+                        "The download or automatic update running pauses when a game starts, \
+                         and goes on where it stopped once the game closes. Download now still \
+                         starts one at once.",
                     ),
                 ]
                 .spacing(8)

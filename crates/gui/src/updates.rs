@@ -1,5 +1,6 @@
 //! Automatic game updates: installed games on their newest build are checked at start and every
-//! six hours, and updated one after the other, never while a game runs or an install downloads.
+//! six hours, and updated one after the other, never while a game runs or an install downloads;
+//! one being applied when a game starts pauses, and goes on once the game closes.
 
 use std::time::Duration;
 
@@ -25,6 +26,8 @@ pub struct AutoUpdates {
     pub builds: std::collections::HashMap<String, String>,
     /// The game being updated.
     pub current: Option<String>,
+    /// The game whose update paused for a game played: it goes on first once the game closes.
+    pub held: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -123,12 +126,26 @@ impl App {
         Task::none()
     }
 
+    /// Pauses the update being applied when a game starts, as the download running is: it goes on
+    /// once the game closes. One the user is pausing stays paused.
+    pub fn hold_update(&mut self) -> Task<Message> {
+        let Some(id) = self.updates.current.clone() else {
+            return Task::none();
+        };
+        let cancel = self.maintenance.get(&id).and_then(|v| v.cancel.as_ref());
+        if self.updates.held.is_some() || cancel.is_none_or(|c| c.is_cancelled()) {
+            return Task::none();
+        }
+        self.updates.held = Some(id.clone());
+        self.update_maintenance(MaintenanceMsg::Pause(id))
+    }
+
     /// Starts the next waiting update when nothing holds it: no update, download (an install or
     /// offline installers), game (a Steam game too, or Play pressed, waiting to start it), cloud
-    /// sync or other work on a game running. Called after every message.
+    /// sync or other work on a game running. One paused for a game goes first. Called after every
+    /// message.
     pub fn next_update(&mut self) -> Task<Message> {
         let busy = self.updates.current.is_some()
-            || self.updates.waiting.is_empty()
             || self.play.as_ref().is_some_and(|p| p.running)
             || (self.steam.on && !self.steam.running.is_empty())
             || self.launch_reading.is_some()
@@ -137,7 +154,16 @@ impl App {
             || self.auto_resume.is_some()
             || self.maintenance.values().any(|m| m.busy)
             || self.cloud.values().any(|c| c.busy);
-        if busy || !self.updates.on || self.account.is_none() {
+        if busy || self.account.is_none() {
+            return Task::none();
+        }
+        // Begun already, the game cannot start until it is finished: it goes on even if
+        // automatic updates were turned off meanwhile.
+        if let Some(id) = self.updates.held.take() {
+            self.updates.current = Some(id.clone());
+            return self.update_maintenance(MaintenanceMsg::Apply(id, Change::Update));
+        }
+        if self.updates.waiting.is_empty() || !self.updates.on {
             return Task::none();
         }
         let Some(core) = self.core.clone() else {
@@ -176,10 +202,23 @@ impl App {
             return;
         }
         self.updates.current = None;
-        // Paused: it waits until asked, like any paused update, and the others wait for the next
-        // check rather than start in its place.
-        if let Err(None) = result {
-            self.updates.waiting.clear();
+        let held = self.updates.held.as_deref() == Some(game_id);
+        match result {
+            // Paused for a game: it goes on once the game closes (`next_update`), and at the next
+            // start if SlattyLauncher is closed meanwhile.
+            Err(None) if held => {
+                if let Some(core) = self.core.clone()
+                    && let Err(e) = maintenance::resume_later(&core.db, &core.dirs, game_id)
+                {
+                    self.notify_error(e.to_string());
+                }
+            }
+            // Paused: it waits until asked, like any paused update, and the others wait for the
+            // next check rather than start in its place.
+            Err(None) => self.updates.waiting.clear(),
+            _ => {
+                self.updates.held.take_if(|h| h == game_id);
+            }
         }
     }
 }

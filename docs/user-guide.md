@@ -400,7 +400,9 @@ With **Update games automatically** on (Settings → Installs, on until turned o
 checks the games SlattyLauncher installed at start, at sign-in and every six hours, and updates
 those on their newest build one after the other, never while a game runs, an install or offline
 installers download, or saves sync. They wait in the Updates part of the Downloads tab; while a game updates, its page
-shows **Updating** instead of Play.
+shows **Updating** instead of Play. With **Pause downloads while playing** on, an update being
+applied when a game starts pauses, and goes on once the game closes (at the next start if
+SlattyLauncher is closed first).
 
 A game on an older build you chose stays on it until you update it, or choose the newest build
 again. **Check for update** and **Update now** are in the game's Manage drawer.
@@ -716,7 +718,7 @@ Settings lists its parts on the left; the list follows the page as it scrolls.
 | **Default platform** | Windows | The build installed for a game GOG offers on both |
 | **Default Proton** | | The build new Windows games start with. Each game can use another |
 | **Update games automatically** | On | See [Updates](#updates) |
-| **Pause downloads while playing** | On | The download running pauses when a game starts and goes on once it closes; nothing else starts meanwhile, but **Download now** |
+| **Pause downloads while playing** | On | The download or automatic update running pauses when a game starts and goes on once it closes; nothing else starts meanwhile, but **Download now** |
 
 `slatty install --dir` and `--proton`, and `slatty installers --dir`, set the same defaults.
 

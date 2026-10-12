@@ -151,7 +151,9 @@ impl App {
         // What GOG offers to download depends on the account (its DLC).
         self.offline_views.clear();
         // Found with the account signed out; its check's answer is dropped with its other work.
+        // One paused for a game is left cut off: it goes on at the next start.
         self.updates.waiting.clear();
+        self.updates.held = None;
         self.updates.checking = false;
     }
 

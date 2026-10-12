@@ -204,6 +204,48 @@ fn a_game_held_back_or_paused_since_its_check_is_not_updated() {
     assert!(!app.maintenance["3"].busy);
 }
 
+/// The update running when a game starts pauses, as a download does, and goes on once the game
+/// closes, before those waiting; one the user is pausing stays paused.
+#[test]
+fn an_update_running_pauses_for_a_game_and_goes_on_once_it_closes() {
+    let mut app = auto_app();
+    let _ = app.update(found());
+    assert_eq!(app.updates.current.as_deref(), Some("3"));
+    playing(&mut app);
+    let _ = app.hold_for_play();
+    assert!(
+        app.maintenance["3"]
+            .cancel
+            .as_ref()
+            .is_some_and(|c| c.is_cancelled())
+    );
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Updated(
+        "3".into(),
+        Err(None),
+    )));
+    assert!(app.updates.current.is_none());
+    assert!(app.maintenance["3"].lines[0].contains("while a game runs"));
+    app.selected = None;
+    app.page = Page::Downloads;
+    assert!(render(&app).find("Paused while a game runs").is_ok());
+    game_ends(&mut app);
+    assert_eq!(app.updates.current.as_deref(), Some("3"));
+    assert_eq!(app.updates.waiting, ["5"]);
+
+    // Paused by the user before the game started: it stays paused.
+    let mut app = auto_app();
+    let _ = app.update(found());
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Pause("3".into())));
+    playing(&mut app);
+    let _ = app.hold_for_play();
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Updated(
+        "3".into(),
+        Err(None),
+    )));
+    game_ends(&mut app);
+    assert!(app.updates.current.is_none());
+}
+
 #[test]
 fn pausing_the_update_running_starts_no_other() {
     let mut app = auto_app();

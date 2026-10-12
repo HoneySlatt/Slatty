@@ -108,7 +108,9 @@ impl App {
                 .push(heading("Queue", Some(self.queue.len())))
                 .push(self.queue_list());
         }
-        let updates = usize::from(self.updates.current.is_some()) + self.updates.waiting.len();
+        let updates = usize::from(self.updates.current.is_some())
+            + usize::from(self.updates.held.is_some())
+            + self.updates.waiting.len();
         if updates > 0 {
             content = content
                 .push(heading("Updates", Some(updates)))
@@ -188,12 +190,18 @@ impl App {
                 .style(theme::card),
             );
         }
-        for id in &self.updates.waiting {
+        let held = self
+            .updates
+            .held
+            .iter()
+            .map(|id| (id, "Paused while a game runs"));
+        let waiting = self.updates.waiting.iter().map(|id| (id, "Waiting"));
+        for (id, state) in held.chain(waiting) {
             list = list.push(
                 container(
                     row![
                         text(self.title_of(id)).size(15).width(Length::Fill),
-                        text("Waiting").size(14).color(tokens().muted),
+                        text(state).size(14).color(tokens().muted),
                     ]
                     .align_y(Alignment::Center),
                 )
@@ -204,7 +212,8 @@ impl App {
         }
         list.push(note(
             "Games on their newest build are updated one after the other, never while a game \
-             runs or something downloads. A paused update waits until you apply it in Manage.",
+             runs or something downloads; one being applied when a game starts pauses, and goes \
+             on once it closes. An update you pause waits until you apply it in Manage.",
         ))
         .into()
     }

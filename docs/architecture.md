@@ -355,7 +355,10 @@ and running the change again resumes it with the pinned build.
 Automatic updates (`gui/src/updates.rs`) take the games SlattyLauncher installed that are not held
 on an older build (`maintenance::auto_update_candidates`), check them at start, at sign-in and every
 six hours, and apply them one at a time through Manage's own update, once no game runs, no install
-downloads and no cloud sync or other work on a game is busy. Whether a game is held back is decided
+downloads and no cloud sync or other work on a game is busy. One being applied when a game starts
+pauses with the download running (`App::hold_update`); its job is then taken as cut off
+(`maintenance::resume_later`), and it goes on first once the game closes, or at the next start.
+Whether a game is held back is decided
 when its build is chosen: never when a queued or interrupted install resumes, by which time GOG may
 list a newer build.
 
