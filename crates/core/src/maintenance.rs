@@ -539,25 +539,7 @@ pub async fn reconfigure(
             progress,
             free_space: &installer::free_space,
         };
-        let applied = async {
-            dl.check_space(&set, &install.path)?;
-            let begin = once(&begin);
-            let checked = dl.replace_bad(&set, &install.path, &begin).await?;
-            begin()?;
-            let kept: HashSet<&Path> = set
-                .files
-                .iter()
-                .chain(&set.links)
-                .map(|f| f.path.as_path())
-                .collect();
-            let removed = remove_obsolete(&record, &install.path, |rel| kept.contains(rel))?;
-            Ok::<_, Error>(UpdateReport {
-                downloaded: checked.bad,
-                removed,
-                ..Default::default()
-            })
-        }
-        .await;
+        let applied = apply_linux_update(&dl, &set, &record, &install.path, &begin).await;
         (applied, set.recorded_files())
     } else {
         windows_reconfigure(
@@ -670,23 +652,63 @@ pub(crate) async fn apply_update<S: crate::galaxy::ContentSource>(
     let begin = once(begin);
     let patched =
         crate::patches::apply_all(dl.source, patches, set, old, dir, &dl.cancel, &begin).await?;
-    let checked = dl.replace_bad(set, dir, &begin).await?;
-    begin()?;
     // Windows sees differently cased paths as one file.
     let kept: HashSet<String> = set
         .files
         .iter()
         .map(|(p, _)| p.to_string_lossy().to_lowercase())
         .collect();
-    let removed = remove_obsolete(old, dir, |rel| {
-        kept.contains(&rel.to_string_lossy().to_lowercase())
-    })?;
+    let removed = std::sync::Mutex::new(Vec::new());
+    // The files the game no longer has go just before the first new file or folder is made (after
+    // the patches, which can read them): a file can become a folder, or a folder a file.
+    let remove = || {
+        begin()?;
+        *removed.lock().unwrap() = remove_obsolete(old, dir, |rel| {
+            kept.contains(&rel.to_string_lossy().to_lowercase())
+        })?;
+        Ok(())
+    };
+    let clear = once(&remove);
+    let checked = dl.replace_bad(set, dir, &clear).await?;
+    clear()?;
     Ok(UpdateReport {
         downloaded: checked.bad,
         reused_bytes: checked.reused_bytes,
         patched: patched.files,
         patch_bytes: patched.delta_bytes,
-        removed,
+        removed: std::mem::take(&mut removed.lock().unwrap()),
+        ..Default::default()
+    })
+}
+
+/// `apply_update` for a Linux build, from GOG's offline installers.
+pub(crate) async fn apply_linux_update<S: linux::Source>(
+    dl: &linux::LinuxDownload<'_, S>,
+    set: &linux::LinuxSet,
+    old: &InstallRecord,
+    dir: &Path,
+    begin: &(dyn Fn() -> Result<()> + Sync),
+) -> Result<UpdateReport> {
+    dl.check_space(set, dir)?;
+    let kept: HashSet<&Path> = set
+        .files
+        .iter()
+        .chain(&set.links)
+        .map(|f| f.path.as_path())
+        .collect();
+    let removed = std::sync::Mutex::new(Vec::new());
+    // As in `apply_update`, before the first new file, folder or link is made.
+    let remove = || {
+        begin()?;
+        *removed.lock().unwrap() = remove_obsolete(old, dir, |rel| kept.contains(rel))?;
+        Ok(())
+    };
+    let clear = once(&remove);
+    let checked = dl.replace_bad(set, dir, &clear).await?;
+    clear()?;
+    Ok(UpdateReport {
+        downloaded: checked.bad,
+        removed: std::mem::take(&mut removed.lock().unwrap()),
         ..Default::default()
     })
 }

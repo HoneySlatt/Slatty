@@ -756,3 +756,68 @@ async fn links_chained_out_of_the_game_are_removed_and_never_written_through() {
     assert!(!root.join("planted.bin").exists());
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// A file of the old build where the new one has a folder is removed before the new files are
+/// written: otherwise the update could never finish.
+#[tokio::test]
+async fn a_linux_update_turns_a_file_into_a_folder() {
+    let bytes = installer(
+        b"#!/bin/sh\n",
+        &[
+            File {
+                name: "data/noarch/start.sh",
+                data: b"#!/bin/sh\n",
+                mode: 0o100755,
+                deflate: false,
+            },
+            File {
+                name: "data/noarch/Movies/intro.bik",
+                data: b"[FAKE] new movie",
+                mode: 0o100644,
+                deflate: true,
+            },
+        ],
+        false,
+    );
+    let source = Fake::new(vec![bytes]);
+    let set = LinuxSet::new(&[Part {
+        installer: installer_of("1"),
+        entries: read_entries(&source, 0).await.unwrap(),
+    }])
+    .unwrap();
+    let root = temp("file-folder");
+    let game = root.join("Game");
+    std::fs::create_dir_all(&game).unwrap();
+    std::fs::write(game.join("start.sh"), b"#!/bin/sh\n").unwrap();
+    std::fs::write(game.join("Movies"), b"[FAKE] old movie").unwrap();
+    let old = crate::installer::InstallRecord {
+        build_id: "linux:1.0".into(),
+        version: "1.0".into(),
+        language: "en".into(),
+        path: Some(game.clone()),
+        dlcs: vec![],
+        setup_build: None,
+        setup_failures: 0,
+        files: ["start.sh", "Movies"]
+            .map(|path| RecordedFile {
+                path: path.into(),
+                size: 10,
+            })
+            .into(),
+    };
+    let dl = LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &plenty,
+    };
+    let report = crate::maintenance::apply_linux_update(&dl, &set, &old, &game, &|| Ok(()))
+        .await
+        .unwrap();
+    assert_eq!(report.removed, [PathBuf::from("Movies")]);
+    assert_eq!(
+        std::fs::read(game.join("Movies/intro.bik")).unwrap(),
+        b"[FAKE] new movie"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}

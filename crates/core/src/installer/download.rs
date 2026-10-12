@@ -188,7 +188,7 @@ impl<S: ContentSource> Download<'_, S> {
     }
 
     /// Checks an installed game in place and re-downloads its bad files, calling `begin` before
-    /// each one is replaced.
+    /// each one is replaced and each missing folder made.
     pub(crate) async fn replace_bad(
         &self,
         set: &FileSet,
@@ -200,6 +200,9 @@ impl<S: ContentSource> Download<'_, S> {
         for d in &set.dirs {
             let d = dir.join(d);
             refuse_outside(dir, &d)?;
+            if !d.is_dir() {
+                begin()?;
+            }
             crate::paths::ensure_dir(&d)?;
         }
         Ok(checked)

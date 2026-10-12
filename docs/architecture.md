@@ -240,7 +240,9 @@ as it was, playable. Then:
 
 1. The new file list is checked in place with the same fill routine as installs and repairs: only
    files that are missing or differ are downloaded, each written to a temporary name and renamed.
-2. Files listed in the old install record but absent from the new build are deleted. Their parent
+2. Files listed in the old install record but absent from the new build are deleted, just before
+   the first new file, folder or link is made (GOG's binary patches, which can read them, applied
+   first), or at the end when none is: a file can become a folder, or a folder a file. Their parent
    folders are removed only if they end up empty.
 3. The install record is rewritten for the new build.
 

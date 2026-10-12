@@ -462,7 +462,7 @@ impl<S: Source> LinuxDownload<'_, S> {
     }
 
     /// Checks an installed game in place and downloads its bad files again, calling `begin`
-    /// before each file or link is changed.
+    /// before each file or link is changed and each missing folder made.
     pub(crate) async fn replace_bad(
         &self,
         set: &LinuxSet,
@@ -496,7 +496,8 @@ impl<S: Source> LinuxDownload<'_, S> {
         Ok(())
     }
 
-    /// With `download`, `begin` is called before each file or link is changed.
+    /// With `download`, `begin` is called before each file or link is changed and each missing
+    /// folder made.
     async fn fill(
         &self,
         set: &LinuxSet,
@@ -606,6 +607,9 @@ impl<S: Source> LinuxDownload<'_, S> {
             for d in &set.dirs {
                 let d = dir.join(d);
                 refuse_outside(dir, &d)?;
+                if !d.is_dir() {
+                    begin()?;
+                }
                 crate::paths::ensure_dir(&d)?;
             }
             if !bad.is_empty() {

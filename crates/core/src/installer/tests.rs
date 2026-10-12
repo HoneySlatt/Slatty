@@ -876,6 +876,134 @@ async fn an_update_paused_before_any_file_changed_is_not_noted() {
     assert_eq!(begun.load(Ordering::SeqCst), 1);
 }
 
+/// A file of the old build where the new one has a folder, or the reverse, is removed before the
+/// new files are written: otherwise neither could be, and the update could never finish.
+#[tokio::test]
+async fn an_update_turns_a_file_into_a_folder_and_back() {
+    let mut env = Env::new("file-folder");
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    let game = env.target();
+    std::fs::write(game.join("Movies"), b"[FAKE] old movie").unwrap();
+    let mut files = recorded_files(&collect_files(&env.source, &env.depots).await.unwrap());
+    files.push(RecordedFile {
+        path: "Movies".into(),
+        size: 16,
+    });
+    let record = |files| InstallRecord {
+        build_id: "b1".into(),
+        version: "1.0".into(),
+        language: "en-US".into(),
+        path: Some(game.clone()),
+        dlcs: vec![],
+        setup_build: None,
+        setup_failures: 0,
+        files,
+    };
+    let exe = env
+        .source
+        .file("Game.exe", b"[FAKE] executable bytes", &["executable"]);
+    let as_folder = vec![
+        exe.clone(),
+        env.source
+            .file("Movies\\intro.bik", b"[FAKE] new movie", &[]),
+    ];
+    let as_file = vec![exe, env.source.file("Movies", b"[FAKE] movie again", &[])];
+    env.source.manifests.insert("folder".into(), as_folder);
+    env.source.manifests.insert("file".into(), as_file);
+    let set_of = |manifest: &str| {
+        let depots = vec![Depot {
+            manifest: manifest.into(),
+            ..env.depots[0].clone()
+        }];
+        let source = &env.source;
+        async move { collect_files(source, &depots).await.unwrap() }
+    };
+    let free_space = |_: &Path| Ok(PLENTY);
+    let dl = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    };
+
+    let folder = set_of("folder").await;
+    let report =
+        crate::maintenance::apply_update(&dl, &folder, &record(files), &game, &[], &|| Ok(()))
+            .await
+            .unwrap();
+    assert!(report.removed.contains(&PathBuf::from("Movies")));
+    assert_eq!(
+        std::fs::read(game.join("Movies/intro.bik")).unwrap(),
+        b"[FAKE] new movie"
+    );
+
+    let file = set_of("file").await;
+    let report = crate::maintenance::apply_update(
+        &dl,
+        &file,
+        &record(recorded_files(&folder)),
+        &game,
+        &[],
+        &|| Ok(()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.removed, [PathBuf::from("Movies/intro.bik")]);
+    assert_eq!(
+        std::fs::read(game.join("Movies")).unwrap(),
+        b"[FAKE] movie again"
+    );
+}
+
+/// Nor does a file of the old build keep an empty folder of the new one from being made, when no
+/// other file changes.
+#[tokio::test]
+async fn an_update_makes_a_folder_where_a_file_it_drops_was() {
+    let mut env = Env::new("file-empty-folder");
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    let game = env.target();
+    std::fs::write(game.join("Screens"), b"[FAKE] old file").unwrap();
+    let old = collect_files(&env.source, &env.depots).await.unwrap();
+    let mut files = recorded_files(&old);
+    files.push(RecordedFile {
+        path: "Screens".into(),
+        size: 15,
+    });
+    let record = InstallRecord {
+        build_id: "b1".into(),
+        version: "1.0".into(),
+        language: "en-US".into(),
+        path: Some(game.clone()),
+        dlcs: vec![],
+        setup_build: None,
+        setup_failures: 0,
+        files,
+    };
+    let mut items = env.source.manifests["m1"].clone();
+    items.push(DepotItem::DepotDirectory {
+        path: "Screens".into(),
+    });
+    env.source.manifests.insert("m2".into(), items);
+    let depots = vec![Depot {
+        manifest: "m2".into(),
+        ..env.depots[0].clone()
+    }];
+    let set = collect_files(&env.source, &depots).await.unwrap();
+    let free_space = |_: &Path| Ok(PLENTY);
+    let dl = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    };
+    let report = crate::maintenance::apply_update(&dl, &set, &record, &game, &[], &|| Ok(()))
+        .await
+        .unwrap();
+    assert!(report.downloaded.is_empty());
+    assert_eq!(report.removed, [PathBuf::from("Screens")]);
+    assert!(game.join("Screens").is_dir());
+}
+
 #[tokio::test]
 async fn chunks_moved_inside_a_changed_file_are_reused() {
     let mut env = Env::new("moved");
