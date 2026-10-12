@@ -64,8 +64,8 @@ pub struct Boot {
     pub overview: HashMap<String, GameOverview>,
     pub jobs: Vec<(String, Interrupted)>,
     pub queue: Vec<String>,
-    /// Offline installers cut off by a close, first in the queue: they go on by themselves.
-    pub cut_off: Option<String>,
+    /// Entries of the queue that go on beside a download paused on request (`Waiting::goes_on`).
+    pub goes_on: Vec<String>,
     /// Offline installers paused, or stopped by an error.
     pub offline_stopped: Vec<(String, Option<String>)>,
     pub customs: HashMap<String, slatty_core::custom::Custom>,
@@ -84,38 +84,62 @@ pub fn summary(r: &InstallRecord) -> InstallSummary {
     }
 }
 
-/// The queue, from its saved order and the queued jobs (one missing from it goes last), and the
-/// offline installers paused or failed. Installers cut off go first: they resume by themselves.
+/// What downloads at start, from the saved order of the queue and the jobs saved.
+pub(crate) struct Waiting {
+    /// The queue, in its saved order (a queued job missing from it goes last); installers cut off
+    /// by a close go first: they resume by themselves.
+    pub queue: Vec<String>,
+    /// Entries of the queue started already (stopped by the launcher, cut off, resumed while
+    /// another ran): they go on beside a download paused on request.
+    pub goes_on: Vec<String>,
+    /// Installs stopped otherwise: paused, failed, cut off by a close (they resume first).
+    pub interrupted: Vec<InstallJob>,
+    /// Offline installers paused, or stopped by an error.
+    pub offline_stopped: Vec<(String, Option<String>)>,
+}
+
 pub(crate) fn downloads_from(
     saved: Vec<String>,
-    queued: Vec<InstallJob>,
+    installs: Vec<InstallJob>,
     offline: &[OfflineJob],
-) -> (Vec<String>, Vec<(String, Option<String>)>) {
-    let offline_in = |state: &str| -> Vec<String> {
-        offline
-            .iter()
-            .filter(|j| j.state == state)
-            .map(|j| offline::entry(&j.game_id))
-            .collect()
-    };
+) -> Waiting {
+    // A started download still in the saved order waits at its place there; one missing from it
+    // was the download running when the window closed.
+    let (queued, interrupted): (Vec<InstallJob>, Vec<InstallJob>) = installs
+        .into_iter()
+        .partition(|j| j.is_queued() || (j.state == DOWNLOADING && saved.contains(&j.game_id)));
+    let started: Vec<String> = queued
+        .iter()
+        .filter(|j| j.state == DOWNLOADING)
+        .map(|j| j.game_id.clone())
+        .chain(offline_in_state(offline, DOWNLOADING))
+        .collect();
     let mut queue: Vec<String> = saved
         .into_iter()
         .filter(|id| match offline::of_entry(id) {
-            Some(_) => offline_in(QUEUED).contains(id),
+            Some(_) => offline_in_state(offline, QUEUED).any(|e| e == *id) || started.contains(id),
             None => queued.iter().any(|j| &j.game_id == id),
         })
         .collect();
     for id in queued
         .into_iter()
         .map(|j| j.game_id)
-        .chain(offline_in(QUEUED))
+        .chain(offline_in_state(offline, QUEUED))
     {
         if !queue.contains(&id) {
             queue.push(id);
         }
     }
-    queue.splice(0..0, offline_in(DOWNLOADING));
-    let stopped = offline
+    let cut_off: Vec<String> = offline_in_state(offline, DOWNLOADING)
+        .filter(|e| !queue.contains(e))
+        .collect();
+    queue.splice(0..0, cut_off);
+    let goes_on = queue
+        .iter()
+        .filter(|e| started.contains(e))
+        .cloned()
+        .collect();
+    let offline_stopped = offline
         .iter()
         .filter(|j| j.state == PAUSED || j.state == FAILED)
         .map(|j| {
@@ -123,7 +147,23 @@ pub(crate) fn downloads_from(
             (j.game_id.clone(), failed)
         })
         .collect();
-    (queue, stopped)
+    Waiting {
+        queue,
+        goes_on,
+        interrupted,
+        offline_stopped,
+    }
+}
+
+/// The queue entries of the offline installers in `state`.
+fn offline_in_state<'a>(
+    offline: &'a [OfflineJob],
+    state: &'a str,
+) -> impl Iterator<Item = String> + 'a {
+    offline
+        .iter()
+        .filter(move |j| j.state == state)
+        .map(|j| offline::entry(&j.game_id))
 }
 
 /// The interface's own lock, held until it closes.
@@ -260,24 +300,16 @@ async fn boot() -> Result<Boot, String> {
     let playtime =
         session::playtime(&db, account.as_ref().map(|a| a.user_id.as_str())).map_err(err)?;
     InstallJob::forget_finished(&db).map_err(err)?;
-    let (queued, jobs): (Vec<InstallJob>, Vec<InstallJob>) = InstallJob::list(&db)
-        .map_err(err)?
-        .into_iter()
-        .partition(InstallJob::is_queued);
-    let jobs = jobs
+    let waiting = downloads_from(
+        slatty_core::settings::download_queue(&db).map_err(err)?,
+        InstallJob::list(&db).map_err(err)?,
+        &OfflineJob::list(&db).map_err(err)?,
+    );
+    let jobs = waiting
+        .interrupted
         .iter()
         .map(|j| (j.game_id.clone(), Interrupted::of(j)))
         .collect();
-    let offline = OfflineJob::list(&db).map_err(err)?;
-    let (queue, offline_stopped) = downloads_from(
-        slatty_core::settings::download_queue(&db).map_err(err)?,
-        queued,
-        &offline,
-    );
-    let cut_off = offline
-        .iter()
-        .find(|j| j.state == DOWNLOADING)
-        .map(|j| offline::entry(&j.game_id));
     let installers_root = slatty_core::settings::installers_root(&db).map_err(err)?;
     let core = Core {
         dirs,
@@ -319,9 +351,9 @@ async fn boot() -> Result<Boot, String> {
         playtime,
         overview,
         jobs,
-        queue,
-        cut_off,
-        offline_stopped,
+        queue: waiting.queue,
+        goes_on: waiting.goes_on,
+        offline_stopped: waiting.offline_stopped,
         customs,
         sort_keys,
         cover_width,

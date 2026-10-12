@@ -389,13 +389,13 @@ fn resumed_installers_start_beside_a_paused_install_and_stay_resumed() {
         OfflineJob::load(&db, "5").unwrap().unwrap().state,
         DOWNLOADING
     );
-    let (queue, stopped) = crate::boot::downloads_from(
+    let waiting = crate::boot::downloads_from(
         app.queue.clone(),
         Vec::new(),
         &OfflineJob::list(&db).unwrap(),
     );
-    assert_eq!(queue, [entry("5")]);
-    assert!(stopped.is_empty());
+    assert_eq!(waiting.queue, [entry("5")]);
+    assert!(waiting.offline_stopped.is_empty());
 }
 
 #[test]
@@ -444,6 +444,45 @@ fn installers_taken_out_of_the_queue_are_forgotten() {
     assert!(app.offline_stopped.is_empty());
 }
 
+/// Closed while a row started with Download now downloaded: at the next start that row, cut off,
+/// goes first, and the download it stopped keeps its place after it; both go on by themselves.
+#[test]
+fn start_up_keeps_a_download_the_launcher_stopped_at_its_place() {
+    let install = |id: &str| InstallJob {
+        game_id: id.into(),
+        build_id: "1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: format!("Game {id}"),
+        state: DOWNLOADING.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    };
+    // 6 was downloading; 7, stopped for it, waited after it. Jobs come oldest first.
+    let waiting =
+        crate::boot::downloads_from(vec!["7".into()], vec![install("7"), install("6")], &[]);
+    assert_eq!(waiting.queue, ["7"]);
+    let cut_off: Vec<&str> = waiting
+        .interrupted
+        .iter()
+        .map(|j| j.game_id.as_str())
+        .collect();
+    assert_eq!(cut_off, ["6"], "resumed before the queue");
+    assert_eq!(waiting.goes_on, ["7"]);
+
+    let job = |id: &str| OfflineJob {
+        game_id: id.into(),
+        os: "windows".into(),
+        languages: vec!["en".into()],
+        dlcs: Vec::new(),
+        folder: PathBuf::new(),
+        state: DOWNLOADING.into(),
+    };
+    let waiting = crate::boot::downloads_from(vec![entry("7")], Vec::new(), &[job("7"), job("6")]);
+    assert_eq!(waiting.queue, [entry("6"), entry("7")]);
+    assert_eq!(waiting.goes_on, [entry("6"), entry("7")]);
+}
+
 #[test]
 fn start_up_resumes_installers_cut_off_first_and_keeps_the_stopped_ones_apart() {
     let job = |id: &str, state: &str| OfflineJob {
@@ -464,7 +503,7 @@ fn start_up_resumes_installers_cut_off_first_and_keeps_the_stopped_ones_apart() 
         dlcs: Vec::new(),
         proton: None,
     };
-    let (queue, stopped) = crate::boot::downloads_from(
+    let waiting = crate::boot::downloads_from(
         vec![entry("7"), "6".into(), entry("8")],
         vec![install],
         &[
@@ -476,10 +515,11 @@ fn start_up_resumes_installers_cut_off_first_and_keeps_the_stopped_ones_apart() 
         ],
     );
     assert_eq!(
-        queue,
+        waiting.queue,
         [entry("5"), entry("7"), "6".into(), entry("10")],
         "a paused one is not in the queue"
     );
+    let stopped = waiting.offline_stopped;
     assert_eq!(stopped.len(), 2);
     assert_eq!(stopped[0], ("8".to_string(), None));
     assert!(stopped[1].0 == "9" && stopped[1].1.is_some());
