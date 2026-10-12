@@ -52,6 +52,8 @@ pub struct ScaledCovers {
     art_pending: HashSet<(PathBuf, u32)>,
     /// When the first key art copy was asked for: those shown since are kept (`trim`).
     session: Option<SystemTime>,
+    /// The width covers are made at, once the window's scale is known.
+    width: Option<u32>,
 }
 
 impl App {
@@ -161,6 +163,7 @@ impl App {
         }
         self.scaled = ScaledCovers {
             scale: self.scaled.scale,
+            width: self.scaled.width,
             ..ScaledCovers::default()
         };
     }
@@ -190,12 +193,15 @@ impl App {
         if let Some(old) = self.scaled.limit.take() {
             old.close();
         }
-        Task::batch([self.prune_covers(), self.scale_covers(None)])
+        let width = self.scaled_width();
+        let previous = std::mem::replace(&mut self.scaled.width, width);
+        Task::batch([self.prune_covers(previous), self.scale_covers(None)])
     }
 
-    /// Deletes the copies made at other sizes: about 37 KB a cover at 225 pixels, 350 MB at 10,000
-    /// games.
-    fn prune_covers(&self) -> Task<Message> {
+    /// Deletes the copies made at other sizes than the current one and `previous`, about 37 KB a
+    /// cover at 225 pixels, 350 MB at 10,000 games: a window moved between screens of two scales
+    /// finds its copies for each.
+    fn prune_covers(&self, previous: Option<u32>) -> Task<Message> {
         let (Some(core), Some(width)) = (&self.core, self.scaled_width()) else {
             return Task::none();
         };
@@ -203,8 +209,9 @@ impl App {
         if let Some(account) = &self.account {
             folders.push(core.dirs.account_cache(&account.user_id).join("scaled"));
         }
+        let keep: Vec<u32> = [Some(width), previous].into_iter().flatten().collect();
         Task::future(async move {
-            let _ = tokio::task::spawn_blocking(move || prune(&folders, width)).await;
+            let _ = tokio::task::spawn_blocking(move || prune(&folders, &keep)).await;
         })
         .discard()
     }
@@ -307,12 +314,12 @@ impl App {
     }
 }
 
-/// Deletes, in each of `folders`, the copies made at another width than `width`.
-fn prune(folders: &[PathBuf], width: u32) {
-    let keep = width.to_string();
+/// Deletes, in each of `folders`, the copies made at other widths than those in `keep`.
+fn prune(folders: &[PathBuf], keep: &[u32]) {
+    let keep: Vec<String> = keep.iter().map(u32::to_string).collect();
     let entries = folders.iter().filter_map(|f| std::fs::read_dir(f).ok());
     for entry in entries.flatten().flatten() {
-        if entry.file_name() != keep.as_str() {
+        if !keep.iter().any(|k| entry.file_name() == k.as_str()) {
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
@@ -631,15 +638,18 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let (shared, account) = (dir.join("cache/scaled"), dir.join("cache/1/scaled"));
         for folder in [&shared, &account] {
-            for width in ["225", "300"] {
+            for width in ["225", "300", "450"] {
                 std::fs::create_dir_all(folder.join(width)).unwrap();
                 std::fs::write(folder.join(width).join("a.jpg"), b"jpg").unwrap();
             }
         }
-        prune(&[shared.clone(), account.clone(), dir.join("missing")], 300);
+        // The current size and the one before, a screen of another scale's.
+        let folders = [shared.clone(), account.clone(), dir.join("missing")];
+        prune(&folders, &[300, 450]);
         for folder in [&shared, &account] {
             assert!(!folder.join("225").exists());
             assert!(folder.join("300/a.jpg").exists());
+            assert!(folder.join("450/a.jpg").exists());
         }
         std::fs::remove_dir_all(dir).unwrap();
     }
