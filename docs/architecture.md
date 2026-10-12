@@ -514,8 +514,9 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one runs at a time.
   KeyValues, bounded in size, depth and entries;
 - `stats` reads a game's achievements from the client's stats files;
 - `running` finds the games the client runs, from the user's own processes named `reaper` started
-  from the client's folders, as `reaper SteamLaunch AppId=<id>`; no other process's arguments are
-  read;
+  from the client's folders, as `reaper SteamLaunch AppId=<id>`, but the one SlattyLauncher itself
+  runs under when Steam started it (a non-Steam game on a Steam Deck); no other process's
+  arguments are read;
 - `library` turns them into library games, and `twins` pairs a GOG game with the Steam game it also
   is: by the Steam app ids gamesdb gives for it (`game.releases`), or, for a game gamesdb did not
   describe, by a title written alike;

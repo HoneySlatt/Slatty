@@ -250,7 +250,8 @@ Once **Steam games** is on (Settings → Steam), SlattyLauncher reads the Steam 
   Steam (Settings → Steam names it), and `steamapps/libraryfolders.vdf`, for Valve's Proton builds
   in Steam's libraries.
 - **Processes.** To tell a Steam game runs, the names of your processes are read, and the arguments
-  of the client's `reaper` processes alone.
+  of the client's `reaper` processes alone; and which processes SlattyLauncher runs under, so that
+  the `reaper` it runs under when Steam started it is not taken for a game.
 - **Writes into Steam's folders**, only these: **Share with Steam and Heroic** (Settings → Runners,
   off until turned on) puts links to the Proton builds SlattyLauncher downloaded in
   `compatibilitytools.d`; and before an isolated game runs with one of Valve's Proton builds, which
