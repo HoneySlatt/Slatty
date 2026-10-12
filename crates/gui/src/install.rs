@@ -137,7 +137,7 @@ pub enum InstallMsg {
 impl App {
     /// The downloads wait for GOG, said once as they start waiting.
     fn wait_for_gog(&mut self, e: String) -> Task<Message> {
-        let told = if self.downloads_waiting.is_none() {
+        let told = if !std::mem::replace(&mut self.waiting_told, true) {
             self.notify(
                 Kind::Downloads,
                 None,
@@ -196,6 +196,7 @@ impl App {
                 // GOG answered: nothing waits for it any longer.
                 if result.is_ok() {
                     self.downloads_waiting = None;
+                    self.waiting_told = false;
                 }
                 let view = match result {
                     // Planned again after a restart: it keeps its place in the queue.
@@ -465,6 +466,7 @@ impl App {
             }
             InstallMsg::Done(game_id, Ok(install)) => {
                 self.downloads_waiting = None;
+                self.waiting_told = false;
                 if let Some(InstallView::Running { progress, .. }) =
                     self.install_views.remove(&game_id)
                 {

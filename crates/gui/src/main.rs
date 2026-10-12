@@ -314,8 +314,10 @@ pub struct App {
     pub context_menu: Option<edit::ContextMenu>,
     /// A download being planned again to resume on its own at start-up.
     pub auto_resume: Option<String>,
-    /// Why GOG could not be reached, while the downloads wait for it.
+    /// Why GOG could not be reached, while the downloads wait for it; and whether that was told,
+    /// once until GOG answers again, whatever the retries.
     pub downloads_waiting: Option<String>,
+    pub waiting_told: bool,
     /// A game's install or settings, open over the library.
     pub dialog: Option<(String, Panel)>,
     /// Font families of the system, listed when Settings first opens.
@@ -415,6 +417,7 @@ impl Default for App {
             context_menu: None,
             auto_resume: None,
             downloads_waiting: None,
+            waiting_told: false,
             font_families: Vec::new(),
             dialog: None,
             window: Size::new(1440.0, 900.0),

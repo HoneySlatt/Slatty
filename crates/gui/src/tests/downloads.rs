@@ -221,6 +221,51 @@ fn a_download_cut_off_by_the_network_waits_and_resumes_first() {
     assert_eq!(app.auto_resume.as_deref(), Some("5"), "resumed first");
 }
 
+/// GOG out of reach is told once, as downloads start waiting for it: not again at each retry,
+/// every minute while it stays out of reach (a desktop notification each, the window behind).
+#[test]
+fn downloads_waiting_for_gog_are_told_once_not_at_each_retry() {
+    use slatty_core::installer::{DOWNLOADING, InstallJob};
+    let mut app = library_app();
+    ready_to_install(&mut app, "5");
+    let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
+    // What the core leaves behind when GOG cannot be reached.
+    InstallJob {
+        game_id: "5".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 5".into(),
+        state: DOWNLOADING.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&app.core.as_ref().unwrap().db)
+    .unwrap();
+    let unreachable = || crate::install::Failure("[FAKE] network error".into(), true);
+    let _ = app.update(Message::Install(InstallMsg::Done(
+        "5".into(),
+        Err(Some(unreachable())),
+    )));
+    let told = |app: &App| {
+        toasted(app)
+            .iter()
+            .filter(|(title, _)| title == "Downloads waiting for GOG")
+            .count()
+    };
+    assert_eq!(told(&app), 1);
+    for _ in 0..3 {
+        let _ = app.update(Message::Install(InstallMsg::Retry));
+        assert_eq!(app.auto_resume.as_deref(), Some("5"));
+        let _ = app.update(Message::Install(InstallMsg::Unreachable(
+            "5".into(),
+            unreachable().0,
+        )));
+    }
+    assert!(app.downloads_waiting.is_some());
+    assert_eq!(told(&app), 1, "told once");
+}
+
 /// Each message rebuilds the page: moving the pointer over the queue sends none, unless a row is
 /// being moved.
 #[test]
