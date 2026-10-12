@@ -17,14 +17,15 @@ pub fn partial_dir(root: &Path, directory: &str) -> PathBuf {
     root.join(format!(".{directory}{PARTIAL_SUFFIX}"))
 }
 
-/// Written into a partial folder as its download starts, carried into the game folder by the
-/// rename and removed once the game is registered: a game folder holding it was published by
-/// SlattyLauncher and is finished by resuming its job; one without it is someone else's, never
-/// adopted.
+/// Written into a partial folder as its download starts, with the game's id, carried into the game
+/// folder by the rename and removed once the game is registered: a game folder holding it was
+/// published by SlattyLauncher for that game and is finished by resuming its job; one without it,
+/// or with another game's id (two products sharing a folder name), is not its own, never adopted.
 pub const STAGED_MARK: &str = ".slatty-staged";
 
-/// Makes `partial` with its mark, or keeps them as an earlier attempt left them.
-pub(crate) fn mark_staged(partial: &Path) -> Result<()> {
+/// Makes `partial` with its mark, or keeps them as an earlier attempt for the same game left them.
+pub(crate) fn mark_staged(partial: &Path, game_id: &str) -> Result<()> {
+    use std::io::Write;
     crate::paths::ensure_dir(partial)?;
     let mark = partial.join(STAGED_MARK);
     match std::fs::OpenOptions::new()
@@ -32,15 +33,28 @@ pub(crate) fn mark_staged(partial: &Path) -> Result<()> {
         .create_new(true)
         .open(&mark)
     {
-        Ok(_) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Ok(mut file) => file
+            .write_all(game_id.as_bytes())
+            .map_err(|e| Error::io(format!("write {}", mark.display()), e)),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            if staged_here(partial, game_id) {
+                Ok(())
+            } else {
+                Err(Error::Refused(format!(
+                    "{} holds the download of another game going into a folder of the same name",
+                    partial.display()
+                )))
+            }
+        }
         Err(e) => Err(Error::io(format!("create {}", mark.display()), e)),
     }
 }
 
-/// Whether SlattyLauncher published `target` (see `STAGED_MARK`).
-pub(crate) fn staged_here(target: &Path) -> bool {
-    std::fs::symlink_metadata(target.join(STAGED_MARK)).is_ok_and(|m| m.is_file())
+/// Whether SlattyLauncher published `target` for `game_id` (see `STAGED_MARK`).
+pub(crate) fn staged_here(target: &Path, game_id: &str) -> bool {
+    let mark = target.join(STAGED_MARK);
+    std::fs::symlink_metadata(&mark).is_ok_and(|m| m.is_file() && m.len() <= 64)
+        && std::fs::read(&mark).is_ok_and(|id| id == game_id.as_bytes())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -184,7 +198,7 @@ pub fn discard(db: &Db, dirs: &Dirs, game_id: &str) -> Result<Option<PathBuf>> {
     let target = job.root.join(&job.directory);
     // The download finished and took the game folder's place; only the job lets an install finish
     // it, since a new one refuses an existing folder. A folder it did not publish is not its own.
-    if !partial.exists() && staged_here(&target) {
+    if !partial.exists() && staged_here(&target, game_id) {
         return Err(Error::Refused(format!(
             "{} is already downloaded; install the game again to finish it",
             target.display()

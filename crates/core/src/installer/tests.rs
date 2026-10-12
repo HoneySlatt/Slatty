@@ -1179,7 +1179,7 @@ fn discarding_an_install_whose_folder_was_published_is_refused() {
     let db = Db::in_memory().unwrap();
     std::fs::create_dir_all(root.join("Game")).unwrap();
     std::fs::write(root.join("Game/Game.exe"), "[FAKE]").unwrap();
-    std::fs::write(root.join("Game").join(STAGED_MARK), "").unwrap();
+    std::fs::write(root.join("Game").join(STAGED_MARK), "1").unwrap();
     InstallJob {
         game_id: "1".into(),
         build_id: "b".into(),
@@ -1322,16 +1322,22 @@ fn an_install_cut_off_after_publishing_is_checked_where_it_landed() {
     let root = std::env::temp_dir().join(format!("slatty-published-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let (partial, target) = (partial_dir(&root, "Game"), root.join("Game"));
-    mark_staged(&partial).unwrap();
+    mark_staged(&partial, "1").unwrap();
     assert!(
-        !published_unregistered(true, &partial, &target),
+        !published_unregistered(true, &partial, &target, "1"),
         "still downloading"
     );
+    // Another product going into a folder of the same name: not its download.
+    assert!(matches!(mark_staged(&partial, "2"), Err(Error::Refused(_))));
     std::fs::rename(&partial, &target).unwrap();
-    assert!(published_unregistered(true, &partial, &target));
+    assert!(published_unregistered(true, &partial, &target, "1"));
     assert!(
-        !published_unregistered(false, &partial, &target),
+        !published_unregistered(false, &partial, &target, "1"),
         "a new install never adopts an existing folder"
+    );
+    assert!(
+        !published_unregistered(true, &partial, &target, "2"),
+        "nor another game's"
     );
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -1348,7 +1354,7 @@ fn a_folder_slatty_did_not_publish_is_never_adopted() {
     let (partial, target) = (partial_dir(&root, "Game"), root.join("Game"));
     std::fs::create_dir_all(&target).unwrap();
     std::fs::write(target.join("[FAKE] mod.dll"), "mod").unwrap();
-    assert!(!published_unregistered(true, &partial, &target));
+    assert!(!published_unregistered(true, &partial, &target, "1"));
     InstallJob {
         game_id: "1".into(),
         build_id: "b".into(),

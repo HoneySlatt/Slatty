@@ -170,12 +170,12 @@ pub async fn install(
     job.save(db)?;
 
     let progress = |p| emit(InstallEvent::Progress(p));
-    let resumed_published = published_unregistered(job_resumed, &partial, &target);
+    let resumed_published = published_unregistered(job_resumed, &partial, &target, &req.game_id);
     // What was written: the game's files, GOG's support files, links left out.
     let result = async {
         // A folder already where the game goes is refused by the download below, unmarked.
         if !resumed_published && !target.exists() {
-            mark_staged(&partial)?;
+            mark_staged(&partial, &req.game_id)?;
         }
         if plan.platform == Platform::Linux {
             let source = linux::GogInstallers::new(
@@ -290,9 +290,9 @@ fn drop_replaced(started: Option<&str>, planned: &str, partial: &Path) -> Result
 
 /// The partial folder of a resumed install is gone and the game folder it became exists: the
 /// download finished and was renamed into place, but the game was not registered yet. A folder
-/// already there that SlattyLauncher did not publish is never taken for it.
-fn published_unregistered(resumed: bool, partial: &Path, target: &Path) -> bool {
-    resumed && !partial.exists() && staged_here(target)
+/// already there that SlattyLauncher did not publish for this game is never taken for it.
+fn published_unregistered(resumed: bool, partial: &Path, target: &Path, game_id: &str) -> bool {
+    resumed && !partial.exists() && staged_here(target, game_id)
 }
 
 /// Whether an install holds its game back from automatic updates (an older build chosen), decided
