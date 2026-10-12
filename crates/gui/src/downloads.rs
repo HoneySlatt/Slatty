@@ -94,8 +94,8 @@ impl App {
                     self.preempted = Some((running.clone(), Preempt::StartNow));
                     return self.pause_entry(&running);
                 }
-                // One being planned to start goes first.
-                if self.auto_resume.is_none() {
+                // One being planned to start goes first; one pausing on request, once paused.
+                if self.auto_resume.is_none() && !self.downloading() {
                     return self.start_first();
                 }
             }
@@ -140,13 +140,18 @@ impl App {
         self.pause_entry(&running)
     }
 
-    /// The queue entry of the download running.
+    /// The queue entry of the download running, unless it is already pausing on request: that
+    /// pause stays the user's.
     fn running_entry(&self) -> Option<String> {
-        self.installing()
-            .map(|(id, _, _)| id.to_string())
+        self.install_views
+            .iter()
+            .find_map(|(id, v)| match v {
+                InstallView::Running { cancel, .. } if !cancel.is_cancelled() => Some(id.clone()),
+                _ => None,
+            })
             .or_else(|| {
                 let run = self.offline_run.as_ref()?;
-                Some(crate::offline::entry(&run.game_id))
+                (!run.cancel.is_cancelled()).then(|| crate::offline::entry(&run.game_id))
             })
     }
 
@@ -309,8 +314,9 @@ impl App {
                 .offline_stopped
                 .iter()
                 .any(|(_, failed)| failed.is_none());
-        // What the launcher stopped goes on, first in line.
-        if paused && self.queue.first() != self.goes_on.as_ref() {
+        // What the launcher stopped goes on, first in line, as does what Download now asked for.
+        let head = self.queue.first();
+        if paused && head != self.goes_on.as_ref() && head != self.starting_now.as_ref() {
             return Task::none();
         }
         self.start_first()

@@ -872,6 +872,44 @@ fn a_download_the_launcher_paused_goes_on_beside_one_paused_on_request() {
     assert_eq!(app.queue, ["7"]);
 }
 
+/// A download the user is pausing stays paused: neither a game nor Download now takes it over.
+#[test]
+fn a_download_pausing_on_request_stays_paused() {
+    use super::offline::{installing_6, paused_install_job, queued_job};
+    use crate::downloads::DownloadsMsg;
+    use crate::offline::entry;
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    let _ = app.update(Message::Install(InstallMsg::Pause("6".into())));
+    play_3(&mut app);
+    assert!(app.preempted.is_none());
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert_eq!(
+        app.interrupted,
+        [("6".to_string(), crate::Interrupted::Paused)]
+    );
+    let _ = app.update(Message::Playing(crate::play::PlayMsg::Done(Ok(()))));
+    assert!(app.installing().is_none() && app.auto_resume.is_none());
+
+    // Download now meanwhile starts its download once the pause is done.
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.update(Message::Install(InstallMsg::Pause("6".into())));
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("5"))));
+    assert!(app.preempted.is_none());
+    assert_eq!(app.queue, [entry("5")], "waits for the pause");
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert_eq!(
+        app.interrupted,
+        [("6".to_string(), crate::Interrupted::Paused)]
+    );
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+}
+
 #[test]
 fn an_install_started_while_a_game_runs_waits_in_the_queue() {
     let mut app = library_app();
