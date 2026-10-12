@@ -260,6 +260,12 @@ impl App {
                     return Task::none();
                 };
                 let title = self.title_of(&game_id);
+                if matches!(result, Err(None))
+                    && let Some(next) = self.requeue_preempted(&entry(&game_id))
+                {
+                    return next;
+                }
+                self.preempted.take_if(|(e, _)| *e == entry(&game_id));
                 match result {
                     Ok(files) => {
                         self.downloads_waiting = None;
@@ -276,7 +282,8 @@ impl App {
                         );
                         return Task::batch([done, self.start_next()]);
                     }
-                    // Paused: the queue waits too, as for an install.
+                    // Paused: the queue waits too, as for an install, unless the launcher paused
+                    // it (`requeue_preempted`).
                     Err(None) => self.offline_stopped.push((game_id, None)),
                     // GOG out of reach: it keeps its place, and the queue waits for GOG.
                     Err(Some((e, true))) => {

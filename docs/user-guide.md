@@ -160,9 +160,10 @@ and cloud saves is read from GOG in the background and kept; **Refresh** reads i
   paused, cut off or failed, with **Resume** and **Discard** (**Remove** for installers).
 - **Queue**: installs and offline installers started while another download runs (the button then
   reads **Add to queue**). One download runs at a time. Each starts once the ones before it are
-  done, failed or cancelled. Drag a row by its
-  handle to reorder, or remove it with ×. Pausing the running download holds the queue. The queue
-  is kept when SlattyLauncher closes and goes on at the next start.
+  done, failed or cancelled. Drag a row by its handle to reorder, or remove it with ×.
+  **Download now** starts a row at once: the download running is paused and waits right after it,
+  then goes on by itself. Pausing the running download yourself holds the queue. The queue is kept
+  when SlattyLauncher closes and goes on at the next start.
 - **Updates**: games waiting for their automatic update, and the one being applied.
 - **Completed**: installs finished since SlattyLauncher started, with **Play**.
 - **In Steam**, with Steam's games on: what the Steam client is downloading.

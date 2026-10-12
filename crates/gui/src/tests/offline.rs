@@ -367,3 +367,104 @@ fn the_installers_folder_is_chosen_in_settings() {
         "not absolute: kept"
     );
 }
+
+/// The install of game 6 paused, as the core leaves its job.
+fn paused_install_job(app: &App) {
+    InstallJob {
+        game_id: "6".into(),
+        build_id: "1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 6".into(),
+        state: PAUSED.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&app.core.as_ref().unwrap().db)
+    .unwrap();
+}
+
+#[test]
+fn a_queued_download_started_now_queues_the_running_install_after_it() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    queued_job(&app, "5");
+    app.queue = vec!["7".into(), entry("5")];
+    app.page = Page::Downloads;
+    app.selected = None;
+    let mut ui = render(&app);
+    snapshot(&mut ui, "queue-download-now");
+    drop(ui);
+
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("5"))));
+    assert_eq!(app.queue, [entry("5"), "7".into()]);
+    assert!(
+        matches!(app.install_views.get("6"), Some(InstallView::Running { cancel, .. }) if cancel.is_cancelled()),
+        "the install is paused"
+    );
+    assert!(app.offline_run.is_none(), "not before it stopped");
+
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    assert_eq!(app.queue, ["6", "7"], "right after the one started");
+    assert!(app.interrupted.is_empty(), "not held as paused");
+    assert!(app.preempted.is_none());
+    let job = InstallJob::load(&app.core.as_ref().unwrap().db, "6")
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.state, QUEUED);
+}
+
+#[test]
+fn an_install_started_now_queues_the_running_installers_after_it() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.start_next();
+    ready_to_install(&mut app, "7");
+    let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
+    assert_eq!(app.queue, ["7"]);
+
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow("7".into())));
+    assert!(
+        app.offline_run
+            .as_ref()
+            .is_some_and(|r| r.cancel.is_cancelled())
+    );
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    assert!(app.installing().is_some_and(|(id, _, _)| id == "7"));
+    assert_eq!(app.queue, [entry("5")]);
+    assert!(app.offline_stopped.is_empty(), "not held as paused");
+    let job = OfflineJob::load(&app.core.as_ref().unwrap().db, "5")
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.state, QUEUED);
+}
+
+#[test]
+fn a_download_started_now_with_nothing_running_starts_at_once() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    queued_job(&app, "5");
+    app.queue = vec!["6".into(), entry("5")];
+    // Even a paused one, which holds the queue otherwise.
+    app.offline_stopped = vec![("8".into(), None)];
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("5"))));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    assert_eq!(app.queue, ["6"]);
+}
+
+#[test]
+fn a_download_the_user_pauses_still_holds_the_queue() {
+    let mut app = library_app();
+    queued_job(&app, "5");
+    app.queue = vec![entry("5"), "6".into()];
+    let _ = app.start_next();
+    let _ = app.update(Message::Offline(OfflineMsg::Pause("5".into())));
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    assert_eq!(app.offline_stopped, [("5".to_string(), None)]);
+    assert_eq!(app.queue, ["6"]);
+}

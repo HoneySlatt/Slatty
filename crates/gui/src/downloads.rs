@@ -24,6 +24,17 @@ pub enum DownloadsMsg {
     /// Where the pointer is over the queue, from its top.
     Drag(f32),
     Drop,
+    /// Starts a queued download now: the one running is paused and goes back to the queue, right
+    /// after it, to go on once it is done.
+    StartNow(String),
+}
+
+/// Why the launcher paused the download running, which then goes back to the queue rather than
+/// waiting to be resumed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Preempt {
+    /// To make way for a download started from the queue.
+    StartNow,
 }
 
 /// A queue row being moved, from its place to where it would land.
@@ -65,8 +76,97 @@ impl App {
                     self.save_queue();
                 }
             }
+            DownloadsMsg::StartNow(entry) => {
+                let Some(i) = self.queue.iter().position(|e| *e == entry) else {
+                    return Task::none();
+                };
+                self.drag = None;
+                let entry = self.queue.remove(i);
+                self.queue.insert(0, entry);
+                self.save_queue();
+                if let Some(running) = self.running_entry() {
+                    self.preempted = Some((running.clone(), Preempt::StartNow));
+                    return self.pause_entry(&running);
+                }
+                // One being planned to start goes first.
+                if self.auto_resume.is_none() {
+                    return self.start_first();
+                }
+            }
         }
         Task::none()
+    }
+
+    /// The queue entry of the download running.
+    fn running_entry(&self) -> Option<String> {
+        self.installing()
+            .map(|(id, _, _)| id.to_string())
+            .or_else(|| {
+                let run = self.offline_run.as_ref()?;
+                Some(crate::offline::entry(&run.game_id))
+            })
+    }
+
+    fn pause_entry(&mut self, entry: &str) -> Task<Message> {
+        match of_entry(entry) {
+            Some(id) => self.update_offline(OfflineMsg::Pause(id.to_owned())),
+            None => self.update_install(InstallMsg::Pause(entry.to_owned())),
+        }
+    }
+
+    /// A download paused by the launcher (`Preempt`), once stopped: queued again, after the one it
+    /// made way for, which then starts. `None` when the launcher did not pause it.
+    pub(crate) fn requeue_preempted(&mut self, entry: &str) -> Option<Task<Message>> {
+        let (_, why) = self.preempted.take_if(|(e, _)| e == entry)?;
+        let core = self.core.clone()?;
+        let saved = match of_entry(entry) {
+            Some(id) => slatty_core::offline::OfflineJob::load(&core.db, id).and_then(|job| {
+                job.map_or(Ok(()), |job| {
+                    slatty_core::offline::OfflineJob {
+                        state: QUEUED.into(),
+                        ..job
+                    }
+                    .save(&core.db)
+                })
+            }),
+            // Under the game's lock, as when it was queued.
+            None => slatty_core::lock::game(&core.dirs, entry).and_then(|_busy| {
+                InstallJob::load(&core.db, entry)?.map_or(Ok(()), |job| {
+                    InstallJob {
+                        state: QUEUED.into(),
+                        ..job
+                    }
+                    .save(&core.db)
+                })
+            }),
+        };
+        if let Err(e) = saved {
+            self.notify_error(e.to_string());
+            return None;
+        }
+        // No longer running, before the next one starts.
+        match of_entry(entry) {
+            Some(id) => self.offline_stopped.retain(|(g, _)| g != id),
+            None => {
+                self.forget_interrupted(entry);
+                self.install_views.remove(entry);
+            }
+        }
+        self.drag = None;
+        let at = match why {
+            Preempt::StartNow => 1.min(self.queue.len()),
+        };
+        self.queue.insert(at, entry.to_owned());
+        self.save_queue();
+        let next = match why {
+            Preempt::StartNow => self.start_first(),
+        };
+        // An install is planned again, for its size in the queue.
+        let plan = match of_entry(entry) {
+            Some(_) => Task::none(),
+            None => self.update_install(InstallMsg::Prepare(entry.to_owned(), None)),
+        };
+        Some(Task::batch([next, plan]))
     }
 
     /// The queue as shown: while a row is moved, as it would be once dropped.
@@ -162,7 +262,15 @@ impl App {
                 .offline_stopped
                 .iter()
                 .any(|(_, failed)| failed.is_none());
-        if paused || self.queue.is_empty() {
+        if paused {
+            return Task::none();
+        }
+        self.start_first()
+    }
+
+    /// Starts the first download of the queue, whatever waits beside it.
+    fn start_first(&mut self) -> Task<Message> {
+        if self.queue.is_empty() {
             return Task::none();
         }
         self.drag = None;

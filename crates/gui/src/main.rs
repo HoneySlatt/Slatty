@@ -310,6 +310,8 @@ pub struct App {
     /// Installs waiting for the current download, in order.
     pub queue: Vec<String>,
     pub drag: Option<downloads::Drag>,
+    /// The download the launcher is pausing (its queue entry), to queue again once stopped.
+    pub preempted: Option<(String, downloads::Preempt)>,
     /// Installs finished since the start, the latest first, with their size.
     pub completed: Vec<(String, u64)>,
     /// What GOG offers to download for the games whose Installers drawer opened.
@@ -425,6 +427,7 @@ impl Default for App {
             interrupted: Vec::new(),
             queue: Vec::new(),
             drag: None,
+            preempted: None,
             completed: Vec::new(),
             offline_views: HashMap::new(),
             offline_run: None,

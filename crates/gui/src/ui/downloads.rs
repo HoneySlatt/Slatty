@@ -477,6 +477,12 @@ impl App {
                         self.cover_art(id, 40.0),
                         row_title(title),
                         text(size).size(15),
+                        button(text("Download now").size(14))
+                            .padding([10, 16])
+                            .on_press(Message::Downloads(DownloadsMsg::StartNow(
+                                entry.to_string()
+                            )))
+                            .style(theme::tonal),
                         round_button(
                             Icon::X,
                             Message::Downloads(DownloadsMsg::Remove(entry.to_string()))

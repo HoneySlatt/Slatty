@@ -471,11 +471,13 @@ impl App {
                     })
                 ) =>
             {
+                self.preempted.take_if(|(e, _)| *e == game_id);
                 self.install_views.remove(&game_id);
                 let discard = self.update_install(InstallMsg::Discard(game_id));
                 return Task::batch([discard, self.start_next()]);
             }
             InstallMsg::Done(game_id, Ok(install)) => {
+                self.preempted.take_if(|(e, _)| *e == game_id);
                 self.downloads_waiting = None;
                 self.waiting_told = false;
                 if let Some(InstallView::Running { progress, .. }) =
@@ -501,12 +503,16 @@ impl App {
                 };
                 return Task::batch([read, done, cloud, self.start_next()]);
             }
-            // Paused: the queue waits too.
+            // Paused: the queue waits too, unless the launcher paused it.
             InstallMsg::Done(game_id, Err(None)) => {
+                if let Some(next) = self.requeue_preempted(&game_id) {
+                    return next;
+                }
                 self.sync_interrupted(&game_id);
                 return self.update_install(InstallMsg::Prepare(game_id, None));
             }
             InstallMsg::Done(game_id, Err(Some(Failure(e, temporary)))) => {
+                self.preempted.take_if(|(e, _)| *e == game_id);
                 self.sync_interrupted(&game_id);
                 // Left cut off because GOG could not be reached: it resumes first once GOG answers,
                 // and the queue waits for it rather than fail the same way.
