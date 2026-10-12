@@ -465,6 +465,27 @@ fn back_at_a_tab_opens_the_menu() {
     );
 }
 
+/// The menu's hint, a button, sits on the same line as the others.
+#[test]
+fn the_hints_are_on_one_line() {
+    use iced_test::selector::Candidate;
+    let app = couch_app();
+    let mut ui = render(&app);
+    let mut middle = |wanted: &str| {
+        let bounds = ui
+            .find(|c: Candidate<'_>| match c {
+                Candidate::Text {
+                    content, bounds, ..
+                } if content == wanted => Some(bounds),
+                _ => None,
+            })
+            .unwrap();
+        bounds.center_y()
+    };
+    let (search, menu) = (middle("Search"), middle("Menu"));
+    assert!((search - menu).abs() < 1.0, "{search} and {menu}");
+}
+
 /// On the shelves above the covers, the hints say what A and X do there; Y does nothing.
 #[test]
 fn the_hints_follow_the_focus_onto_the_shelves() {

@@ -181,13 +181,17 @@ impl App {
                     _ => hint.into(),
                 }
             });
-        container(Row::with_children(hints).spacing(28))
-            .padding([0.0, MARGIN])
-            .width(Length::Fill)
-            .height(HINTS)
-            .center_y(HINTS)
-            .style(theme::couch_bar)
-            .into()
+        container(
+            Row::with_children(hints)
+                .spacing(28)
+                .align_y(Alignment::Center),
+        )
+        .padding([0.0, MARGIN])
+        .width(Length::Fill)
+        .height(HINTS)
+        .center_y(HINTS)
+        .style(theme::couch_bar)
+        .into()
     }
 
     /// A game's cover, ringed while it has the focus; pressed, it opens the game.
