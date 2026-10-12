@@ -57,6 +57,12 @@ impl Bytes for Fake {
         let pieces: Vec<Result<Vec<u8>>> = data.chunks(700).map(|c| Ok(c.to_vec())).collect();
         Ok(futures::stream::iter(pieces).boxed())
     }
+
+    /// Never asked for: a part's size comes from GOG's sums, so it is written as it comes rather
+    /// than taken whole into memory.
+    async fn read(&self, _: usize, _: u64, _: u64) -> Result<Vec<u8>> {
+        unreachable!("a whole range read into memory")
+    }
 }
 
 impl Source for Fake {

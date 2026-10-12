@@ -705,15 +705,27 @@ async fn check<S: Source>(
             .open(partial)
             .map_err(|e| Error::io(format!("open {}", partial.display()), e))?;
         for c in bad.unwrap_or_default() {
-            let data = source.read(part, c.from, c.to + 1).await?;
-            if data.len() as u64 != c.to + 1 - c.from {
+            // Written as it comes: a part's size is GOG's sums' to tell, never taken into memory.
+            let mut body = source.open(part, c.from, c.to + 1).await?;
+            let mut at = c.from;
+            while at <= c.to
+                && let Some(piece) = body.next().await
+            {
+                if cancel.is_cancelled() {
+                    return Err(Error::Cancelled);
+                }
+                let piece = piece?;
+                let piece = &piece[..piece.len().min((c.to + 1 - at) as usize)];
+                file.write_all_at(piece, at)
+                    .map_err(|e| Error::io(format!("write {}", partial.display()), e))?;
+                at += piece.len() as u64;
+            }
+            if at != c.to + 1 {
                 return Err(Error::io(
                     "downloading an installer",
                     std::io::ErrorKind::UnexpectedEof.into(),
                 ));
             }
-            file.write_all_at(&data, c.from)
-                .map_err(|e| Error::io(format!("write {}", partial.display()), e))?;
         }
         file.sync_all()
             .map_err(|e| Error::io(format!("sync {}", partial.display()), e))?;
