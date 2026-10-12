@@ -614,6 +614,11 @@ are drawn in place of the desktop's while `App::couch` holds its state.
   (`App::start_planned`); a game's main button is the desktop page's (`App::main_action`).
 - It starts with `--couch` or in a gamescope session (`XDG_CURRENT_DESKTOP=gamescope`,
   `GAMESCOPE_WAYLAND_DISPLAY`), full screen from the first frame.
+- Laid out for 1920×1080, it is enlarged on a larger screen through Iced's scale factor
+  (`App::ui_scale`, from `App::fit_screen`), so it is drawn at the screen's pixels rather than
+  small. `App::window` is then in the interface's units; the sizes Iced gives are converted back
+  with the scale it last applied (`App::scale_factor`), so a size never feeds back into the scale.
+  Key art and cover copies are sized from the screen (`App::screen`).
 
 ## Storage
 

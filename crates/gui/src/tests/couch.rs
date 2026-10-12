@@ -518,6 +518,54 @@ fn home_makes_no_key_art_copy_before_the_focus_rests() {
     assert!(app.update(Message::Image(url, Some(file))).units() > 0);
 }
 
+/// On a screen larger than 1920×1080 (a 4K television at scale 1), the couch mode is laid out as on
+/// a 1080p one and drawn larger, its text and key art sharp at the screen's pixels, rather than
+/// small in a corner; at 1080p or a Steam Deck's 1280×800 it is drawn as it is, the desktop never.
+#[test]
+fn the_couch_mode_fills_a_large_screen() {
+    let mut app = couch_app();
+    let art = PathBuf::from("/custom/5/art.jpg");
+    app.customs.insert(
+        "5".into(),
+        slatty_core::custom::Custom {
+            background: Some(art.clone()),
+            ..Default::default()
+        },
+    );
+    let _ = app.update(Message::Rescaled(1.0));
+    let _ = app.update(Message::WindowResized(Size::new(3840.0, 2160.0)));
+    assert_eq!(app.ui_scale, 2.0);
+    assert_eq!(app.window, Size::new(1920.0, 1080.0));
+    nav(&mut app, Nav::Down);
+    let copy = PathBuf::from("/art/3840/art.jpg");
+    let _ = app.update(Message::ArtScaled(art, 3840, Some(copy.clone())));
+    let g = app.home_focus().unwrap().2.clone();
+    assert!(matches!(
+        app.hero_art(&g),
+        Some(iced::widget::image::Handle::Path(_, p)) if p == copy
+    ));
+    // Once Iced draws at that scale, it gives the window's size in the interface's units: the
+    // same screen, the same scale, nothing that grows each time.
+    assert_eq!(app.scale_factor(), 2.0);
+    let _ = app.update(Message::WindowResized(Size::new(1920.0, 1080.0)));
+    assert_eq!(app.ui_scale, 2.0);
+    assert_eq!(app.window, Size::new(1920.0, 1080.0));
+    // Back on the desktop, the screen at its own scale.
+    let _ = app.update(Message::Couch(CouchMsg::Leave));
+    assert_eq!(app.ui_scale, 1.0);
+    assert_eq!(app.window, Size::new(3840.0, 2160.0));
+
+    for screen in [Size::new(1920.0, 1080.0), Size::new(1280.0, 800.0)] {
+        let mut app = couch_app();
+        let _ = app.update(Message::WindowResized(screen));
+        assert_eq!(app.ui_scale, 1.0);
+        assert_eq!(app.window, screen);
+    }
+    let mut app = library_app();
+    let _ = app.update(Message::WindowResized(Size::new(3840.0, 2160.0)));
+    assert_eq!(app.ui_scale, 1.0);
+}
+
 /// The couch mode's Home draws key art as wide as the window, not enlarged as a game page does: on
 /// a 1080p television its copy is 1920 pixels wide, not 2560.
 #[test]

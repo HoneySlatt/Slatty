@@ -6,7 +6,7 @@
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use iced::Task;
+use iced::{Size, Task};
 use slatty_core::installer::Progress;
 use slatty_core::library::LibraryGame;
 
@@ -227,7 +227,9 @@ impl App {
     pub fn update_couch(&mut self, msg: CouchMsg) -> Task<Message> {
         match msg {
             CouchMsg::Enter => {
+                let screen = self.screen();
                 self.couch = Some(Couch::default());
+                self.fit_screen(screen);
                 self.selected = None;
                 self.panel = None;
                 self.dialog = None;
@@ -237,8 +239,10 @@ impl App {
                 return Task::batch([fullscreen(true), self.home_art()]);
             }
             CouchMsg::Leave => {
+                let screen = self.screen();
                 self.couch = None;
-                return fullscreen(false);
+                self.fit_screen(screen);
+                return Task::batch([fullscreen(false), self.scale_art()]);
             }
             // A gamepad is read whatever window is in front: a game's moves are not the launcher's.
             CouchMsg::Nav(_) if self.away() => {}
@@ -1041,6 +1045,25 @@ impl App {
             });
         }
         rows
+    }
+
+    /// The window's size at the screen's own scale.
+    pub fn screen(&self) -> Size {
+        Size::new(
+            self.window.width * self.ui_scale,
+            self.window.height * self.ui_scale,
+        )
+    }
+
+    /// Lays the interface out for a window of `screen`'s size: the couch mode, made for 1920×1080,
+    /// is enlarged to fill a larger screen (a 4K television at scale 1 shows it as a 1080p one
+    /// does), drawn at the screen's pixels; smaller ones, a Steam Deck's, show it as it is.
+    pub fn fit_screen(&mut self, screen: Size) {
+        self.ui_scale = match self.couch {
+            Some(_) => (screen.width / 1920.0).min(screen.height / 1080.0).max(1.0),
+            None => 1.0,
+        };
+        self.window = Size::new(screen.width / self.ui_scale, screen.height / self.ui_scale);
     }
 
     /// Width of a cover: about eight across the window, the row filling it.

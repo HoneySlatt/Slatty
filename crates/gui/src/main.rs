@@ -107,6 +107,7 @@ fn main() -> iced::Result {
     app.title("SlattyLauncher")
         .subscription(App::subscription)
         .theme(App::theme)
+        .scale_factor(App::scale_factor)
         .window(iced::window::Settings {
             size: Size::new(1440.0, 900.0),
             fullscreen: couch::ask_at_start(),
@@ -360,8 +361,14 @@ pub struct App {
     pub dialog: Option<(String, Panel)>,
     /// Font families of the system, listed when Settings first opens.
     pub font_families: Vec<String>,
-    /// Size of the window, for layouts that change with it.
+    /// Size of the window, for layouts that change with it, in the interface's units: the couch
+    /// mode enlarges them on a large screen (`ui_scale`).
     pub window: Size,
+    /// How much the interface is enlarged, the couch mode's on a screen larger than 1920×1080
+    /// (`App::fit_screen`); 1 otherwise.
+    pub ui_scale: f32,
+    /// The scale Iced draws at, last asked for: the window sizes it gives are in its units.
+    applied_scale: std::cell::Cell<f32>,
     /// Fade in a new page, and the key art of a game once downloaded; `now` is the time of the
     /// frame drawn.
     pub page_shown: Animation<bool>,
@@ -472,6 +479,8 @@ impl Default for App {
             font_families: Vec::new(),
             dialog: None,
             window: Size::new(1440.0, 900.0),
+            ui_scale: 1.0,
+            applied_scale: std::cell::Cell::new(1.0),
             page_shown: Animation::new(true),
             art_shown: Animation::new(true),
             now: Instant::now(),
@@ -703,6 +712,13 @@ impl App {
                     .map(Message::Rescaled),
             ]),
         )
+    }
+
+    /// The scale Iced draws the interface at, beyond the screen's own (`ui_scale`); noted, as the
+    /// window sizes Iced gives from then on are in its units.
+    pub(crate) fn scale_factor(&self) -> f32 {
+        self.applied_scale.set(self.ui_scale);
+        self.ui_scale
     }
 
     fn theme(&self) -> iced::Theme {
@@ -1141,7 +1157,9 @@ impl App {
             }
             Message::CloseDialog => self.dialog = None,
             Message::WindowResized(size) => {
-                self.window = size;
+                // Given at the scale Iced draws at: back to the screen's own.
+                let applied = self.applied_scale.get();
+                self.fit_screen(Size::new(size.width * applied, size.height * applied));
                 // The parts of the Settings page moved.
                 self.settings_view.tops = Default::default();
                 return self.scale_art();
