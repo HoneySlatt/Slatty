@@ -202,15 +202,26 @@ impl App {
                 }
                 self.offline_stopped.retain(|(id, _)| *id != game_id);
                 let entry = entry(&game_id);
-                if !self.queue.contains(&entry) {
-                    self.drag = None;
+                // Download, as the drawer says when nothing downloads, starts at once, as an
+                // install does, even before a queue that a download paused on request holds.
+                let now = !self.downloads_held()
+                    && self.auto_resume.is_none()
+                    && self.downloads_waiting.is_none();
+                self.drag = None;
+                if now {
+                    self.queue.retain(|e| *e != entry);
+                    self.queue.insert(0, entry);
+                } else if !self.queue.contains(&entry) {
                     self.queue.push(entry);
-                    self.save_queue();
                 }
+                self.save_queue();
                 if self.selected.as_deref() == Some(game_id.as_str())
                     && self.panel == Some(Panel::Installers)
                 {
                     self.panel = None;
+                }
+                if now {
+                    return self.start_first();
                 }
                 return self.start_next();
             }

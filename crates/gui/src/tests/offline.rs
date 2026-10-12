@@ -196,6 +196,22 @@ fn installers_wait_in_the_queue_behind_a_running_install() {
     assert!(ui.find("[FAKE] Game 5 · offline installers").is_ok());
 }
 
+/// Download, as the drawer says when nothing downloads, starts beside a download paused on request
+/// and before the queue it holds.
+#[test]
+fn installers_download_at_once_beside_a_paused_install() {
+    let mut app = library_app();
+    app.interrupted
+        .push(("6".into(), crate::Interrupted::Paused));
+    app.queue = vec!["7".into()];
+    open(&mut app, "5", Some(Panel::Installers));
+    offered(&mut app);
+    assert!(render(&app).find("Download").is_ok());
+    let _ = app.update(Message::Offline(OfflineMsg::Download("5".into())));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    assert_eq!(app.queue, ["7"]);
+}
+
 #[test]
 fn an_install_waits_while_installers_download() {
     let mut app = library_app();
