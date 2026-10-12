@@ -128,9 +128,20 @@ impl App {
         let (Some(core), Some(width)) = (self.core.clone(), self.art_width()) else {
             return Task::none();
         };
+        // Home's only once its focus rested there: whatever arrives meanwhile, a game passed over
+        // gets no copy.
+        let rested = |id: &str| {
+            self.couch
+                .as_ref()
+                .is_some_and(|c| c.rested.as_deref() == Some(id))
+        };
         let Some(image::Handle::Path(_, from)) = self
             .selected_game()
-            .or_else(|| self.home_focus().map(|(_, _, g)| g))
+            .or_else(|| {
+                self.home_focus()
+                    .map(|(_, _, g)| g)
+                    .filter(|g| rested(&g.id))
+            })
             .and_then(|g| self.background(g))
         else {
             return Task::none();

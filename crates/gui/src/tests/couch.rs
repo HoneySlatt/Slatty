@@ -480,6 +480,44 @@ fn home_draws_the_key_art_from_its_copy() {
     ));
 }
 
+/// Key art arriving while the focus passes over a game of Home makes no copy before the focus rests
+/// there, nor does another image arriving meanwhile: one copy per game passed over is the burst the
+/// rest avoids. Once rested, it is made.
+#[test]
+fn home_makes_no_key_art_copy_before_the_focus_rests() {
+    let mut app = couch_app();
+    let url = "https://images.example/[FAKE]-5.jpg".to_string();
+    assert_eq!(app.library[4].id, "5");
+    app.library[4].background = Some(url.clone());
+    let _ = app.update(Message::Rescaled(1.0));
+    nav(&mut app, Nav::Down);
+    assert_eq!(app.home_focus().unwrap().2.id, "5");
+    let mut arrived = |url: String| {
+        let file = root().join("[FAKE]-art.jpg");
+        app.update(Message::Image(url, Some(file))).units()
+    };
+    assert_eq!(arrived(url.clone()), 0, "no copy before the rest");
+    assert_eq!(arrived("https://images.example/[FAKE]-9.jpg".into()), 0);
+    assert!(
+        app.update(Message::Couch(CouchMsg::Rested("5".into())))
+            .units()
+            > 0
+    );
+
+    // Rested before its art arrived: the copy is made as it arrives.
+    let mut app = couch_app();
+    app.library[4].background = Some(url.clone());
+    let _ = app.update(Message::Rescaled(1.0));
+    nav(&mut app, Nav::Down);
+    assert_eq!(
+        app.update(Message::Couch(CouchMsg::Rested("5".into())))
+            .units(),
+        0
+    );
+    let file = root().join("[FAKE]-art.jpg");
+    assert!(app.update(Message::Image(url, Some(file))).units() > 0);
+}
+
 /// The couch mode draws key art as it is, not enlarged as the desktop's game page does: on a 1080p
 /// television its copy is 1920 pixels wide, not 2560.
 #[test]

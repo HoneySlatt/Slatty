@@ -155,6 +155,8 @@ pub struct Couch {
     /// Home: the row with the focus, and the cover each row was left on.
     pub home_row: usize,
     pub home_cols: Vec<usize>,
+    /// Home: the game the focus rested on a moment, whose key art's copy is made (`REST`).
+    pub rested: Option<String>,
     /// Library: the shelf shown, the cover with the focus and the first row shown; on the
     /// shelves above, the one with the focus (the search after them).
     pub shelf: Shelf,
@@ -295,6 +297,9 @@ impl App {
             }
             CouchMsg::Rested(game_id) => {
                 if self.home_focus().is_some_and(|(_, _, g)| g.id == game_id) {
+                    if let Some(couch) = &mut self.couch {
+                        couch.rested = Some(game_id);
+                    }
                     return self.scale_art();
                 }
             }
