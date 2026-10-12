@@ -58,6 +58,7 @@ impl App {
                 self.queue.retain(|id| *id != game_id);
                 self.save_queue();
                 self.starting_now.take_if(|id| *id == game_id);
+                self.goes_on.take_if(|id| *id == game_id);
                 self.install_views.remove(&game_id);
                 return self.update_install(InstallMsg::Discard(game_id));
             }
@@ -201,6 +202,7 @@ impl App {
         };
         self.queue.insert(at, entry.to_owned());
         self.save_queue();
+        self.goes_on = Some(entry.to_owned());
         let next = match why {
             Preempt::StartNow => self.start_first(),
             // The game may have closed before the download stopped.
@@ -307,7 +309,8 @@ impl App {
                 .offline_stopped
                 .iter()
                 .any(|(_, failed)| failed.is_none());
-        if paused {
+        // What the launcher stopped goes on, first in line.
+        if paused && self.queue.first() != self.goes_on.as_ref() {
             return Task::none();
         }
         self.start_first()
@@ -321,6 +324,7 @@ impl App {
         self.drag = None;
         let game_id = self.queue.remove(0);
         self.save_queue();
+        self.goes_on.take_if(|e| *e == game_id);
         if let Some(id) = of_entry(&game_id) {
             return self.update_offline(OfflineMsg::Start(id.to_owned()));
         }

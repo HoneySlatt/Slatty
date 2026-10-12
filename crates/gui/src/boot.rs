@@ -64,6 +64,8 @@ pub struct Boot {
     pub overview: HashMap<String, GameOverview>,
     pub jobs: Vec<(String, Interrupted)>,
     pub queue: Vec<String>,
+    /// Offline installers cut off by a close, first in the queue: they go on by themselves.
+    pub cut_off: Option<String>,
     /// Offline installers paused, or stopped by an error.
     pub offline_stopped: Vec<(String, Option<String>)>,
     pub customs: HashMap<String, slatty_core::custom::Custom>,
@@ -266,11 +268,16 @@ async fn boot() -> Result<Boot, String> {
         .iter()
         .map(|j| (j.game_id.clone(), Interrupted::of(j)))
         .collect();
+    let offline = OfflineJob::list(&db).map_err(err)?;
     let (queue, offline_stopped) = downloads_from(
         slatty_core::settings::download_queue(&db).map_err(err)?,
         queued,
-        &OfflineJob::list(&db).map_err(err)?,
+        &offline,
     );
+    let cut_off = offline
+        .iter()
+        .find(|j| j.state == DOWNLOADING)
+        .map(|j| offline::entry(&j.game_id));
     let installers_root = slatty_core::settings::installers_root(&db).map_err(err)?;
     let core = Core {
         dirs,
@@ -313,6 +320,7 @@ async fn boot() -> Result<Boot, String> {
         overview,
         jobs,
         queue,
+        cut_off,
         offline_stopped,
         customs,
         sort_keys,

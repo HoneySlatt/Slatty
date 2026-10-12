@@ -357,6 +357,7 @@ impl App {
                 self.drag = None;
                 self.queue.retain(|e| *e != entry(&game_id));
                 self.save_queue();
+                self.goes_on.take_if(|e| *e == entry(&game_id));
                 return Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {

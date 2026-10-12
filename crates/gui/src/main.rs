@@ -317,6 +317,10 @@ pub struct App {
     pub preempted: Option<(String, downloads::Preempt)>,
     /// The queue entry Download now asked for, which starts even while a game runs.
     pub starting_now: Option<String>,
+    /// The queue entry of a download the launcher stopped (paused for a game or for Download now,
+    /// cut off by a close): it goes on by itself even while a download paused on request holds the
+    /// rest of the queue.
+    pub goes_on: Option<String>,
     /// Whether downloads pause while a game runs (Settings → Installs).
     pub pause_while_playing: bool,
     /// The couch mode, while on, and where its focus is.
@@ -440,6 +444,7 @@ impl Default for App {
             drag: None,
             preempted: None,
             starting_now: None,
+            goes_on: None,
             pause_while_playing: true,
             couch: None,
             start_planned: HashSet::new(),
@@ -859,6 +864,7 @@ impl App {
                 self.overview = boot.overview;
                 self.interrupted = boot.jobs;
                 self.queue = boot.queue;
+                self.goes_on = boot.cut_off;
                 self.customs = boot.customs;
                 self.sort_keys.fill(boot.sort_keys);
                 if let Some(sort) = boot.sort {

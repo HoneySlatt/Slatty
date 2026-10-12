@@ -313,6 +313,7 @@ pub(super) fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
         overview: Default::default(),
         jobs: Vec::new(),
         queue: Vec::new(),
+        cut_off: None,
         offline_stopped: Vec::new(),
         customs: Default::default(),
         sort_keys: Vec::new(),

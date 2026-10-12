@@ -813,6 +813,65 @@ fn a_game_pauses_the_download_running_until_it_closes() {
     assert_eq!(app.queue, ["7"]);
 }
 
+/// What the launcher paused goes on by itself, even while a download paused on request holds the
+/// rest of the queue.
+#[test]
+fn a_download_the_launcher_paused_goes_on_beside_one_paused_on_request() {
+    use super::offline::{installing_6, paused_install_job, queued_job};
+    use crate::downloads::DownloadsMsg;
+    use crate::offline::{OfflineMsg, entry};
+    // Paused for a game: it goes on once the game closes.
+    let mut app = library_app();
+    app.interrupted
+        .push(("8".into(), crate::Interrupted::Paused));
+    installing_6(&mut app);
+    paused_install_job(&app);
+    play_3(&mut app);
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert_eq!(app.queue, ["6"]);
+    let _ = app.update(Message::Playing(crate::play::PlayMsg::Done(Ok(()))));
+    assert_eq!(
+        app.auto_resume.as_deref(),
+        Some("6"),
+        "planned, then started"
+    );
+
+    // Paused for Download now: it goes on once the download started is done.
+    let mut app = library_app();
+    app.interrupted
+        .push(("8".into(), crate::Interrupted::Paused));
+    installing_6(&mut app);
+    paused_install_job(&app);
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("5"))));
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    assert_eq!(app.queue, ["6"]);
+    let _ = app.update(Message::Offline(OfflineMsg::Done(
+        "5".into(),
+        Ok(Vec::new()),
+    )));
+    assert_eq!(app.auto_resume.as_deref(), Some("6"));
+
+    // Cut off by a close: it goes on at the next start (`boot::downloads_from` puts it first).
+    let mut app = library_app();
+    app.interrupted
+        .push(("8".into(), crate::Interrupted::Paused));
+    queued_job(&app, "5");
+    app.queue = vec![entry("5"), "7".into()];
+    app.goes_on = Some(entry("5"));
+    let _ = app.start_next();
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    // The rest of the queue still waits.
+    let _ = app.update(Message::Offline(OfflineMsg::Done(
+        "5".into(),
+        Ok(Vec::new()),
+    )));
+    assert!(app.installing().is_none() && app.auto_resume.is_none());
+    assert_eq!(app.queue, ["7"]);
+}
+
 #[test]
 fn an_install_started_while_a_game_runs_waits_in_the_queue() {
     let mut app = library_app();
