@@ -116,8 +116,10 @@ async fn stop_request_terminates_the_game() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
-/// Real Proton check: `SLATTY_TEST_PROTON=<dir> cargo test -- --ignored proton`.
-/// Creates a throwaway prefix; `start` detaches ping from cmd, which exits at once.
+/// Real Proton check: `TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<dir> cargo test -p slatty-cli
+/// --test supervisor -- --ignored` (a name filter such as `proton` would also run the isolation
+/// checks, which must be given copies). Creates a throwaway prefix; `start` detaches ping from
+/// cmd, which exits at once.
 #[tokio::test]
 #[ignore]
 async fn proton_session_waits_for_detached_windows_process() {

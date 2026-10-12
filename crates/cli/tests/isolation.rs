@@ -1,7 +1,10 @@
 //! Real checks that an isolated game sees nothing of the home folder. They run umu's container,
-//! from a folder inside the home folder (umu's runtime cannot see `/tmp/nix-shell.*`):
-//! `TMPDIR=$HOME/.cache cargo test -- --ignored isolated` (the Windows one also needs
-//! `SLATTY_TEST_PROTON=<Proton dir>`).
+//! from a folder inside the home folder (umu's runtime cannot see `/tmp/nix-shell.*`), one at a
+//! time (they set the test process's environment). A failing check writes a probe into umu's
+//! runtime and the Proton build: give them copies (`cp -a --reflink=auto`) of
+//! `~/.local/share/umu`, as `<data>/umu`, and of a Proton build:
+//! `TMPDIR=$HOME/.cache XDG_DATA_HOME=<data> SLATTY_TEST_PROTON=<copy of a Proton dir>
+//! cargo test -p slatty-cli --test isolation -- --ignored --test-threads=1`.
 //!
 //! Each leak closed here is shown first: the same launch without the measure, or not isolated,
 //! sees what the isolated one must not.
