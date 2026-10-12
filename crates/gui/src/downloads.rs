@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 
 use iced::Task;
-use slatty_core::installer::{InstallJob, QUEUED};
+use slatty_core::installer::{DOWNLOADING, InstallJob, QUEUED};
 
 use crate::install::{InstallMsg, InstallView};
 use crate::offline::{OfflineMsg, of_entry};
@@ -181,11 +181,13 @@ impl App {
     pub(crate) fn requeue_preempted(&mut self, entry: &str) -> Option<Task<Message>> {
         let (_, why) = self.preempted.take_if(|(e, _)| e == entry)?;
         let core = self.core.clone()?;
+        // Saved as started, as if cut off: its resume is checked as one (a folder gone, a game
+        // folder already published), and it goes on first after a restart.
         let saved = match of_entry(entry) {
             Some(id) => slatty_core::offline::OfflineJob::load(&core.db, id).and_then(|job| {
                 job.map_or(Ok(()), |job| {
                     slatty_core::offline::OfflineJob {
-                        state: QUEUED.into(),
+                        state: DOWNLOADING.into(),
                         ..job
                     }
                     .save(&core.db)
@@ -195,7 +197,7 @@ impl App {
             None => slatty_core::lock::game(&core.dirs, entry).and_then(|_busy| {
                 InstallJob::load(&core.db, entry)?.map_or(Ok(()), |job| {
                     InstallJob {
-                        state: QUEUED.into(),
+                        state: DOWNLOADING.into(),
                         ..job
                     }
                     .save(&core.db)

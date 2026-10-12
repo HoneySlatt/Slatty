@@ -471,10 +471,12 @@ fn a_queued_download_started_now_queues_the_running_install_after_it() {
     assert_eq!(app.queue, ["6", "7"], "right after the one started");
     assert!(app.interrupted.is_empty(), "not held as paused");
     assert!(app.preempted.is_none());
+    // Saved as started: its resume is checked as one (its folder still there, a game folder already
+    // published finished), and it goes on first after a restart.
     let job = InstallJob::load(&app.core.as_ref().unwrap().db, "6")
         .unwrap()
         .unwrap();
-    assert_eq!(job.state, QUEUED);
+    assert_eq!(job.state, DOWNLOADING);
 }
 
 #[test]
@@ -501,7 +503,7 @@ fn an_install_started_now_queues_the_running_installers_after_it() {
     let job = OfflineJob::load(&app.core.as_ref().unwrap().db, "5")
         .unwrap()
         .unwrap();
-    assert_eq!(job.state, QUEUED);
+    assert_eq!(job.state, DOWNLOADING, "saved as started");
 }
 
 #[test]
