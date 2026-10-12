@@ -247,6 +247,16 @@ fn closing_from_the_sign_in_page_asks_first_too() {
         let _ = app.update(m);
     }
     assert!(app.quit_confirm.is_none());
+
+    // Opened from Settings, the sign-in page stays under the dialog Escape closes.
+    let mut app = library_app();
+    app.steam.on = true;
+    app.logged_out();
+    let _ = app.update(Message::ShowLogin(true));
+    app.quit_confirm = Some(vec!["[FAKE] Game 3 is running.".into()]);
+    app.go_back();
+    assert!(app.quit_confirm.is_none());
+    assert!(app.login_open, "the page stays");
 }
 
 /// A game added by hand, here a Windows one: GOG neither keeps its saves nor hears of it.

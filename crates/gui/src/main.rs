@@ -1054,9 +1054,7 @@ impl App {
     /// Escape: closes GOG's sign-in opened from Settings, the panel, else the game page, else the
     /// per-game achievements page.
     fn go_back(&mut self) {
-        if std::mem::take(&mut self.login_open) {
-            return;
-        }
+        // The dialogs first: they show over the sign-in page too.
         if self.quit_confirm.take().is_some() {
             return;
         }
@@ -1064,6 +1062,9 @@ impl App {
             return;
         }
         if self.launch_prompt.take().is_some() {
+            return;
+        }
+        if std::mem::take(&mut self.login_open) {
             return;
         }
         if self.context_menu.take().is_some() {
