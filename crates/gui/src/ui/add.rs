@@ -168,9 +168,6 @@ impl App {
             "Removing it from the library deletes only what SlattyLauncher unpacked for it: your \
              own files stay. It has no cloud saves or achievements, and GOG is not told of it.",
         ));
-        if let Some(e) = &d.error {
-            fields = fields.push(text(e.as_str()).size(14).color(tokens().danger));
-        }
         let (label_of, ready, next) = if d.installer_first() {
             (
                 match (d.busy, d.windows()) {
@@ -210,7 +207,13 @@ impl App {
         let body =
             container(scrollable(fields.padding(Padding::ZERO.right(14))).style(theme::scroller))
                 .max_height((self.window.height - AROUND).max(160.0));
-        let dialog = container(column![header, body, actions].spacing(20))
+        // Why the game was not added, above the buttons: at the end of the form, it would be
+        // scrolled out of sight in a short window.
+        let error = d
+            .error
+            .as_ref()
+            .map(|e| text(e.as_str()).size(14).color(tokens().danger));
+        let dialog = container(column![header, body].push(error).push(actions).spacing(20))
             .padding(Padding::new(26.0).right(12.0))
             .max_width(640)
             .style(theme::card);

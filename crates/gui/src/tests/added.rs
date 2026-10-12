@@ -289,6 +289,30 @@ fn a_game_is_added_from_the_library() {
     );
 }
 
+/// Why a game was not added shows between the form and its buttons, in view in the smallest window,
+/// not at the end of a form that scrolls.
+#[test]
+fn why_a_game_was_not_added_shows_in_the_smallest_window() {
+    use crate::add::AddMsg;
+    let mut app = library_app();
+    app.window = Size::new(800.0, 560.0);
+    let _ = app.update(Message::Add(AddMsg::Open));
+    let _ = app.update(Message::Add(AddMsg::PickedProgram(Some(
+        "/games/[FAKE] Quest/Quest.exe".into(),
+    ))));
+    let _ = app.update(Message::Add(AddMsg::Saved(Err("[FAKE] refused".into()))));
+    let mut ui = render_window(&app);
+    let error = ui.find("[FAKE] refused").unwrap();
+    let shown = error.visible_bounds().expect("in view");
+    assert!(
+        shown.height > error.bounds().height - 0.1,
+        "all of it: {shown:?}"
+    );
+    assert!(shown.y + shown.height <= app.window.height, "{shown:?}");
+    let add = ui.find("Add").unwrap().bounds();
+    assert!(add.y + add.height <= app.window.height, "{add:?}");
+}
+
 /// Isolation starts as for a game installed now, for a Windows program alone (unless turned off in
 /// Settings), and follows the program chosen until the switch is touched.
 #[test]
