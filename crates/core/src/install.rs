@@ -157,6 +157,14 @@ fn from_row(row: &Row<'_>) -> rusqlite::Result<Result<Install>> {
     })())
 }
 
+/// Registers a game installed by another tool (`from_dir`, `from_heroic`), isolated as a game
+/// installed now would be.
+pub fn import(db: &Db, mut install: Install) -> Result<Install> {
+    install.isolated = isolated_when_installed(db, install.platform, &install.runner)?;
+    install.save(db)?;
+    Ok(install)
+}
+
 /// Builds an install record from a directory that already contains a GOG game. Its id, which
 /// comes from the game's own files or the user, must be GOG's: a game added by hand is not
 /// imported over (its files, which removing it deletes, would be taken for the folder's).
@@ -330,6 +338,24 @@ mod tests {
         assert!(!isolated(Platform::Linux, &Runner::Native));
         crate::settings::set_isolate_new_games(&db, false).unwrap();
         assert!(!isolated(Platform::Windows, &proton));
+    }
+
+    /// A Windows game imported from another tool is a new game too: Isolate new Windows games
+    /// turned off, it starts with access to the user's files.
+    #[test]
+    fn imported_games_follow_the_isolation_setting() {
+        let root = fixture("import-isolated");
+        let db = Db::in_memory().unwrap();
+        let proton = Runner::Umu {
+            proton: "/p".into(),
+            prefix: "/x".into(),
+        };
+        let found = from_dir(&root.join("Game"), None, proton).unwrap();
+        assert!(import(&db, found.clone()).unwrap().isolated);
+        crate::settings::set_isolate_new_games(&db, false).unwrap();
+        assert!(!import(&db, found).unwrap().isolated);
+        assert!(!Install::get(&db, "42").unwrap().unwrap().isolated);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

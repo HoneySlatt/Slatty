@@ -63,7 +63,7 @@ pub fn import(ctx: &Ctx, args: ImportArgs) -> Result<()> {
         }
         (None, None) => bail!("give a directory or --from-heroic GAME_ID"),
     };
-    install.save(&ctx.db)?;
+    let install = install::import(&ctx.db, install)?;
     println!(
         "Imported {} ({}) from {}",
         install.title,
