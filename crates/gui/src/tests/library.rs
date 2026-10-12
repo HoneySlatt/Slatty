@@ -536,6 +536,24 @@ fn copies_made_for_an_account_go_with_it() {
     assert_eq!(shown(&app), mine, "made for the account signed out");
 }
 
+/// A game page opened another way than from its cover (a notification, a panel's button) asks for
+/// its key art's copy too.
+#[test]
+fn every_way_to_a_game_page_asks_for_its_key_arts_copy() {
+    let mut app = library_app();
+    app.window = Size::new(1800.0, 1000.0);
+    app.customs.insert(
+        "2".into(),
+        slatty_core::custom::Custom {
+            background: Some(PathBuf::from("/custom/2/art.jpg")),
+            ..Default::default()
+        },
+    );
+    let _ = app.update(Message::Rescaled(1.5));
+    let _ = app.update(Message::SelectWith("2".into(), Panel::Manage));
+    assert_eq!(app.scale_art().units(), 0, "already asked for");
+}
+
 /// The game page draws its key art from the copy made at the window's width, rounded up to 1920,
 /// 2560 or 3840 pixels; another width draws the original until its own copy is made.
 #[test]

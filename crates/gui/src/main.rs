@@ -945,10 +945,7 @@ impl App {
             Message::ToggleFilters => self.filters_open = !self.filters_open,
             Message::SetFilters(f) => return self.set_filters(f),
             Message::ToggleFavorite(id) => self.toggle_favorite(id),
-            Message::Select(id) => {
-                let open = self.open_game(id, None);
-                return Task::batch([open, self.scale_art()]);
-            }
+            Message::Select(id) => return self.open_game(id, None),
             Message::SelectWith(id, panel) => return self.open_game(id, Some(panel)),
             Message::OpenAchievements(id) => return self.open_achievements(id),
             Message::Avatar(Some(url)) => {
@@ -1277,6 +1274,7 @@ impl App {
         if let Some(p) = panel {
             tasks.push(self.open_panel(p));
         }
+        tasks.push(self.scale_art());
         Task::batch(tasks)
     }
 
