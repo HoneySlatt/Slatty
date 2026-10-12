@@ -63,7 +63,11 @@ fn work_ending_after_its_account_was_forgotten_leaves_nothing_of_it() {
         let _ = app.update(Message::AccountResult(epoch, Box::new(ended)));
     };
     let epoch = app.account_epoch;
+    // Written by a result handled while the sign-out ran, after its data was deleted.
+    std::fs::create_dir_all(cache.join("covers")).unwrap();
+    std::fs::write(cache.join("library.json"), b"[FAKE]").unwrap();
     let _ = app.update(Message::LoggedOut(Ok(Some("77".into()))));
+    assert!(!cache.exists(), "deleted as the sign-out ends");
     late(&mut app, epoch);
     assert!(!cache.exists(), "deleted again");
 

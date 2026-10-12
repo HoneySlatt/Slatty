@@ -879,6 +879,8 @@ impl App {
             Message::LoggedOut(Ok(forgotten)) => {
                 self.forgotten.extend(forgotten);
                 self.logged_out();
+                // What work wrote as it ended between the account's data deleted and now.
+                self.forget_again();
             }
             Message::LoggedOut(Err(e)) => self.notify_error(e),
             Message::SyncLibrary => return self.sync_library(),
