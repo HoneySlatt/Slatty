@@ -27,8 +27,14 @@ use crate::{fsutil, http};
 /// The systems GOG makes installers for, in the order they are offered.
 pub const SYSTEMS: [&str; 3] = ["windows", "linux", "mac"];
 const DOWNLOAD_SUFFIX: &str = ".slatty-dl";
-/// Times a file's download is taken up again after its connection dropped.
-const ATTEMPTS: usize = 3;
+/// Times a file's download is tried in a row after its connection dropped, the first after this
+/// wait, the next after twice as long: a dropped connection often comes back within seconds.
+const ATTEMPTS: u32 = 3;
+const FIRST_WAIT: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_millis(10)
+} else {
+    std::time::Duration::from_secs(1)
+};
 
 /// A file of an installer: large ones come in several.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -563,6 +569,7 @@ async fn fetch<S: Source>(
     progress(*p);
     let mut attempt = 1;
     while have < size {
+        let before = have;
         let got = async {
             let mut body = source.open(part, have, size).await?;
             loop {
@@ -588,11 +595,15 @@ async fn fetch<S: Source>(
             }
         }
         .await;
-        match got {
-            Ok(()) if have == size => {}
+        // A connection that brought something leaves every try for the next drop.
+        if have > before {
+            attempt = 1;
+        }
+        let again = match got {
+            Ok(()) if have == size => false,
             // Cut short, or dropped on the way: taken up where it stopped.
-            Ok(()) if attempt < ATTEMPTS => attempt += 1,
-            Err(e) if e.is_temporary() && attempt < ATTEMPTS => attempt += 1,
+            Ok(()) if attempt < ATTEMPTS => true,
+            Err(e) if e.is_temporary() && attempt < ATTEMPTS => true,
             Ok(()) => {
                 return Err(Error::io(
                     "downloading an installer",
@@ -600,6 +611,14 @@ async fn fetch<S: Source>(
                 ));
             }
             Err(e) => return Err(e),
+        };
+        if again {
+            tokio::select! {
+                biased;
+                _ = cancel.cancelled() => return Err(Error::Cancelled),
+                _ = tokio::time::sleep(FIRST_WAIT * attempt) => {}
+            }
+            attempt += 1;
         }
     }
     file.sync_all().map_err(|e| io("sync", e))

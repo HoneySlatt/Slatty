@@ -4,12 +4,12 @@ use futures::stream::BoxStream;
 
 use super::*;
 
-/// Installer files in memory, sent in small pieces. `drop_once` cuts the first answer for a file
-/// starting there, as a dropped connection would; `corrupt_once` changes a byte of the first
-/// answer that holds it.
+/// Installer files in memory, sent in small pieces. `drops` cuts in half the first answer for a
+/// file starting at each of its places, as a dropped connection would; `corrupt_once` changes a
+/// byte of the first answer that holds it.
 struct Fake {
     files: Vec<(String, Vec<u8>, Option<String>)>,
-    drop_once: Mutex<Option<(usize, u64)>>,
+    drops: Mutex<Vec<(usize, u64)>>,
     corrupt_once: Mutex<Option<(usize, u64)>>,
     opened: Mutex<Vec<(usize, u64, u64)>>,
 }
@@ -21,7 +21,7 @@ impl Fake {
                 .into_iter()
                 .map(|(n, d, x)| (n.to_owned(), d, x))
                 .collect(),
-            drop_once: Mutex::new(None),
+            drops: Mutex::new(Vec::new()),
             corrupt_once: Mutex::new(None),
             opened: Mutex::new(Vec::new()),
         }
@@ -49,13 +49,9 @@ impl Bytes for Fake {
         {
             data[(at - start) as usize] ^= 0xff;
         }
-        if self
-            .drop_once
-            .lock()
-            .unwrap()
-            .take_if(|(p, at)| *p == part && *at == start)
-            .is_some()
-        {
+        let mut drops = self.drops.lock().unwrap();
+        if let Some(i) = drops.iter().position(|(p, at)| *p == part && *at == start) {
+            drops.remove(i);
             data.truncate(data.len() / 2);
         }
         let pieces: Vec<Result<Vec<u8>>> = data.chunks(700).map(|c| Ok(c.to_vec())).collect();
@@ -300,13 +296,26 @@ async fn a_dropped_connection_is_taken_up() {
     let dir = temp("dropped");
     let a = data(5000, 4);
     let fake = Fake::new(vec![("setup_fake.exe", a.clone(), None)]);
-    *fake.drop_once.lock().unwrap() = Some((0, 0));
+    *fake.drops.lock().unwrap() = vec![(0, 0)];
     run_download(&fake, &dir).await.unwrap();
     assert_eq!(std::fs::read(dir.join("setup_fake.exe")).unwrap(), a);
     assert_eq!(
         *fake.opened.lock().unwrap(),
         [(0, 0, 5000), (0, 2500, 5000)]
     );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// A line dropping now and then, each time after something came: the download goes on.
+#[tokio::test]
+async fn a_download_that_keeps_dropping_but_moves_on_completes() {
+    let dir = temp("drops");
+    let a = data(5000, 27);
+    let fake = Fake::new(vec![("setup_fake.exe", a.clone(), None)]);
+    *fake.drops.lock().unwrap() = vec![(0, 0), (0, 2500), (0, 3750), (0, 4375)];
+    run_download(&fake, &dir).await.unwrap();
+    assert_eq!(std::fs::read(dir.join("setup_fake.exe")).unwrap(), a);
+    assert_eq!(fake.opened.lock().unwrap().len(), 5);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
