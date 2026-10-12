@@ -493,9 +493,7 @@ impl App {
             {
                 return self.add_web_games(games);
             }
-            SteamMsg::Owned(_, Err(e)) if self.asks_steam_web() => {
-                self.notify_error(format!("Steam's Web API did not answer: {e}"));
-            }
+            SteamMsg::Owned(_, Err(e)) if self.asks_steam_web() => self.notify_error(e),
             SteamMsg::Owned(..) => {}
         }
         Task::none()
@@ -570,7 +568,7 @@ impl App {
                 }
                 web::owned_games(&core.http, &key, account)
                     .await
-                    .map_err(|e| e.to_string())
+                    .map_err(web_failure)
             },
             move |games| Message::Steam(SteamMsg::Owned(account, games)),
         )
@@ -832,6 +830,17 @@ impl App {
         }
         self.steam.read_from = self.steam.installed.keys().cloned().collect();
         read_installed()
+    }
+}
+
+/// What to tell of a request to Steam's Web API that failed: a key refused is not an API that did
+/// not answer.
+pub(crate) fn web_failure(e: slatty_core::Error) -> String {
+    match e {
+        slatty_core::Error::Http {
+            status: 401 | 403, ..
+        } => "Steam refused the Web API key: check it in Settings → Steam.".into(),
+        e => format!("Steam's Web API did not answer: {e}"),
     }
 }
 

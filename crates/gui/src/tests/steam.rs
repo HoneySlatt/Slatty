@@ -1216,3 +1216,22 @@ fn a_steam_games_page_asks_steam() {
     assert!(ui.find("Cloud saves").is_err());
     snapshot(&mut ui, "steam-game-page");
 }
+
+/// A Web API key Steam refuses is said to be refused, with where to change it, not taken for an
+/// API that did not answer.
+#[test]
+fn a_web_api_key_steam_refuses_is_said_refused() {
+    let refused = crate::steam::web_failure(slatty_core::Error::Http {
+        context: "[FAKE]",
+        status: 403,
+    });
+    assert!(
+        refused.contains("refused") && refused.contains("Settings"),
+        "{refused}"
+    );
+    let failing = crate::steam::web_failure(slatty_core::Error::Http {
+        context: "[FAKE]",
+        status: 503,
+    });
+    assert!(failing.contains("did not answer"), "{failing}");
+}
