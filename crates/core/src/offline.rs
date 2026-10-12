@@ -451,9 +451,9 @@ impl Source for GogInstallers {
     }
 }
 
-/// Downloads every file of `source` into `folder`, each staged under a name of its own (its
-/// game's id in it), checked, then renamed. A file already there at its size is kept; one there
-/// at another size is not replaced.
+/// Downloads every file of `source` into `folder`, each staged under a name of its own (its size
+/// and its game's id in it), checked, then renamed. A file already there at its size is kept; one
+/// there at another size is not replaced.
 pub async fn download<S: Source>(
     source: &S,
     folder: &Path,
@@ -461,7 +461,10 @@ pub async fn download<S: Source>(
     progress: &(dyn Fn(Progress) + Sync),
     cancel: &CancellationToken,
 ) -> Result<Vec<PathBuf>> {
-    let partial_of = |name: &str| folder.join(format!("{name}.{game_id}{DOWNLOAD_SUFFIX}"));
+    // The size in it: a file GOG replaced by another of the same name never takes up the other's
+    // beginning.
+    let partial_of =
+        |name: &str, size: u64| folder.join(format!("{name}.{size}.{game_id}{DOWNLOAD_SUFFIX}"));
     let mut files: Vec<(usize, String, u64, Option<Checksums>)> = Vec::new();
     for part in 0..source.parts() {
         let name = file_name(&source.name(part).await?)?;
@@ -508,7 +511,7 @@ pub async fn download<S: Source>(
     for (_, name, size, _) in &files {
         if let Some(have) = there(&folder.join(name), *size)? {
             present += have;
-        } else if let Ok(m) = std::fs::symlink_metadata(partial_of(name)) {
+        } else if let Ok(m) = std::fs::symlink_metadata(partial_of(name, *size)) {
             present += m.len().min(*size);
         }
     }
@@ -525,7 +528,7 @@ pub async fn download<S: Source>(
     for (part, name, size, sums) in files {
         let target = folder.join(&name);
         if there(&target, size)?.is_none() {
-            let partial = partial_of(&name);
+            let partial = partial_of(&name, size);
             fetch(source, part, size, &partial, &mut p, progress, cancel).await?;
             if let Some(sums) = sums {
                 check(source, part, &partial, &sums, cancel).await?;

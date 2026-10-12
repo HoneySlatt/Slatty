@@ -114,7 +114,8 @@ The setup programs GOG's site offers, downloaded to keep rather than installed.
 | Installer bytes | Ranged requests to the link, as for Linux builds | Capture | Verified (for Linux installers) |
 
 The sums are read with each file's link, before its bytes, as lgogdownloader does: their address
-is signed for a while only. A file is downloaded under a name of its own, taken up from where it
+is signed for a while only. A file is downloaded under a name of its own, its size in it (a file
+GOG replaced by another of the same name never takes up the other's part), taken up from where it
 stopped, checked against the whole file's MD5, and renamed once right. Chunks whose MD5 differs are
 downloaded again, once; a file still wrong is deleted. A file GOG keeps no checksums for is taken
 on its size.

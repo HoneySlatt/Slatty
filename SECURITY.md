@@ -172,12 +172,12 @@ show game titles and achievement names on a lock screen.
   SlattyLauncher's own folders, with the permissions your other downloads get. Each file's name is
   the last part of the address GOG's link leads to, refused unless it is a plain file name (no
   folder, no leading dot, no control character, at most 200 bytes). A file is written under a name
-  of its own, its game's id in it, never through a link left in its place, and takes its name only
-  once checked against the MD5 sums GOG keeps for it (the whole file, and its parts to download
-  again what is damaged); a file GOG keeps no sums for, and one already in the folder at its size,
-  are taken on their size. Another file of the same name is never replaced, and removing a
-  download deletes only what it left unfinished. A download whose installers folder is gone (a
-  drive unplugged) stops rather than start over on another disk.
+  of its own, its size and its game's id in it, never through a link left in its place, and takes
+  its name only once checked against the MD5 sums GOG keeps for it (the whole file, and its parts
+  to download again what is damaged); a file GOG keeps no sums for, and one already in the folder
+  at its size, are taken on their size. Another file of the same name is never replaced, and
+  removing a download deletes only what it left unfinished. A download whose installers folder is
+  gone (a drive unplugged) stops rather than start over on another disk.
 
 ### Sizes
 

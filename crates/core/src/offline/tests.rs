@@ -294,11 +294,30 @@ async fn what_a_replaced_installer_left_goes_once_all_is_downloaded() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// GOG replaced an installer by another of the same name, of another size, while its download was
+/// paused: what was kept of the old one is not taken up as the new one's beginning.
+#[tokio::test]
+async fn a_part_of_a_replaced_file_of_the_same_name_is_not_taken_up() {
+    let dir = temp("same-name");
+    let old = data(4000, 29);
+    std::fs::write(dir.join("setup_fake.exe.1.slatty-dl"), &old[..2100]).unwrap();
+    let new = data(5000, 30);
+    let fake = Fake::new(vec![("setup_fake.exe", new.clone(), None)]);
+    run_download(&fake, &dir).await.unwrap();
+    assert_eq!(std::fs::read(dir.join("setup_fake.exe")).unwrap(), new);
+    assert_eq!(
+        std::fs::read_dir(&dir).unwrap().count(),
+        1,
+        "the old part gone"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
 #[tokio::test]
 async fn a_partial_file_is_taken_up_where_it_stopped() {
     let dir = temp("resume");
     let a = data(5000, 3);
-    std::fs::write(dir.join("setup_fake.exe.1.slatty-dl"), &a[..2100]).unwrap();
+    std::fs::write(dir.join("setup_fake.exe.5000.1.slatty-dl"), &a[..2100]).unwrap();
     let fake = Fake::new(vec![(
         "setup_fake.exe",
         a.clone(),
@@ -391,7 +410,7 @@ async fn a_pause_during_the_check_stops_it() {
         download(&fake, &dir, "1", &pressed, &pause).await,
         Err(Error::Cancelled)
     ));
-    assert!(dir.join("setup_fake.exe.1.slatty-dl").exists());
+    assert!(dir.join("setup_fake.exe.5000.1.slatty-dl").exists());
     assert!(!dir.join("setup_fake.exe").exists());
     let fake = Fake::new(vec![("setup_fake.exe", a.clone(), sums)]);
     run_download(&fake, &dir).await.unwrap();
@@ -465,7 +484,7 @@ async fn a_link_in_place_of_the_staged_file_is_not_followed() {
     std::fs::write(&outside, b"[FAKE] keep").unwrap();
     let folder = dir.join("game");
     std::fs::create_dir(&folder).unwrap();
-    std::os::unix::fs::symlink(&outside, folder.join("setup_fake.exe.1.slatty-dl")).unwrap();
+    std::os::unix::fs::symlink(&outside, folder.join("setup_fake.exe.5000.1.slatty-dl")).unwrap();
     let fake = Fake::new(vec![("setup_fake.exe", data(5000, 9), None)]);
     assert!(run_download(&fake, &folder).await.is_err());
     assert_eq!(std::fs::read(&outside).unwrap(), b"[FAKE] keep");
@@ -531,7 +550,7 @@ async fn a_paused_download_keeps_what_it_has() {
         download(&fake, &dir, "1", &|_| {}, &cancel).await,
         Err(Error::Cancelled)
     ));
-    assert!(dir.join("setup_fake.exe.1.slatty-dl").exists());
+    assert!(dir.join("setup_fake.exe.5000.1.slatty-dl").exists());
     assert!(!dir.join("setup_fake.exe").exists());
     std::fs::remove_dir_all(&dir).unwrap();
 }
