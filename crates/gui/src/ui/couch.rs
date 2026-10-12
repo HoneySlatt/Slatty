@@ -141,6 +141,12 @@ impl App {
             ]
         } else if couch.tab == Tab::Downloads {
             &[(Glyph::A, "Select"), (Glyph::Menu, "Menu")]
+        } else if couch.tab == Tab::Library && couch.on_shelves.is_some() {
+            &[
+                (Glyph::A, "Choose"),
+                (Glyph::X, "Search"),
+                (Glyph::Menu, "Menu"),
+            ]
         } else {
             &[
                 (Glyph::A, "Open"),

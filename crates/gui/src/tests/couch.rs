@@ -339,6 +339,18 @@ fn an_installed_game_plays_from_its_page() {
     assert_eq!(app.selected.as_deref(), Some("3"));
 }
 
+/// On the shelves above the covers, the hints say what A and X do there; Y does nothing.
+#[test]
+fn the_hints_follow_the_focus_onto_the_shelves() {
+    let mut app = couch_app();
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    nav(&mut app, Nav::Up);
+    assert!(couch(&app).on_shelves.is_some());
+    let mut ui = render(&app);
+    assert!(ui.find("Choose").is_ok());
+    assert!(ui.find("Favorite").is_err());
+}
+
 /// Typed on a real keyboard, the search ends with Enter, as it would elsewhere; A on a gamepad
 /// still presses the key with the focus.
 #[test]
