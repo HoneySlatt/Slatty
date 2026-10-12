@@ -48,7 +48,7 @@ fn choice(app: &App) -> &crate::offline::Choice {
     }
 }
 
-fn queued_job(app: &App, game_id: &str) {
+pub(super) fn queued_job(app: &App, game_id: &str) {
     OfflineJob {
         game_id: game_id.into(),
         os: "windows".into(),
@@ -62,7 +62,7 @@ fn queued_job(app: &App, game_id: &str) {
 }
 
 /// An install of game 6, downloading.
-fn installing_6(app: &mut App) {
+pub(super) fn installing_6(app: &mut App) {
     app.install_views.insert(
         "6".into(),
         InstallView::Running {
@@ -369,7 +369,7 @@ fn the_installers_folder_is_chosen_in_settings() {
 }
 
 /// The install of game 6 paused, as the core leaves its job.
-fn paused_install_job(app: &App) {
+pub(super) fn paused_install_job(app: &App) {
     InstallJob {
         game_id: "6".into(),
         build_id: "1".into(),

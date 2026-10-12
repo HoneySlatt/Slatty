@@ -168,7 +168,7 @@ impl App {
     fn installers_footer<'a>(&'a self, g: &'a LibraryGame, c: &'a Choice) -> Element<'a, Message> {
         let queued = self.queue.contains(&crate::offline::entry(&g.id))
             || self.offline_run.as_ref().is_some_and(|r| r.game_id == g.id);
-        let label = match (queued, self.downloading()) {
+        let label = match (queued, self.downloads_held()) {
             (true, _) => "In the Downloads tab",
             (false, true) => "Add to queue",
             (false, false) => "Download",

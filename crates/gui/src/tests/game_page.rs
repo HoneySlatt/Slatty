@@ -307,6 +307,7 @@ pub(super) fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
         proton_update_due: false,
         proton_shared: false,
         auto_update: false,
+        pause_while_playing: true,
         favorites: Vec::new(),
         playtime: Default::default(),
         overview: Default::default(),

@@ -35,6 +35,9 @@ pub enum DownloadsMsg {
 pub enum Preempt {
     /// To make way for a download started from the queue.
     StartNow,
+    /// While a game runs (Settings → Installs): first in the queue, it goes on once the game
+    /// closes.
+    Play,
 }
 
 /// A queue row being moved, from its place to where it would land.
@@ -97,6 +100,28 @@ impl App {
         Task::none()
     }
 
+    /// Whether downloads wait for the game running to close (Settings → Installs).
+    pub fn held_for_play(&self) -> bool {
+        self.pause_while_playing && self.play.as_ref().is_some_and(|p| p.running)
+    }
+
+    /// Whether a download started now would wait in the queue.
+    pub fn downloads_held(&self) -> bool {
+        self.downloading() || self.held_for_play()
+    }
+
+    /// Pauses the download running while a game runs; it goes back first in the queue.
+    pub fn hold_for_play(&mut self) -> Task<Message> {
+        if !self.held_for_play() || self.preempted.is_some() {
+            return Task::none();
+        }
+        let Some(running) = self.running_entry() else {
+            return Task::none();
+        };
+        self.preempted = Some((running.clone(), Preempt::Play));
+        self.pause_entry(&running)
+    }
+
     /// The queue entry of the download running.
     fn running_entry(&self) -> Option<String> {
         self.installing()
@@ -155,11 +180,14 @@ impl App {
         self.drag = None;
         let at = match why {
             Preempt::StartNow => 1.min(self.queue.len()),
+            Preempt::Play => 0,
         };
         self.queue.insert(at, entry.to_owned());
         self.save_queue();
         let next = match why {
             Preempt::StartNow => self.start_first(),
+            // The game may have closed before the download stopped.
+            Preempt::Play => self.start_next(),
         };
         // An install is planned again, for its size in the queue.
         let plan = match of_entry(entry) {
@@ -231,13 +259,13 @@ impl App {
         Task::none()
     }
 
-    /// Starts what downloads next, unless something downloads: a download cut off (closed window,
-    /// crash) first, then the first install of the queue. A download paused on request holds the
-    /// queue until it is resumed or discarded.
+    /// Starts what downloads next, unless something downloads or a game runs while downloads wait
+    /// for it: a download cut off (closed window, crash) first, then the first install of the
+    /// queue. A download paused on request holds the queue until it is resumed or discarded.
     pub fn start_next(&mut self) -> Task<Message> {
         // One being planned to start is as good as downloading. Waiting for GOG, the queue is
         // tried again by itself (`InstallMsg::Retry`).
-        if self.downloading() || self.auto_resume.is_some() || self.downloads_waiting.is_some() {
+        if self.downloads_held() || self.auto_resume.is_some() || self.downloads_waiting.is_some() {
             return Task::none();
         }
         let waiting = |kind| {

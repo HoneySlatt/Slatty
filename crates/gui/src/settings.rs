@@ -236,6 +236,7 @@ pub enum SettingsMsg {
     SaveInstallersRoot,
     BrowseInstallersRoot,
     BrowsedInstallersRoot(Option<PathBuf>),
+    PauseWhilePlaying(bool),
     Proton(ProtonChoice),
     /// Writes the default theme to the theme file, to start a custom one from.
     CreateTheme,
@@ -370,6 +371,19 @@ impl App {
                 return self.update_settings(SettingsMsg::SaveInstallersRoot);
             }
             SettingsMsg::BrowsedInstallersRoot(None) => {}
+            SettingsMsg::PauseWhilePlaying(on) => {
+                if let Err(e) = settings::set_pause_while_playing(&core.db, on) {
+                    self.notify_error(e.to_string());
+                    return Task::none();
+                }
+                self.pause_while_playing = on;
+                // Changed while a game runs: the download pauses, or goes on.
+                return if on {
+                    self.hold_for_play()
+                } else {
+                    self.start_next()
+                };
+            }
             SettingsMsg::Proton(choice) => {
                 match settings::set_default_proton(&core.db, &choice.0) {
                     Ok(()) => self.proton = Some(choice.0),

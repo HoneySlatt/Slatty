@@ -312,6 +312,8 @@ pub struct App {
     pub drag: Option<downloads::Drag>,
     /// The download the launcher is pausing (its queue entry), to queue again once stopped.
     pub preempted: Option<(String, downloads::Preempt)>,
+    /// Whether downloads pause while a game runs (Settings → Installs).
+    pub pause_while_playing: bool,
     /// Installs finished since the start, the latest first, with their size.
     pub completed: Vec<(String, u64)>,
     /// What GOG offers to download for the games whose Installers drawer opened.
@@ -428,6 +430,7 @@ impl Default for App {
             queue: Vec::new(),
             drag: None,
             preempted: None,
+            pause_while_playing: true,
             completed: Vec::new(),
             offline_views: HashMap::new(),
             offline_run: None,
@@ -785,6 +788,7 @@ impl App {
                 self.library_root = boot.library_root.display().to_string();
                 self.installers_root = boot.installers_root.display().to_string();
                 self.offline_stopped = boot.offline_stopped;
+                self.pause_while_playing = boot.pause_while_playing;
                 self.proton = boot.proton;
                 self.runners.downloads = boot.proton_downloads;
                 self.runners.downloaded = boot.downloaded_protons;

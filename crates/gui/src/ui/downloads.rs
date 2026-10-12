@@ -88,6 +88,11 @@ impl App {
                 .spacing(16)
                 .align_y(Alignment::Center),
             );
+        } else if self.held_for_play() && !self.queue.is_empty() && !self.downloading() {
+            downloading = downloading.push(note(
+                "Paused while a game runs: the queue goes on once it closes. Download now starts \
+                 one anyway.",
+            ));
         } else if active == steam.len() && self.updates.current.is_none() {
             downloading = downloading.push(note(if !steam.is_empty() {
                 "Nothing is downloading from GOG; what Steam downloads is below."

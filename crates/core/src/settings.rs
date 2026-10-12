@@ -26,6 +26,7 @@ const PROTON_CHECKED_AT: &str = "proton_checked_at";
 const UMU_RUNTIMES_CHECKED_AT: &str = "umu_runtimes_checked_at";
 const SHARE_PROTONS: &str = "share_protons";
 const AUTO_UPDATE: &str = "auto_update";
+const PAUSE_WHILE_PLAYING: &str = "pause_downloads_while_playing";
 const VULKAN_ONLY: &str = "vulkan_only";
 const STEAM_GAMES: &str = "steam_games";
 const STEAM_IMAGES: &str = "steam_images";
@@ -202,6 +203,15 @@ pub fn auto_update(db: &Db) -> Result<bool> {
 
 pub fn set_auto_update(db: &Db, on: bool) -> Result<()> {
     db.set_setting(AUTO_UPDATE, Some(if on { "on" } else { "off" }))
+}
+
+/// Whether downloads pause while a game runs, and go on once it closes. On until turned off.
+pub fn pause_while_playing(db: &Db) -> Result<bool> {
+    Ok(db.setting(PAUSE_WHILE_PLAYING)?.as_deref() != Some("off"))
+}
+
+pub fn set_pause_while_playing(db: &Db, on: bool) -> Result<()> {
+    db.set_setting(PAUSE_WHILE_PLAYING, Some(if on { "on" } else { "off" }))
 }
 
 /// Whether the Steam games of the account signed in to the Steam client show in the library, read
@@ -539,6 +549,14 @@ mod tests {
         );
         set_library_filters(&db, None).unwrap();
         assert_eq!(library_filters(&db).unwrap(), None);
+    }
+
+    #[test]
+    fn downloads_pause_while_playing_until_turned_off() {
+        let db = Db::in_memory().unwrap();
+        assert!(pause_while_playing(&db).unwrap());
+        set_pause_while_playing(&db, false).unwrap();
+        assert!(!pause_while_playing(&db).unwrap());
     }
 
     #[test]

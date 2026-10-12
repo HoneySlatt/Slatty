@@ -380,7 +380,7 @@ impl App {
         info: &'a PlanInfo,
         wide: bool,
     ) -> Element<'a, Message> {
-        let busy = self.downloading();
+        let busy = self.downloads_held();
         let width = if wide { Length::Fill } else { Length::Shrink };
         // While another game downloads, Start puts this one in the queue.
         let start = button(
@@ -407,7 +407,8 @@ impl App {
                 .padding(if wide { [12, 0] } else { [14, 22] })
                 .width(width)
                 .on_press_maybe(
-                    (!busy).then(|| Message::Install(InstallMsg::Discard(g.id.clone()))),
+                    (!self.downloading())
+                        .then(|| Message::Install(InstallMsg::Discard(g.id.clone()))),
                 )
                 .style(theme::danger)
         });
@@ -418,14 +419,15 @@ impl App {
             Some(note(format!(
                 "{title} is downloading; this one waits in the queue until it is done."
             )))
+        } else if let Some(run) = &self.offline_run {
+            Some(note(format!(
+                "The installers of {} are downloading; this one waits in the queue until they \
+                 are done.",
+                self.title_of(&run.game_id)
+            )))
         } else {
-            self.offline_run.as_ref().map(|run| {
-                note(format!(
-                    "The installers of {} are downloading; this one waits in the queue until \
-                     they are done.",
-                    self.title_of(&run.game_id)
-                ))
-            })
+            self.held_for_play()
+                .then(|| note("A game is running; this one waits in the queue until it closes."))
         };
         if wide {
             column![]

@@ -63,7 +63,11 @@ impl App {
             running: true,
             told: Vec::new(),
         });
-        Task::run(play_stream(core, game_id, stop_rx), Message::Playing)
+        let hold = self.hold_for_play();
+        Task::batch([
+            Task::run(play_stream(core, game_id, stop_rx), Message::Playing),
+            hold,
+        ])
     }
 
     /// What a session tells by a notification: the achievements unlocked (as the game unlocks
@@ -162,7 +166,8 @@ impl App {
             let user = self.account.as_ref().map(|a| a.user_id.as_str());
             self.playtime = session::playtime(&core.db, user).unwrap_or_default();
         }
-        let playtime = self.refresh_playtime(vec![game.clone()]);
+        // Downloads held while it ran go on.
+        let playtime = Task::batch([self.refresh_playtime(vec![game.clone()]), self.start_next()]);
         if self.selected.as_deref() == Some(game.as_str()) {
             return Task::batch([
                 playtime,

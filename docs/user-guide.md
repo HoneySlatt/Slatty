@@ -162,8 +162,9 @@ and cloud saves is read from GOG in the background and kept; **Refresh** reads i
   reads **Add to queue**). One download runs at a time. Each starts once the ones before it are
   done, failed or cancelled. Drag a row by its handle to reorder, or remove it with ×.
   **Download now** starts a row at once: the download running is paused and waits right after it,
-  then goes on by itself. Pausing the running download yourself holds the queue. The queue is kept
-  when SlattyLauncher closes and goes on at the next start.
+  then goes on by itself. While a game runs, downloads wait for it to close (**Pause downloads
+  while playing**, Settings → Installs). Pausing the running download yourself holds the queue.
+  The queue is kept when SlattyLauncher closes and goes on at the next start.
 - **Updates**: games waiting for their automatic update, and the one being applied.
 - **Completed**: installs finished since SlattyLauncher started, with **Play**.
 - **In Steam**, with Steam's games on: what the Steam client is downloading.
@@ -656,6 +657,7 @@ Settings lists its parts on the left; the list follows the page as it scrolls.
 | **Default platform** | Windows | The build installed for a game GOG offers on both |
 | **Default Proton** | | The build new Windows games start with. Each game can use another |
 | **Update games automatically** | On | See [Updates](#updates) |
+| **Pause downloads while playing** | On | The download running pauses when a game starts and goes on once it closes; nothing else starts meanwhile, but **Download now** |
 
 `slatty install --dir` and `--proton`, and `slatty installers --dir`, set the same defaults.
 

@@ -764,3 +764,90 @@ fn an_install_that_cannot_start_does_not_hold_up_the_queue() {
     ));
     assert!(app.notice.is_some(), "says why the other did not start");
 }
+
+/// Game 3, installed, started from its page.
+fn play_3(app: &mut App) {
+    app.launch_options.insert("3".into(), Vec::new());
+    let _ = app.update(Message::Play("3".into()));
+    assert!(app.play.as_ref().is_some_and(|p| p.running));
+}
+
+fn install_6_paused(app: &App) -> bool {
+    matches!(app.install_views.get("6"), Some(InstallView::Running { cancel, .. }) if cancel.is_cancelled())
+}
+
+#[test]
+fn a_game_pauses_the_download_running_until_it_closes() {
+    use super::offline::{installing_6, paused_install_job};
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    app.queue = vec!["7".into()];
+    play_3(&mut app);
+    assert!(install_6_paused(&app));
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert_eq!(app.queue, ["6", "7"], "first in the queue");
+    assert!(app.interrupted.is_empty(), "not held as paused");
+    assert!(app.installing().is_none());
+    assert_eq!(app.auto_resume, None, "nothing starts while the game runs");
+
+    app.page = Page::Downloads;
+    app.selected = None;
+    let mut ui = render(&app);
+    assert!(
+        ui.find(
+            "Paused while a game runs: the queue goes on once it closes. Download now starts one \
+             anyway."
+        )
+        .is_ok()
+    );
+    snapshot(&mut ui, "downloads-while-playing");
+    drop(ui);
+
+    let _ = app.update(Message::Playing(crate::play::PlayMsg::Done(Ok(()))));
+    assert_eq!(
+        app.auto_resume.as_deref(),
+        Some("6"),
+        "planned, then started"
+    );
+    assert_eq!(app.queue, ["7"]);
+}
+
+#[test]
+fn an_install_started_while_a_game_runs_waits_in_the_queue() {
+    let mut app = library_app();
+    play_3(&mut app);
+    ready_to_install(&mut app, "7");
+    app.panel = Some(Panel::Install);
+    app.selected = Some("7".into());
+    assert!(render(&app).find("Add to queue").is_ok());
+    let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
+    assert!(app.installing().is_none());
+    assert_eq!(app.queue, ["7"]);
+}
+
+#[test]
+fn downloads_go_on_while_playing_once_turned_off() {
+    use super::offline::installing_6;
+    use crate::settings::SettingsMsg;
+    let mut app = library_app();
+    let db = app.core.clone().unwrap().db;
+    let _ = app.update(Message::Settings(SettingsMsg::PauseWhilePlaying(false)));
+    assert!(!slatty_core::settings::pause_while_playing(&db).unwrap());
+    installing_6(&mut app);
+    play_3(&mut app);
+    assert!(!install_6_paused(&app));
+    assert!(app.preempted.is_none());
+    // Turned on while the game runs: the download pauses then.
+    let _ = app.update(Message::Settings(SettingsMsg::PauseWhilePlaying(true)));
+    assert!(install_6_paused(&app));
+}
+
+#[test]
+fn the_pause_while_playing_setting_shows_in_installs() {
+    use crate::settings::{Section, SettingsMsg};
+    let mut app = library_app();
+    app.page = Page::Settings;
+    let _ = app.update(Message::Settings(SettingsMsg::Show(Section::Installs)));
+    assert!(render(&app).find("Pause downloads while playing").is_ok());
+}

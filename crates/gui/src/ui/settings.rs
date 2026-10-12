@@ -906,6 +906,22 @@ impl App {
                 .into(),
                 None,
             ),
+            setting(
+                wide,
+                "Pause downloads while playing",
+                column![
+                    toggler(self.pause_while_playing)
+                        .on_toggle(|on| Message::Settings(SettingsMsg::PauseWhilePlaying(on)))
+                        .size(22),
+                    note(
+                        "The download running pauses when a game starts, and goes on where it \
+                         stopped once the game closes. Download now still starts one at once.",
+                    ),
+                ]
+                .spacing(8)
+                .into(),
+                None,
+            ),
         ]
     }
 

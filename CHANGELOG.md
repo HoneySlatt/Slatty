@@ -25,8 +25,9 @@ The first public version.
 - Windows builds from GOG's Galaxy content system, with their DLC and language, and native Linux
   builds from GOG's offline installers, read file by file.
 - A download queue, kept across restarts and reordered by dragging; **Download now** starts a row
-  at once and puts the download it pauses right after it. Downloads resume after a crash or a power
-  cut, and wait while GOG is out of reach.
+  at once and puts the download it pauses right after it. Downloads pause while a game runs and go
+  on once it closes (can be turned off), resume after a crash or a power cut, and wait while GOG is
+  out of reach.
 - Every file checked against GOG's checksums; the game folder appears only once all are right.
 - Updates in place, automatic for games on their newest build, with GOG's binary patches; DLC,
   language and version changes; verify, repair, uninstall.

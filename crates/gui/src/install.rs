@@ -286,7 +286,7 @@ impl App {
                     self.notify_error("The install folder must be an absolute path.".into());
                     return Task::none();
                 }
-                if self.downloading() {
+                if self.downloads_held() {
                     return self.enqueue(game_id);
                 }
                 let req = InstallRequest {
