@@ -339,6 +339,24 @@ fn an_installed_game_plays_from_its_page() {
     assert_eq!(app.selected.as_deref(), Some("3"));
 }
 
+/// Scrolled down to the last row, the window grows (moved to a television): the row with the focus
+/// still shows, rather than an empty grid.
+#[test]
+fn the_row_with_the_focus_shows_after_the_window_grows() {
+    let mut app = couch_app();
+    app.library = (1..=60)
+        .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
+        .collect();
+    app.lists.clear();
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    for _ in 0..12 {
+        nav(&mut app, Nav::Down);
+    }
+    let _ = app.update(Message::WindowResized(Size::new(3840.0, 2160.0)));
+    // A cover of the focus's row, other than the one with the focus, whose title the header shows.
+    assert!(render_window(&app).find("[FAKE] Game 50").is_ok());
+}
+
 /// On the shelves above the covers, the hints say what A and X do there; Y does nothing.
 #[test]
 fn the_hints_follow_the_focus_onto_the_shelves() {

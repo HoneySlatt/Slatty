@@ -394,8 +394,12 @@ impl App {
             })
         } else {
             let (across, down, card) = (self.couch_columns(), self.couch_rows(), self.couch_card());
+            // The row with the focus stays in view, whatever changed since the last move (the
+            // window grew, the shelf has fewer games).
+            let row = focused.unwrap_or(0) / across;
+            let top = couch.top.min(row).max((row + 1).saturating_sub(down));
             // One row more than fits, cut by the bottom: there is more below.
-            let rows = (couch.top..=couch.top + down)
+            let rows = (top..=top + down)
                 .take_while(|r| r * across < games.len())
                 .map(|r| {
                     let covers = (r * across..((r + 1) * across).min(games.len())).map(|k| {
