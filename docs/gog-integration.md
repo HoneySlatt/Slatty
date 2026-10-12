@@ -108,7 +108,7 @@ The setup programs GOG's site offers, downloaded to keep rather than installed.
 | Use | Request | Source | Status |
 |---|---|---|---|
 | Installers of a game and its DLC | The products request above, every `os` (`windows`, `linux`, `mac`); an installer comes in one file or several (`files[]`). A DLC the account does not own has no installers listed | gogapidocs, lgogdownloader | Not verified |
-| Download link and checksums | The file's `downlink`, as above: `{"downlink": …, "checksum": …}`, `checksum` empty when GOG keeps none | lgogdownloader, gogrepoc | Not verified |
+| Download link and checksums | The file's `downlink`, as above: `{"downlink": …, "checksum": …}`, `checksum` empty when GOG keeps none (null or missing are read the same way) | lgogdownloader, gogrepoc | Not verified |
 | File name | The last segment of the address the link leads to, percent-decoded. A setup for several languages is listed under each of them: the same name and size, downloaded once | lgogdownloader (its duplicate handling) | Not verified |
 | Checksums | `GET` the `checksum` address, without the token: XML, `<file md5="…">` holding `<chunk from="…" to="…" method="md5">…</chunk>`, `to` being the chunk's last byte | lgogdownloader | Not verified |
 | Installer bytes | Ranged requests to the link, as for Linux builds | Capture | Verified (for Linux installers) |
