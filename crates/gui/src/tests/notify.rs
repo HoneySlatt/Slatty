@@ -68,13 +68,10 @@ fn a_card_goes_after_one_wait_of_its_own() {
     let task = app.notify(Kind::Downloads, Some("5"), "Download complete", "[FAKE]");
     assert_eq!(task.units(), 1, "its wait");
     assert_eq!(app.toasts.len(), 1);
-    let ticks = format!("{:?}", app.subscription());
-    let none = format!("{:?}", {
-        let mut quiet = library_app();
-        quiet.toasts.clear();
-        quiet.subscription()
-    });
-    assert_eq!(ticks, none, "no tick while it shows");
+    let recipes = |app: &App| iced::advanced::subscription::into_recipes(app.subscription()).len();
+    let mut quiet = library_app();
+    quiet.toasts.clear();
+    assert_eq!(recipes(&app), recipes(&quiet), "no tick while it shows");
 }
 
 /// A long notification stays a small card: its title takes two lines at most, its text four.
