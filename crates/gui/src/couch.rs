@@ -292,7 +292,7 @@ impl App {
     }
 
     /// Whether the player is elsewhere: the window behind another, or a game running.
-    fn away(&self) -> bool {
+    pub(crate) fn away(&self) -> bool {
         self.unfocused
             || self.play.as_ref().is_some_and(|p| p.running)
             || !self.steam.running.is_empty()

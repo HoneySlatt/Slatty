@@ -766,6 +766,8 @@ impl App {
         let task = self.handle(message);
         // Whatever ended (a game, an install, an update) may let a waiting update start.
         let task = Task::batch([task, self.next_update()]);
+        // The gamepad's reader sends nothing while the player is elsewhere.
+        pad::set_away(self.couch.is_some() && self.away());
         let now = self.location();
         if now != shown {
             self.now = Instant::now();

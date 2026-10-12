@@ -2,6 +2,7 @@
 //! thread of their own, while the couch mode is on; a direction held repeats, from the d-pad as
 //! from the left stick.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use iced::futures::{SinkExt, Stream};
@@ -206,16 +207,33 @@ fn read(tx: &tokio::sync::mpsc::UnboundedSender<Nav>) {
             .next_repeat()
             .map_or(IDLE, |at| at.saturating_duration_since(Instant::now()));
         let event = gilrs.next_event_blocking(Some(wait));
-        let now = Instant::now();
-        let moved = event
-            .and_then(|e| pad_input(e.event))
-            .and_then(|input| repeater.input(input, now));
-        for nav in moved.into_iter().chain(repeater.tick(now)) {
+        let input = event.and_then(|e| pad_input(e.event));
+        let away = AWAY.load(Ordering::Relaxed);
+        for nav in step(&mut repeater, input, Instant::now(), away) {
             if tx.send(nav).is_err() {
                 return;
             }
         }
     }
+}
+
+/// Whether the player is elsewhere (`App::away`): the window behind another, a game running.
+static AWAY: AtomicBool = AtomicBool::new(false);
+
+/// Told by the interface after each message.
+pub fn set_away(away: bool) {
+    AWAY.store(away, Ordering::Relaxed);
+}
+
+/// The moves `input` makes, and the repeat due; none while the player is away: they are the
+/// game's, and each would wake the launcher for nothing.
+fn step(repeater: &mut Repeater, input: Option<PadInput>, now: Instant, away: bool) -> Vec<Nav> {
+    if away {
+        *repeater = Repeater::default();
+        return Vec::new();
+    }
+    let moved = input.and_then(|input| repeater.input(input, now));
+    moved.into_iter().chain(repeater.tick(now)).collect()
 }
 
 /// A key of the couch mode: a move, a character typed into the search, or one taken away.
@@ -312,6 +330,21 @@ mod tests {
         assert_eq!(
             pad_input(gilrs::EventType::Disconnected),
             Some(PadInput::Lost)
+        );
+    }
+
+    /// While the player is away (the window behind a game), the gamepad's moves are not sent:
+    /// they are the game's, and each would wake the launcher. Back, the gamepad moves it at once.
+    #[test]
+    fn moves_are_not_sent_while_the_player_is_away() {
+        let start = Instant::now();
+        let mut r = Repeater::default();
+        assert!(step(&mut r, Some(PadInput::StickY(0.9)), start, true).is_empty());
+        assert_eq!(r.next_repeat(), None);
+        assert!(step(&mut r, None, at(2000, start), true).is_empty());
+        assert_eq!(
+            step(&mut r, Some(PadInput::StickY(0.95)), at(2100, start), false),
+            [Nav::Up]
         );
     }
 

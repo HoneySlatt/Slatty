@@ -600,7 +600,8 @@ are drawn in place of the desktop's while `App::couch` holds its state.
 - `pad::moves` reads every gamepad through gilrs on a thread of its own, only while the couch mode
   is on, and turns presses and the left stick into `Nav`; `Repeater` repeats a held direction
   (after 400 ms, every 110 ms), the stick moving once per lean. Gamepads are read whatever window
-  is in front, so their moves are dropped while the window is behind another one or a game runs.
+  is in front, so their moves are not sent while the window is behind another one or a game runs
+  (`pad::set_away`, after each message): they would wake the launcher for nothing.
   The keyboard (`pad::key`) moves the focus too and types into the search.
 - Its lists are kept like the library's (`library::Lists`): its library by shelf and search, the
   home rows (`App::home_rows`); a move changes no list (`Message::keeps_lists`). Only the covers in
