@@ -468,8 +468,9 @@ pub async fn download<S: Source>(
     progress: &(dyn Fn(Progress) + Sync),
     cancel: &CancellationToken,
 ) -> Result<Vec<PathBuf>> {
-    // The size in it: a file GOG replaced by another of the same name never takes up the other's
-    // beginning.
+    // The size in it: a file GOG replaced by another of the same name and another size never takes
+    // up the other's beginning. Of the same size, it does: its sums, when GOG keeps them, find the
+    // parts that differ.
     let partial_of =
         |name: &str, size: u64| folder.join(format!("{name}.{size}.{game_id}{DOWNLOAD_SUFFIX}"));
     let mut files: Vec<(usize, String, u64, Option<Checksums>)> = Vec::new();
