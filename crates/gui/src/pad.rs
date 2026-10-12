@@ -43,6 +43,8 @@ pub enum PadInput {
     /// The left stick, from -1 to 1, right and up positive.
     StickX(f32),
     StickY(f32),
+    /// A gamepad gone (unplugged, asleep, its battery flat): nothing it held is released.
+    Lost,
 }
 
 /// A held direction repeats after this, then this often.
@@ -81,6 +83,10 @@ impl Repeater {
             PadInput::StickY(y) => {
                 self.stick.1 = y;
                 self.lean(now)
+            }
+            PadInput::Lost => {
+                *self = Repeater::default();
+                None
             }
         }
     }
@@ -162,6 +168,7 @@ fn pad_input(event: gilrs::EventType) -> Option<PadInput> {
         EventType::ButtonReleased(b, _) => button_nav(b).map(PadInput::Released),
         EventType::AxisChanged(Axis::LeftStickX, v, _) => Some(PadInput::StickX(v)),
         EventType::AxisChanged(Axis::LeftStickY, v, _) => Some(PadInput::StickY(v)),
+        EventType::Disconnected => Some(PadInput::Lost),
         _ => None,
     }
 }
@@ -283,6 +290,29 @@ mod tests {
         assert_eq!(r.input(PadInput::Released(Nav::Down), at(520, start)), None);
         assert_eq!(r.tick(at(2000, start)), None);
         assert_eq!(r.next_repeat(), None);
+    }
+
+    /// A gamepad gone while a direction is held sends no release: the repeat stops all the same.
+    #[test]
+    fn a_direction_held_stops_with_its_gamepad() {
+        let start = Instant::now();
+        let mut r = Repeater::default();
+        r.input(PadInput::Pressed(Nav::Down), start);
+        assert_eq!(r.input(PadInput::Lost, at(100, start)), None);
+        assert_eq!(r.next_repeat(), None);
+        assert_eq!(r.tick(at(2000, start)), None);
+        // The stick too, which leans again once back.
+        r.input(PadInput::StickX(0.9), at(2100, start));
+        r.input(PadInput::Lost, at(2200, start));
+        assert_eq!(r.tick(at(4000, start)), None);
+        assert_eq!(
+            r.input(PadInput::StickX(0.9), at(4100, start)),
+            Some(Nav::Right)
+        );
+        assert_eq!(
+            pad_input(gilrs::EventType::Disconnected),
+            Some(PadInput::Lost)
+        );
     }
 
     #[test]
