@@ -860,7 +860,7 @@ fn a_download_the_launcher_paused_goes_on_beside_one_paused_on_request() {
         .push(("8".into(), crate::Interrupted::Paused));
     queued_job(&app, "5");
     app.queue = vec![entry("5"), "7".into()];
-    app.goes_on = Some(entry("5"));
+    app.goes_on = vec![entry("5")];
     let _ = app.start_next();
     assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
     // The rest of the queue still waits.

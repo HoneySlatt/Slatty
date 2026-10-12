@@ -196,6 +196,37 @@ fn installers_wait_in_the_queue_behind_a_running_install() {
     assert!(ui.find("[FAKE] Game 5 · offline installers").is_ok());
 }
 
+/// Two downloads the launcher stopped in turn, for Download now, both go on by themselves once
+/// their rows are done, though a download paused on request holds the rest of the queue.
+#[test]
+fn every_download_the_launcher_stopped_goes_on() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    app.interrupted
+        .push(("9".into(), crate::Interrupted::Paused));
+    for id in ["5", "6", "7"] {
+        queued_job(&app, id);
+    }
+    app.queue = vec![entry("5")];
+    let _ = app.start_first();
+    app.queue = vec![entry("6"), entry("7")];
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("6"))));
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("7"))));
+    let _ = app.update(Message::Offline(OfflineMsg::Done("6".into(), Err(None))));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "7"));
+    let _ = app.update(Message::Offline(OfflineMsg::Done(
+        "7".into(),
+        Ok(Vec::new()),
+    )));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "6"));
+    let _ = app.update(Message::Offline(OfflineMsg::Done(
+        "6".into(),
+        Ok(Vec::new()),
+    )));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+}
+
 /// GOG's offline installers name some languages with codes of their own ("jp", "br"): they show
 /// by their names.
 #[test]
