@@ -406,7 +406,7 @@ impl App {
     }
 
     /// A game's title as its store gives it, GOG's or Steam's, or as it was added by hand.
-    fn store_title(&self, game_id: &str) -> &str {
+    pub fn store_title(&self, game_id: &str) -> &str {
         self.gog_titles
             .get(game_id)
             .or_else(|| {

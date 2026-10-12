@@ -29,6 +29,47 @@ fn a_game_can_be_renamed_and_sorted_under_another_name() {
     assert_ne!(titles(&app)[0], "Game 7");
 }
 
+/// Edit game names the title the game's store gives it, the one an emptied Title goes back to: a
+/// Steam game's (in the dialog over the library) and one added by hand's (in the drawer of its page)
+/// too, renamed or not.
+#[test]
+fn edit_game_names_the_store_title_of_steam_games_and_games_added_by_hand() {
+    use crate::edit::EditMsg;
+    let mut app = library_app();
+    app.steam.on = true;
+    app.steam.games = vec![fake_game("steam-620", "Portal")];
+    app.installs.insert(
+        "local-1".into(),
+        Install {
+            umu_id: None,
+            game_id: "local-1".into(),
+            title: "[FAKE] Mine".into(),
+            platform: Platform::Linux,
+            path: PathBuf::from("/games/Mine"),
+            client_id: None,
+            runner: Runner::Native,
+            isolated: false,
+        },
+    );
+    for id in ["steam-620", "local-1"] {
+        app.customs.insert(
+            id.into(),
+            slatty_core::custom::Custom {
+                title: Some(format!("[FAKE] Renamed {id}")),
+                ..Default::default()
+            },
+        );
+    }
+    app.merge_steam();
+
+    let _ = app.update(Message::Edit(EditMsg::Open("steam-620".into())));
+    assert!(render(&app).find("[FAKE] Portal").is_ok());
+    let _ = app.update(Message::Edit(EditMsg::Cancel));
+    open(&mut app, "local-1", None);
+    let _ = app.update(Message::Edit(EditMsg::Open("local-1".into())));
+    assert!(render(&app).find("[FAKE] Mine").is_ok());
+}
+
 #[test]
 fn a_cover_can_be_replaced_by_an_image_file_only() {
     use crate::edit::{Art, EditMsg};

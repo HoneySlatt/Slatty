@@ -33,7 +33,6 @@ impl App {
         page: Element<'a, Message>,
         d: &'a EditDraft,
     ) -> Element<'a, Message> {
-        let gog_title = self.gog_titles.get(&d.game_id).map_or("", String::as_str);
         let close = button(container(icon(Icon::X, 20.0, tokens().text)).center(24))
             .padding(10)
             .on_press(Message::Edit(EditMsg::Cancel))
@@ -41,7 +40,9 @@ impl App {
         let header = row![
             column![
                 text("Edit game").size(26).font(bold()),
-                text(gog_title).size(14).color(tokens().muted),
+                text(self.store_title(&d.game_id))
+                    .size(14)
+                    .color(tokens().muted),
             ]
             .spacing(4)
             .width(Length::Fill),
@@ -91,8 +92,9 @@ impl App {
         page: Element<'a, Message>,
         d: &'a EditDraft,
     ) -> Element<'a, Message> {
-        let gog_title = self.gog_titles.get(&d.game_id).map_or("", String::as_str);
-        let subtitle = text(gog_title).size(18).color(tokens().muted);
+        let subtitle = text(self.store_title(&d.game_id))
+            .size(18)
+            .color(tokens().muted);
         let form = self.edit_form(
             d,
             (DRAWER_PICTURE * 0.3, DRAWER_PICTURE * 0.4),
@@ -124,12 +126,11 @@ impl App {
         cover: (f32, f32),
         background: (f32, f32),
     ) -> Form<'a> {
-        let gog_title = self.gog_titles.get(&d.game_id).map_or("", String::as_str);
         let msg = |m| Message::Edit(m);
         let label = |t| text(t).size(14).color(tokens().muted);
         let fields = column![
             label("Title"),
-            text_input(gog_title, &d.title)
+            text_input(self.store_title(&d.game_id), &d.title)
                 .on_input(|v| Message::Edit(EditMsg::Title(v)))
                 .style(theme::field)
                 .font(theme::font())
