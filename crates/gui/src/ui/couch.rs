@@ -168,10 +168,18 @@ impl App {
                     .filter(|(g, _)| notice.is_none() || !matches!(g, Glyph::B)),
             )
             .map(|(g, label)| {
-                row![glyph(*g), text(*label).size(16).color(tokens().muted)]
+                let hint = row![glyph(*g), text(*label).size(16).color(tokens().muted)]
                     .spacing(8)
-                    .align_y(Alignment::Center)
-                    .into()
+                    .align_y(Alignment::Center);
+                // The menu, the way out, opens from its hint too, with a mouse or a finger.
+                match g {
+                    Glyph::Menu => button(hint)
+                        .padding([4, 8])
+                        .on_press(Message::Couch(CouchMsg::OpenMenu))
+                        .style(theme::ghost)
+                        .into(),
+                    _ => hint.into(),
+                }
             });
         container(Row::with_children(hints).spacing(28))
             .padding([0.0, MARGIN])

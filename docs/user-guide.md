@@ -639,13 +639,14 @@ It opens:
   Mode.
 
 **Menu** → **Desktop mode** goes back to the desktop window; **Menu** → **Quit SlattyLauncher**
-closes it, asking first if a download or a game runs.
+closes it, asking first if a download or a game runs. The menu opens with the Menu button (☰),
+B or Escape at a tab, or a click on its hint at the bottom.
 
 | Gamepad | Keyboard | What it does |
 |---|---|---|
 | D-pad, left stick | Arrow keys | Moves the focus; held, it repeats |
 | A | Enter | Opens or presses what has the focus |
-| B | Escape | Back; closes a notice, the keyboard, the menu or a list |
+| B | Escape | Back; closes a notice, the keyboard, the menu or a list; at a tab, opens the menu |
 | Y | Space | Adds the game with the focus to the favorites, or takes it out |
 | X | `/`, or a letter typed | Search |
 | LB, RB | Page Up, Page Down, Tab | The tab before or after |

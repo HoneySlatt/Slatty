@@ -357,6 +357,23 @@ fn the_row_with_the_focus_shows_after_the_window_grows() {
     assert!(render_window(&app).find("[FAKE] Game 50").is_ok());
 }
 
+/// Back at a tab, with nowhere else to go, opens the menu and its way out; so does a click on the
+/// menu's hint.
+#[test]
+fn back_at_a_tab_opens_the_menu() {
+    let mut app = couch_app();
+    key(&mut app, Key::Nav(Nav::Back));
+    assert_eq!(couch(&app).menu, Some(0));
+    key(&mut app, Key::Nav(Nav::Back));
+    assert_eq!(couch(&app).menu, None);
+    let mut ui = render(&app);
+    ui.click("Menu").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::Couch(CouchMsg::OpenMenu)))
+    );
+}
+
 /// On the shelves above the covers, the hints say what A and X do there; Y does nothing.
 #[test]
 fn the_hints_follow_the_focus_onto_the_shelves() {

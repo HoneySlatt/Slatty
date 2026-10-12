@@ -331,7 +331,8 @@ impl App {
                 couch.tab = couch.tab.step(nav == Nav::NextTab);
                 Task::none()
             }
-            Nav::Menu => self.update_couch(CouchMsg::OpenMenu),
+            // At a tab, Back has nowhere to go but the menu, and its way out.
+            Nav::Menu | Nav::Back => self.update_couch(CouchMsg::OpenMenu),
             Nav::Search => {
                 self.open_search();
                 Task::none()
