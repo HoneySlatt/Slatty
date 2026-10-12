@@ -1,492 +1,631 @@
 # Architecture
 
-## Crates
+This page is for people reading or changing the code. [AGENTS.md](../AGENTS.md) lists the rules
+the code depends on; [SECURITY.md](../SECURITY.md) the protections, from the user's side.
+
+## Overview
 
 ```
-crates/core   slatty-core   all behaviour: GOG services, installs, sessions, cloud, Comet
-crates/cli    slatty        command line, diagnostics, real-service integration tests
+ slatty-gui (Iced) ─┐                  ┌─ GOG: sign-in, library, content system and CDN,
+ slatty (CLI) ──────┼──> slatty-core ──┤        cloud storage, achievements, play time
+                    │                  ├─ the Steam client's files (read only), steam:// addresses
+ session supervisor ┘                  ├─ umu-launcher → pressure-vessel (in bubblewrap) → Proton
+ (/proc/self/exe)                      ├─ steam-run, for native games on NixOS
+                                       ├─ Comet and its Galaxy service, beside a game
+                                       ├─ GitHub (Proton builds), SteamGridDB, umu's database
+                                       └─ disk: keyring, state.db, data, cache, state, config
+```
+
+```
+crates/core   slatty-core   every behaviour; no interface code
+crates/cli    slatty        command line, diagnostics; tests that spawn real processes
 crates/gui    slatty-gui    Iced interface
 ```
 
-The core has no user-interface dependency and is tested on its own. Both front ends call the same
-core functions. Long operations report progress through callbacks or typed events (`PlayEvent`,
-`InstallEvent`) and honour a `CancellationToken`. Either binary can act as the session supervisor
-(see [Game sessions](#game-sessions)).
+The core has no interface dependency and is tested on its own. Both front ends call the same core
+functions. Long operations take a `CancellationToken` and report progress through a callback or
+typed events (`PlayEvent`, `InstallEvent`, `Progress`); the core returns typed errors
+(`error::Error`), and the words the user reads are chosen by the front ends. Either binary can
+become the session supervisor (see [Game sessions](#game-sessions)).
 
 ## Core modules
 
-| Module | Responsibility |
-|---|---|
-| `auth` | Sign-in URL, code exchange, token refresh, game-scoped tokens |
-| `account` | Active account, cross-process locked refresh, keyring storage via `credentials` |
-| `credentials` | System keyring (Secret Service through the `keyring` crate): GOG tokens, and API keys (SteamGridDB's, Steam's Web API's) |
-| `http` | Shared HTTP client; reads that fail on the way (dropped connection, timeout, rate limit, server error) are sent again twice; errors are stripped of URLs so query-string secrets never reach logs |
-| `db` | SQLite state database with versioned migrations |
-| `library` | Galaxy library and gamesdb metadata, per-account cache (a game gamesdb fails to describe during a sync keeps what an earlier sync got), covers, key art and images, whether GOG offers anything to install |
-| `gameinfo` | `goggame-<id>.info` parsing, case-insensitive Windows path resolution |
-| `install` | Installed-game records, Proton build of each game |
-| `galaxy` | Content system: builds, build metadata, depot manifests, secure links, chunks from the fastest CDN endpoint |
-| `installer` | Install plans, staged verified downloads, resumable jobs, install records; `installer::linux` and `installer::zip` read Linux builds file by file from GOG's offline installers |
-| `maintenance` | Verify, repair, uninstall, updates and content changes |
-| `patches` | GOG's binary patches between builds: lookup, delta download, xdelta3 application |
-| `runner` | Launch commands for umu/Proton, Wine and native games; prefix creation; isolation (see [Game isolation](#game-isolation)). Other programs run in a game's prefix (`windows_command`: setup, redistributables, `reg`, `wineboot`) get `PROTONFIXES_DISABLE=1`: a game's fixes can add arguments to whatever runs with its id (DOOM's `+r_renderAPI 1`), which those programs refuse |
-| `umu` | Game id in umu's database, looked up once per game, so umu applies its fixes for it |
-| `protons` | Proton builds downloaded from GitHub releases (GE-Proton, Proton-CachyOS, UMU-Proton), once turned on: the archive for this computer, resumed downloads, its published SHA-512 sum checked before it is opened, then unpacked (a `.tar.xz` made in blocks of 32 MiB or less, compressed, on up to four threads, a block each; the archive of a game added by hand, whose sum nothing gives, on one thread, its dictionary at most 256 MiB, `XZ_MEMORY_KIB`) without anything leaving its folder (paths that climb out, links out, even through another link, and special files are left out). Each project has a `<project>-latest` link to its newest downloaded build, replaced in one step (`rename`) once a newer build is unpacked, never by an older version (the numbers in the names, in order, are compared, with every build of the project rather than only the link's); games and the default can be set to it (`link_newest`, at start, gives a project without a link, or whose link leads to a build deleted by hand, one to its newest build). `update` (at most once a day at start once turned on) downloads the newest build of each project followed that way, keeps the build the link led to before and deletes older ones no game uses; a project that fails is reported beside the others (`Updated`), and the day starts again only once GitHub answered. One lock (`protons.lock`) covers each change of the builds or links, from a download to its link, from an update to its pruning, and the links made at start, so the interface and the command line never interleave. Builds are downloaded and unpacked in `protons/.staging` and deleted by being moved there first; a build that fails to unpack (a full disk, a stop) is removed at once, and the next download clears what cut-off runs left there. A build a game, an install not finished yet (queued, paused or cut off) or the default uses, or that a followed link leads to, is not deleted. `sync_shared`, once Share with Steam and Heroic is on, keeps one link per downloaded build in Steam's `compatibilitytools.d` (native Steam only; the numbered builds, not the `-latest` links; a name already taken is left alone) and removes only links leading into the builds folder, all of them once the setting is off; it runs after each download, update and removal, and at start. A failure there only leaves builds out of Steam and Heroic: the interface and every `slatty proton` command go on (only `slatty proton share` reports it). Which builds Steam's or Heroic's games use is not known: pruning and deletion only check SlattyLauncher's games |
-| `session` | Session supervisor (subreaper), session records, play time |
-| `play` | Full play flow: prefix, cloud, Comet, session (unlocks as they come), upload, achievement diff |
-| `cloud` | Save locations, local scan, three-way plan, transport, sync executor, diagnostics |
-| `comet` | Supervised Comet process |
-| `galaxy_service` | Comet's dummy `GalaxyCommunication` service, registered in game prefixes |
-| `achievements` | Achievement list, manual unlock and clear |
-| `added` | Games added by hand, from no store: an install (`installs`) with the id `local-<number>`, from a count in the settings never given twice, and what it starts (`added/<id>.json`: program, arguments and working directory, relative to its folder, checked to be still in it at each launch). `platform_of` tells a Windows program (`MZ`) from a Linux one (ELF, `#!`); a folder holding the home folder or the whole disk is refused, as an isolated game can write in its folder, and so are another game's folder, one inside or holding it, and one holding the default installation path (`check_folder`, comparing paths resolved on disk). `runner::launch_spec` starts the program as a GOG build's task (Windows) or script (Linux; an ELF program isolated through `sh -c`, an AppImage told to unpack itself); `play` asks GOG nothing for them (no cloud, Comet or play time sent) and umu has no store to look them up in. `run_installer` runs a Windows installer under the session supervisor in a prefix made for the game to add, which `NewGame::installed_by` then adds with that id and prefix, or `discard_installer` throws away (saves backed up); `unpack` unpacks a Linux installer or archive for a game to add, never running it (a MojoSetup installer's `data/noarch` through `installer::linux` and `LocalArchive`, a zip whole, a tarball through `protons::unpack_tar`), and lists the files in `added/<id>.unpacked.json` with their size and modification time once unpacked (`UnpackedFile`; a link left out is not listed), then in the game's task once added, rather than in an install record, which would have GOG's setup, updates and checks run; `remove` deletes those files alone, and only those still as they were unpacked (a list an earlier version wrote, without them, deletes nothing), else never their files, the user's: only their prefix, when asked, its saves backed up first |
-| `overview` | Per-game achievement counts and cloud save support, cached per account |
-| `playtime` | Play time read from GOG, finished sessions reported to GOG |
-| `settings` | Default installation path, default Proton and platform, favorites, the download queue, privacy switches (isolation of new games among them), manual achievement changes, launch options |
-| `custom` | Titles, sorting titles, covers and backgrounds the user chose, and the games they hid, apart from GOG's data; chosen or downloaded images are copied into the data folder |
-| `steamgriddb` | SteamGridDB, once turned on: games searched by name, their grids (covers) and heroes (backgrounds), images downloaded from its servers only; the user's API key in a header. Thumbnails are kept in `~/.cache/slatty/steamgriddb`, shared by every account (`thumbnail`), so they show signed out of GOG too |
-| `paths`, `fsutil`, `lock`, `secret`, `error`, `doctor` | Shared utilities |
-| `store` | Which store a game comes from, read from its id: GOG's product id, `steam-<app id>`, or `local-<number>` for a game added by hand; `store::of` accepts all three and refuses an id unsafe in a file name. `paths::check_owned_id` accepts GOG's and those added by hand and guards what installs, records or deletes a game's files, so nothing SlattyLauncher writes or deletes is a Steam game's; `paths::check_game_id` accepts GOG's alone and guards every request to GOG about a game, so GOG never learns of the others |
-| `steam` | Steam games, read from the local Steam client and never written: `local` (where Steam is, native or Flatpak, with both the one signed in to last; its library folders, the main one read once even when found through `~/.steam/steam`; the account last signed in, from `loginusers.vdf`; its games, from `userdata/<account>/config/librarycache`; those installed, from each library folder's `appmanifest_*.acf`; each game's play time and last session, from `userdata/<account>/config/localconfig.vdf`, of which nothing else is kept: it also holds the client's download tokens), `stats` (a game's achievements as the client keeps them: names, descriptions and icons from `appcache/stats/UserGameStatsSchema_<app>.bin`, which are unlocked and when from `UserGameStats_<account>_<app>.bin`, binary KeyValues read by `appinfo::keyvalues`, how common some are from the library cache's `<app>.json`, which knows a dozen or two per game, a negative share otherwise; `counts` takes the cache's counts, else the stats files': 180 games in 42 ms on the author's computer), `running` (the games the client runs: the user's own processes named `reaper`, started from the client's `ubuntu12_32` or `steamrt64` folder, as `reaper SteamLaunch AppId=<id> -- …`, about 2 ms for 500 processes; other processes' arguments are not read, another program named `reaper` included), `vdf` (Steam's text KeyValues, bounded in size, depth and entries), `appinfo` (`appcache/appinfo.vdf`, binary KeyValues of versions 40 and 41, only the apps asked for decoded, and of them only the app id and `common`'s name, type, systems and images, the rest read past: 754 KB for 217 apps instead of 12.9 MB; what one file takes once decoded is bounded, version 41's keys coming from a table any entry can use), every file opened without waiting and read only when it is a regular file (`steam::open`), cached images only when they are not links, `library` (the account's games and demos as `LibraryGame`s, with the cover, key art and logo the client cached, as `library_assets_full` names them; `twins` pairs a GOG game with the Steam game it also is: by the Steam app ids gamesdb gives (`LibraryGame::steam`, from `game.releases`; an empty list when it knows no Steam release, which is then never matched), by a title written alike only for a game gamesdb did not describe or a library cached before the ids were kept, never a title two Steam games share, each Steam game to one GOG game; once `settings::steam_images` is on, those it has not cached are named by their address on Steam's image servers, `shared.steamstatic.com`, and `library::image` downloads them into `~/.cache/slatty/steam`, refusing any other address), `client` (`steam://` addresses asking the client to play, install, verify or uninstall, opened by the desktop), `web` (Steam's Web API once `settings::steam_web_api` is on, with the user's key from the keyring, in the address as the API takes it, errors stripped of it: the account's games, `GetOwnedGames`, for those the client has not described, `library::web_game`; a game's achievements, `GetSchemaForGame` and `GetPlayerAchievements`, with `GetGlobalAchievementPercentagesForApp`, asked without the key, for how common each is; icons named on the image servers). Nothing else goes to Steam's servers |
-| `logs` | Logs of the programs the launcher starts: each run starts its own (`start_run`, before the first command of a launch, a prefix creation, a setup, a Galaxy service registration, a Comet), the two runs before kept as `.1` and `.2`; the session supervisor appends the commands of one run to it. A game's logs go with its uninstall: they hold what it printed |
-
-## Interface modules
-
-The interface follows Iced's state, message, update and view split. `main.rs` holds the
-application state, the `Message` enum and navigation; `update` only dispatches. `boot.rs` reads
-everything the first page needs, on a thread of its own begun as the program starts (`boot::start`),
-while the window and the graphics driver are set up (about 100 ms) rather than after, and nothing
-from the keyring (whether the Steam Web API's and SteamGridDB's keys are saved is asked once the
-library shows: a locked keyring holds a read until its prompt is answered), game folders or Steam
-libraries, which can sit on a network drive taking seconds to wake up: how each game starts
-(`App::read_launch_options`, which a Play pressed before waits for) and the Proton builds found
-there (`runners::list`) are read once the library shows, as after an install or an update. The
-system's fonts are read on another thread begun at the same time: Iced reads them once the
-graphics driver is set up, about 70 ms more before the first frame when they are not in the disk
-cache yet, as after the computer starts. Each feature keeps its state, message handling and
-background tasks in its own module, and the views live under `ui/`.
-
-Work started for the signed-in account (`App::account_task`) carries the sign-in it started in,
-and its result is dropped once that sign-in has ended: a late answer never fills the page of the
-next account, nor that of the same account signed in again. For an account forgotten since
-(`App::forgotten`), what that work wrote into the account's cache as it ended is deleted again as
-its result is dropped (`App::forget_again`). Such work, and a game session's cloud,
-achievement and play time steps, load credentials with `Account::load_for`, which refuses when
-another account is now signed in.
+**Accounts and network**
 
 | Module | Responsibility |
 |---|---|
-| `login` | Browser sign-in, sign-out, avatar |
-| `graphics` | The graphics backends the window starts with. Iced has wgpu start every backend it has and pick the best adapter among them, OpenGL's (EGL) included. Where that pick is a Vulkan GPU anyway (not lavapipe, drawn by the processor), the next starts set `WGPU_BACKEND=vulkan` in `main`, before any thread runs (`settings::vulkan_only`): the library shows 24 ms sooner warm and 27 ms cold, with 23 MB less memory (RX 6900 XT, RADV). Five seconds after each start (`CHECK_AFTER`: at once, it slowed the first frame by 16 ms), `boot`'s thread asks wgpu for an adapter as Iced does, with the backends the window started with (already loaded), and keeps the answer: a Vulkan that stopped working costs one start drawn in software (Iced's tiny-skia fallback), then every backend is started again. A `WGPU_BACKEND` the user set is left alone and nothing is checked |
-| `library` | Library sync, covers and images (cached as files named after their format, `<id>.jpg` or `<hash of the address>.jpg`, and shown from the file: the interface holds no image in memory; key art wider than 3840 pixels, a 4K screen's width, is scaled down once, in the cache, with Lanczos3 (0.65 s more than area averaging for 7184 pixels, the widest GOG key art seen); at start the covers already cached are found in one pass over their folder and shown in one message, and only the missing ones are downloaded, each on its own), favorites, shelf, sort (numbers by value) and filters, per-game overview and play time. The grid draws each cover from a copy made at the card's widest in pixels (`scaled`: the card's width times the window's scale, known from `window::scale_factor` and `Rescaled`), with Lanczos3, once, in `scaled/<width>/` of the cover's cache (the account's for GOG's, which forgetting it deletes; the shared one otherwise), at the lowest priority, four at a time, those the grid shows first first, and the copies of other widths deleted when the size changes: Iced reads four pixels of an image for each one it draws, without smaller copies to read from, so a cover two or three times as wide as its card showed grainy. A cover at most a fifth wider than its card is shown as it is. The game page's key art is made the same way, in `art/<width>/`, at the window's width in pixels (times 1.06, as the page enlarges it) rounded up to 1920, 2560 or 3840, so resizing the window makes none again; narrower than that, it is enlarged with Lanczos3 and sharpened with AMD's RCAS, FSR 1's sharpening pass (about 0.4 s for 1920 to 3840 pixels), rather than enlarged by Iced, which blends four pixels and shows it soft. Key art copies take at most 2 GB (`ART_BUDGET`, about 1 to 2 MB each at 3840 pixels): once over, those shown longest ago go (by modification time, which showing one again sets), down to a tenth below. At 10,000 covers of 342×482 made at 225 pixels: 21 s (82 s of processor time) the first time, 16 ms once made, about 37 KB a copy. Only the rows of the cover grid in view are built (`GridWindow`, a row of margin each side), and the Achievements tab does the same: at 10,000 games they build in about 0.13 and 0.16 ms, the order key of each title made once (`SortKeys`) and the games each tab lists kept until a message other than a scroll step, a frame, a cover or progress (`Lists`, `Message::keeps_lists`): making them takes about 2 ms, which every view paid before. A game read by a scan of GOG's data forgets them only when its achievements, cloud saves or play time changed (`App::overview_fetched`): a Refresh reads every game again, mostly as it was. Going back from a game page scrolls the grid to where it was left (`App::library_scroll`, then `scroll_to` on `library::GRID`); another page shown again starts at its top. Each row of the whole grid is one child of its column (`ui::widgets::grid_rows`), a space of the same height when out of view, so a row still in view after a scroll keeps what Iced laid out for it: titles in a script the font lacks (Chinese, Japanese) are slow to shape again. `library_at_10000_games` (ignored test) measures both |
-| `play` | Launching a game and following its session |
-| `cloud` | Cloud save check, sync and conflict choices |
-| `achievements` | Loading achievements, confirmed manual changes; a game's achievements page lays its cards out with `ui/even_grid.rs`, a grid whose cells take the height of the tallest of their row (iced's own grid gives each cell its content's height) |
-| `install` | Install plan, download with progress, pause, discard |
-| `downloads` | The download queue: installs waiting as `queued` jobs, started one after the other, reordered by dragging (`ui/downloads.rs` for the tab). A download stopped because GOG could not be reached (`Error::is_temporary`: network, 429, 5xx) leaves its job `downloading`, as a cut-off one, rather than `failed` (any other error, registering the game included, leaves it `failed`); that download, or a queued one GOG cannot plan, keeps its place and holds the queue (`downloads_waiting`), asked again every minute by a subscription that exists only meanwhile. The interface waits for GOG only when the error says so (`install::Failure`), not for a job still cut off after another one (the game busy with the command line, which holds the job) |
-| `maintenance` | Verify, repair, updates, uninstall, language and DLC changes |
-| `notify` | Notifications (`App::notify`): a card in the window's corner while it has the focus (`window::events`, Focused/Unfocused), else the desktop's notification through the freedesktop.org service on the session bus (`zbus`, already built for Iced and the keyring; the game's cover as `image-path`). Each kind (downloads, updates, achievements, cloud) and all of them have a switch (`settings::notifications`). Cards go after six seconds, each after one wait of its own (no tick while they show, each tick a frame) |
-| `updates` | Automatic updates: games from `maintenance::auto_update_candidates` (installed by slatty, not held on an older build chosen) checked at start, at sign-in and every six hours (one request each for a Windows build: GOG's list of builds), then applied one at a time through Manage's own update, started after any message once no game runs or waits to start (Play pressed while its folder is read or while it asks how to start), no install downloads, no cloud sync and no other work on a game is busy. A game the user changes while it waits leaves the queue, and each is checked again (held back, unfinished change) as its turn comes; one busy elsewhere (its lock held: played from the command line, or since before the interface restarted) waits for the next check, and one whose record already shows the build found (updated elsewhere) is passed over, without an error for either. Whether a game is held back is decided when its build is chosen: as an install starts without a job, or as it is queued, never when a queued or interrupted install resumes, by which time GOG may list a newer build |
-| `settings` | The Settings page (its side list follows the scroll), defaults for installs, privacy switches, manual achievement changes (Advanced, off until turned on), the Proton build, launch option and isolation of each installed game |
-| `steam` | Steam's games beside GOG's (`SteamView`, Settings → Steam, off until turned on): read at start off the interface thread and merged into the library (`merge_steam`, which also puts in the games added by hand from their installs, `added::library_game`, and keeps both through a GOG refresh or sign-out, and leaves out a Steam game owned on GOG too, `steam::library::twins` matched with GOG's own titles: its GOG game's page offers it, it counts as installed, its play time adds to the GOG game's, or one store's shows once preferred, `settings::twin_playtime`, and its last session is the latest of either); the games Steam installed, their play times and the account signed in read from its files after start and again when the window has the focus back (another account signed in to Steam reads its library instead); Play, Install, Verify and Uninstall asked of the client as a task. After Play, and while a game runs, the games Steam runs are looked at every two seconds (`LOOK_EVERY`, a subscription that exists only then, its messages in `keeps_lists`), for five minutes at most while the game asked for does not show; once one ends, its play time is read again. Play time and last played of a Steam game are Steam's (`App::played_seconds`, `App::last_played`). Its achievements are counted after the library shows (`App::achievement_counts`, kept apart from GOG's overview) and read when shown, from the client's files; manual changes are never offered for them (`App::manual_changes`). What the client downloads comes from each game's manifest, for the account's games alone (Steam's own tools, its runtimes, Proton and redistributables, have manifests too) (`local::Update`: `StateFlags`, `BytesDownloaded` of `BytesToDownload`, `BytesToStage`); while one downloads, the manifests of the games downloading alone are read again (`local::read_again`, which keeps a game as it was while its manifest cannot be read), not every library folder, which can be a network drive, one read at a time, with what Steam wrote in each one's `steamapps/downloading/<app id>` (`local::written`: the files' sizes and the room they take, links not followed): the manifest is said to stay as it was until the download ends, so the progress shown is what was written of `BytesToStage` (`Update::progress`, never all of it before the manifest says so), and a folder growing counts as a change; Steam downloads one game at a time, so a game it began without such a folder while another has one shows as waiting its turn (`App::steam_waiting`; not checked against a real download yet). Every five seconds while one changed in the last two minutes (`DOWNLOAD_EVERY`), every thirty seconds after that while the window is in front, not at all while it is behind (`App::steam_downloads_every`); one that ends ready is told as a finished download, once (a slow read of every folder, begun before the end, can land after it). Achievements are read for the account shown and dropped when another one shows by the time they arrive (`SteamMsg::Achieved`); images from Steam's servers are asked only while `SteamView::images_allowed` says so, which downloads waiting their turn look at. Without a GOG account the library shows Steam's games, GOG's sign-in one click away in Settings (`login_open`) |
-| `runners` | Settings → Runners: the Proton downloads and Keep up to date switches, the newest build of each project on GitHub, a download or an update with its progress and Stop (an update due starts with the application), the downloaded builds with Delete; the Share with Steam and Heroic switch; the Proton menus are listed again, and the links in Steam's `compatibilitytools.d` made to match, once a build is added or deleted |
-| `edit` | The menu a right click on a cover or on the key art of a game page opens, and the edit form, a dialog over the library and a drawer on the game page: draft, file picker, SteamGridDB search (name, game, picture), saving. `ui/pointer.rs` reports where a right click happened, without a message per mouse move |
-| `work` | Shared helpers for background work: GOG tokens, throttled progress streams |
-| `ui` | Window shell (top bar, notices, quit dialog); `widgets` for the building blocks every page uses (logo, tabs, avatar, cards); `library`, `achievements`, `settings`, `game` and `panels` pages, `install` for the Install drawer and dialog, `game_settings` for the Game settings drawer and dialog (library dialogs share `panels::library_dialog`), `manage` and `cloud` for their drawers (drawers share `panels::drawer`); `format` for text shown to the user |
-| `theme`, `presets`, `icons` | Design tokens (`Tokens`: every colour, the corner radii of the redesigned pages, and the page transition: a short fade with a slight rise, played when the page changes and set to zero to turn it off) and the widget styles built from them; Lucide icons. Views never name a colour; the tokens come from a built-in theme (`presets`), with `~/.config/slatty/theme.toml` on top when it exists, read at start, on Reload and when the theme changes (see [theming](theming.md)) |
+| `auth` | Sign-in address, code exchange, token refresh, game-scoped tokens |
+| `account` | The active account; refresh under a lock shared by every process; avatar |
+| `credentials` | The system keyring (Secret Service): GOG tokens, SteamGridDB and Steam Web API keys |
+| `secret` | `Secret`, whose `Debug` hides its value |
+| `http` | The shared client; reads retried on transient failures; errors stripped of their address; `gog_only` for addresses a GOG answer names |
 
-Interface tests (`tests/`, one module per area, helpers in `tests/mod.rs`) drive the real views with
-Iced's simulator and fictitious data. Dialogs and menus are layers over the page, each over an empty layer, and the
-notice banner keeps its place: the page stays the same widget whatever opens over it, so Iced keeps
-its state (the library's scroll position).
+**Library**
+
+| Module | Responsibility |
+|---|---|
+| `library` | GOG's library and gamesdb metadata, cached per account; covers, key art and images; whether a product can be installed |
+| `overview` | Per game: achievement counts, cloud save support and play time, cached per account |
+| `custom` | Titles, sorting titles, covers, backgrounds and hidden games the user chose, apart from GOG's data |
+| `steamgriddb` | SteamGridDB search, grids and heroes, once turned on |
+| `store` | Which store a game id belongs to: GOG's product id, `steam-<app id>`, `local-<number>` |
+| `steam` | Steam's games, read from the client's files: `local`, `appinfo`, `vdf`, `stats`, `running`, `library`, `client`, `web` (see [Steam games](#steam-games)) |
+| `added` | Games added by hand (see [Games added by hand](#games-added-by-hand)) |
+
+**Installing and looking after games**
+
+| Module | Responsibility |
+|---|---|
+| `galaxy` | GOG's content system: builds, build metadata, depot manifests, secure links, chunks from the fastest CDN endpoint (`galaxy::speeds`) |
+| `installer` | Install plans (`plan`), staged and verified downloads (`download`), resumable jobs (`job`), install records (`record`); `installer::linux` and `installer::zip` read Linux builds from GOG's offline installers |
+| `patches` | GOG's binary patches between builds: lookup, delta download, xdelta3 |
+| `install` | Installed games: their record in the database, Proton build, isolation; imports from a folder or from Heroic |
+| `maintenance` | Verify, repair, uninstall, updates and content changes (`reconfigure`) |
+| `setup` | GOG's post-install setup: install scripts, setup programs, redistributables |
+| `gameinfo` | A game's `goggame-<id>.info`; Windows paths resolved case-insensitively |
+| `units` | Sizes and speeds as shown (decimal units, megabits a second) |
+
+**Running games**
+
+| Module | Responsibility |
+|---|---|
+| `runner` | Launch commands for umu and Proton, Wine and native games; prefix creation; isolation |
+| `umu` | A game's id in umu's database, so umu applies its fixes |
+| `session` | The session supervisor, session records, play time |
+| `play` | The whole play flow (see [Play](#play)) |
+| `playtime` | Play time read from GOG, sessions reported to GOG |
+| `logs` | Logs of the programs the launcher starts, the last run and the two before |
+| `protons` | Proton builds downloaded from GitHub (see [Proton builds](#proton-builds)) |
+
+**Saves and achievements**
+
+| Module | Responsibility |
+|---|---|
+| `cloud` | Save locations (`locations`), local scan (`scan`), three-way plan (`plan`), transport (`transport`), the sync itself (`sync`), diagnostics (`inspect`) |
+| `achievements` | Achievement lists, manual unlock and clear |
+| `comet` | Comet, supervised beside a game; `comet::Unlocks` reads what it records |
+| `galaxy_service` | Comet's dummy `GalaxyCommunication` service, registered in a game's prefix |
+
+**Foundations**
+
+| Module | Responsibility |
+|---|---|
+| `db` | SQLite state database; versioned migrations, only ever appended |
+| `settings` | Every setting, a key/value row with a getter and a setter |
+| `paths` | Data folders (`Dirs`), game id checks |
+| `fsutil` | Staged writes, file reads of bounded size, work at the lowest priority (`in_background`) |
+| `lock` | One operation per game, one interface at a time |
+| `error` | Typed errors |
+| `doctor` | Checks of the system (`slatty doctor`) and the sandbox check before an isolated launch |
+
+## Command line
+
+`crates/cli/src/main.rs` declares the commands with clap and dispatches them; each group has its
+module: `auth`, `library`, `install`, `games` (import, forget, isolation, launch-spec, installs),
+`added` (add, remove), `maintenance` (uninstall, verify, update, content, setup), `launch`,
+`cloud`, `achievements`, `proton`, `steam`. Its tests (`crates/cli/tests`) start real processes:
+the supervisor with detached children, fake games, a fake Steam installation; those that need real
+Proton, umu or Comet are ignored by default ([testing](testing.md)).
+
+## Interface
+
+The interface follows Iced's state, message, update and view split:
+
+- `main.rs` holds `App` (the state), the `Message` enum and navigation; `update` only dispatches;
+- each feature keeps its state, its messages and its background tasks in a module of its own;
+- views live under `ui/`, one module per page or panel.
+
+| Module | Responsibility |
+|---|---|
+| `boot` | What the first page needs, read on a thread begun as the program starts (see [Start-up](#start-up)) |
+| `graphics` | The graphics backends the window starts with |
+| `login` | Sign-in, sign-out, avatar; work tied to the account signed in (`account_task`) |
+| `library` | Library sync, covers and images, shelves, sort and filters, kept lists and sort keys |
+| `scaled` | Covers and key art drawn from copies made at the size they are shown |
+| `install`, `downloads` | The Install drawer, the download, the queue |
+| `maintenance`, `updates` | Verify, repair, uninstall, content changes; automatic updates |
+| `play`, `cloud`, `achievements` | A game session, cloud saves, achievements |
+| `steam` | Steam's games beside GOG's |
+| `add`, `edit` | Adding a game by hand; editing a game's title and images |
+| `runners`, `settings` | Settings → Runners; the rest of Settings |
+| `notify` | Cards in the window, desktop notifications |
+| `work` | Shared helpers for background work: GOG tokens, throttled progress |
+| `theme`, `presets`, `icons` | Design tokens and widget styles, built-in themes, Lucide icons |
+| `ui/*` | The views: top bar and layers (`mod`), building blocks (`widgets`), pages (`library`, `game`, `achievements`, `settings`, `downloads`), drawers and dialogs (`install`, `game_settings`, `manage`, `cloud`, `edit`, `add`, `panels`), text shown to the user (`format`), `even_grid`, `pointer` |
+
+Views never name a colour: every colour, radius and motion comes from `theme::tokens()`, a built-in
+theme (`presets`) with `~/.config/slatty/theme.toml` over it ([theming](theming.md)).
+
+Dialogs and menus are layers over the page, each over an empty layer, and the notice banner keeps
+its place: the page stays the same widget whatever opens over it, so Iced keeps its state (the
+library's scroll position).
+
+### Start-up
+
+The window and the graphics driver take about 100 ms to set up. `boot::start` reads what the first
+page needs meanwhile, on a thread begun as the program starts: the database, the account, the
+library cache, settings. It reads nothing from game folders or Steam libraries, which can sit on a
+network drive taking seconds to wake up, nor from the keyring, whose prompt would hold it: how
+each game starts, the Proton builds found there, and whether keys are saved are read once the
+library shows. The system's fonts are read on another thread begun at the same time.
+
+`main` reads the theme, the font and the graphics backend before the first frame, so the window
+never shows another look first. One interface runs at a time: `boot` takes
+`locks/interface.lock`, and a second window says SlattyLauncher is already open. The command line
+still runs beside it.
+
+`graphics` chooses the backends: Iced has wgpu start every backend and pick the best adapter. Where
+that is a Vulkan GPU anyway (not drawn by the processor), the next starts set `WGPU_BACKEND=vulkan`
+before any thread runs (`settings::vulkan_only`), which shows the library sooner and takes less
+memory. Five seconds after each start, `boot`'s thread checks that the backend still finds an
+adapter; one that stopped working costs one start drawn in software, then every backend is started
+again. A `WGPU_BACKEND` the user set is left alone.
+
+### Work for an account
+
+Work started for the signed-in account (`App::account_task`) carries the sign-in it began in, and
+its result is dropped once that sign-in has ended: a late answer never fills the page of the next
+account, nor that of the same account signed in again. For an account forgotten since
+(`App::forgotten`), what that work wrote into the account's cache as it ended is deleted again
+(`App::forget_again`). Such work, and a game session's cloud, achievement and play time steps,
+load credentials with `Account::load_for`, which refuses when another account is now signed in.
+
+### Staying fluid at 10,000 games
+
+- **Only the rows in view are built.** The cover grid and the Achievements grid build the rows in
+  view and one row of margin (`library::GridWindow`), with one child per row of the whole grid
+  (`ui::widgets::grid_rows`), a space of the same height when out of view: a row still in view
+  after a scroll is the same child, and Iced keeps what it laid out for it (titles in scripts the
+  font lacks are slow to shape).
+- **Lists are kept.** The games each tab lists (`library::Lists`) are kept until a message that
+  can change them; those that cannot (scroll steps, frames, covers, progress…) are in
+  `Message::keeps_lists`. Sort keys are made once per title (`library::SortKeys`), at start off
+  the interface thread.
+- **Images come from files.** Covers and images are cached as files named after their format and
+  shown with `image::Handle::from_path`: the interface holds no image bytes. At start the covers
+  already cached are found in one pass over their folder and shown in one message.
+- **Images are drawn at their size.** Iced draws an image larger than its place by sampling four of
+  its pixels, without smaller copies to read from, and enlarges a smaller one by blending, softly.
+  `scaled` makes each cover once at the card's width in pixels (the card's width times the
+  window's scale), with Lanczos3, at the lowest priority, four at a time, those in view first, in
+  `scaled/<width>/` of the cover's cache; copies of the size before stay, for a window moved
+  between screens. The game page's key art is made at the window's width rounded up to 1920, 2560
+  or 3840 pixels; narrower art is enlarged with Lanczos3 and sharpened with AMD's RCAS (FSR 1),
+  up to a 4K screen's pixels. Key art copies take at most 2 GiB, those shown longest ago going
+  first, never one shown in this session. Copies of GOG's images go into the account's cache, so
+  they go with it.
+
+`library_at_10000_games` (an ignored test) measures the views; [testing](testing.md) gives the
+references measured in the application itself.
+
+## Rules every part follows
+
+- **Game ids.** A game id names files (locks, records, prefixes, covers), so it is checked before
+  any path is built from it. `store::of` accepts GOG's product id, `steam-<app id>` and
+  `local-<number>`, and refuses anything unsafe in a file name. `paths::check_owned_id` accepts
+  GOG's and those added by hand, and guards whatever installs, records or deletes a game's files:
+  a Steam game's files, which Steam owns, never are. `paths::check_game_id` accepts GOG's alone and
+  guards every request to GOG about a game, so GOG never learns of the others.
+- **One operation per game.** Installing, discarding an install, verifying or repairing, updating
+  or changing content, uninstalling, syncing cloud saves (checking does not), running setup and
+  playing each hold `locks/game-<id>.lock`. A second one on the same game, from the same process
+  or another (command line and interface), is refused rather than touch files in use. A game
+  started from SlattyLauncher keeps it busy until its last process ends, even once the launcher
+  closed or crashed: the session supervisor holds `session-<id>.lock` while it runs.
+- **Staged writes.** Files are written under a temporary name, then renamed
+  (`fsutil::write_atomic`, `temp_sibling`). A game folder appears only once every file is
+  verified. Nothing is written through a symbolic link that leads out of the game folder
+  (`installer::refuse_outside`, `leads_inside`), and every path from GOG goes through
+  `installer::safe_relative`.
+- **Destructive actions refuse or keep a copy.** Only files SlattyLauncher installed (its install
+  record) are ever deleted from a game folder; saves are copied before they are replaced.
+- **Network behind traits.** `galaxy::ContentSource`, `cloud::CloudTransport` and
+  `installer::linux::Source` have in-memory fakes with fault injection, so tests need no network.
+- **Settings** are key/value rows, each with a getter defaulting sensibly and a setter in
+  `settings.rs`. The database changes only by appending a migration to `db::MIGRATIONS`.
 
 ## Main flows
 
 ### Sign-in
 
-GOG accepts only its Galaxy client's redirect URI (`https://embed.gog.com/on_login_success`).
+GOG accepts only its Galaxy client's redirect address (`https://embed.gog.com/on_login_success`).
 
 1. The system browser opens GOG's sign-in page.
-2. The user pastes the final address; SlattyLauncher extracts the code from it.
+2. The user pastes the address they land on; SlattyLauncher takes the code from it.
 3. The code is exchanged for tokens, which go to the keyring.
 
-Refreshes take a file lock, so the CLI and the interface never refresh concurrently. Tests showed the
-refresh token is not rotated on refresh.
-Download links expire; a download that outlasts the access token (about an hour) renews it the
-same way before asking for new links.
+Refreshes take a file lock, so the command line and the interface never refresh at once; GOG does
+not rotate the refresh token. A download that outlasts the access token (about an hour) renews it
+the same way before asking for new links.
 
-### One operation per game
+### Library and overview
 
-Installing, discarding an unfinished install, verifying or repairing, updating or changing content,
-uninstalling, syncing cloud saves (checking them does not), running its setup and playing each hold
-`~/.local/state/slatty/locks/game-<id>.lock` while they run. A second one on the same game, from
-the same process or another one (CLI and interface), is refused instead of touching files in use.
-A game started from SlattyLauncher keeps it busy until its last process ends, even once the launcher
-was closed or crashed: the session supervisor holds `session-<id>.lock` for as long as it runs (as
-do the prefix creation and setup steps it runs), and every operation on the game is refused while it
-is held. A launcher starting meanwhile does not mark that session as interrupted either. One
-interface runs at a time (`locks/interface.lock`, taken before anything is read): a second one says
-SlattyLauncher is already open. The command line still runs beside it.
+`library` reads the account's products from `galaxy-library.gog.com`, then each game's metadata
+and images from gamesdb, and caches them per account; a game gamesdb fails to describe during a
+sync keeps what an earlier sync got. In the background, `overview` asks, for the games not read
+yet, whether they have achievements and cloud saves (through a token for the game, as Galaxy does)
+and their play time, and keeps the answers; the Achievements tab's **Refresh** reads every game
+again.
 
 ### Install
 
-1. `plan_for` picks the public Windows build of generation 2 and reads its metadata. It keeps the
-   depots of the base game and of the chosen owned DLC (all owned by default) for one language. DLC
-   ownership comes from `embed.gog.com/user/data/games`.
-2. `collect_files` reads the depot manifests. It rejects unsafe paths, merges paths that differ only
-   by case, and skips "support" files and links.
-3. `Download::run` checks disk space, then fills `.<Game>.slatty-partial`:
-   - chunks come from the fastest of the CDN endpoints GOG lists: each is measured on a first
-     request, one that fails is avoided for the retries of that chunk, and the runner-up is
-     measured again now and then;
-   - a chunk still waiting after three times the usual request time on its endpoint is asked again
-     from another endpoint, and the first answer wins; the slow endpoint is set aside while it
-     stays slow. Only one such copy runs at a time, so a slow connection is not loaded further;
-   - two chunks per file are fetched at once and written at their offset as they arrive, so a late
-     chunk does not hold back the following ones;
-   - each file is verified first and downloaded only if missing or wrong (four files at once, and
-     a file of 64 MiB or more in parts on up to four threads: MD5 is slower than an SSD reads),
-     each check on a thread of its own at the lowest priority (`fsutil::in_background`): a whole
-     game, 70 GB read again and hashed, kept seven cores busy for 40 s, which then only take the
-     time the desktop and games leave;
-   - when a file is replaced (update, repair, resumed install), the file already there is hashed at
-     the new chunk offsets, and chunks whose MD5 matches are copied from it and checked again
-     instead of downloaded;
+1. `plan_for` picks the build: the one chosen or kept by an interrupted install, else the newest
+   public Windows build of generation 2. It reads its metadata and keeps the depots of the base
+   game and of the chosen owned DLC (all by default) for one language; ownership comes from
+   `embed.gog.com/user/data/games`.
+2. `collect_files` reads the depot manifests. It refuses unsafe paths, merges paths that differ
+   only by case, and leaves "support" files and links aside.
+3. `Download::run` checks the disk space, then fills `.<Game>.slatty-partial`:
+   - chunks come from the fastest of the CDN endpoints GOG lists, each measured on a first request;
+     a chunk still waiting after three times the usual time is asked again from another endpoint,
+     one such copy at a time, and the first answer wins;
+   - two chunks per file are fetched at once and written at their offset as they arrive;
    - each chunk is checked against its compressed and decompressed MD5;
-   - files are written to a temporary name, then renamed; the filesystem is synced once when every
-     file is in place, rather than file by file, except files of 1 MiB or more, synced before they
-     take their name (`SYNCED_FROM`): a resumed install takes one of the right size in its
-     partial folder as it is rather than reading it again (2 GB of them: 0.06 s instead of 0.45 s
-     and 4.6 s of processor time), and checks only the smaller ones, many and quick to read,
-     which a hard disk would sync in about 10 ms each;
-   - a file that fails does not stop the others, so a retry has less to fetch, except on a full
-     disk, where the others would only fail once downloaded.
+   - a file already there (a repair, an update, a resumed install) is hashed at the new chunk
+     offsets, and chunks that match are copied from it instead of downloaded;
+   - files are checked four at a time, a file of 64 MiB or more in parts on up to four threads,
+     each on a thread at the lowest priority (`fsutil::in_background`);
+   - each file is written under a temporary name and renamed. Files of 1 MiB or more are synced to
+     disk before taking their name (`SYNCED_FROM`), so a resumed install keeps one of the right size
+     without reading it again; smaller ones, quick to read, are checked again. The file system is
+     synced once at the end for the rest;
+   - a file that fails does not stop the others, except on a full disk.
 4. The partial folder is renamed to the game folder.
-5. An install record (build, language, file list) is saved, and the game is registered with a
-   prefix under `~/.local/share/slatty/prefixes/<id>`.
+5. The install record (build, language, files) is saved, and the game registered with its prefix,
+   `prefixes/<id>`.
 
-A Linux build takes another path (`installer::linux`), since GOG's content system has no Linux
-builds (`Unsupported OS`):
+A **Linux build** takes another path (`installer::linux`), since GOG's content system has none:
 
-1. `plan_for` with `Platform::Linux` reads the game's and its DLC's Linux installers from
-   `api.gog.com/products/<id>?expand=downloads,expanded_dlcs`, and picks one per product for the
-   language. An installer in several parts is not handled and left out on its own (a DLC, or a
-   language, so offered); a game left with none is refused. Its build id is `linux:<version>`: that is how a job tells its platform, with no
-   column of its own.
-2. Each installer is a MojoSetup shell script followed by a zip. Its download link comes from the
-   API's `downlink`. The CDN serves byte ranges but not suffix ranges, so the exact size comes from
-   the `Content-Range` of the first byte (the API's size is rounded). `installer::zip` finds the
-   zip's directory in the last 64 KiB, with ZIP64 when present, and shifts every offset by the
-   length of the script before it. The plan reads these directories, for the size on disk.
+1. `plan_linux` reads the game's and its DLC's Linux installers from
+   `api.gog.com/products/<id>?expand=downloads,expanded_dlcs` and picks one per product for the
+   language. An installer in several parts is left out. Its build id is `linux:<version>`, which is
+   how a job tells its platform.
+2. Each installer is a MojoSetup script followed by a zip. GOG's CDN serves byte ranges but not
+   suffix ranges, so the exact size comes from the `Content-Range` of the first byte.
+   `installer::zip` finds the zip's directory in the last 64 KiB (ZIP64 too) and shifts every offset
+   by the script's length.
 3. Only entries under `data/noarch/` are kept; a DLC's file replaces the game's at the same path.
-   `LinuxDownload` fetches each file with its own ranged request (eight at once), inflates it off
-   the async threads in 1 MiB batches, checks size and CRC-32, writes it under a temporary name
-   (synced first from 1 MiB, as above, so a resumed install takes it on its size), then renames
-   it. A dropped connection or an expired link (refused with 401, 403 or 410) is
-   tried again, without counting the progress twice. Links pointing out of the game folder are
-   never made.
-4. The staged folder, its publication, the record and the job are those of a Windows build. The
-   game is registered with `Runner::Native` and starts through `start.sh`: on NixOS inside `steam-run`
-   when present (which mounts an empty `/tmp` of its own: a temporary folder under `/tmp` the
-   environment names, `nix develop`'s `/tmp/nix-shell.*`, becomes `/tmp`, `runner::steam_run_temp`), else inside umu's Steam Linux Runtime 3.0 (sniper), through a compatibility tool
-   of SlattyLauncher's own (`runner::runtime_tool`, made again before each launch, read-only to
-   an isolated game) rather than umu's `UMU_NO_PROTON`, which asks GitHub for umu's Proton
-   releases at each launch and uses a tool of umu's an isolated game could change; on
-   other systems through the interpreter its first line names, looked up in `PATH` when
-   that path is missing. Post-install setup,
-   cloud sync and Comet are skipped. Verify, repair, updates and DLC or language changes compare
-   the files with the current installers the same way.
+   `LinuxDownload` fetches each file with a ranged request (eight at once), inflates it off the
+   async threads, checks its size and CRC-32, and writes it as above. A dropped connection or an
+   expired link (401, 403, 410) is tried again. Links out of the game folder are never made.
+4. The staged folder, its publication, the record and the job are a Windows build's. The game runs
+   through `start.sh` with `Runner::Native` (see [Play](#play)).
 
-An interrupted install keeps its job in the database, and resumes with the same build, language and
-folder (a Linux build on GOG's current installer once GOG has replaced the one it started with:
-`plan_install`; GOG offers one at a time, and what was staged for the replaced installer is
-deleted, `drop_replaced`: not all of it is the new one's, and none of it would be recorded); when
-that folder is gone (an automounted drive unplugged, a network share's folder not there), the job
-stops as failed instead of starting again on the system disk; a mount point left behind as an
-empty folder is not told apart from a library folder still empty, and the download starts again
-there. Verify, repair, updates and content changes refuse a game whose folder is missing or empty
-(its own mount point not mounted) the same way. An install queued in the interface waits as a job in the `queued` state, with the
-choices made in its panel; the order of the queue is a setting. A queued job is never taken for a
-download already published, even when its folder exists. Its state tells a pause on request (`paused`, resumed when asked) from a cut-off
-(`downloading`, resumed by the interface at start-up). Updates do the same with `updating-paused`
-and `updating`; both keep the game from starting. A cut-off after the partial folder was renamed
-but before the game was registered is resumed by checking the game folder in place. The partial
-folder gets a mark (`.slatty-staged`, holding the game's id) as its download starts, which the
-rename carries into the game folder and the registration deletes: a folder already where the game
-goes without it (another launcher's copy, modded), or with another game's id (two products whose
-folders have the same name), is never adopted, only refused, and its job can be discarded without
-touching it. A job left behind by a game registered just before a cut-off is dropped at
-start-up.
+### Interrupted and queued installs
+
+An interrupted install keeps its job in the database and resumes with the same build, language
+and folder. Its state tells a pause asked for (`paused`, resumed when asked) from a cut-off
+(`downloading`, resumed by the interface at start-up). An install queued in the interface waits as
+a `queued` job with the choices of its panel; the queue's order is a setting.
+
+The partial folder gets a mark (`.slatty-staged`, holding the game's id and the build) as its
+download starts, which the rename carries into the game folder and the registration deletes:
+
+- a folder already where the game goes without it (another launcher's copy, a modded one), or with
+  another game's id, is never adopted, only refused;
+- a download whose mark names another build than the one planned (GOG replaced a Linux installer)
+  starts again from nothing: not all of it is the new installer's, and none of it would be
+  recorded;
+- a cut-off after the rename but before the registration is finished by checking the game folder
+  in place.
+
+A job whose folder is gone (a network share not mounted, a drive unplugged) stops as failed rather
+than start again on the system disk. A download stopped because GOG could not be reached
+(`Error::is_temporary`: network, 429, 5xx) stays `downloading` and holds the queue, asked again
+every minute; any other error leaves it `failed`.
 
 ### Post-install setup
 
-`setup::run` reproduces what Galaxy does after an install. It runs once per installed build, from
-the play flow after the prefix exists, or on demand with `slatty setup`:
+`setup::run` does what Galaxy does after an install, once per installed build, from the play flow
+once the prefix exists, or with `slatty setup`:
 
-1. Missing support files and the shared dependencies are downloaded:
-   - support files go to the game's support folder;
-   - the shared dependencies (and the script interpreter when the build uses it) go to
-     `~/.local/share/slatty/redist`.
-2. For the base game and each installed DLC, it runs GOG's script interpreter when the build
-   metadata asks for it, otherwise the product's temporary setup program, with Galaxy's arguments.
+1. Missing support files go to the game's support folder; shared dependencies, and GOG's script
+   interpreter when the build uses it, go to `redist/`.
+2. For the base game and each DLC, GOG's script interpreter runs when the build asks for it,
+   otherwise the product's setup program, with Galaxy's arguments.
 3. Shared redistributables are installed silently.
 
-Commands are built by a pure function (`setup::commands`). They are run under the session
-supervisor, so each one has really finished before the next starts. The build is then recorded as
-set up. Updates, language and DLC changes clear that mark.
+Commands are built by a pure function (`setup::commands`) and run under the session supervisor,
+each finished before the next. A step fails on any exit code but 0 and the Windows Installer codes
+that mean done (1638, 1641, 3010, and their low bytes through Wine). A run with a failed step leaves
+the build not set up, so setup runs again at the next launch, up to `setup::SETUP_RUNS` (3) runs.
+Programs run in a game's prefix get `PROTONFIXES_DISABLE=1`: a game's fixes can add arguments to
+whatever runs with its id, which setup programs refuse.
 
-A step fails when it exits with a code other than 0 or the Windows Installer codes that mean done
-(1638: a newer version is installed; 1641 and 3010: a restart is asked for). Through Wine, the
-exit status keeps only the low byte of a code, so 102, 105 and 194 count as these. A run with a failed
-step leaves the build not set up, so the whole setup runs again at the next launch, up to
-`setup::SETUP_RUNS` (3) runs for that build (`InstallRecord::setup_failures`): a step that fails
-for good is then left as it is, rather than slowing every launch; `slatty setup --force` still
-runs it.
+### Updates, language, DLC and build changes
 
-### Update, language and DLC changes
+`maintenance::reconfigure` handles four changes the same way: a newer build (`Change::Update`),
+another build GOG offers, older or newer (`Change::Build`), another language, and another set of
+DLC.
 
-`maintenance::reconfigure` handles three changes the same way:
+It records an `updating` job with the target just before the first file changes, so a change
+refused or paused before (not enough space, GOG not answering) leaves the game playable. Then the
+new file list is filled in place with the install's routine, GOG's binary patches applied where
+GOG offers them, files the new build no longer has deleted if SlattyLauncher installed them, and
+the install record rewritten. While the job exists, launching and verifying the game are refused,
+and running the change again resumes it with the pinned build.
 
-- a newer build (`Change::Update`);
-- another language;
-- another set of DLC, the last two staying on the installed build.
+Automatic updates (`gui/src/updates.rs`) take the games SlattyLauncher installed that are not held
+on an older build (`maintenance::auto_update_candidates`), check them at start, at sign-in and every
+six hours, and apply them one at a time through Manage's own update, once no game runs, no install
+downloads and no cloud sync or other work on a game is busy. Whether a game is held back is decided
+when its build is chosen: never when a queued or interrupted install resumes, by which time GOG may
+list a newer build.
 
-It records an "updating" job with the target build, language and DLC just before the first file
-changes (`begin`), or once every file is checked when none has to: a change refused or paused before
-(not enough space, GOG not answering, a pause while the installed files are checked) leaves the game
-as it was, playable. Then:
+### Verify, repair, uninstall
 
-1. The new file list is checked in place with the same fill routine as installs and repairs: only
-   files that are missing or differ are downloaded, each written to a temporary name and renamed.
-2. Files listed in the old install record but absent from the new build are deleted, just before
-   the first new file, folder or link is made (GOG's binary patches, which can read them, applied
-   first), or at the end when none is: a file can become a folder, or a folder a file. Their parent
-   folders are removed only if they end up empty.
-3. The install record is rewritten for the new build.
+Verify hashes every installed file against the installed build's manifest; repair downloads only
+the damaged chunks of damaged files. Uninstall deletes the files in the install record and nothing
+else, then folders left empty; the prefix stays unless asked, and then its `users` folder, Wine's
+registry files and `C:\ProgramData` are copied to `backups/prefixes/` first. Verify, repair, updates
+and content changes refuse a game whose folder is missing or empty (its drive not mounted).
 
-While the job exists, launching the game and verifying it are refused, and running the update again
-resumes it with the pinned build.
+### Play
 
-### Game isolation
+`play::play`, for a game installed or added:
 
-An isolated game (`Install::isolated`; on by default for Windows builds run through Proton) runs
-in the container umu already uses, pressure-vessel from the Steam Linux Runtime. umu starts a
-Proton build in it only when the build's `toolmanifest.vdf` names a runtime (`require_tool_appid`);
-a build naming none, made to run on the host (Proton-tkg, some custom builds), umu starts without
-the container, so `runner::container_of` refuses it for an isolated game. The container is told
-through its environment (`runner::isolation_env`) to share less:
+1. The game's id in umu's database (`umu::resolve`), from its Proton build's own copy, or umu's
+   server when **Proton fixes online** is on.
+2. An unfinished update is refused.
+3. For an isolated game, umu's runtimes are refreshed (at most once a day) and the one the launch
+   needs installed, outside the sandbox.
+4. The launch command is built and checked first, so a game that cannot start says so first.
+5. At the first launch, the Wine prefix is created (`wineboot`), then the post-install setup runs.
+6. With Comet, its Galaxy service is registered in the prefix if it is not yet.
+7. Cloud saves are synced; a conflict or an error stops the launch, the cloud out of reach does not.
+8. Comet starts, for a Windows game that ships the Galaxy SDK and once **Achievements in game** is
+   on (`comet::uses_galaxy`, `settings::game_achievements`).
+9. The game runs under the session supervisor; Comet's unlocks are read as they come.
+10. After the game: Comet stops, cloud saves are uploaded (not when the session's end is
+    uncertain), play time is reported, and the achievements GOG recorded are compared with those
+    before.
 
-- `PRESSURE_VESSEL_HOME`: a home folder of the game's own, `~/.local/share/slatty/homes/<id>`,
-  mounted where the user's is;
-- `PRESSURE_VESSEL_FILESYSTEMS_RW`: the game folder; `PRESSURE_VESSEL_FILESYSTEMS_RO`: umu's data,
-  the redistributables and the game's support files. The prefix is shared by umu itself;
-- `TMPDIR`, `TMP`, `TEMP`, `TEMPDIR` set to `/tmp`, which is private in the container: it shares
-  the folders they name;
-- `DBUS_SESSION_BUS_ADDRESS` and `DBUS_SYSTEM_BUS_ADDRESS` set to `disabled:`, D-Bus's address
-  for no bus: the container then shares neither bus (an address to a missing socket stops it from
-  starting). Proton and umu do not use them; Wine uses the system bus only in `mountmgr` (UDisks,
-  NetworkManager) and `winebth` (BlueZ), and showed the same network adapters and drives without
-  it;
-- `HOME` set to the game's own home as well: pressure-vessel shares the Steam installation
-  (`~/.steam` and where its links lead, `~/.local/share/Steam` with the client's settings and
-  tokens) read-only with every game, from the home folder `HOME` names (`wrap-home.c`,
-  `expose_steam`). The game writes its own home, so links it put in its `.steam` (or that folder
-  as a link) are taken away before each launch (`runner::forget_steam_links`). umu keeps its runtimes and cache where they are through `XDG_DATA_HOME` and
-  `XDG_CACHE_HOME`, which the container replaces with the game's own. One of Valve's own Proton
-  builds (in a Steam library's `steamapps/common`) is the exception: its `steam.exe` stops
-  (`steamclient_init unable to load native steamclient library`, then an assertion) unless it
-  loads `$HOME/.steam/sdk64/steamclient.so`, so the game's home gets `.steam/sdk64` and
-  `.steam/sdk32` folders holding a link to Steam's `linux64/steamclient.so` and
-  `linux32/steamclient.so`, shared read-only (`runner::steam_sdk_links`); folders, because
-  pressure-vessel removes a link it finds at `~/.steam/sdk64` in a home of its own. The builds
-  made for use outside Steam (GE-Proton, Proton-CachyOS, UMU-Proton) go on without the library;
-- `PRESSURE_VESSEL_SHARE_HOME=0`, `PROTON_LOG_DIR` (the game's home), and an empty
-  `STEAM_COMPAT_INSTALL_PATH`, `STEAM_COMPAT_LIBRARY_PATHS`, `STEAM_COMPAT_CLIENT_INSTALL_PATH`,
-  `STEAM_COMPAT_MOUNT_PATHS`, `STEAM_COMPAT_TOOL_PATH`, `STEAM_COMPAT_APP_LIBRARY_PATH(S)`,
-  `STEAM_EXTRA_COMPAT_TOOLS_PATHS` and `STEAM_RUNTIME_SCOUT`: the launch inherits the user's
-  environment, and pressure-vessel turns each of these into a writable mount
-  (`wrap-setup.c`, `known_required_env`), the first into the shared home folder, whatever the
-  other settings say. umu takes `STEAM_COMPAT_INSTALL_PATH` from the environment too;
-- for a Linux game, `WINEPREFIX` set to the game's home: without one umu takes `~/Games/umu/<id>`
-  (or the user's `$WINEPREFIX`), and the container shares it as `STEAM_COMPAT_DATA_PATH`;
-- `PRESSURE_VESSEL_SHARE_PID=0`: the container gets a process namespace of its own, so the game
-  sees and signals only its own processes, not the user's other programs.
+GOG is never asked anything about a game added by hand, and Linux builds skip setup, cloud saves and
+Comet.
 
-umu shares the tools a game runs through with its container, writable: its runtime, the Proton
-build, and for a Linux game the runtime tool it goes through. A game that changed them would run
-its code in other games, isolated or not. An isolated launch therefore runs umu inside bubblewrap
-(`runner::read_only_tools`): the system as it is (`--dev-bind / /`), with umu's runtimes, the
-Proton build and SlattyLauncher's own runtime tool (`runner::runtime_tool`, written again before
-each launch) bound read-only over themselves, by where they lead (`runner::bind`: bubblewrap cannot
-mount over a link, which a `<project>-latest` build is); umu is given the same resolved path, so a
-build linked in its place before umu starts cannot run instead, writable. Each runtime's `var/`, where pressure-vessel copies
-the runtime, and the `.ref` lock files it takes in the runtime stay writable. So does a Valve
-build's `dist.lock`, which its `proton` script takes at every launch; what that script writes into
-its own folder after a Steam update (SteamPipe's fixups: empty folders, files made read-only, then
-`files/steampipe_fixups_mtime` in Python's `str(getmtime)` form, which it compares) is done before
-the launch, outside the sandbox (`runner::set_up_valve_build`), and a Valve build Proton never set
-up (no `files/share/default_pfx`) is refused with the way out. pressure-vessel then
-cannot hard-link the runtime across the read-only mount (EXDEV) and copies it: reflinked on btrfs
-or XFS (an isolated launch took 2.3 s instead of 1.4 s), written in full on ext4 (about 750 MB).
-umu cannot update a runtime it sees read-only, so isolated launches set `UMU_RUNTIME_UPDATE=0`,
-and `runner::refresh_runtimes` runs umu once a day before one, outside bubblewrap, through the
-same runtime tool: umu's `UMU_NO_PROTON` would ask GitHub for umu's Proton releases first. The
-runtime the launch runs in (`runner::container`), when umu does not have it yet (a first isolated
-launch, a Proton build needing a newer runtime), is installed then whatever the day: umu would
-install it during the launch, inside the sandbox, where nothing binds it read-only and the game
-could change it. An isolated launch in a runtime still missing is refused
-(`runner::runtime_installed`). It
-gives umu `true` to run, from a folder of SlattyLauncher's own (`umu-runtimes`): umu takes its
-first argument for a program in the working directory when one of that name is there, and the
-command line may be started from a game's folder. The bubblewrap check below runs from `/`, with
-`true` by its absolute path, for the same reason.
-
-Before each isolated launch, `runner::sandbox` tries bubblewrap (`doctor::sandbox_problem`, about
-5 ms): a sandbox, then one inside it, as pressure-vessel's starts inside ours. On Ubuntu 23.10 and
-later only programs with an AppArmor profile may start one (`kernel.apparmor_restrict_unprivileged_userns`),
-and Ubuntu's profile for bubblewrap strips privileges from what runs inside, which may stop the
-second. Either way the launch is refused with the reason and the user guide's way out, never run
-without isolation instead. The result is not kept: a profile installed meanwhile counts at the
-next launch.
-
-umu shares, writable, the whole filesystem a game is on (its "game drive": the first mount point
-above `STEAM_COMPAT_INSTALL_PATH`, which it otherwise takes from the program's folder). With `/home`
-or a library disk mounted on its own, that is all of it. An isolated game is therefore started
-without `STEAM_COMPAT_INSTALL_PATH`, and never by a path umu can open: a Windows program by its
-`Z:\…` path, which Proton resolves in the container, a Linux script through its interpreter
-(`bash start.sh`). Proton's fixes then find the game from the working directory.
-
-umu looks for that first argument on this computer too, relative to the working directory
-(`Path(cmd).absolute()`): a file named `sh`, `sc`, `wineboot` or `Z:\…\game.exe` in the game's
-folder, which the game writes, would make umu take the folder for the game's at the next launch.
-And pressure-vessel shares the working directory as it is on disk: a link the game made in its
-folder, named as the working directory in its `goggame-*.info`, would share where it leads.
-`runner::check_shared` refuses both, for every command run isolated (the game, `wineboot`, the
-setup programs, the Galaxy service), just before it starts; the play flow builds the game's
-command again after the setup steps. pressure-vessel splits its path lists on every `:`, escaped
-or not: a game folder with `:` in its path is refused rather than started without its folder.
-umu also reads its first argument as one of its own options or verbs: `--config` would take the
-script for its configuration, which names the prefix the container shares; `winetricks` and
-Proton's verbs (`run`, …) change what it runs. A Linux script's interpreter, the first line of a
-script the game can rewrite, is therefore only accepted as `sh`, `bash` or `dash`.
-
-The launcher itself works in the prefix and the game folder outside the container, where a link
-the game planted could lead it out. When the game is isolated, cloud sync refuses a save folder
-that leads out of the prefix (or of the game folder), the Galaxy service registration refuses to
-copy through such a link, and an uninstall refuses to back up or delete a prefix whose `users`
-folder leads out of it. Games that are not isolated keep the old behaviour: Wine alone links the
-user folders to the real ones.
-
-A Linux game runs isolated in umu without Proton (the sniper runtime), on NixOS too, rather than in
-`steam-run`, which shares everything. Wine alone cannot isolate: such a game is refused while marked
-isolated. The ignored tests in `cli/tests/isolation.rs` run a marker check through the real
-container, and the same launch not isolated as a control.
+A **native Linux game** runs through `start.sh`: on NixOS inside `steam-run` when present (which
+mounts an empty `/tmp` of its own, so temporary folders under `/tmp` become `/tmp`,
+`runner::steam_run_temp`), else inside umu's Steam Linux Runtime 3.0 through a compatibility tool of
+SlattyLauncher's own (`runner::runtime_tool`) rather than umu's `UMU_NO_PROTON`, which asks GitHub
+at each launch; on other systems through the interpreter its first line names.
 
 ### Game sessions
 
-A launch spawns the running binary again (through `/proc/self/exe`, which still works after the
-file was replaced by an update or a rebuild) with a hidden argument. That copy becomes the
-supervisor for the session:
+A launch starts the running binary again (through `/proc/self/exe`, which still works after the
+file was replaced by an update or a rebuild) with a hidden argument. That copy becomes the session's
+supervisor: it marks itself `PR_SET_CHILD_SUBREAPER`, starts the game in its own process group and
+reports events as JSON lines. Processes that detach (launchers that exit early, Wine services) are
+re-parented to it, so the session ends only when no descendant is left. umu's `waitforexitandrun`
+already waits for Windows processes; the supervisor is the safety net for everything else.
 
-- It marks itself `PR_SET_CHILD_SUBREAPER`, starts the game in its own process group and reports
-  events as JSON lines.
-- Processes that detach (launchers that exit early, Wine services) are re-parented to the
-  supervisor. The session therefore ends only when no descendant is left.
+The session's length is measured on a monotonic clock, without the time the computer was
+suspended. A session without a recorded end (a crash) is reported at the next launch, and the
+upload after it is skipped.
 
-umu's `waitforexitandrun` already waits for Windows processes; the supervisor is the safety net for
-everything else. A session without a recorded end (launcher crash) is reported at the next launch,
-and post-game sync is skipped when the end is uncertain.
+### Game isolation
+
+An isolated game (`Install::isolated`; Windows builds run through Proton by default) runs in the
+container umu already uses, pressure-vessel from the Steam Linux Runtime. umu starts a Proton build
+in it only when the build's `toolmanifest.vdf` names a runtime; `runner::container_of` refuses a
+build made for the host (Proton-tkg) for an isolated game.
+
+**What the container is told** (`runner::isolation_env`):
+
+- `PRESSURE_VESSEL_HOME`: a home folder of the game's own, `homes/<id>`, mounted where the user's
+  is; `HOME` set to it as well, since pressure-vessel shares the Steam installation it finds there;
+- `PRESSURE_VESSEL_FILESYSTEMS_RW`: the game folder; `PRESSURE_VESSEL_FILESYSTEMS_RO`: umu's data,
+  the redistributables and the game's support files; the prefix is shared by umu itself;
+- `TMPDIR`, `TMP`, `TEMP`, `TEMPDIR` set to `/tmp`, private in the container (it shares the
+  folders they name);
+- `DBUS_SESSION_BUS_ADDRESS` and `DBUS_SYSTEM_BUS_ADDRESS` set to `disabled:`, so neither bus is
+  shared;
+- `PRESSURE_VESSEL_SHARE_HOME=0`, `PROTON_LOG_DIR` in the game's home, and every `STEAM_COMPAT_*`
+  path variable, `STEAM_EXTRA_COMPAT_TOOLS_PATHS` and `STEAM_RUNTIME_SCOUT` emptied: the launch
+  inherits the user's environment, and pressure-vessel turns each of these into a writable mount;
+- for a Linux game, `WINEPREFIX` set to the game's home, which umu would otherwise take from
+  `~/Games/umu/<id>` and share;
+- `PRESSURE_VESSEL_SHARE_PID=0`: a process namespace of its own, so the game sees and signals only
+  its own processes.
+
+A Valve Proton build needs `$HOME/.steam/sdk64/steamclient.so`: the game's home gets `.steam/sdk64`
+and `sdk32` folders with links to Steam's `linux64` and `linux32`, shared read-only
+(`runner::steam_sdk_links`). Links the game itself put in its `.steam` are removed before each
+launch (`runner::forget_steam_links`).
+
+**The tools stay read-only.** umu shares the tools a game runs through with its container,
+writable: its runtime, the Proton build, the runtime tool of a Linux game. An isolated launch
+therefore runs umu inside bubblewrap (`runner::read_only_tools`): the system as it is, with those
+bound read-only over themselves, by where they lead (`runner::bind`: bubblewrap cannot mount over a
+link, which a `<project>-latest` build is). Each runtime's `var/`, its `.ref` lock files and a Valve
+build's `dist.lock` stay writable; what a Valve build's script writes into its own folder after a
+Steam update (SteamPipe's fixups) is done before the launch, outside the sandbox
+(`runner::set_up_valve_build`). pressure-vessel then cannot hard-link the runtime and copies it
+(reflinked on btrfs and XFS, written in full on ext4). umu cannot update a runtime it sees
+read-only, so isolated launches set `UMU_RUNTIME_UPDATE=0`, and `runner::refresh_runtimes` updates
+it at most once a day, outside the sandbox.
+
+**Before each isolated launch**, `runner::sandbox` tries bubblewrap (`doctor::sandbox_problem`, a
+few milliseconds): a sandbox, then one inside it. On Ubuntu 23.10 and later, without an AppArmor
+profile, either can fail: the launch is refused with the reason, never run without isolation.
+
+**What umu would share by itself.** umu shares, writable, the whole filesystem a game is on (the
+first mount point above `STEAM_COMPAT_INSTALL_PATH`, else the program's folder). An isolated game
+is therefore started without that variable and never by a path umu can open: a Windows program by
+its `Z:\…` path, a Linux script through its interpreter (`sh`, `bash` or `dash` only). umu also
+looks for its first argument relative to the working directory and the home folder: a file named
+`sh`, `sc`, `wineboot` or `Z:\…\game.exe` the game wrote in its folder would make umu take the
+folder for the game's. pressure-vessel shares the working directory as it is on disk, and splits
+its path lists on every `:`. `runner::check_shared` refuses all of these for every command run
+isolated, just before it starts.
+
+**Outside the container**, the launcher itself works in the prefix and the game folder, where a
+link the game planted could lead it out. For an isolated game, cloud sync refuses a save folder
+that leads out of the prefix or game folder, the Galaxy service registration refuses to copy
+through such a link, and an uninstall refuses to back up or delete a prefix whose `users` folder
+leads out of it.
+
+The ignored tests in `crates/cli/tests/isolation.rs` run each check through the real container,
+with the same launch without the measure, or not isolated, as a control.
 
 ### Cloud sync
 
-See [cloud-saves.md](cloud-saves.md). The decision logic (`cloud::plan`) is a pure function. The
-executor (`cloud::sync`) works against a `CloudTransport` trait, with two implementations:
-
-- `GogCloud` for real use;
-- an in-memory transport with fault injection, used by the tests.
+See [cloud-saves.md](cloud-saves.md) for the rules. The decision (`cloud::plan`) is a pure
+function. The sync (`cloud::sync`) works against the `CloudTransport` trait: `GogCloud` for real
+use, an in-memory transport with fault injection for the tests.
 
 ### Comet
 
-Comet listens on the fixed port 127.0.0.1:9977, so only one instance can run.
+Comet listens on the fixed port 127.0.0.1:9977, so only one runs at a time.
 
 - **Tokens.** SlattyLauncher passes them through Comet's Lutris importer: a 0600 file in a private
-  directory under `$XDG_RUNTIME_DIR`, removed as soon as Comet listens. They never appear in process
-  arguments. `$XDG_RUNTIME_DIR` must belong to the user and be closed to others
-  (`comet::private_dir`), and the folders left by a launcher killed meanwhile are removed. Comet
-  is taken as ready only once a listener of the user's own holds the port (`/proc/net/tcp`), not
-  another user's.
-- **Exposure.** Comet hands the account's access token to anything that connects to its port and
-  asks (its overlay service), and its log would hold the refresh token after a failed token
-  request at its default level: `COMET_LOG` keeps that module's messages out.
-- **Shutdown.** Comet is stopped with SIGINT, so pending requests can finish: when the game ends,
-  when the launcher drops it, and when the launcher dies, through `PR_SET_PDEATHSIG` set by the
-  thread that starts it. It runs in a process group of its own, so a Ctrl+C in the terminal
-  reaches the launcher only.
-- **Unlocks as they come.** Comet records an unlock in its own SQLite database at once
-  (`<data>/comet/comet/gameplay/<client id>/<user id>/gameplay.db`, Comet adding its folder to the
-  `XDG_DATA_HOME` it is given) and sends it to GOG later. During the session `comet::Unlocks` opens
-  it read-only, never waiting on Comet's locks, and looks each second: `PRAGMA data_version` tells
-  whether Comet wrote since the last look, so the rows are read again only then (4 to 8 µs a look,
-  0.4 ms after a write, with 1,000 achievements). What was unlocked on GOG at the start, or is
-  dated more than a minute before it (Comet copies GOG's list into the database, with GOG's dates,
-  whenever the game first asks), is not new. Each new one is a `PlayEvent::Achieved`, and a last
-  look follows the game's end.
-- **Achievement report.** Achievements are read before and after the session, so the report reflects
-  what GOG actually recorded. The interface does not notify again one already told during the game:
-  it compares keys, since Comet asks GOG for names in the system's language and the launcher does
-  not.
-- **Galaxy service.** Some Galaxy SDK versions only reach Comet when a `GalaxyCommunication` Windows
-  service exists, as GOG Galaxy installs one. Before the first session with Comet, the play flow
-  registers Comet's dummy service in the prefix (`sc create`, plus the `GalaxyClient\paths`
-  registry value), then copies the executable to
-  `C:\ProgramData\GOG.com\Galaxy\redists\`. The copy comes last, so its presence means the
-  registration completed. Wine stops the service with the last game process, so session tracking
-  is unaffected.
+  folder under `$XDG_RUNTIME_DIR`, removed as soon as Comet listens, never in process arguments.
+  `$XDG_RUNTIME_DIR` must belong to the user and be closed to others (`comet::private_dir`). Comet
+  is taken as ready only once a listener of the user's own holds the port (`/proc/net/tcp`).
+- **Exposure.** Comet hands the account's access token to anything that connects and asks, which
+  is why it runs only once allowed. `COMET_LOG` keeps out of its log the messages that would hold
+  the refresh token.
+- **Shutdown.** Comet stops with SIGINT when the game ends, when the launcher drops it, and when the
+  launcher dies (`PR_SET_PDEATHSIG`). It runs in a process group of its own, so a Ctrl+C in the
+  terminal reaches the launcher only.
+- **Unlocks as they come.** Comet records an unlock in its SQLite database at once and sends it to
+  GOG later. `comet::Unlocks` opens that database read-only, never waiting on Comet's locks, and
+  looks each second; `PRAGMA data_version` tells whether Comet wrote since. What was unlocked on
+  GOG at the start, or dated more than a minute before it, is not new.
+- **Galaxy service.** Some Galaxy SDK versions reach Comet only when a `GalaxyCommunication`
+  Windows service exists. Before the first session with Comet, the play flow registers Comet's
+  dummy service in the prefix (`sc create`, the `GalaxyClient\paths` registry value), then copies
+  the executable to `C:\ProgramData\GOG.com\Galaxy\redists\`; the copy comes last, so its presence
+  means the registration completed.
+
+### Steam games
+
+`core/src/steam` reads the local Steam client and never writes to it:
+
+- `local` finds Steam (native or Flatpak; with both, the one signed in to last), its library
+  folders, the account last signed in (`config/loginusers.vdf`), its games
+  (`userdata/<account>/config/librarycache`), those installed (`appmanifest_*.acf`), and each
+  game's play time and last session from `localconfig.vdf`, of which nothing else is kept: it also
+  holds the client's download tokens;
+- `appinfo` decodes `appcache/appinfo.vdf` (binary KeyValues, versions 40 and 41), only the apps
+  asked for, and of them only the name, type, systems and images; `vdf` reads Steam's text
+  KeyValues, bounded in size, depth and entries;
+- `stats` reads a game's achievements from the client's stats files;
+- `running` finds the games the client runs, from the user's own processes named `reaper` started
+  from the client's folders, as `reaper SteamLaunch AppId=<id>`; no other process's arguments are
+  read;
+- `library` turns them into library games, and `twins` pairs a GOG game with the Steam game it also
+  is: by the Steam app ids gamesdb gives for it (`game.releases`), or, for a game gamesdb did not
+  describe, by a title written alike;
+- `client` builds the `steam://` addresses that ask the client to play, install, verify or
+  uninstall;
+- `web` asks Steam's Web API, once turned on, with the user's key from the keyring.
+
+Every file is opened without waiting and read only when it is a regular file of bounded size
+(`steam::open`); cached images only when they are not links.
+
+In the interface (`gui/src/steam.rs`), Steam's games are read at start off the interface thread
+and merged into the library (`merge_steam`), which leaves out a Steam game owned on GOG too: its
+GOG game's page offers it. What Steam installed and its play times are read again when the window
+comes back to the front. After Play, and while a game runs, the client's games are looked at every
+two seconds. What the client downloads comes from each game's manifest and from what Steam wrote so
+far in `steamapps/downloading/<app id>`, every five seconds while something moves, every thirty
+while the window is in front, not at all while it is behind.
+
+### Games added by hand
+
+`core/src/added.rs`: an install with the id `local-<number>`, from a count in the settings never
+given twice, and what it starts (`added/<id>.json`: program, arguments, working directory, relative
+to its folder, checked to be still in it at each launch). There is no install record, which would
+have GOG's setup, updates and checks run.
+
+- `platform_of` tells a Windows program (`MZ`) from a Linux one (ELF, `#!`), whatever its name.
+- `check_folder` refuses a folder an isolated game could reach more through: one holding the home
+  folder or the whole disk, a folder of programs, another game's folder, one inside or holding it,
+  one holding the default installation path (paths compared as resolved on disk).
+- `run_installer` runs a Windows installer under the session supervisor in a prefix made for the
+  game; `NewGame::installed_by` then adds the program it installed with that id and prefix, or
+  `discard_installer` throws it away, saves backed up.
+- `unpack` unpacks a Linux installer or archive without running it (a MojoSetup installer's
+  `data/noarch` through `installer::linux`, a zip whole, a tarball through `protons::unpack_tar`)
+  and lists the files with their size and modification time; `remove` deletes those alone, and
+  only while they are as they were unpacked, never the game's other files.
+
+`runner::launch_spec` starts the program as a GOG build's (Windows) or script (Linux; an ELF
+program isolated through `sh -c`, an AppImage told to unpack itself).
+
+### Proton builds
+
+`core/src/protons.rs`, once **Proton downloads** is on:
+
+- the archive for this computer is downloaded from the project's GitHub release, resumed when cut
+  off, checked against the release's SHA-512 sum before it is opened, then unpacked in
+  `protons/.staging` (a `.tar.xz` made in blocks on up to four threads), nothing leaving its folder
+  (paths that climb out, links out, special files are left out), and moved into place;
+- each project has a `<project>-latest` link to its newest build, replaced in one step (`rename`)
+  once a newer build is unpacked, never by an older version (the numbers in the names compared);
+  `link_newest`, at start, gives a project without a link, or whose build was deleted, one to its
+  newest build;
+- `update` (once a day at start, once turned on) downloads the newest build of each project
+  followed that way, keeps the build before and deletes older ones no game uses; a project that
+  fails is reported beside the others;
+- one lock (`protons.lock`) covers each change of the builds or links, so the interface and the
+  command line never interleave;
+- a build a game, an unfinished install or the default uses, or that a followed link leads to, is
+  not deleted;
+- `sync_shared`, once **Share with Steam and Heroic** is on, keeps one link per downloaded build in
+  native Steam's `compatibilitytools.d` (numbered builds only; a name already taken is left alone)
+  and removes only links leading into the builds folder. A failure there only leaves builds out of
+  Steam and Heroic.
 
 ## Storage
 
-| Kind | Location | Rebuildable |
+Paths follow the XDG variables; the defaults are shown.
+
+| Kind | Location | Rebuilt from |
 |---|---|---|
-| Secrets | System keyring | no (sign in again) |
-| Essential state | `~/.local/share/slatty/state.db` (accounts, installs, sessions, sync history, install jobs, settings) | no |
-| Install records | `~/.local/share/slatty/manifests/` | from GOG, for the same build |
-| Prefixes and backups | `~/.local/share/slatty/{prefixes,backups}/` | no |
-| Home folders of isolated games | `~/.local/share/slatty/homes/` | no (Linux games' saves) |
-| Downloaded Proton builds | `~/.local/share/slatty/protons/` | from GitHub, while the release is listed |
-| Cache | `~/.cache/slatty/<user id>/` | yes |
-| Logs | `~/.local/state/slatty/logs/` | yes |
+| Secrets | System keyring | nowhere (sign in again) |
+| State | `~/.local/share/slatty/state.db` (accounts, installs, jobs, sessions, sync history, settings, customisations) | nowhere |
+| Install records | `~/.local/share/slatty/manifests/` | GOG, for the same build |
+| Prefixes, isolated games' homes, backups | `~/.local/share/slatty/{prefixes,homes,backups}/` | nowhere |
+| Games added by hand | `~/.local/share/slatty/added/`, `custom/` (user's images) | nowhere |
+| Setup files | `~/.local/share/slatty/{support,redist}/` | GOG |
+| Proton builds, runtime tool | `~/.local/share/slatty/{protons,umu-runtimes}/` | GitHub; made again |
+| Comet | `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | GOG |
+| Cache | `~/.cache/slatty/<user id>/` (GOG), `~/.cache/slatty/{steam,steamgriddb,scaled,art}/` | the network, or made again |
+| Logs and locks | `~/.local/state/slatty/{logs,locks}/` | made again |
+| Theme | `~/.config/slatty/theme.toml` | the user |
 
 ## Design decisions
 
 | Decision | Why |
 |---|---|
-| Rust everywhere in the application; Proton, umu and Comet stay external | Reuse proven tools instead of rewriting them; keep their boundaries explicit |
-| Iced rather than GPUI (reviewed 2026-10-09) | Maintenance comes first. Iced has versioned releases and documentation. GPUI has had no maintained release since 0.2.2 (October 2025); its ecosystem pins weekly third-party snapshots (`gpui-pre`) with frequent breaking changes. Rich pages remain possible with Iced's `markdown`, `table` and `sensor` widgets. |
-| No web view | Native application; sign-in happens in the user's own browser |
-| Address pasted back after sign-in | GOG accepts only the Galaxy redirect URI; no local redirect is known to work |
-| Isolation through umu's own container rather than another sandbox | pressure-vessel already runs every Proton game; its documented options hide the home folder with no second container to keep working with GPUs, sound and gamepads. It still shares the display, sound, devices and the network: it keeps games out of files and D-Bus, not out of the system |
-| Proton builds downloaded by SlattyLauncher, not by umu | umu can fetch GE-Proton or UMU-Proton itself, but only at a game's launch, which would then wait for half a gigabyte, and its "latest" builds are replaced in place under one name, changing a game's Proton behind its back, under a game already running. SlattyLauncher keeps each build in a folder of its own; following the newest goes through a link, which umu resolves when a game starts, so a running game keeps its build, and the build before stays to go back to |
-| Comet as a supervised companion process | Its library API is not meant for embedding (global state, fixed port, panics on errors) |
-| Subreaper supervisor process for sessions | Launchers that exit early and Wine processes must not end the session too soon |
-| Content hashes, not dates, for cloud sync | Dates are unreliable across machines and Wine; hashes plus per-file history detect real changes |
+| Rust everywhere in the application; Proton, umu and Comet stay external | Proven tools reused rather than rewritten, with explicit boundaries |
+| Iced rather than GPUI (reviewed 2026-10-09) | Maintenance comes first: Iced has versioned releases and documentation; GPUI had no maintained release, and its ecosystem pinned weekly third-party snapshots |
+| No web view; the address pasted back after sign-in | A native application; GOG accepts only Galaxy's redirect address, and no local redirect is known to work |
+| Linux builds from GOG's offline installers, read file by file | GOG's content system has no Linux builds; ranged reads keep the installer off the disk |
+| Isolation through umu's own container, with bubblewrap around umu | pressure-vessel already runs every Proton game and keeps GPUs, sound and gamepads working; its options hide the home folder. Bubblewrap only makes the tools read-only. It keeps games out of files and D-Bus, not out of the system |
+| Proton builds downloaded by SlattyLauncher, not by umu | umu fetches them at a game's launch, which would wait for half a gigabyte, and replaces its "latest" in place under a running game. A folder per build, followed through a link umu resolves at launch, keeps a running game on its build and the build before at hand |
+| Comet as a supervised process beside the game, off until turned on | Its library is not meant for embedding (global state, fixed port); while it runs, any local program can get the access token from it |
+| A subreaper supervisor process for sessions | Launchers that exit early and Wine processes must not end the session too soon |
+| Content hashes, not dates, for cloud sync | Dates are unreliable across machines and Wine; hashes and per-file history show real changes |
+| Steam read from its files, played through its client | Most Steam games need the client running; reading never writes into Steam or asks its servers without a switch |
+| GOG never told of other stores' games | GOG learns nothing of what you own elsewhere |
+| Images shown from files, made at the size drawn | The interface held 880 MB of covers at 10,000 games when it kept their bytes; Iced has no smaller copies to sample from |
+| Grids that build only the rows in view | A library of 10,000 games stays within a frame |
 | SQLite through rusqlite behind a mutex | One writer per process, simple synchronous queries, futures stay `Send` |
 | Interface in English first | Translations come later |
 | GPL-3.0-or-later | Allows building on heroic-gogdl's GPL code with attribution |
 
 ## Security principles
 
-- No password field: sign-in happens on GOG's site.
-- Tokens live only in the keyring. They are never written to plain files, except Comet's short-lived
-  0600 handoff file. They never appear in process arguments or logs. The `Secret` type hides its
-  value from `Debug`.
-- HTTP errors never include URLs, since some GOG endpoints take tokens in the query string.
-- SlattyLauncher's folders are 0700 and its database 0600, set again at every start.
-- Game ids are checked (letters and digits only) before they name a file: locks, installs, install
-  jobs and records, covers, customisations.
-- Nothing is written through a symbolic link that leads out of the game folder; links from Linux
-  installers are resolved on disk once all are made, and those leading out are removed.
-- Besides GOG, SlattyLauncher itself contacts only umu's game database (Settings → Privacy),
-  GitHub for Proton builds (Settings → Runners), SteamGridDB (Settings → Advanced) and Steam's
-  image servers and Web API (Settings → Steam), each off until turned on; play time reporting to GOG can be
-  turned off (Settings → Privacy).
-- Writes to installed games, saves and prefixes are staged and renamed. Every destructive action
-  either refuses when the situation looks wrong, or keeps a copy.
+The protections are told from the user's side in [SECURITY.md](../SECURITY.md); in the code:
+
+- no password field; tokens only in the keyring (Comet's short-lived 0600 handoff file aside), never
+  in process arguments or logs, wrapped in `Secret`;
+- network errors stripped of their address (`Error::network`), since some GOG endpoints take tokens
+  in the query string; the token sent only to `https://` addresses on `gog.com` (`http::gog_only`);
+- SlattyLauncher's folders 0700 and its database 0600, set again at every start;
+- every request SlattyLauncher itself sends to a host other than GOG's has a switch in Settings,
+  off until turned on, and a line in SECURITY.md, which also lists what the programs it starts
+  contact (umu asks Valve about its runtime, Comet talks to GOG);
+- no telemetry.
