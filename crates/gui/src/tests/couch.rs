@@ -498,6 +498,18 @@ fn the_hints_follow_the_focus_onto_the_shelves() {
     assert!(ui.find("Favorite").is_err());
 }
 
+/// Arrows and Enter alone (a television's remote, which sends keys) still type on the keyboard on
+/// the screen: Enter ends the search only after letters typed.
+#[test]
+fn arrows_and_enter_type_on_the_keyboard_on_the_screen() {
+    let mut app = couch_app();
+    key(&mut app, Key::Nav(Nav::Search));
+    key(&mut app, Key::Nav(Nav::Right));
+    key(&mut app, Key::Nav(Nav::Confirm));
+    assert_eq!(couch(&app).search, "w");
+    assert!(couch(&app).keyboard.is_some());
+}
+
 /// Typed on a real keyboard, the search ends with Enter, as it would elsewhere; A on a gamepad
 /// still presses the key with the focus.
 #[test]

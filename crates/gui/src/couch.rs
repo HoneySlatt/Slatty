@@ -160,6 +160,9 @@ pub struct Couch {
     pub search: String,
     /// The on-screen keyboard, while open: the key with the focus (row, column out of ten).
     pub keyboard: Option<(usize, usize)>,
+    /// Whether letters came from a real keyboard since its focus last moved: Enter then ends the
+    /// search, rather than press the key with the focus (a remote's arrows and OK).
+    pub typed: bool,
     /// Downloads: the row and its button with the focus.
     pub download: (usize, usize),
     /// The game page: its button with the focus, and the achievement with the focus while the
@@ -232,7 +235,9 @@ impl App {
             // A gamepad is read whatever window is in front: a game's moves are not the launcher's.
             CouchMsg::Nav(_) if self.away() => {}
             // Typed on a real keyboard, the search ends with Enter, as it would elsewhere.
-            CouchMsg::Key(Key::Nav(Nav::Confirm)) if self.typing() => {
+            CouchMsg::Key(Key::Nav(Nav::Confirm))
+                if self.typing() && self.couch.as_ref().is_some_and(|c| c.typed) =>
+            {
                 if let Some(couch) = &mut self.couch {
                     couch.keyboard = None;
                 }
@@ -582,6 +587,9 @@ impl App {
         };
         let (row, col) = couch.keyboard.unwrap_or((1, 0));
         let last = KEYS.len();
+        if matches!(nav, Nav::Up | Nav::Down | Nav::Left | Nav::Right) {
+            couch.typed = false;
+        }
         match nav {
             Nav::Up => couch.keyboard = Some((row.saturating_sub(1), col)),
             Nav::Down => couch.keyboard = Some(((row + 1).min(last), col)),
@@ -653,6 +661,7 @@ impl App {
         };
         if typing {
             couch.search.push(c);
+            couch.typed = true;
             self.searched();
             return Task::none();
         }
@@ -667,6 +676,7 @@ impl App {
             self.open_search();
             if let Some(couch) = &mut self.couch {
                 couch.search.push(c);
+                couch.typed = true;
             }
             self.searched();
         }
@@ -689,6 +699,7 @@ impl App {
             couch.tab = Tab::Library;
             couch.on_shelves = None;
             couch.keyboard = Some((1, 0));
+            couch.typed = false;
         }
     }
 
