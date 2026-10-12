@@ -73,7 +73,7 @@ partly not Latin, in no particular order: how long a view takes with the lists k
 scrolling), how long making the lists again takes (after any other message), and how much longer
 laying out takes than with 14 games. It times the couch mode too: its home page and library, a
 move of the focus (a message and a view, as each press of the d-pad), and its lists made again
-(2026-10-12: views 5–9 µs, a move 9 µs, lists 2.7 ms). A view must build well within a 16 ms frame. Layout times
+(2026-10-12: views 4–8 µs, a move 7 µs, lists 2.7 ms). A view must build well within a 16 ms frame. Layout times
 include the test renderer's start-up, so only the difference means something; and the test lays
 out every widget anew, while the application keeps what it laid out for a row in view. Scrolling is
 measured in the application itself (below).
@@ -105,7 +105,7 @@ profile:
 
 Reference, 2026-10-10 (Ryzen 7 5800X, Radeon RX 6900 XT, niri at 3840×2160, 240 Hz, scale 1.5),
 before covers and key art were drawn from copies made at their size (2026-10-12): the rows on
-covers and memory have not been measured again since.
+covers have not been measured again since; the last row was, on 2026-10-12.
 
 | | Result |
 |---|---|
@@ -119,6 +119,7 @@ covers and memory have not been measured again since.
 | Idle CPU, nothing happening | 0 ticks in 15 s |
 | Wake-ups at rest (2026-10-11, context switches of every thread in 60 s) | 120: one thread of the D-Bus library's pool, kept by the keyring's connection, wakes every 500 ms |
 | Cover copies at the card's size (2026-10-12) | 21 s (82 s of processor time, at the lowest priority) the first time for 10,000 covers made at 225 pixels, about 37 KB each; 16 ms to find them once made |
+| Start-up, scrolling and rest again (2026-10-12) | Library shown 86–91 ms after start, 125–130 ms with the program, its libraries, the profile and the shader caches dropped from the disk cache; scrolling p50 4.15 ms, p99 4.6–4.9 ms, none above 16.7 ms; `view` p50 0.17–0.19 ms, p99 0.29–0.33 ms; 116 MB resident after scrolling; at rest, 0 ticks and 120–122 wake-ups in 60 s |
 
 ## Tests that need real tools
 
