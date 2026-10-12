@@ -204,6 +204,8 @@ pub struct App {
     pub fatal: Option<String>,
     pub account: Option<AccountInfo>,
     pub account_epoch: u64,
+    /// Accounts forgotten since start, whose work may still write into their cache as it ends.
+    pub forgotten: Vec<String>,
     pub avatar: Option<String>,
     pub login_input: String,
     pub login_busy: bool,
@@ -334,6 +336,7 @@ impl Default for App {
             fatal: None,
             account: None,
             account_epoch: 0,
+            forgotten: Vec::new(),
             avatar: None,
             login_input: String::new(),
             login_busy: false,
@@ -437,7 +440,8 @@ pub enum Message {
     AskForget,
     CancelForget,
     ConfirmForget,
-    LoggedOut(Result<(), String>),
+    /// Signed out; with the account's id when it was forgotten too.
+    LoggedOut(Result<Option<String>, String>),
     SyncLibrary,
     GridScrolled(iced::widget::scrollable::Viewport),
     AchievementsScrolled(iced::widget::scrollable::Viewport),
@@ -724,6 +728,7 @@ impl App {
                 if epoch == self.account_epoch && self.account.is_some() {
                     return self.handle(*message);
                 }
+                self.forget_again();
             }
             Message::Booted(Ok(boot)) => {
                 self.core = Some(boot.core);
@@ -865,7 +870,10 @@ impl App {
                 self.forget_confirm = false;
                 return self.logout(true);
             }
-            Message::LoggedOut(Ok(())) => self.logged_out(),
+            Message::LoggedOut(Ok(forgotten)) => {
+                self.forgotten.extend(forgotten);
+                self.logged_out();
+            }
             Message::LoggedOut(Err(e)) => self.notify_error(e),
             Message::SyncLibrary => return self.sync_library(),
             Message::GridScrolled(viewport) => self.grid_view = Some(viewport),

@@ -48,6 +48,35 @@ fn forgetting_the_account_asks_first() {
     assert!(!app.forget_confirm, "Escape closes it too");
 }
 
+/// Work for an account forgotten meanwhile (a library sync, a cover) writes into its cache as it
+/// ends, after the cache was deleted: that is deleted again as its result comes, too late to be
+/// shown. Once signed in again, the account's cache is its own again.
+#[test]
+fn work_ending_after_its_account_was_forgotten_leaves_nothing_of_it() {
+    let mut app = library_app();
+    let dirs = app.core.clone().unwrap().dirs;
+    let cache = dirs.account_cache("77");
+    let late = |app: &mut App, epoch| {
+        std::fs::create_dir_all(cache.join("covers")).unwrap();
+        std::fs::write(cache.join("covers/1.jpg"), b"[FAKE]").unwrap();
+        let ended = Message::Image("https://images.gog.example/1.jpg".into(), None);
+        let _ = app.update(Message::AccountResult(epoch, Box::new(ended)));
+    };
+    let epoch = app.account_epoch;
+    let _ = app.update(Message::LoggedOut(Ok(Some("77".into()))));
+    late(&mut app, epoch);
+    assert!(!cache.exists(), "deleted again");
+
+    let account = AccountInfo {
+        user_id: "77".into(),
+        username: "[FAKE]".into(),
+    };
+    let _ = app.update(Message::LoggedIn(Ok((account, None))));
+    late(&mut app, epoch);
+    assert!(cache.join("covers/1.jpg").exists(), "its own again");
+    std::fs::remove_dir_all(cache).unwrap();
+}
+
 #[test]
 fn default_installation_path_is_browsed_or_typed_without_a_save_button() {
     use crate::settings::SettingsMsg;

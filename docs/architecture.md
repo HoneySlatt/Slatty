@@ -67,7 +67,9 @@ background tasks in its own module, and the views live under `ui/`.
 
 Work started for the signed-in account (`App::account_task`) carries the sign-in it started in,
 and its result is dropped once that sign-in has ended: a late answer never fills the page of the
-next account, nor that of the same account signed in again. Such work, and a game session's cloud,
+next account, nor that of the same account signed in again. For an account forgotten since
+(`App::forgotten`), what that work wrote into the account's cache as it ended is deleted again as
+its result is dropped (`App::forget_again`). Such work, and a game session's cloud,
 achievement and play time steps, load credentials with `Account::load_for`, which refuses when
 another account is now signed in.
 

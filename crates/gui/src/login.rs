@@ -64,6 +64,8 @@ impl App {
                 slatty_core::session::playtime(&core.db, Some(&info.user_id)).unwrap_or_default();
         }
         self.account_epoch += 1;
+        // Its cache is its own again, work of before included.
+        self.forgotten.retain(|id| *id != info.user_id);
         self.account = Some(info);
         self.login_open = false;
         let avatar = self.fetch_avatar();
@@ -87,11 +89,25 @@ impl App {
             async move {
                 Account::sign_out(&core.db, &core.dirs, forget)
                     .await
-                    .map(drop)
+                    .map(|account| forget.then_some(account.user_id))
                     .map_err(err)
             },
             Message::LoggedOut,
         )
+    }
+
+    /// Deletes again what work for an account forgotten meanwhile wrote into its cache as it ended
+    /// (`forget_data` deleted the cache before): a few files at most, the cache being gone.
+    pub fn forget_again(&self) {
+        let Some(core) = &self.core else {
+            return;
+        };
+        for user_id in &self.forgotten {
+            let cache = core.dirs.account_cache(user_id);
+            if cache.exists() {
+                let _ = std::fs::remove_dir_all(cache);
+            }
+        }
     }
 
     /// Forgets everything that belonged to the account. Installs and updates keep running.

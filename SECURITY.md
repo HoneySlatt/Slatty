@@ -57,7 +57,9 @@ account), and a game you run without isolation (it runs as you).
   `slatty auth logout --forget`) also deletes what SlattyLauncher keeps of the account: its name,
   play history (that of games added by hand, no account's, stays), cloud sync history, library
   cache and Comet's achievement records. Games, saves, prefixes and save backups are never
-  deleted.
+  deleted. What the interface's work for that account, still running, writes into its cache as it
+  ends (a library refresh, a cover) is deleted again then; not when the account is forgotten from
+  the command line while the interface runs.
 - **Account changes.** Work started for one account never uses another's tokens: after a switch,
   its requests are refused and its late results dropped. Downloads, updates and other changes to
   installed games are the exception: they act with the account signed in when they start, so an
