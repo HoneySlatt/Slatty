@@ -32,10 +32,17 @@ fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, 
     let install = Install::get(db, game_id)?
         .ok_or_else(|| Error::NotFound(format!("{game_id} is not installed")))?;
     let record = InstallRecord::load(dirs, game_id)?.ok_or_else(|| {
-        Error::Refused(format!(
-            "{} was not installed by slatty; use `forget` to drop it without touching its files",
-            install.title
-        ))
+        Error::Refused(if crate::store::is_local(game_id) {
+            format!(
+                "{} was added by hand: `slatty remove {game_id}` takes it out of the library",
+                install.title
+            )
+        } else {
+            format!(
+                "{} was not installed by slatty; use `forget` to drop it without touching its files",
+                install.title
+            )
+        })
     })?;
     if record.path.as_ref().is_some_and(|p| p != &install.path) {
         return Err(Error::Refused(
@@ -1243,6 +1250,22 @@ mod tests {
         assert!(update_pending(&env.db, "1").unwrap().is_none());
         assert!(env.game().join("Game.exe").exists());
         assert!(env.dirs.data.join("prefixes/1/drive_c/users").is_dir());
+    }
+
+    /// A game added by hand has nothing to verify, update or uninstall from GOG: the refusal names
+    /// `slatty remove`, which takes it out of the library, not `forget`, which refuses it.
+    #[test]
+    fn a_game_added_by_hand_is_pointed_to_remove() {
+        let env = Env::new("added", false);
+        let mut install = Install::get(&env.db, "1").unwrap().unwrap();
+        install.game_id = "local-1".into();
+        install.save(&env.db).unwrap();
+        let refused = uninstall(&env.db, &env.dirs, "local-1", false)
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("`slatty remove local-1`"), "{refused}");
+        assert!(!refused.contains("forget"), "{refused}");
+        assert!(env.game().join("Game.exe").exists());
     }
 
     #[test]
