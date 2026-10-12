@@ -598,6 +598,38 @@ fn a_build_a_game_or_the_default_uses_is_not_removed() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// An install queued, paused or cut off runs the build it was given once it is finished: neither
+/// an update's pruning nor Delete takes that build away meanwhile.
+#[test]
+fn a_build_an_unfinished_install_will_run_is_kept() {
+    let root = root("job-uses");
+    let dirs = Dirs::under(&root);
+    let db = Db::in_memory().unwrap();
+    let waiting = fake_build(&dirs, "GE-Proton11-5-x86_64");
+    let previous = fake_build(&dirs, "GE-Proton11-6-x86_64");
+    let newest = fake_build(&dirs, "GE-Proton11-7-x86_64");
+    crate::installer::InstallJob {
+        game_id: "1".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: root.join("games"),
+        directory: "[FAKE] Game".into(),
+        state: crate::installer::QUEUED.into(),
+        dlcs: Vec::new(),
+        proton: Some(waiting.clone()),
+    }
+    .save(&db)
+    .unwrap();
+    let result = remove(&db, &dirs, &waiting);
+    assert!(
+        matches!(&result, Err(Error::Refused(m)) if m.contains("[FAKE] Game")),
+        "{result:?}"
+    );
+    prune(&db, &dirs, Source::GeProton, &newest, Some(&previous)).unwrap();
+    assert!(waiting.join("proton").is_file(), "not pruned");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// A build shared with Steam is also reachable through Steam's link to it, which the user guide's
 /// own `--proton` example names: a game or the default set that way uses the build all the same,
 /// and keeps it when sharing is turned off.

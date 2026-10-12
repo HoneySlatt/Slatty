@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::install::Install;
-use crate::installer::{leads_inside, linux::stays_inside};
+use crate::installer::{InstallJob, leads_inside, linux::stays_inside};
 use crate::paths::Dirs;
 use crate::runner::Runner;
 
@@ -265,7 +265,7 @@ pub fn link_newest(dirs: &Dirs) -> Result<()> {
     Ok(())
 }
 
-/// The Proton builds games and the default are set to.
+/// The Proton builds games, installs not finished yet and the default are set to.
 fn used(db: &Db, dirs: &Dirs) -> Result<Vec<PathBuf>> {
     let mut used: Vec<PathBuf> = Install::list(db)?
         .into_iter()
@@ -274,6 +274,7 @@ fn used(db: &Db, dirs: &Dirs) -> Result<Vec<PathBuf>> {
             _ => None,
         })
         .collect();
+    used.extend(InstallJob::list(db)?.into_iter().filter_map(|j| j.proton));
     used.extend(crate::settings::default_proton(db)?);
     Ok(used.iter().map(|p| own_path(dirs, p)).collect())
 }
@@ -680,13 +681,24 @@ pub fn remove(db: &Db, dirs: &Dirs, path: &Path) -> Result<()> {
             source.name()
         )));
     }
-    let users: Vec<String> = Install::list(db)?
+    let mut users: Vec<String> = Install::list(db)?
         .into_iter()
         .filter(
             |i| matches!(&i.runner, Runner::Umu { proton, .. } if own_path(dirs, proton) == path),
         )
         .map(|i| i.title)
         .collect();
+    // An install not finished yet runs the build it was given; its folder names it.
+    users.extend(
+        InstallJob::list(db)?
+            .into_iter()
+            .filter(|j| {
+                j.proton
+                    .as_deref()
+                    .is_some_and(|p| own_path(dirs, p) == path)
+            })
+            .map(|j| j.directory),
+    );
     if !users.is_empty() {
         return Err(Error::Refused(format!(
             "{} runs {}; choose another Proton for it first",
