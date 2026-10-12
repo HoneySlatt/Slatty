@@ -430,6 +430,26 @@ fn the_cover_does_not_stand_in_while_the_key_art_downloads() {
     );
 }
 
+/// GOG's key art arriving once the page shows the user's own background does not fade that one in
+/// again: it stays as it is, GOG's unseen behind it.
+#[test]
+fn gogs_key_art_arriving_leaves_a_background_of_ones_own_as_it_is() {
+    let mut app = library_app();
+    let art = "https://images.example/[FAKE]-art.jpg".to_string();
+    app.library[2].background = Some(art.clone());
+    app.customs.insert(
+        "3".into(),
+        slatty_core::custom::Custom {
+            background: Some("/data/[FAKE]-mine.jpg".into()),
+            ..Default::default()
+        },
+    );
+    let _ = app.update(Message::Select("3".into()));
+    settle(&mut app);
+    let _ = app.update(Message::Image(art, Some("/images/art.jpg".into())));
+    assert!(!app.animating());
+}
+
 #[test]
 fn the_session_shows_in_a_drawer_with_stop() {
     let mut app = library_app();

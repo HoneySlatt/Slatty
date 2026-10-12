@@ -933,8 +933,16 @@ impl App {
                 }
             }
             Message::Image(url, Some(path)) => {
-                // The key art of the open game fades in once downloaded.
-                if self.selected_game().and_then(|g| g.background.as_ref()) == Some(&url) {
+                // The key art of the open game fades in once downloaded, unless the user's own
+                // background shows in its place.
+                if let Some(g) = self.selected_game()
+                    && g.background.as_ref() == Some(&url)
+                    && self
+                        .customs
+                        .get(&g.id)
+                        .and_then(|c| c.background.as_ref())
+                        .is_none()
+                {
                     self.now = Instant::now();
                     self.art_shown = Self::fade_in(self.now);
                 }
