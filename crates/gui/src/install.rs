@@ -239,10 +239,11 @@ impl App {
                                 }
                             }
                             // One the launcher stopped waited in the queue, not among those
-                            // stopped: listed there now, as at the next start.
+                            // stopped: listed there now, as at the next start, its pass gone.
                             if !self.interrupted.iter().any(|(id, _)| *id == game_id) {
                                 self.sync_interrupted(&game_id);
                             }
+                            self.goes_on.retain(|id| *id != game_id);
                         }
                         InstallView::Failed(e)
                     }
@@ -288,6 +289,8 @@ impl App {
                 let Some(InstallView::Ready(info)) = self.install_views.get(&game_id) else {
                     return Task::none();
                 };
+                // Out of the queue: queued again, it gets its pass back if it had started.
+                self.goes_on.retain(|e| *e != game_id);
                 // Asked for by Download now: it starts even while a game runs.
                 let now = self.starting_now.take_if(|id| *id == game_id).is_some();
                 let proton = match (info.platform, info.proton.clone()) {
@@ -372,6 +375,7 @@ impl App {
                 // Nor is it started by a plan for its resume answering before the discard ends.
                 self.auto_resume.take_if(|id| *id == game_id);
                 self.start_planned.remove(&game_id);
+                self.goes_on.retain(|id| *id != game_id);
                 self.install_views
                     .insert(game_id.clone(), InstallView::Planning);
                 let id = game_id.clone();

@@ -319,7 +319,8 @@ pub struct App {
     pub starting_now: Option<String>,
     /// The queue entries of downloads the launcher stopped (paused for a game or for Download now,
     /// cut off by a close): each goes on by itself, first in line, even while a download paused on
-    /// request holds the rest of the queue.
+    /// request holds the rest of the queue. An install keeps its mark while planned to start, until
+    /// it runs.
     pub goes_on: Vec<String>,
     /// Whether downloads pause while a game runs (Settings → Installs).
     pub pause_while_playing: bool,

@@ -993,6 +993,47 @@ fn a_stopped_download_that_cannot_resume_after_a_restart_is_listed_as_failed() {
         app.interrupted,
         [("6".to_string(), crate::Interrupted::Failed)]
     );
+    assert!(app.goes_on.is_empty());
+}
+
+/// A download the launcher stopped, saved as started in the queue, still goes on beside a download
+/// paused on request when GOG could not be reached as it was planned to start: its pass lasts
+/// until it runs.
+#[test]
+fn a_stopped_download_gog_could_not_plan_still_goes_on() {
+    use slatty_core::installer::{DOWNLOADING, InstallJob};
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    InstallJob {
+        game_id: "6".into(),
+        build_id: "1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 6".into(),
+        state: DOWNLOADING.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    let waiting =
+        crate::boot::downloads_from(vec!["6".into()], InstallJob::list(&db).unwrap(), &[]);
+    app.queue = waiting.queue;
+    app.goes_on = waiting.goes_on;
+    // Installers paused on request hold the rest of the queue.
+    app.offline_stopped = vec![("8".into(), None)];
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("6"));
+    let _ = app.update(Message::Install(InstallMsg::Unreachable(
+        "6".into(),
+        "[FAKE] network error".into(),
+    )));
+    assert_eq!(app.queue, ["6"]);
+    let _ = app.update(Message::Install(InstallMsg::Retry));
+    assert_eq!(app.auto_resume.as_deref(), Some("6"), "planned again");
+    // Discarded meanwhile, it keeps no pass a later download of the game would get.
+    let _ = app.update(Message::Install(InstallMsg::Discard("6".into())));
+    assert!(app.goes_on.is_empty());
 }
 
 /// Download now pressed while a download pauses on request starts its row once that one is

@@ -156,7 +156,9 @@ impl App {
             self.drag = None;
             self.queue.insert(at.min(self.queue.len()), id.clone());
             self.save_queue();
-            self.goes_on.push(id);
+            if !self.goes_on.contains(&id) {
+                self.goes_on.push(id);
+            }
         }
     }
 
@@ -381,8 +383,10 @@ impl App {
         self.drag = None;
         let game_id = self.queue.remove(0);
         self.save_queue();
-        self.goes_on.retain(|e| *e != game_id);
+        // An install keeps its pass until it runs (`InstallMsg::Start`): planned first, it goes
+        // back first in the queue when GOG cannot be reached.
         if let Some(id) = of_entry(&game_id) {
+            self.goes_on.retain(|e| *e != game_id);
             return self.update_offline(OfflineMsg::Start(id.to_owned()));
         }
         match self.install_views.remove(&game_id) {
