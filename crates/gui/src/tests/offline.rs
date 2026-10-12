@@ -825,6 +825,27 @@ fn installers_that_never_started_are_resumed_as_never_started() {
     assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
 }
 
+/// Installers resumed before their run began, while another download runs, wait as never started:
+/// no pass past a download paused on request, as after a restart.
+#[test]
+fn installers_resumed_before_they_began_wait_as_never_started() {
+    let mut app = library_app();
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.start_next();
+    let _ = app.update(Message::Offline(OfflineMsg::Done(
+        "5".into(),
+        Err(Some(("[FAKE] permission denied".into(), false))),
+    )));
+    installing_6(&mut app);
+    let _ = app.update(Message::Offline(OfflineMsg::Resume("5".into())));
+    assert_eq!(app.queue, [entry("5")]);
+    let jobs = OfflineJob::list(&app.core.as_ref().unwrap().db).unwrap();
+    let waiting = crate::boot::downloads_from(app.queue.clone(), Vec::new(), &jobs);
+    assert!(app.goes_on.is_empty());
+    assert_eq!(app.goes_on, waiting.goes_on);
+}
+
 #[test]
 fn installers_removed_before_download_now_started_them_wait_for_a_pause_once_queued_again() {
     use crate::downloads::DownloadsMsg;

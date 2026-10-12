@@ -347,28 +347,33 @@ impl App {
                 }
             }
             OfflineMsg::Resume(game_id) => {
-                // Saved as started, as if cut off: it still waits first after a restart, and its
-                // run checks that its folder is still there (a drive unplugged). One stopped
-                // before it began (its folder could not be made) stays queued.
+                // Saved as started, as if cut off: it still waits first after a restart, goes on
+                // beside a download paused on request, and its run checks that its folder is still
+                // there (a drive unplugged). One stopped before it began (its folder could not be
+                // made) stays queued, as never started.
                 let saved = OfflineJob::load(&core.db, &game_id).and_then(|job| {
-                    job.filter(|j| j.state != QUEUED).map_or(Ok(()), |job| {
+                    job.filter(|j| j.state != QUEUED).map_or(Ok(false), |job| {
                         OfflineJob {
                             state: DOWNLOADING.into(),
                             ..job
                         }
                         .save_if_idle(&core.db, &core.dirs)
+                        .map(|()| true)
                     })
                 });
-                if let Err(e) = saved {
-                    self.notify_error(e.to_string());
-                    return Task::none();
-                }
+                let started = match saved {
+                    Ok(started) => started,
+                    Err(e) => {
+                        self.notify_error(e.to_string());
+                        return Task::none();
+                    }
+                };
                 self.offline_stopped.retain(|(id, _)| *id != game_id);
                 self.drag = None;
                 self.queue.retain(|e| *e != entry(&game_id));
                 self.queue.insert(0, entry(&game_id));
                 self.save_queue();
-                if !self.goes_on.contains(&entry(&game_id)) {
+                if started && !self.goes_on.contains(&entry(&game_id)) {
                     self.goes_on.push(entry(&game_id));
                 }
                 // Asked for, it starts at once when nothing downloads, as an install's Resume does,
