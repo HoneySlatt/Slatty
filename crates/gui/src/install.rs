@@ -363,6 +363,7 @@ impl App {
                 }
                 // Nor is it started by a plan for its resume answering before the discard ends.
                 self.auto_resume.take_if(|id| *id == game_id);
+                self.start_planned.remove(&game_id);
                 self.install_views
                     .insert(game_id.clone(), InstallView::Planning);
                 let id = game_id.clone();

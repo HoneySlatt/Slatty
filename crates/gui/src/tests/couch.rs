@@ -282,6 +282,27 @@ fn installs_asked_one_after_the_other_all_start() {
 }
 
 #[test]
+fn a_download_discarded_while_resuming_is_not_started_by_its_plan() {
+    let mut app = couch_app();
+    app.interrupted = vec![("5".into(), crate::Interrupted::Paused)];
+    let _ = app.update(Message::Couch(CouchMsg::Install("5".into())));
+    let _ = app.update(Message::Install(InstallMsg::Discard("5".into())));
+    // GOG answers before the discard ends.
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(crate::install::PlanInfo {
+            resumable: true,
+            ..fake_plan()
+        }),
+    )));
+    assert!(app.installing().is_none(), "not started");
+    assert!(!app.queue.contains(&"5".to_string()), "not queued");
+    let _ = app.update(Message::Install(InstallMsg::Discarded("5".into(), Ok(()))));
+    assert!(app.installing().is_none());
+    assert!(!app.install_views.contains_key("5"));
+}
+
+#[test]
 fn an_installed_game_plays_from_its_page() {
     let mut app = couch_app();
     app.launch_options.insert("3".into(), Vec::new());
