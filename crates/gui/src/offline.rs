@@ -305,12 +305,34 @@ impl App {
                 }
             }
             OfflineMsg::Resume(game_id) => {
+                // Saved, so that it still waits in the queue after a restart.
+                let saved = OfflineJob::load(&core.db, &game_id).and_then(|job| {
+                    job.map_or(Ok(()), |job| {
+                        OfflineJob {
+                            state: QUEUED.into(),
+                            ..job
+                        }
+                        .save(&core.db)
+                    })
+                });
+                if let Err(e) = saved {
+                    self.notify_error(e.to_string());
+                    return Task::none();
+                }
                 self.offline_stopped.retain(|(id, _)| *id != game_id);
                 self.drag = None;
                 self.queue.retain(|e| *e != entry(&game_id));
                 self.queue.insert(0, entry(&game_id));
                 self.save_queue();
-                return self.start_next();
+                // Asked for, it starts at once when nothing downloads, as an install's Resume does,
+                // whatever else is paused.
+                if self.downloads_held()
+                    || self.auto_resume.is_some()
+                    || self.downloads_waiting.is_some()
+                {
+                    return Task::none();
+                }
+                return self.start_first();
             }
             OfflineMsg::Remove(game_id) => {
                 if self

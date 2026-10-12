@@ -253,6 +253,50 @@ fn paused_installers_hold_the_queue_until_resumed() {
     assert_eq!(app.queue, ["6"]);
 }
 
+/// Paused installers, as the core leaves them.
+fn paused_job(app: &mut App, game_id: &str) {
+    let db = app.core.as_ref().unwrap().db.clone();
+    queued_job(app, game_id);
+    let job = OfflineJob::load(&db, game_id).unwrap().unwrap();
+    OfflineJob {
+        state: PAUSED.into(),
+        ..job
+    }
+    .save(&db)
+    .unwrap();
+    app.offline_stopped.push((game_id.into(), None));
+}
+
+#[test]
+fn resumed_installers_start_beside_a_paused_install_and_stay_resumed() {
+    let mut app = library_app();
+    paused_job(&mut app, "5");
+    app.interrupted
+        .push(("6".into(), crate::Interrupted::Paused));
+    let _ = app.update(Message::Offline(OfflineMsg::Resume("5".into())));
+    assert!(app.offline_stopped.is_empty());
+    assert!(
+        app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"),
+        "the installers asked for start"
+    );
+
+    // Resumed while an install runs: first in the queue, and still there after a restart.
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    paused_job(&mut app, "5");
+    installing_6(&mut app);
+    let _ = app.update(Message::Offline(OfflineMsg::Resume("5".into())));
+    assert!(app.offline_run.is_none());
+    assert_eq!(app.queue, [entry("5")]);
+    let (queue, stopped) = crate::boot::downloads_from(
+        app.queue.clone(),
+        Vec::new(),
+        &OfflineJob::list(&db).unwrap(),
+    );
+    assert_eq!(queue, [entry("5")]);
+    assert!(stopped.is_empty());
+}
+
 #[test]
 fn installers_out_of_reach_of_gog_keep_their_place() {
     let mut app = library_app();
