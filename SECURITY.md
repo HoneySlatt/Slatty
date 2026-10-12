@@ -152,9 +152,9 @@ show game titles and achievement names on a lock screen.
 - **Sizes.** Limits apply before memory or disk is taken: network answers (256 MiB), manifests once
   inflated (512 MiB), download chunks (64 MiB), a game's own `goggame-*.info` and `start.sh`
   (16 MiB), each Linux installer entry (the size its installer gives), a library listing (10,000
-  pages). Not yet bounded: a cloud save is held whole in memory, up to 4 GiB as it downloads and
-  without a limit as it uploads; the archive or Linux installer of a game added by hand is unpacked
-  with each of its files in memory, and a `.tar.xz` one with whatever dictionary it names.
+  pages), the dictionary of a `.tar.xz` added by hand (256 MiB). Not yet bounded: a cloud save is
+  held whole in memory, up to 4 GiB as it downloads and without a limit as it uploads; the `.zip`
+  archive or Linux installer of a game added by hand is unpacked with each of its files in memory.
 - **Content.** Galaxy chunks and files are checked against the MD5 sums of GOG's manifests, Linux
   installer entries against their size and CRC-32, files rebuilt from binary patches against GOG's
   sums, Proton archives against the SHA-512 sum published with their release. These catch a

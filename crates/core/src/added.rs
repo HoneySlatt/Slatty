@@ -417,7 +417,7 @@ async fn unpack_into(
         // The progress reaches the caller from the thread unpacking.
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let work = tokio::task::spawn_blocking(move || {
-            crate::protons::unpack_tar(&from, &to, false, &cancel, &|done, total| {
+            crate::protons::unpack_tar(&from, &to, false, false, &cancel, &|done, total| {
                 let _ = tx.send((done, total));
             })
         });

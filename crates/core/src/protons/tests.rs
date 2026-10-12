@@ -93,6 +93,54 @@ fn xz_blocks(data: &[u8]) -> Vec<u8> {
     e.finish().unwrap()
 }
 
+/// An archive of a game added by hand, decoded on one thread, may not name a dictionary larger
+/// than `XZ_MEMORY_KIB`: a crafted one naming 512 MiB is refused, not given that memory; one made
+/// as xz makes them is unpacked.
+#[test]
+fn an_archive_naming_a_huge_dictionary_is_refused() {
+    let root = root("huge-dictionary");
+    let mut options = lzma_rust2::XzOptions::default();
+    options.lzma_options.dict_size = lzma_rust2::DICT_SIZE_MIN;
+    let mut e = lzma_rust2::XzWriter::new(Vec::new(), options).unwrap();
+    e.write_all(&build_tar(|_| {})).unwrap();
+    let made = e.finish().unwrap();
+    let archive = root.join("[FAKE] game.tar.xz");
+    std::fs::write(&archive, &made).unwrap();
+    let cancel = CancellationToken::new();
+    unpack_tar(
+        &archive,
+        &root.join("ok"),
+        false,
+        false,
+        &cancel,
+        &|_, _| {},
+    )
+    .unwrap();
+    assert!(root.join("ok/GE-Proton11-7/proton").is_file());
+
+    // The block header follows the stream's 12 bytes: its size, its flags (one filter, no sizes
+    // here), then LZMA2's id, the size of its properties and the dictionary's, and its CRC32.
+    let mut huge = made;
+    let size = (huge[12] as usize + 1) * 4;
+    assert_eq!(huge[13] & 0xc3, 0, "one filter, no sizes");
+    assert_eq!(&huge[14..16], [0x21, 0x01], "LZMA2");
+    huge[16] = 34; // 512 MiB
+    let mut crc = flate2::Crc::new();
+    crc.update(&huge[12..12 + size - 4]);
+    huge[12 + size - 4..12 + size].copy_from_slice(&crc.sum().to_le_bytes());
+    std::fs::write(&archive, &huge).unwrap();
+    let refused = unpack_tar(
+        &archive,
+        &root.join("huge"),
+        false,
+        false,
+        &cancel,
+        &|_, _| {},
+    );
+    assert!(refused.is_err(), "{refused:?}");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 fn sha512_hex(data: &[u8]) -> String {
     crate::fsutil::hex(&Sha512::digest(data))
 }

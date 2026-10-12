@@ -904,15 +904,23 @@ fn unpack(
     cancel: &CancellationToken,
     progress: &dyn Fn(u64, u64),
 ) -> Result<()> {
-    unpack_tar(archive, to, true, cancel, progress)
+    unpack_tar(archive, to, true, true, cancel, progress)
 }
 
+/// What one block's dictionary may take as an archive is decoded on one thread, in KiB: four
+/// times what `xz -9` needs (64 MiB). Only a crafted archive names more, refused rather than given
+/// that memory.
+const XZ_MEMORY_KIB: u32 = 256 << 10;
+
 /// Unpacks a `.tar.gz` or `.tar.xz` into `to`, made again empty; with `strip`, without the
-/// folder each path starts with. What `unpack` leaves out, this does too.
+/// folder each path starts with. What `unpack` leaves out, this does too. With `parallel`, for a
+/// Proton build whose published sum was checked, an archive made in blocks is decoded a block per
+/// thread; another one (a game added by hand) is decoded on one thread, its dictionary bounded.
 pub(crate) fn unpack_tar(
     archive: &Path,
     to: &Path,
     strip: bool,
+    parallel: bool,
     cancel: &CancellationToken,
     progress: &dyn Fn(u64, u64),
 ) -> Result<()> {
@@ -937,23 +945,33 @@ pub(crate) fn unpack_tar(
         // thread, each holding its block in memory: four threads decode a 1.1 GB build 4.2
         // times faster with about 300 MB at most. Large blocks (`xz -9` makes 192 MiB ones), or a
         // single one, are decoded on one thread as they stream.
-        let workers = std::thread::available_parallelism().map_or(1, |n| n.get().min(4)) as u32;
-        let again = std::fs::File::open(archive).map_err(|e| Error::io(context(), e))?;
-        let threaded = lzma_rust2::XzReaderMt::new(
-            std::io::BufReader::new(Counting {
-                inner: again,
-                read: read.clone(),
-            }),
-            true,
-            workers,
-        )
-        .map_err(|e| Error::io(context(), e))?;
-        let blocks = threaded.block_count() as u64;
-        if blocks > 1 && total / blocks <= 32 << 20 {
-            Box::new(threaded)
+        let threaded = if parallel {
+            let workers = std::thread::available_parallelism().map_or(1, |n| n.get().min(4)) as u32;
+            let again = std::fs::File::open(archive).map_err(|e| Error::io(context(), e))?;
+            let threaded = lzma_rust2::XzReaderMt::new(
+                std::io::BufReader::new(Counting {
+                    inner: again,
+                    read: read.clone(),
+                }),
+                true,
+                workers,
+            )
+            .map_err(|e| Error::io(context(), e))?;
+            let blocks = threaded.block_count() as u64;
+            (blocks > 1 && total / blocks <= 32 << 20).then_some(threaded)
         } else {
-            read.store(0, std::sync::atomic::Ordering::Relaxed);
-            Box::new(lzma_rust2::XzReader::new(counting, true))
+            None
+        };
+        match threaded {
+            Some(threaded) => Box::new(threaded),
+            None => {
+                read.store(0, std::sync::atomic::Ordering::Relaxed);
+                Box::new(lzma_rust2::XzReader::new_mem_limit(
+                    counting,
+                    true,
+                    XZ_MEMORY_KIB,
+                ))
+            }
         }
     } else {
         Box::new(flate2::read::GzDecoder::new(counting))
