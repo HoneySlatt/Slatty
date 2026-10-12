@@ -333,7 +333,12 @@ impl App {
                             format!("The installers of {title}: {e}"),
                         );
                         self.offline_stopped.push((game_id, Some(e)));
-                        return Task::batch([failed, self.start_next()]);
+                        // What Download now asked for while it stopped starts, game or not.
+                        let next = match self.starting_now {
+                            Some(_) => self.start_asked_now(),
+                            None => self.start_next(),
+                        };
+                        return Task::batch([failed, next]);
                     }
                 }
             }

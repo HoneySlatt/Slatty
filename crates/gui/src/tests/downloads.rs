@@ -891,6 +891,45 @@ fn download_now_while_a_download_pauses_for_a_game_starts_its_row() {
     assert_eq!(app.queue, ["6"]);
 }
 
+/// Download now pressed while a download pauses for a game starts its row also when that download
+/// ends on an error rather than paused.
+#[test]
+fn download_now_starts_its_row_when_the_download_pausing_for_a_game_fails() {
+    use super::offline::{installing_6, paused_install_job, queued_job};
+    use crate::downloads::DownloadsMsg;
+    use crate::offline::entry;
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    play_3(&mut app);
+    queued_job(&app, "5");
+    app.queue.push(entry("5"));
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("5"))));
+    let _ = app.update(Message::Install(InstallMsg::Done(
+        "6".into(),
+        Err(Some(crate::install::Failure(
+            "[FAKE] disk error".into(),
+            false,
+        ))),
+    )));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+
+    // Installers failing so, the same.
+    let mut app = library_app();
+    queued_job(&app, "5");
+    queued_job(&app, "8");
+    app.queue = vec![entry("5")];
+    let _ = app.start_next();
+    app.queue = vec![entry("8")];
+    play_3(&mut app);
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("8"))));
+    let _ = app.update(Message::Offline(crate::offline::OfflineMsg::Done(
+        "5".into(),
+        Err(Some(("[FAKE] disk error".into(), false))),
+    )));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "8"));
+}
+
 /// A download the user is pausing stays paused: neither a game nor Download now takes it over.
 #[test]
 fn a_download_pausing_on_request_stays_paused() {
