@@ -533,7 +533,21 @@ fn the_queue_goes_on_once_nothing_downloads_or_waits() {
 #[test]
 fn a_cut_off_download_that_cannot_resume_waits_instead_of_being_retried() {
     use crate::Interrupted;
+    use slatty_core::installer::{DOWNLOADING, FAILED, InstallJob};
     let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    InstallJob {
+        game_id: "5".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 5".into(),
+        state: DOWNLOADING.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
     app.interrupted = vec![("5".into(), Interrupted::Download)];
     app.queue = vec!["6".into()];
     // Resumed first, before the queue.
@@ -546,6 +560,8 @@ fn a_cut_off_download_that_cannot_resume_waits_instead_of_being_retried() {
     assert_eq!(app.interrupted, [("5".to_string(), Interrupted::Failed)]);
     assert!(app.queue.is_empty(), "the queue goes on");
     assert_eq!(app.auto_resume.as_deref(), Some("6"));
+    // Nor tried again at the next start: only when asked.
+    assert_eq!(InstallJob::load(&db, "5").unwrap().unwrap().state, FAILED);
 }
 
 /// After a restart the queue is planned again before it starts: the queue going on meanwhile (a

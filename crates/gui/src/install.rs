@@ -209,10 +209,21 @@ impl App {
                                 self.title_of(&game_id)
                             ));
                             // It waits for Resume or Discard, rather than being tried again and
-                            // again, without holding the queue.
+                            // again, without holding the queue; at the next start too.
                             for (id, kind) in &mut self.interrupted {
                                 if *id == game_id && *kind == crate::Interrupted::Download {
                                     *kind = crate::Interrupted::Failed;
+                                }
+                            }
+                            if let Ok(Some(job)) = InstallJob::load(&core.db, &game_id)
+                                && !job.is_update()
+                            {
+                                let failed = InstallJob {
+                                    state: installer::FAILED.into(),
+                                    ..job
+                                };
+                                if let Err(e) = failed.save(&core.db) {
+                                    self.notify_error(e.to_string());
                                 }
                             }
                         }
