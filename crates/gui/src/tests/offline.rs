@@ -710,6 +710,49 @@ fn a_download_the_user_pauses_still_holds_the_queue() {
     assert_eq!(app.queue, ["6"]);
 }
 
+/// The row Download now asked for during a game starts once the download it paused stopped, though
+/// another row was put first meanwhile; the stopped download goes right after it.
+#[test]
+fn download_now_during_a_game_starts_its_row_though_another_came_first() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    queued_job(&app, "5");
+    queued_job(&app, "8");
+    app.queue = vec![entry("5")];
+    let _ = app.start_next();
+    paused_job(&mut app, "9");
+    app.queue = vec![entry("8")];
+    app.launch_options.insert("3".into(), Vec::new());
+    let _ = app.update(Message::Play("3".into()));
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("8"))));
+    let _ = app.update(Message::Offline(OfflineMsg::Resume("9".into())));
+    assert_eq!(app.queue, [entry("9"), entry("8")]);
+    // The row said to be starting is the one asked for, on both screens.
+    let rows = app.download_rows();
+    let eight = rows.iter().find(|r| r.game_id == "8").unwrap();
+    assert_eq!(eight.status, "Starting…");
+    app.page = Page::Downloads;
+    app.selected = None;
+    let mut ui = render(&app);
+    let mut middle = |wanted: &str| {
+        use iced_test::selector::Candidate;
+        ui.find(|c: Candidate<'_>| match c {
+            Candidate::Text {
+                content, bounds, ..
+            } if content == wanted => Some(bounds.center_y()),
+            _ => None,
+        })
+        .unwrap()
+    };
+    let starting = middle("Starting…");
+    let row = middle("[FAKE] Game 8 · offline installers");
+    assert!((starting - row).abs() < 1.0, "{starting} and {row}");
+    drop(ui);
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "8"));
+    assert_eq!(app.queue, [entry("5"), entry("9")]);
+}
+
 /// Installers stopped before their run began (their folder could not be made, the keyring locked)
 /// are resumed as never started: their run makes the folder rather than take it for a drive gone.
 #[test]

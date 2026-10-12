@@ -929,6 +929,34 @@ fn a_download_pausing_on_request_stays_paused() {
     assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
 }
 
+/// Download now's row taken out while the download running pauses for a game: the paused download
+/// waits for the game to close, as it does without Download now.
+#[test]
+fn download_now_taken_out_while_a_download_pauses_for_a_game_starts_nothing() {
+    use super::offline::queued_job;
+    use crate::downloads::{DownloadsMsg, Preempt};
+    use crate::offline::{OfflineMsg, entry};
+    let mut app = library_app();
+    queued_job(&app, "5");
+    queued_job(&app, "8");
+    app.queue = vec![entry("5")];
+    let _ = app.start_next();
+    app.queue = vec![entry("8")];
+    play_3(&mut app);
+    assert_eq!(app.preempted, Some((entry("5"), Preempt::Play)));
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("8"))));
+    let _ = app.update(Message::Downloads(DownloadsMsg::Remove(entry("8"))));
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    assert!(
+        app.offline_run.is_none(),
+        "nothing starts while the game runs"
+    );
+    assert_eq!(app.queue, [entry("5")]);
+    assert_eq!(app.goes_on, [entry("5")]);
+    let _ = app.update(Message::Playing(crate::play::PlayMsg::Done(Ok(()))));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+}
+
 /// Download now pressed while a download pauses on request starts its row once that one is
 /// paused, a game running or not, as it does when nothing downloads.
 #[test]

@@ -504,7 +504,7 @@ impl App {
                         row_title(title),
                         text(size).size(15),
                         // Asked for, while the download running stops; one at a time.
-                        if starting && i == 0 {
+                        if starting && self.starting_now.as_deref() == Some(entry) {
                             container(text("Starting…").size(15).color(tokens().muted))
                                 .padding([10, 16])
                                 .into()

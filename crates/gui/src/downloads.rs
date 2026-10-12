@@ -223,19 +223,29 @@ impl App {
             }
         }
         self.drag = None;
-        let at = match why {
-            Preempt::StartNow => 1.min(self.queue.len()),
-            Preempt::Play => 0,
+        // The row Download now asked for goes first, wherever it was put meanwhile, the stopped
+        // download right after it; taken out, the stopped download waits as if paused for a game.
+        let asked = match why {
+            Preempt::StartNow => self
+                .starting_now
+                .as_ref()
+                .and_then(|row| self.queue.iter().position(|e| e == row)),
+            Preempt::Play => None,
         };
-        self.queue.insert(at, entry.to_owned());
+        if let Some(i) = asked {
+            let row = self.queue.remove(i);
+            self.queue.insert(0, row);
+        }
+        self.queue
+            .insert(usize::from(asked.is_some()), entry.to_owned());
         self.save_queue();
         if !self.goes_on.iter().any(|e| e == entry) {
             self.goes_on.push(entry.to_owned());
         }
-        let next = match why {
-            Preempt::StartNow => self.start_first(),
+        let next = match asked {
+            Some(_) => self.start_first(),
             // The game may have closed before the download stopped.
-            Preempt::Play => self.start_next(),
+            None => self.start_next(),
         };
         // An install is planned again, for its size in the queue.
         let plan = match of_entry(entry) {

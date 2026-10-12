@@ -1001,9 +1001,10 @@ impl App {
                 "Remove",
                 Message::Downloads(DownloadsMsg::Remove(entry.clone())),
             );
-            let (status, buttons) = match (starting, place) {
-                (true, 0) => ("Starting…".to_string(), Vec::new()),
-                (true, _) => (format!("Queued, {} in line{size}", place + 1), vec![remove]),
+            let asked = self.starting_now.as_ref() == Some(entry);
+            let (status, buttons) = match (starting, asked) {
+                (true, true) => ("Starting…".to_string(), Vec::new()),
+                (true, false) => (format!("Queued, {} in line{size}", place + 1), vec![remove]),
                 (false, _) => (
                     format!("Queued, {} in line{size}", place + 1),
                     vec![
