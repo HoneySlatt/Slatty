@@ -851,3 +851,42 @@ fn the_pause_while_playing_setting_shows_in_installs() {
     let _ = app.update(Message::Settings(SettingsMsg::Show(Section::Installs)));
     assert!(render(&app).find("Pause downloads while playing").is_ok());
 }
+
+/// The download running takes a moment to stop: the tab says so at once.
+#[test]
+fn download_now_shows_at_once_what_it_is_doing() {
+    use super::offline::{installing_6, paused_install_job, queued_job};
+    use crate::downloads::DownloadsMsg;
+    use crate::offline::entry;
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    queued_job(&app, "5");
+    app.queue = vec!["7".into(), entry("5")];
+    app.page = Page::Downloads;
+    app.selected = None;
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("5"))));
+    let mut ui = render(&app);
+    snapshot(&mut ui, "download-now-pausing");
+    assert!(ui.find("Pausing…").is_ok());
+    assert!(ui.find("Starting…").is_ok());
+    // The other row cannot ask the same meanwhile.
+    ui.click("Download now").unwrap();
+    assert!(ui.into_messages().next().is_none());
+
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    let mut ui = render(&app);
+    assert!(ui.find("Pausing…").is_err());
+    assert!(ui.find("Starting…").is_err());
+}
+
+#[test]
+fn a_game_starting_shows_the_download_pausing_for_it() {
+    use super::offline::installing_6;
+    let mut app = library_app();
+    installing_6(&mut app);
+    play_3(&mut app);
+    app.page = Page::Downloads;
+    app.selected = None;
+    assert!(render(&app).find("Pausing while a game runs…").is_ok());
+}

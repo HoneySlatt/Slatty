@@ -11,7 +11,7 @@ use super::format::*;
 use super::game::cancel_prompt;
 use super::note;
 use super::widgets::{round_button, vertical_rule};
-use crate::downloads::{DownloadsMsg, ROW_HEIGHT, ROW_SPACING};
+use crate::downloads::{DownloadsMsg, Preempt, ROW_HEIGHT, ROW_SPACING};
 use crate::icons::{Icon, icon};
 use crate::install::{Cancelling, InstallMsg, InstallView};
 use crate::maintenance::MaintenanceMsg;
@@ -231,13 +231,17 @@ impl App {
             .map(|s| p.bytes_total.saturating_sub(p.bytes_done) as f64 / s);
         let stat = |s: String| text(s).size(15).width(Length::Fill);
         let msg = |m: fn(String) -> InstallMsg| Message::Install(m(id.to_string()));
-        let actions = (*cancelling == Cancelling::No).then(|| {
-            row![
-                round_button(Icon::Pause, msg(InstallMsg::Pause)),
-                round_button(Icon::X, msg(InstallMsg::AskCancel)),
-            ]
-            .spacing(10)
-        });
+        let actions: Option<Element<'a, Message>> = match self.pausing(id) {
+            Some(why) => Some(why),
+            None => (*cancelling == Cancelling::No).then(|| {
+                row![
+                    round_button(Icon::Pause, msg(InstallMsg::Pause)),
+                    round_button(Icon::X, msg(InstallMsg::AskCancel)),
+                ]
+                .spacing(10)
+                .into()
+            }),
+        };
         let details = column![
             row![
                 column![
@@ -295,6 +299,21 @@ impl App {
         .into()
     }
 
+    /// What stands in place of a download's buttons while the launcher pauses it (`Preempt`): it
+    /// takes a moment to stop.
+    fn pausing<'a>(&self, entry: &str) -> Option<Element<'a, Message>> {
+        let (_, why) = self.preempted.as_ref().filter(|(e, _)| e == entry)?;
+        Some(
+            text(match why {
+                Preempt::StartNow => "Pausing…",
+                Preempt::Play => "Pausing while a game runs…",
+            })
+            .size(15)
+            .color(tokens().muted)
+            .into(),
+        )
+    }
+
     /// Offline installers downloading: progress, speed, time left and Pause.
     fn offline_card<'a>(&'a self, run: &'a OfflineRun) -> Element<'a, Message> {
         let p = run.progress;
@@ -320,10 +339,11 @@ impl App {
                 ]
                 .spacing(6)
                 .width(Length::Fill),
-                round_button(
-                    Icon::Pause,
-                    Message::Offline(OfflineMsg::Pause(run.game_id.clone()))
-                ),
+                self.pausing(&crate::offline::entry(&run.game_id))
+                    .unwrap_or_else(|| round_button(
+                        Icon::Pause,
+                        Message::Offline(OfflineMsg::Pause(run.game_id.clone()))
+                    )),
             ]
             .align_y(Alignment::Start),
             row![
@@ -441,6 +461,7 @@ impl App {
     /// leaving it drops the row where it was.
     fn queue_list(&self) -> Element<'_, Message> {
         let moving = self.drag.map(|d| d.to);
+        let starting = matches!(self.preempted, Some((_, Preempt::StartNow)));
         let rows = self
             .queue_order()
             .into_iter()
@@ -482,12 +503,23 @@ impl App {
                         self.cover_art(id, 40.0),
                         row_title(title),
                         text(size).size(15),
-                        button(text("Download now").size(14))
-                            .padding([10, 16])
-                            .on_press(Message::Downloads(DownloadsMsg::StartNow(
-                                entry.to_string()
-                            )))
-                            .style(theme::tonal),
+                        // Asked for, while the download running stops; one at a time.
+                        if starting && i == 0 {
+                            container(text("Starting…").size(15).color(tokens().muted))
+                                .padding([10, 16])
+                                .into()
+                        } else {
+                            Element::from(
+                                button(text("Download now").size(14))
+                                    .padding([10, 16])
+                                    .on_press_maybe((!starting).then(|| {
+                                        Message::Downloads(DownloadsMsg::StartNow(
+                                            entry.to_string(),
+                                        ))
+                                    }))
+                                    .style(theme::tonal),
+                            )
+                        },
                         round_button(
                             Icon::X,
                             Message::Downloads(DownloadsMsg::Remove(entry.to_string()))
