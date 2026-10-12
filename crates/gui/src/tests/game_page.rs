@@ -239,6 +239,167 @@ fn closing_from_the_sign_in_page_asks_first_too() {
     assert!(app.quit_confirm.is_none());
 }
 
+/// A game added by hand, here a Windows one: GOG neither keeps its saves nor hears of it.
+fn added_windows_game() -> Install {
+    Install {
+        umu_id: None,
+        game_id: "local-1".into(),
+        title: "[FAKE] Mine".into(),
+        platform: Platform::Windows,
+        path: PathBuf::from("/games/Mine"),
+        client_id: None,
+        runner: Runner::Umu {
+            proton: "/proton/GE-Proton".into(),
+            prefix: "/prefixes/local-1".into(),
+        },
+        isolated: true,
+    }
+}
+
+/// What start-up read: these installs, and the games of the sessions left without an end.
+fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
+    Message::Booted(Ok(Box::new(crate::boot::Boot {
+        core: core(),
+        account: None,
+        library: None,
+        installs,
+        records: Default::default(),
+        launch_choices: Default::default(),
+        interrupted: interrupted.iter().map(|id| id.to_string()).collect(),
+        library_root: "/games".into(),
+        default_platform: Platform::Windows,
+        twin_playtime: Default::default(),
+        umu_lookup: false,
+        report_playtime: true,
+        game_achievements: false,
+        isolate_new_games: true,
+        manual_achievements: false,
+        steamgriddb: false,
+        steam_found: None,
+        steam_games: false,
+        steam_images: false,
+        steam_web_api: false,
+        proton: None,
+        proton_downloads: false,
+        downloaded_protons: Vec::new(),
+        proton_updates: false,
+        proton_update_due: false,
+        proton_shared: false,
+        auto_update: false,
+        favorites: Vec::new(),
+        playtime: Default::default(),
+        overview: Default::default(),
+        jobs: Vec::new(),
+        queue: Vec::new(),
+        customs: Default::default(),
+        sort_keys: Vec::new(),
+        cover_width: None,
+        sort: None,
+    })))
+}
+
+/// Sessions left without an end are named by their games' titles, and their cloud saves are to be
+/// checked only when GOG keeps some: for the Windows build of one of its games, not for a Linux
+/// build or a game added by hand.
+#[test]
+fn sessions_without_an_end_are_told_by_title_with_cloud_saves_only_where_gog_keeps_them() {
+    let notice = |installs: Vec<Install>, interrupted: &[&str]| {
+        let mut app = App::default();
+        let _ = app.update(booted(installs, interrupted));
+        app.notice.map(|n| n.text).unwrap_or_default()
+    };
+    let windows = library_app().installs["3"].clone();
+    let linux = Install {
+        platform: Platform::Linux,
+        runner: Runner::Native,
+        ..windows.clone()
+    };
+    assert_eq!(
+        notice(vec![windows, added_windows_game()], &["3", "local-1"]),
+        "Session(s) without a recorded end: [FAKE] Game 3, [FAKE] Mine. Check cloud saves before \
+         playing again."
+    );
+    assert_eq!(
+        notice(vec![linux, added_windows_game()], &["3", "local-1"]),
+        "Session(s) without a recorded end: [FAKE] Game 3, [FAKE] Mine."
+    );
+}
+
+/// The quit dialog says what closing would lose, and nothing else: GOG keeps no cloud saves of a
+/// Linux build, and hears nothing of a game added by hand; only an update cut off, not a check of
+/// the game's files, must be finished before playing.
+#[test]
+fn the_quit_dialog_says_only_what_closing_would_lose() {
+    let mut app = library_app();
+    app.installs.insert("local-1".into(), added_windows_game());
+    let asked = |app: &mut App| {
+        let _ = app.update(Message::CloseRequested);
+        app.quit_confirm.take().expect("asked first")
+    };
+    let playing = |app: &mut App, game_id: &str| {
+        let (stop, _) = tokio::sync::mpsc::unbounded_channel();
+        app.play = Some(crate::play::PlayState {
+            game_id: game_id.into(),
+            log: Vec::new(),
+            stop,
+            running: true,
+            told: Vec::new(),
+        });
+    };
+    playing(&mut app, "3");
+    assert_eq!(
+        asked(&mut app),
+        [
+            "[FAKE] Game 3 is running. It keeps running, but its cloud saves will not be uploaded \
+             and its play time will not be sent to GOG."
+        ]
+    );
+    playing(&mut app, "local-1");
+    assert_eq!(
+        asked(&mut app),
+        [
+            "[FAKE] Mine is running. It keeps running, but this session will not count in its play \
+             time."
+        ]
+    );
+    app.installs.get_mut("3").unwrap().platform = Platform::Linux;
+    playing(&mut app, "3");
+    assert_eq!(
+        asked(&mut app),
+        ["[FAKE] Game 3 is running. It keeps running, but its play time will not be sent to GOG."]
+    );
+
+    app.play = None;
+    let _ = app.update(Message::Maintenance(MaintenanceMsg::Check(
+        "3".into(),
+        false,
+    )));
+    assert_eq!(
+        asked(&mut app),
+        ["An operation on [FAKE] Game 3 is running."]
+    );
+    // An update notes itself as it begins to change the game's files.
+    slatty_core::installer::InstallJob {
+        game_id: "3".into(),
+        build_id: "b2".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 3".into(),
+        state: "updating".into(),
+        dlcs: vec![],
+        proton: None,
+    }
+    .save(&app.core.as_ref().unwrap().db)
+    .unwrap();
+    assert_eq!(
+        asked(&mut app),
+        [
+            "An operation on [FAKE] Game 3 is running. An interrupted update must be finished \
+             before playing."
+        ]
+    );
+}
+
 #[test]
 fn the_cover_does_not_stand_in_while_the_key_art_downloads() {
     let mut app = library_app();

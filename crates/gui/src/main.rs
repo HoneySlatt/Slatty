@@ -771,11 +771,22 @@ impl App {
                     self.card_width = width.clamp(COVER_WIDTHS.0, COVER_WIDTHS.1);
                 }
                 if !boot.interrupted.is_empty() {
+                    let titles: Vec<String> = boot
+                        .interrupted
+                        .iter()
+                        .map(|id| self.title_of(id))
+                        .collect();
+                    let cloud = boot.interrupted.iter().any(|id| self.may_sync_cloud(id));
                     self.notice = Some(Notice {
                         error: true,
                         text: format!(
-                            "Session(s) without a recorded end: {}. Check cloud saves before playing again.",
-                            boot.interrupted.join(", ")
+                            "Session(s) without a recorded end: {}.{}",
+                            titles.join(", "),
+                            if cloud {
+                                " Check cloud saves before playing again."
+                            } else {
+                                ""
+                            }
                         ),
                     });
                 }
@@ -1086,10 +1097,20 @@ impl App {
         }
         for (id, m) in &self.maintenance {
             if m.busy {
-                work.push(format!(
-                    "An operation on {} is running. An interrupted update must be finished before playing.",
-                    self.title_of(id)
-                ));
+                // Noted as an update, a language or a DLC change begins to change the game's
+                // files: cut off from then on, it must be finished before the game starts.
+                let update = self.core.as_ref().is_some_and(|core| {
+                    slatty_core::maintenance::update_pending(&core.db, id)
+                        .is_ok_and(|p| p.is_some())
+                });
+                work.push(if update {
+                    format!(
+                        "An operation on {} is running. An interrupted update must be finished before playing.",
+                        self.title_of(id)
+                    )
+                } else {
+                    format!("An operation on {} is running.", self.title_of(id))
+                });
             }
         }
         for (id, c) in &self.cloud {
@@ -1124,10 +1145,20 @@ impl App {
             });
         }
         if let Some(p) = self.play.as_ref().filter(|p| p.running) {
-            work.push(format!(
-                "{} is running. It keeps running, but its cloud saves will not be uploaded and its play time will not be sent to GOG.",
-                self.title_of(&p.game_id)
-            ));
+            let title = self.title_of(&p.game_id);
+            work.push(if slatty_core::store::is_local(&p.game_id) {
+                format!(
+                    "{title} is running. It keeps running, but this session will not count in its play time."
+                )
+            } else if self.may_sync_cloud(&p.game_id) {
+                format!(
+                    "{title} is running. It keeps running, but its cloud saves will not be uploaded and its play time will not be sent to GOG."
+                )
+            } else {
+                format!(
+                    "{title} is running. It keeps running, but its play time will not be sent to GOG."
+                )
+            });
         }
         work
     }

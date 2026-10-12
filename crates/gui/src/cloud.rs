@@ -6,7 +6,7 @@ use slatty_core::cloud::{
     plan::Action,
     sync::{Prefer, SyncOptions},
 };
-use slatty_core::install::Install;
+use slatty_core::install::{Install, Platform};
 
 use crate::work::tokens_for;
 use crate::{App, Core, Message, err, ui};
@@ -76,6 +76,16 @@ pub enum CloudRequest {
 }
 
 impl App {
+    /// Whether GOG may keep cloud saves of an installed game: it keeps them for the Windows builds
+    /// of its own games alone.
+    pub fn may_sync_cloud(&self, game_id: &str) -> bool {
+        !slatty_core::store::is_local(game_id)
+            && self
+                .installs
+                .get(game_id)
+                .is_some_and(|i| i.platform == Platform::Windows)
+    }
+
     pub fn request_cloud(&mut self, game_id: String, request: CloudRequest) -> Task<Message> {
         // A game added by hand has no cloud saves, and GOG is not told of it.
         if slatty_core::store::is_local(&game_id) {
