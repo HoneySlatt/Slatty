@@ -967,6 +967,27 @@ fn an_install_started_while_a_game_runs_waits_in_the_queue() {
     assert_eq!(app.queue, ["7"]);
 }
 
+/// A paused install resumed while another downloads waits in the queue saved as started: its
+/// resume is checked as one (its folder still there, a game folder already published finished).
+#[test]
+fn a_paused_install_resumed_while_another_downloads_waits_as_started() {
+    use super::offline::installing_6;
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    installing_6(&mut app);
+    ready_to_install(&mut app, "7");
+    if let Some(InstallView::Ready(info)) = app.install_views.get_mut("7") {
+        info.resumable = true;
+    }
+    let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
+    assert_eq!(app.queue, ["7"]);
+    let job = slatty_core::installer::InstallJob::load(&db, "7")
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.state, slatty_core::installer::DOWNLOADING);
+    assert_eq!(app.goes_on, ["7"]);
+}
+
 #[test]
 fn download_now_starts_a_queued_install_while_a_game_runs() {
     use crate::downloads::DownloadsMsg;

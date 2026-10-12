@@ -263,13 +263,16 @@ impl App {
         let Some(InstallView::Ready(info)) = self.install_views.remove(&game_id) else {
             return Task::none();
         };
+        // A paused install resumed meanwhile waits saved as started: its resume is checked as
+        // one, and it goes on by itself.
+        let started = info.resumable;
         let job = InstallJob {
             game_id: game_id.clone(),
             build_id: info.build_id.clone(),
             language: info.language.clone(),
             root: PathBuf::from(info.root.trim()),
             directory: info.directory.clone(),
-            state: QUEUED.into(),
+            state: if started { DOWNLOADING } else { QUEUED }.into(),
             dlcs: info
                 .dlcs
                 .iter()
@@ -299,6 +302,9 @@ impl App {
         self.drag = None;
         self.queue.push(game_id.clone());
         self.save_queue();
+        if started && !self.goes_on.contains(&game_id) {
+            self.goes_on.push(game_id.clone());
+        }
         self.dialog.take_if(|(id, _)| *id == game_id);
         if self.selected.as_deref() == Some(game_id.as_str()) && self.panel == Some(Panel::Install)
         {

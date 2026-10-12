@@ -344,6 +344,9 @@ impl App {
                 self.queue.retain(|e| *e != entry(&game_id));
                 self.queue.insert(0, entry(&game_id));
                 self.save_queue();
+                if !self.goes_on.contains(&entry(&game_id)) {
+                    self.goes_on.push(entry(&game_id));
+                }
                 // Asked for, it starts at once when nothing downloads, as an install's Resume does,
                 // whatever else is paused.
                 if self.downloads_held()
