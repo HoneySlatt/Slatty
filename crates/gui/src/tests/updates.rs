@@ -232,6 +232,18 @@ fn updates_wait_for_a_cloud_sync() {
 }
 
 #[test]
+fn updates_wait_while_a_steam_game_runs() {
+    use crate::steam::SteamMsg;
+    let mut app = auto_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Running([440].into())));
+    let _ = app.update(found());
+    assert!(app.updates.current.is_none());
+    let _ = app.update(Message::Steam(SteamMsg::Running(Default::default())));
+    assert_eq!(app.updates.current.as_deref(), Some("3"));
+}
+
+#[test]
 fn updates_wait_while_offline_installers_download() {
     use crate::offline::{OfflineMsg, entry};
     let mut app = auto_app();

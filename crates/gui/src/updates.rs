@@ -124,12 +124,13 @@ impl App {
     }
 
     /// Starts the next waiting update when nothing holds it: no update, download (an install or
-    /// offline installers), game (or Play pressed, waiting to start it), cloud sync or other work
-    /// on a game running. Called after every message.
+    /// offline installers), game (a Steam game too, or Play pressed, waiting to start it), cloud
+    /// sync or other work on a game running. Called after every message.
     pub fn next_update(&mut self) -> Task<Message> {
         let busy = self.updates.current.is_some()
             || self.updates.waiting.is_empty()
             || self.play.as_ref().is_some_and(|p| p.running)
+            || (self.steam.on && !self.steam.running.is_empty())
             || self.launch_reading.is_some()
             || self.launch_prompt.is_some()
             || self.downloading()
