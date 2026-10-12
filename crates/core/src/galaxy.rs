@@ -205,17 +205,21 @@ struct Endpoint {
 }
 
 impl Endpoint {
-    /// Name under which its speed is remembered.
+    /// Name under which its speed is remembered, and which logs show: GOG's name for it, else its
+    /// host, never its whole address, whose query can hold a token (a dependency's secure link).
     fn key(&self) -> String {
-        if self.endpoint_name.is_empty() {
-            self.parameters
-                .get("base")
-                .and_then(Value::as_str)
-                .unwrap_or(&self.url_format)
-                .to_string()
-        } else {
-            self.endpoint_name.clone()
+        if !self.endpoint_name.is_empty() {
+            return self.endpoint_name.clone();
         }
+        let address = self
+            .parameters
+            .get("base")
+            .and_then(Value::as_str)
+            .unwrap_or(&self.url_format);
+        url::Url::parse(address)
+            .ok()
+            .and_then(|u| u.host_str().map(String::from))
+            .unwrap_or_default()
     }
 }
 
@@ -667,6 +671,24 @@ mod tests {
             parameters: nested,
         };
         assert!(chunk_url(&endpoint, "abcdef0123").len() < 1 << 10);
+    }
+
+    /// A download server is remembered, and logged, by GOG's name for it, else by its host: never
+    /// by its whole address, whose query can hold a token (a dependency's secure link).
+    #[test]
+    fn a_download_server_is_known_by_its_name_or_host_never_its_address() {
+        let endpoint = |name: &str, base: &str| Endpoint {
+            endpoint_name: name.into(),
+            url_format: "{base}{path}".into(),
+            parameters: serde_json::Map::from_iter([
+                ("base".to_string(), Value::from(base)),
+                ("path".to_string(), Value::from("")),
+            ]),
+        };
+        let link = "https://cdn.gog.example/deps/store?token=[FAKE]";
+        assert_eq!(endpoint("fastly", link).key(), "fastly");
+        assert_eq!(endpoint("", link).key(), "cdn.gog.example");
+        assert_eq!(endpoint("", "not an address [FAKE]").key(), "");
     }
 
     #[test]
