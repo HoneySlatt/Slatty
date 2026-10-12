@@ -41,6 +41,8 @@ pub const TOP_BAR: f32 = 84.0;
 pub const HINTS: f32 = 60.0;
 /// Height of the shelves above the library's covers.
 pub const SHELVES: f32 = 72.0;
+/// Height of a notice of one line, above the pages while it shows.
+pub const NOTICE: f32 = 64.0;
 /// How many games the Continue row holds.
 const RECENT: usize = 20;
 /// How long the focus stays on a game of Home before its key art's copy is made.
@@ -1036,8 +1038,13 @@ impl App {
     /// Rows of covers the library shows at once.
     pub fn couch_rows(&self) -> usize {
         let row = self.couch_card() * 4.0 / 3.0 + GAP;
-        let room = self.window.height - TOP_BAR - HINTS - SHELVES;
+        let room = self.window.height - TOP_BAR - HINTS - SHELVES - self.notice_room();
         (((room + GAP) / row).floor() as usize).max(1)
+    }
+
+    /// The room a notice takes above the pages while it shows.
+    pub fn notice_room(&self) -> f32 {
+        if self.notice.is_some() { NOTICE } else { 0.0 }
     }
 }
 

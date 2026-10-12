@@ -396,6 +396,26 @@ fn home_fits_its_rows_whole_at_any_size() {
     }
 }
 
+/// A notice above the pages takes room from them: the rows shown still fit whole.
+#[test]
+fn rows_fit_whole_under_a_notice() {
+    use crate::couch::{GAP, HINTS, NOTICE, SHELVES, TOP_BAR};
+    let mut app = couch_app();
+    app.window = Size::new(1280.0, 800.0);
+    app.notice = Some(crate::Notice {
+        error: true,
+        text: "[FAKE] cannot be installed".into(),
+    });
+    let (hero, rows, row) = app.home_layout();
+    let used = hero + rows as f32 * row + (rows - 1) as f32 * GAP;
+    assert!(used <= 800.0 - TOP_BAR - HINTS - 8.0 - NOTICE, "Home");
+    let (rows, row) = (app.couch_rows(), app.couch_card() * 4.0 / 3.0 + GAP);
+    assert!(
+        rows as f32 * row - GAP <= 800.0 - TOP_BAR - HINTS - SHELVES - NOTICE,
+        "Library"
+    );
+}
+
 /// The couch mode's covers are larger than the desktop grid's: the copies made for the grid would
 /// be enlarged, softly, so the couch mode draws the cover itself.
 #[test]

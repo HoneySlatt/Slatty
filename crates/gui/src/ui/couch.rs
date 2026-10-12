@@ -343,7 +343,7 @@ impl App {
     /// the row with the focus.
     pub(crate) fn home_layout(&self) -> (f32, usize, f32) {
         let row = 22.0 * 1.3 + 10.0 + (self.couch_card() - 2.0 * RING) * 4.0 / 3.0 + 2.0 * RING;
-        let room = self.window.height - TOP_BAR - HINTS - 8.0;
+        let room = self.window.height - TOP_BAR - HINTS - 8.0 - self.notice_room();
         let hero = (self.window.height * 0.42)
             .max(220.0)
             .min(room - row)
