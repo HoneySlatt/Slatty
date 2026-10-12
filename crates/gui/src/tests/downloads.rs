@@ -910,6 +910,31 @@ fn a_download_pausing_on_request_stays_paused() {
     assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
 }
 
+/// The download being planned to start gives way to Download now, as a download running does.
+#[test]
+fn download_now_goes_before_a_download_being_planned() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    app.queue = vec!["5".into(), "6".into(), "7".into()];
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("5"));
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow("7".into())));
+    assert_eq!(
+        app.auto_resume.as_deref(),
+        Some("7"),
+        "planned, then started"
+    );
+    assert_eq!(app.queue, ["5", "6"]);
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(fake_plan()),
+    )));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Queued(_))
+    ));
+}
+
 #[test]
 fn an_install_started_while_a_game_runs_waits_in_the_queue() {
     let mut app = library_app();

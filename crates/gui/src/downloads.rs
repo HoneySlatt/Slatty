@@ -94,10 +94,13 @@ impl App {
                     self.preempted = Some((running.clone(), Preempt::StartNow));
                     return self.pause_entry(&running);
                 }
-                // One being planned to start goes first; one pausing on request, once paused.
-                if self.auto_resume.is_none() && !self.downloading() {
-                    return self.start_first();
+                // One pausing on request: once paused.
+                if self.downloading() {
+                    return Task::none();
                 }
+                // One being planned to start gives way, as a download running does.
+                self.put_back_planned(1);
+                return self.start_first();
             }
         }
         Task::none()
@@ -122,17 +125,7 @@ impl App {
         if !self.held_for_play() {
             return Task::none();
         }
-        if let Some(id) = self.auto_resume.take() {
-            let cut_off = self
-                .interrupted
-                .iter()
-                .any(|(i, k)| *i == id && *k == crate::Interrupted::Download);
-            if !cut_off && !self.queue.contains(&id) {
-                self.drag = None;
-                self.queue.insert(0, id);
-                self.save_queue();
-            }
-        }
+        self.put_back_planned(0);
         if self.preempted.is_some() {
             return Task::none();
         }
@@ -141,6 +134,24 @@ impl App {
         };
         self.preempted = Some((running.clone(), Preempt::Play));
         self.pause_entry(&running)
+    }
+
+    /// The download about to start once planned, put back to wait: at `at` in the queue, or among
+    /// those stopped if it was cut off. It goes on by itself once its turn comes again.
+    fn put_back_planned(&mut self, at: usize) {
+        let Some(id) = self.auto_resume.take() else {
+            return;
+        };
+        let cut_off = self
+            .interrupted
+            .iter()
+            .any(|(i, k)| *i == id && *k == crate::Interrupted::Download);
+        if !cut_off && !self.queue.contains(&id) {
+            self.drag = None;
+            self.queue.insert(at.min(self.queue.len()), id.clone());
+            self.save_queue();
+            self.goes_on = Some(id);
+        }
     }
 
     /// The queue entry of the download running, unless it is already pausing on request: that
