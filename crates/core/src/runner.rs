@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
@@ -79,7 +80,7 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
             let steam_run = matches!(wrapper, Some(Wrapper::SteamRun(_)));
             let (mut program, mut args, mut env) = native_command(&script, wrapper);
             if steam_run {
-                env.extend(steam_run_temp(std::env::vars()));
+                env.extend(steam_run_temp(std::env::vars_os()));
             }
             // An AppImage mounts itself through FUSE, which neither the container nor every system
             // offers: it unpacks itself instead.
@@ -141,23 +142,24 @@ enum Wrapper {
     Umu(PathBuf, PathBuf),
 }
 
-/// How to start a native game's script: inside `wrapper` when there is one, else through the
-/// interpreter its first line names, found in PATH by name when that path does not exist.
 /// The temporary folders to give a game started through `steam-run`, which mounts an empty `/tmp`
 /// of its own: one under `/tmp` the user's environment names (`nix develop`'s
 /// `/tmp/nix-shell.*`) does not exist there, and a game writing there failed at once (a launcher
 /// falling back to `nix-shell`). Those become `/tmp`; others are seen as they are.
-fn steam_run_temp(vars: impl IntoIterator<Item = (String, String)>) -> Vec<(String, String)> {
+fn steam_run_temp(vars: impl IntoIterator<Item = (OsString, OsString)>) -> Vec<(String, String)> {
     vars.into_iter()
-        .filter(|(k, v)| {
-            ["TMPDIR", "TMP", "TEMP", "TEMPDIR"].contains(&k.as_str())
-                && Path::new(v).starts_with("/tmp")
-                && Path::new(v) != Path::new("/tmp")
+        .filter_map(|(k, v)| {
+            let k = k.into_string().ok()?;
+            (["TMPDIR", "TMP", "TEMP", "TEMPDIR"].contains(&k.as_str())
+                && Path::new(&v).starts_with("/tmp")
+                && Path::new(&v) != Path::new("/tmp"))
+            .then(|| (k, "/tmp".into()))
         })
-        .map(|(k, _)| (k, "/tmp".into()))
         .collect()
 }
 
+/// How to start a native game's script: inside `wrapper` when there is one, else through the
+/// interpreter its first line names, found in PATH by name when that path does not exist.
 fn native_command(
     script: &Path,
     wrapper: Option<Wrapper>,
@@ -1665,10 +1667,29 @@ mod tests {
             ("TEMPDIR", "/tmpfoo"),
             ("HOME", "/tmp/home"),
         ]
-        .map(|(k, v)| (k.to_string(), v.to_string()));
+        .map(|(k, v)| (OsString::from(k), OsString::from(v)));
         assert_eq!(
             steam_run_temp(vars),
             [("TMPDIR".to_string(), "/tmp".to_string())]
+        );
+    }
+
+    /// The user's environment may hold names and values that are not UTF-8: the launch still
+    /// starts, and a temporary folder so named under `/tmp` is replaced as any other.
+    #[test]
+    fn steam_run_takes_an_environment_that_is_not_utf8() {
+        use std::os::unix::ffi::OsStringExt;
+        let vars = [
+            (
+                OsString::from("TMP"),
+                OsString::from_vec(b"/tmp/\xff".to_vec()),
+            ),
+            (OsString::from_vec(b"\xfe".to_vec()), OsString::from("x")),
+            (OsString::from("LANG"), OsString::from_vec(b"\xff".to_vec())),
+        ];
+        assert_eq!(
+            steam_run_temp(vars),
+            [("TMP".to_string(), "/tmp".to_string())]
         );
     }
 
