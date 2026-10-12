@@ -357,6 +357,45 @@ fn the_row_with_the_focus_shows_after_the_window_grows() {
     assert!(render_window(&app).find("[FAKE] Game 50").is_ok());
 }
 
+/// Iced would squash a row of covers that does not fit to the room left, its covers cropped to
+/// thin strips: only rows that fit whole are shown.
+#[test]
+fn only_rows_that_fit_whole_are_shown() {
+    let mut app = couch_app();
+    // At 1440x900: one row of Home under its key art; two rows of six in Library.
+    let mut ui = render(&app);
+    assert!(ui.find("Continue playing").is_ok());
+    assert!(ui.find("Favorites").is_err(), "the next row does not fit");
+    drop(ui);
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    let mut ui = render(&app);
+    assert!(ui.find("[FAKE] Game 12").is_ok());
+    assert!(
+        ui.find("[FAKE] Game 13").is_err(),
+        "a third row does not fit"
+    );
+}
+
+/// Home's rows of covers fit whole under its key art at any size, the key art shrinking on a small
+/// window so that the row with the focus does.
+#[test]
+fn home_fits_its_rows_whole_at_any_size() {
+    use crate::couch::{GAP, HINTS, TOP_BAR};
+    let mut app = couch_app();
+    for (width, height) in [
+        (800.0, 560.0),
+        (1280.0, 800.0),
+        (1920.0, 1080.0),
+        (3840.0, 2160.0),
+    ] {
+        app.window = Size::new(width, height);
+        let (hero, rows, row) = app.home_layout();
+        let used = hero + rows as f32 * row + (rows - 1) as f32 * GAP;
+        assert!(used <= height - TOP_BAR - HINTS - 8.0, "{width}x{height}");
+        assert!(hero >= height * 0.25, "{width}x{height}: the key art stays");
+    }
+}
+
 /// The couch mode's covers are larger than the desktop grid's: the copies made for the grid would
 /// be enlarged, softly, so the couch mode draws the cover itself.
 #[test]

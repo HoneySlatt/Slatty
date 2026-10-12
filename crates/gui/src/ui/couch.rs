@@ -287,14 +287,14 @@ impl App {
                 "No games yet. Sign in to GOG, or show your Steam games, from the desktop mode.",
             );
         };
+        let (hero_height, shown, _) = self.home_layout();
         let hero = container(self.couch_hero(focused, 44.0, Space::new().into()))
-            .height((self.window.height * 0.42).max(220.0))
+            .height(hero_height)
             .clip(true);
         let card = self.couch_card();
         let across = self.couch_columns();
-        // The row with the focus, then the next one, cut by the window's bottom.
         let mut list = Column::new().spacing(GAP);
-        for (r, home_row) in rows.iter().enumerate().skip(row).take(2) {
+        for (r, home_row) in rows.iter().enumerate().skip(row).take(shown) {
             let games = &home_row.games;
             let at = if r == row {
                 col
@@ -331,6 +331,21 @@ impl App {
                 .clip(true),
         ]
         .into()
+    }
+
+    /// Home's layout: the key art's height, the rows of covers shown (the focus's, then the next
+    /// when it fits whole: Iced would squash it to the room left), and a row's height (its title,
+    /// 22 pixels a line of 1.3, and its covers). On a small window the key art gives up room for
+    /// the row with the focus.
+    pub(crate) fn home_layout(&self) -> (f32, usize, f32) {
+        let row = 22.0 * 1.3 + 10.0 + (self.couch_card() - 2.0 * RING) * 4.0 / 3.0 + 2.0 * RING;
+        let room = self.window.height - TOP_BAR - HINTS - 8.0;
+        let hero = (self.window.height * 0.42)
+            .max(220.0)
+            .min(room - row)
+            .max(0.0);
+        let shown = if hero + 2.0 * row + GAP <= room { 2 } else { 1 };
+        (hero, shown, row)
     }
 
     fn couch_library<'a>(&'a self, couch: &'a Couch) -> Element<'a, Message> {
@@ -406,8 +421,8 @@ impl App {
             // window grew, the shelf has fewer games).
             let row = focused.unwrap_or(0) / across;
             let top = couch.top.min(row).max((row + 1).saturating_sub(down));
-            // One row more than fits, cut by the bottom: there is more below.
-            let rows = (top..=top + down)
+            // The rows that fit whole: Iced would squash one more to the room left.
+            let rows = (top..top + down)
                 .take_while(|r| r * across < games.len())
                 .map(|r| {
                     let covers = (r * across..((r + 1) * across).min(games.len())).map(|k| {
