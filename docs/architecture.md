@@ -153,7 +153,11 @@ SlattyLauncher is already open. The command line still runs beside it.
      instead of downloaded;
    - each chunk is checked against its compressed and decompressed MD5;
    - files are written to a temporary name, then renamed; the filesystem is synced once when every
-     file is in place, rather than file by file;
+     file is in place, rather than file by file, except files of 1 MiB or more, synced before they
+     take their name (`SYNCED_FROM`): a resumed install takes one of the right size in its
+     partial folder as it is rather than reading it again (2 GB of them: 0.06 s instead of 0.45 s
+     and 4.6 s of processor time), and checks only the smaller ones, many and quick to read,
+     which a hard disk would sync in about 10 ms each;
    - a file that fails does not stop the others, so a retry has less to fetch, except on a full
      disk, where the others would only fail once downloaded.
 4. The partial folder is renamed to the game folder.
@@ -175,8 +179,9 @@ builds (`Unsupported OS`):
    length of the script before it. The plan reads these directories, for the size on disk.
 3. Only entries under `data/noarch/` are kept; a DLC's file replaces the game's at the same path.
    `LinuxDownload` fetches each file with its own ranged request (eight at once), inflates it off
-   the async threads in 1 MiB batches, checks size and CRC-32, writes it under a temporary name,
-   then renames it. A dropped connection or an expired link (refused with 401, 403 or 410) is
+   the async threads in 1 MiB batches, checks size and CRC-32, writes it under a temporary name
+   (synced first from 1 MiB, as above, so a resumed install takes it on its size), then renames
+   it. A dropped connection or an expired link (refused with 401, 403 or 410) is
    tried again, without counting the progress twice. Links pointing out of the game folder are
    never made.
 4. The staged folder, its publication, the record and the job are those of a Windows build. The

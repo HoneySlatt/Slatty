@@ -38,6 +38,20 @@ const FILE_CONCURRENCY: usize = 4;
 const CHUNK_CONCURRENCY: usize = 2;
 const DOWNLOAD_SUFFIX: &str = ".slatty-dl";
 
+/// Files this large or larger are synced to disk before they take their name, so that a resumed
+/// download takes one of the right size as it is: reading and hashing them all again took 40 s
+/// of seven cores on a 70 GB game. Syncing costs about the time the disk takes to write them
+/// anyway; smaller files, many and quick to read, are checked again rather than synced, as a hard
+/// disk syncs each in about 10 ms.
+pub(crate) const SYNCED_FROM: u64 = 1 << 20;
+
+/// Whether `dest`, in a partial folder only its download writes, holds a file synced before it
+/// took its name (`SYNCED_FROM`) and of the size expected.
+pub(crate) fn synced(dest: &Path, size: u64) -> bool {
+    size >= SYNCED_FROM
+        && std::fs::symlink_metadata(dest).is_ok_and(|m| m.is_file() && m.len() == size)
+}
+
 /// Files to write, keyed by lowercase path: Windows treats differently cased paths as one file.
 #[derive(Debug, Default)]
 pub struct FileSet {
@@ -161,7 +175,7 @@ impl<S: ContentSource> Download<'_, S> {
         }
         crate::paths::ensure_dir(partial)?;
         self.check_space(set, partial)?;
-        self.fill(set, partial, true, &|| Ok(())).await?;
+        self.fill(set, partial, true, true, &|| Ok(())).await?;
         for dir in &set.dirs {
             crate::paths::ensure_dir(&partial.join(dir))?;
         }
@@ -184,7 +198,7 @@ impl<S: ContentSource> Download<'_, S> {
         if repair {
             return self.replace_bad(set, dir, &|| Ok(())).await;
         }
-        self.fill(set, dir, false, &|| Ok(())).await
+        self.fill(set, dir, false, false, &|| Ok(())).await
     }
 
     /// Checks an installed game in place and re-downloads its bad files, calling `begin` before
@@ -196,7 +210,7 @@ impl<S: ContentSource> Download<'_, S> {
         begin: &(dyn Fn() -> Result<()> + Sync),
     ) -> Result<Checked> {
         self.check_space(set, dir)?;
-        let checked = self.fill(set, dir, true, begin).await?;
+        let checked = self.fill(set, dir, true, false, begin).await?;
         for d in &set.dirs {
             let d = dir.join(d);
             refuse_outside(dir, &d)?;
@@ -233,11 +247,13 @@ impl<S: ContentSource> Download<'_, S> {
 
     /// Verifies every file under `dir`; returns those that were missing or wrong.
     /// With `download`, they are fetched again (atomically replaced), `begin` called before each.
+    /// With `resumed`, `dir` is a partial folder: a file synced there is taken on its size.
     async fn fill(
         &self,
         set: &FileSet,
         dir: &Path,
         download: bool,
+        resumed: bool,
         begin: &(dyn Fn() -> Result<()> + Sync),
     ) -> Result<Checked> {
         let bad: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
@@ -283,7 +299,7 @@ impl<S: ContentSource> Download<'_, S> {
                         return;
                     }
                     let result = async {
-                        let verified = {
+                        let verified = (resumed && synced(&dest, file.size())) || {
                             let (dest, file) = (dest.clone(), file.clone());
                             fsutil::in_background(move || verify_file(&dest, &file)).await?
                         };
@@ -400,6 +416,13 @@ impl<S: ContentSource> Download<'_, S> {
                     reused += data.len() as u64;
                 }
                 on_bytes(data.len() as u64);
+            }
+            if file.size() >= SYNCED_FROM {
+                let out = out.try_clone();
+                tokio::task::spawn_blocking(move || out.and_then(|out| out.sync_all()))
+                    .await
+                    .expect("sync task panicked")
+                    .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
             }
             Ok::<_, Error>(reused)
         }

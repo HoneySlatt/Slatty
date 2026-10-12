@@ -432,6 +432,60 @@ async fn corrupted_chunk_stops_the_install() {
     assert!(!env.target().exists());
 }
 
+/// A large file an earlier attempt finished was synced to disk before it took its name: a resumed
+/// download takes it on its size rather than reading the whole game again. Verify still reads it.
+#[tokio::test]
+async fn a_resumed_download_takes_large_finished_files_on_their_size() {
+    let mut env = Env::new("synced");
+    let big = vec![7u8; SYNCED_FROM as usize];
+    let mut z = ZlibEncoder::new(Vec::new(), Compression::default());
+    z.write_all(&big).unwrap();
+    let compressed = z.finish().unwrap();
+    let chunk = Chunk {
+        md5: fsutil::hex(&Md5::digest(&big)),
+        compressed_md5: fsutil::hex(&Md5::digest(&compressed)),
+        size: big.len() as u64,
+        compressed_size: compressed.len() as u64,
+    };
+    env.source
+        .chunks
+        .insert(chunk.compressed_md5.clone(), compressed);
+    env.source
+        .manifests
+        .get_mut("m1")
+        .unwrap()
+        .push(DepotItem::DepotFile(DepotFile {
+            path: "data\\big.pak".into(),
+            chunks: vec![chunk],
+            flags: Vec::new(),
+            md5: None,
+            sfc_ref: None,
+            product_id: String::new(),
+        }));
+    std::fs::create_dir_all(env.partial().join("data")).unwrap();
+    let left = vec![0u8; big.len()];
+    std::fs::write(env.partial().join("data/big.pak"), &left).unwrap();
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    assert!(
+        std::fs::read(env.target().join("data/big.pak")).unwrap() == left,
+        "not read again"
+    );
+
+    let set = collect_files(&env.source, &env.depots).await.unwrap();
+    let free_space = |_: &Path| Ok(PLENTY);
+    let dl = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    };
+    let bad = dl
+        .check_installed(&set, &env.target(), false)
+        .await
+        .unwrap();
+    assert_eq!(bad.bad, [PathBuf::from("data/big.pak")]);
+}
+
 #[tokio::test]
 async fn tampered_file_left_from_an_earlier_attempt_is_redownloaded() {
     let env = Env::new("tamper");

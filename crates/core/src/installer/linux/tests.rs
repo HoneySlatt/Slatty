@@ -397,6 +397,39 @@ async fn a_corrupted_download_is_never_kept() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// A large file an earlier attempt finished was synced to disk before it took its name: a resumed
+/// download takes it on its size rather than reading the whole game again. Verify still reads it.
+#[tokio::test]
+async fn a_resumed_linux_download_takes_large_finished_files_on_their_size() {
+    let big = big();
+    assert!(big.len() as u64 >= SYNCED_FROM);
+    let source = Fake::new(vec![game(&big)]);
+    let set = LinuxSet::new(&[Part {
+        installer: installer_of("1"),
+        entries: read_entries(&source, 0).await.unwrap(),
+    }])
+    .unwrap();
+    let root = temp("synced");
+    let (partial, target) = (root.join(".p"), root.join("Game"));
+    std::fs::create_dir_all(partial.join("game")).unwrap();
+    let left = vec![0u8; big.len()];
+    std::fs::write(partial.join("game/data.bin"), &left).unwrap();
+    let dl = LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &plenty,
+    };
+    dl.run(&set, &partial, &target).await.unwrap();
+    assert!(
+        std::fs::read(target.join("game/data.bin")).unwrap() == left,
+        "not read again"
+    );
+    let bad = dl.check_installed(&set, &target, false).await.unwrap().bad;
+    assert_eq!(bad, [PathBuf::from("game/data.bin")]);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[tokio::test]
 async fn a_cancelled_download_stops_and_keeps_what_is_done() {
     let source = Fake::new(vec![game(&big())]);

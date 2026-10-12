@@ -17,7 +17,10 @@ use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
 
 use super::zip::{self, ZipEntry};
-use super::{Checked, Progress, RecordedFile, leads_inside, refuse_outside, safe_relative};
+use super::{
+    Checked, Progress, RecordedFile, SYNCED_FROM, leads_inside, refuse_outside, safe_relative,
+    synced,
+};
 use crate::auth::Tokens;
 use crate::error::{Error, Result};
 use crate::fsutil;
@@ -437,7 +440,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         }
         crate::paths::ensure_dir(partial)?;
         self.check_space(set, partial)?;
-        let (_, skipped) = self.fill(set, partial, true, &|| Ok(())).await?;
+        let (_, skipped) = self.fill(set, partial, true, true, &|| Ok(())).await?;
         std::fs::rename(partial, target).map_err(|e| {
             Error::io(
                 format!("publish {} as {}", partial.display(), target.display()),
@@ -458,7 +461,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         if repair {
             return self.replace_bad(set, dir, &|| Ok(())).await;
         }
-        Ok(self.fill(set, dir, false, &|| Ok(())).await?.0)
+        Ok(self.fill(set, dir, false, false, &|| Ok(())).await?.0)
     }
 
     /// Checks an installed game in place and downloads its bad files again, calling `begin`
@@ -470,7 +473,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         begin: &(dyn Fn() -> Result<()> + Sync),
     ) -> Result<Checked> {
         self.check_space(set, dir)?;
-        Ok(self.fill(set, dir, true, begin).await?.0)
+        Ok(self.fill(set, dir, true, false, begin).await?.0)
     }
 
     pub(crate) fn check_space(&self, set: &LinuxSet, dir: &Path) -> Result<()> {
@@ -497,12 +500,14 @@ impl<S: Source> LinuxDownload<'_, S> {
     }
 
     /// With `download`, `begin` is called before each file or link is changed and each missing
-    /// folder made.
+    /// folder made. With `resumed`, `dir` is a partial folder: a file synced there is taken on its
+    /// size.
     async fn fill(
         &self,
         set: &LinuxSet,
         dir: &Path,
         download: bool,
+        resumed: bool,
         begin: &(dyn Fn() -> Result<()> + Sync),
     ) -> Result<(Checked, usize)> {
         let bad = std::sync::Mutex::new(Vec::new());
@@ -541,7 +546,7 @@ impl<S: Source> LinuxDownload<'_, S> {
                         return;
                     }
                     let result = async {
-                        let verified = {
+                        let verified = (resumed && synced(&dest, file.entry.size)) || {
                             let (dest, entry) = (dest.clone(), file.entry.clone());
                             fsutil::in_background(move || verify_file(&dest, &entry)).await?
                         };
@@ -841,11 +846,17 @@ impl<S: Source> LinuxDownload<'_, S> {
             }
         }
         drop(body);
-        let sink =
-            tokio::task::spawn_blocking(move || inflate.expect("inflater put back").finish())
-                .await
-                .expect("inflate task panicked")
-                .map_err(|e| write_failed(e, tmp, &file.path))?;
+        let sync = e.size >= SYNCED_FROM;
+        let sink = tokio::task::spawn_blocking(move || {
+            let sink = inflate.expect("inflater put back").finish()?;
+            if sync {
+                sink.out.get_ref().sync_all()?;
+            }
+            Ok(sink)
+        })
+        .await
+        .expect("inflate task panicked")
+        .map_err(|e| write_failed(e, tmp, &file.path))?;
         if sink.written != e.size || sink.crc.sum() != e.crc {
             return Err(corrupted(&file.path));
         }
