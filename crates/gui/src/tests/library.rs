@@ -351,6 +351,78 @@ fn the_grid_keeps_room_under_what_shows_above_it() {
     )));
 }
 
+/// The store filters keep the games of any store ticked; a GOG game owned on Steam too, shown once
+/// as GOG's, is kept by either.
+#[test]
+fn store_filters_keep_the_games_of_the_stores_ticked() {
+    let mut app = library_app();
+    app.library.truncate(2);
+    app.library[0].steam = Some(vec![999]);
+    app.steam.on = true;
+    app.steam.games = vec![
+        fake_game("steam-620", "Portal"),
+        fake_game("steam-999", "Game 1"),
+    ];
+    app.steam.games[0].os.push("linux".into());
+    app.installs.insert(
+        "local-1".into(),
+        Install {
+            umu_id: None,
+            game_id: "local-1".into(),
+            title: "[FAKE] Mine".into(),
+            platform: Platform::Linux,
+            path: PathBuf::from("/games/Mine"),
+            client_id: None,
+            runner: Runner::Native,
+            isolated: false,
+        },
+    );
+    app.merge_steam();
+    let mut only = |f: Filters| {
+        app.filters = f;
+        let mut t = titles(&app);
+        t.sort();
+        t
+    };
+    assert_eq!(
+        only(Filters {
+            gog: true,
+            ..Default::default()
+        }),
+        ["Game 1", "Game 2"]
+    );
+    assert_eq!(
+        only(Filters {
+            steam: true,
+            ..Default::default()
+        }),
+        ["Game 1", "Portal"]
+    );
+    assert_eq!(
+        only(Filters {
+            added: true,
+            ..Default::default()
+        }),
+        ["Mine"]
+    );
+    assert_eq!(
+        only(Filters {
+            steam: true,
+            added: true,
+            ..Default::default()
+        }),
+        ["Game 1", "Mine", "Portal"]
+    );
+    assert_eq!(
+        only(Filters {
+            steam: true,
+            linux: true,
+            ..Default::default()
+        }),
+        ["Portal"]
+    );
+}
+
 #[test]
 fn shelves_filters_and_sort_select_games() {
     let mut app = library_app();

@@ -240,6 +240,9 @@ impl App {
                 .on_toggle(move |v| Message::SetFilters(set(f, v)))
         };
         let mut items = row![
+            check("GOG", f.gog, |f, v| Filters { gog: v, ..f }),
+            check("Steam", f.steam, |f, v| Filters { steam: v, ..f }),
+            check("Added", f.added, |f, v| Filters { added: v, ..f }),
             check("Windows", f.windows, |f, v| Filters { windows: v, ..f }),
             check("Linux", f.linux, |f, v| Filters { linux: v, ..f }),
             check("Has achievements", f.achievements, |f, v| Filters {
@@ -251,14 +254,15 @@ impl App {
                 ..f
             }),
         ]
-        .spacing(24)
+        .spacing(18)
         .align_y(Alignment::Center);
         if (f.achievements || f.cloud_saves)
             && let Some(status) = self.overview_status()
         {
             items = items.push(text(status).size(13).color(tokens().muted));
         }
-        container(items)
+        // Seven of them are wider than the smallest window.
+        container(items.wrap().vertical_spacing(10))
             .padding([12, 18])
             .width(Length::Fill)
             .style(theme::card)

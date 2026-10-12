@@ -88,9 +88,12 @@ impl fmt::Display for Sort {
     }
 }
 
-/// Library filters; a game must match every enabled one.
+/// Library filters; a game must match every enabled one, but only one of the stores ticked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Filters {
+    pub gog: bool,
+    pub steam: bool,
+    pub added: bool,
     pub windows: bool,
     pub linux: bool,
     pub achievements: bool,
@@ -554,6 +557,18 @@ impl App {
                 Shelf::All => true,
                 Shelf::Installed => self.is_installed(&g.id),
                 Shelf::Favorites => self.favorites.contains(&g.id),
+            })
+            .filter(|(_, g)| {
+                if !(f.gog || f.steam || f.added) {
+                    return true;
+                }
+                // A GOG game owned on Steam too shows once, as GOG's: either store keeps it.
+                match store::of(&g.id) {
+                    Ok(Store::Gog) => f.gog || (f.steam && self.steam_twin(&g.id).is_some()),
+                    Ok(Store::Steam) => f.steam,
+                    Ok(Store::Local) => f.added,
+                    Err(_) => false,
+                }
             })
             .filter(|(_, g)| !f.windows || g.os.iter().any(|o| o == "windows"))
             .filter(|(_, g)| !f.linux || g.os.iter().any(|o| o == "linux"))

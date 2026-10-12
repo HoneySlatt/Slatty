@@ -72,7 +72,9 @@ dot says you are signed in.
   **Hidden games** once you have hidden one;
 - the sort menu orders by name, most recently played or most played, and is kept for the next
   start;
-- the filter button shows games for Windows or Linux, with achievements, or with cloud saves;
+- the filter button shows games from GOG, Steam or added by hand (**Added**; any of the stores
+  ticked, a game owned on both GOG and Steam under either), for Windows or Linux, with
+  achievements, or with cloud saves;
 - the **+** button adds a game from no store (see [Games from no store](#games-from-no-store)).
 
 The size of the covers is set in Settings → Appearance.
