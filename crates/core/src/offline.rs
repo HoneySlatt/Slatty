@@ -414,13 +414,18 @@ pub async fn download<S: Source>(
     let mut files: Vec<(usize, String, u64)> = Vec::new();
     for part in 0..source.parts() {
         let name = file_name(&source.name(part).await?)?;
-        if files.iter().any(|(_, n, _)| *n == name) {
-            return Err(Error::parse(
-                "listing installers",
-                format!("two files are named {name}"),
-            ));
+        let size = source.size(part).await?;
+        // GOG lists an installer under each language it speaks: one file, downloaded once.
+        match files.iter().find(|(_, n, _)| *n == name) {
+            Some((_, _, s)) if *s == size => {}
+            Some(_) => {
+                return Err(Error::parse(
+                    "listing installers",
+                    format!("two files are named {name}"),
+                ));
+            }
+            None => files.push((part, name, size)),
         }
-        files.push((part, name, source.size(part).await?));
     }
     crate::paths::ensure_dir(folder)?;
     let mut p = Progress {

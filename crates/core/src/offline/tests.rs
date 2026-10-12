@@ -364,6 +364,41 @@ async fn a_link_in_place_of_the_staged_file_is_not_followed() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// GOG lists a game's installer for each language it speaks: chosen in two of them, that one file
+/// downloads once. Two different files of one name are still refused.
+#[tokio::test]
+async fn one_file_listed_under_two_languages_downloads_once() {
+    let dir = temp("shared");
+    let a = data(5000, 21);
+    let fake = Fake::new(vec![
+        (
+            "setup_fake.exe",
+            a.clone(),
+            Some(xml("setup_fake.exe", &a, 1024)),
+        ),
+        (
+            "setup_fake.exe",
+            a.clone(),
+            Some(xml("setup_fake.exe", &a, 1024)),
+        ),
+    ]);
+    let files = run_download(&fake, &dir).await.unwrap();
+    assert_eq!(files, [dir.join("setup_fake.exe")]);
+    assert_eq!(std::fs::read(&files[0]).unwrap(), a);
+    assert!(fake.opened.lock().unwrap().iter().all(|(p, _, _)| *p == 0));
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+
+    let clash = temp("clash");
+    let fake = Fake::new(vec![
+        ("setup_fake.exe", data(5000, 22), None),
+        ("setup_fake.exe", data(4000, 23), None),
+    ]);
+    assert!(run_download(&fake, &clash).await.is_err());
+    assert_eq!(std::fs::read_dir(&clash).unwrap().count(), 0);
+    std::fs::remove_dir_all(&dir).unwrap();
+    std::fs::remove_dir_all(&clash).unwrap();
+}
+
 #[tokio::test]
 async fn a_name_that_is_not_a_file_name_writes_nothing() {
     let dir = temp("name");
