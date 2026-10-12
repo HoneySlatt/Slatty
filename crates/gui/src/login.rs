@@ -130,6 +130,7 @@ impl App {
         self.covers.clear();
         self.images.clear();
         self.images_requested.clear();
+        self.forget_scaled();
         // Steam's games stay, without GOG's: their covers come back from Steam's files.
         self.merge_steam();
         self.overview.clear();

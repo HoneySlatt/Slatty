@@ -471,6 +471,39 @@ fn the_grid_shows_covers_made_at_the_cards_size() {
     assert_eq!(shown(&app), cover);
 }
 
+/// Copies made for an account are forgotten with it, and those arriving after it was signed out
+/// are dropped: they may be in its cache, which forgetting it deleted.
+#[test]
+fn copies_made_for_an_account_go_with_it() {
+    let mut app = library_app();
+    app.card_width = 150.0;
+    let mine = PathBuf::from("/custom/7/cover.jpg");
+    app.customs.insert(
+        "7".into(),
+        slatty_core::custom::Custom {
+            cover: Some(mine.clone()),
+            ..Default::default()
+        },
+    );
+    let shown = |app: &App| match app.grid_cover("7") {
+        Some(iced::widget::image::Handle::Path(_, path)) => path,
+        other => panic!("{other:?}"),
+    };
+    let _ = app.update(Message::Rescaled(2.0));
+    let made = |copy: &str| {
+        Message::CoversScaled(300, vec![("7".into(), mine.clone(), Some(copy.into()))])
+    };
+    let _ = app.update(made("/scaled/300/a.jpg"));
+    assert_eq!(shown(&app), PathBuf::from("/scaled/300/a.jpg"));
+
+    let epoch = app.account_epoch;
+    let _ = app.update(Message::LoggedOut(Ok(None)));
+    assert_eq!(shown(&app), mine, "forgotten with the account");
+    let late = Message::AccountResult(epoch, Box::new(made("/scaled/300/b.jpg")));
+    let _ = app.update(late);
+    assert_eq!(shown(&app), mine, "made for the account signed out");
+}
+
 /// The game page draws its key art from the copy made at the window's width, rounded up to 1920,
 /// 2560 or 3840 pixels; another width draws the original until its own copy is made.
 #[test]

@@ -909,6 +909,8 @@ impl App {
                 self.logged_out();
                 // What work wrote as it ended between the account's data deleted and now.
                 self.forget_again();
+                // Steam's covers and those of games added by hand, shown again.
+                return self.scale_covers(None);
             }
             Message::LoggedOut(Err(e)) => self.notify_error(e),
             Message::SyncLibrary => return self.sync_library(),

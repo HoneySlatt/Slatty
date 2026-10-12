@@ -119,7 +119,7 @@ impl App {
             .flatten()
             .map(|c| c.join("art"))
             .collect();
-        Task::perform(
+        self.with_account(Task::perform(
             {
                 let from = from.clone();
                 slatty_core::fsutil::in_background(move || {
@@ -129,7 +129,28 @@ impl App {
                 })
             },
             move |copy| Message::ArtScaled(from.clone(), width, copy),
-        )
+        ))
+    }
+
+    /// Copies may go into the account's cache: made for an account signed out or forgotten since,
+    /// they are dropped, and deleted with its cache (`App::account_task`).
+    fn with_account(&self, task: Task<Message>) -> Task<Message> {
+        if self.account.is_some() {
+            self.account_task(task)
+        } else {
+            task
+        }
+    }
+
+    /// Forgets the copies an account's covers were shown with, and stops making those waiting.
+    pub fn forget_scaled(&mut self) {
+        if let Some(old) = self.scaled.limit.take() {
+            old.close();
+        }
+        self.scaled = ScaledCovers {
+            scale: self.scaled.scale,
+            ..ScaledCovers::default()
+        };
     }
 
     pub fn art_scaled(&mut self, from: PathBuf, width: u32, copy: Option<PathBuf>) {
@@ -231,7 +252,7 @@ impl App {
             .as_ref()
             .map(|a| core.dirs.account_cache(&a.user_id));
         let shared = core.dirs.cache.clone();
-        Task::batch(jobs.chunks(PER_MESSAGE).map(|chunk| {
+        self.with_account(Task::batch(jobs.chunks(PER_MESSAGE).map(|chunk| {
             let (chunk, limit) = (chunk.to_vec(), limit.clone());
             let (user_cache, shared) = (user_cache.clone(), shared.clone());
             Task::perform(
@@ -259,7 +280,7 @@ impl App {
                 },
                 move |made| Message::CoversScaled(width, made),
             )
-        }))
+        })))
     }
 
     pub fn covers_scaled(&mut self, width: u32, made: Vec<(String, PathBuf, Option<PathBuf>)>) {
