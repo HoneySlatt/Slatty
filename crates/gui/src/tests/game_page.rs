@@ -214,6 +214,31 @@ fn closing_asks_first_only_when_something_is_running() {
     );
 }
 
+/// Signed out, a game may still run: closing the window from the sign-in page asks first too, in
+/// the same dialog over that page.
+#[test]
+fn closing_from_the_sign_in_page_asks_first_too() {
+    let mut app = library_app();
+    app.logged_out();
+    let (stop, _stopped) = tokio::sync::mpsc::unbounded_channel();
+    app.play = Some(crate::play::PlayState {
+        game_id: "3".into(),
+        log: Vec::new(),
+        stop,
+        running: true,
+        told: Vec::new(),
+    });
+    let _ = app.update(Message::CloseRequested);
+    let mut ui = render(&app);
+    assert!(ui.find("Sign in to GOG").is_ok(), "over the sign-in page");
+    assert!(ui.find("Quit SlattyLauncher?").is_ok());
+    ui.click("Keep running").unwrap();
+    for m in ui.into_messages().collect::<Vec<_>>() {
+        let _ = app.update(m);
+    }
+    assert!(app.quit_confirm.is_none());
+}
+
 #[test]
 fn the_cover_does_not_stand_in_while_the_key_art_downloads() {
     let mut app = library_app();

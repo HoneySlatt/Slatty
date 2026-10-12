@@ -51,15 +51,17 @@ impl App {
             .keys()
             .any(|id| slatty_core::store::is_local(id));
         let username = match (&self.account, &self.steam.found) {
-            (Some(account), _) if !self.login_open => account.username.as_str(),
-            (None, Some(name)) if self.steam.on && !self.login_open => name.as_str(),
-            (None, None) if self.steam.on && !self.login_open => "Steam",
-            (None, _) if added && !self.login_open => "",
-            _ => return self.with_notice(self.login_view()),
+            (Some(account), _) if !self.login_open => Some(account.username.as_str()),
+            (None, Some(name)) if self.steam.on && !self.login_open => Some(name.as_str()),
+            (None, None) if self.steam.on && !self.login_open => Some("Steam"),
+            (None, _) if added && !self.login_open => Some(""),
+            _ => None,
         };
-        let body: Element<'_, Message> = match self.selected_game() {
-            Some(game) => self.arriving(self.game_page(game)),
-            None => column![
+        // The sign-in page is a page like the others, under the same layers: the quit dialog too.
+        let body: Element<'_, Message> = match (username, self.selected_game()) {
+            (None, _) => self.login_view(),
+            (Some(_), Some(game)) => self.arriving(self.game_page(game)),
+            (Some(username), None) => column![
                 self.top_bar(username),
                 container(
                     self.arriving(match self.page {
