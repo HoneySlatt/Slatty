@@ -930,6 +930,61 @@ fn download_now_starts_its_row_when_the_download_pausing_for_a_game_fails() {
     assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "8"));
 }
 
+/// Download now pressed while a download pauses for a game starts its row also when that download
+/// finishes rather than pauses, or is cut off by GOG: then the row goes first once GOG answers.
+#[test]
+fn download_now_starts_its_row_when_the_download_pausing_for_a_game_finishes_or_is_cut_off() {
+    use super::offline::{installing_6, paused_install_job, queued_job};
+    use crate::downloads::DownloadsMsg;
+    use crate::offline::entry;
+    use slatty_core::installer::{DOWNLOADING, InstallJob};
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    play_3(&mut app);
+    queued_job(&app, "8");
+    app.queue = vec![entry("8")];
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("8"))));
+    let done = slatty_core::install::Install {
+        game_id: "6".into(),
+        ..app.installs["3"].clone()
+    };
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Ok(done))));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "8"));
+
+    let mut app = library_app();
+    installing_6(&mut app);
+    let db = app.core.as_ref().unwrap().db.clone();
+    let job = InstallJob::load(&db, "6").unwrap();
+    InstallJob {
+        game_id: "6".into(),
+        build_id: "1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 6".into(),
+        state: DOWNLOADING.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    assert!(job.is_none());
+    play_3(&mut app);
+    queued_job(&app, "8");
+    app.queue = vec![entry("8")];
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("8"))));
+    let _ = app.update(Message::Install(InstallMsg::Done(
+        "6".into(),
+        Err(Some(crate::install::Failure(
+            "[FAKE] network error".into(),
+            true,
+        ))),
+    )));
+    assert!(app.offline_run.is_none(), "GOG waited for");
+    let _ = app.update(Message::Install(InstallMsg::Retry));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "8"));
+}
+
 /// A download the user is pausing stays paused: neither a game nor Download now takes it over.
 #[test]
 fn a_download_pausing_on_request_stays_paused() {

@@ -310,13 +310,15 @@ impl App {
                                 run.folder.display()
                             ),
                         );
-                        return Task::batch([done, self.start_next()]);
+                        // What Download now asked for while they ended goes first, game or not.
+                        let next = self.start_asked().unwrap_or_else(|| self.start_next());
+                        return Task::batch([done, next]);
                     }
                     // Paused: the queue waits too, as for an install, unless the launcher paused
                     // it (`requeue_preempted`); what Download now asked for meanwhile starts.
                     Err(None) => {
                         self.offline_stopped.push((game_id, None));
-                        return self.start_asked_now();
+                        return self.start_asked().unwrap_or_else(Task::none);
                     }
                     // GOG out of reach: it keeps its place, and the queue waits for GOG.
                     Err(Some((e, true))) => {
@@ -339,10 +341,7 @@ impl App {
                         );
                         self.offline_stopped.push((game_id, Some(e)));
                         // What Download now asked for while it stopped starts, game or not.
-                        let next = match self.starting_now {
-                            Some(_) => self.start_asked_now(),
-                            None => self.start_next(),
-                        };
+                        let next = self.start_asked().unwrap_or_else(|| self.start_next());
                         return Task::batch([failed, next]);
                     }
                 }

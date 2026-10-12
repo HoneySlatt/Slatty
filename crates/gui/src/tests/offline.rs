@@ -710,6 +710,37 @@ fn a_download_the_user_pauses_still_holds_the_queue() {
     assert_eq!(app.queue, ["6"]);
 }
 
+/// The row Download now asked for during a game starts though another came first meanwhile, also
+/// when the download it paused fails, or is cut off by GOG, rather than pauses.
+#[test]
+fn download_now_during_a_game_starts_its_row_when_the_download_fails_or_is_cut_off() {
+    use crate::downloads::DownloadsMsg;
+    for (error, temporary) in [("[FAKE] disk error", false), ("[FAKE] network error", true)] {
+        let mut app = library_app();
+        queued_job(&app, "5");
+        queued_job(&app, "8");
+        app.queue = vec![entry("5")];
+        let _ = app.start_next();
+        paused_job(&mut app, "9");
+        app.queue = vec![entry("8")];
+        app.launch_options.insert("3".into(), Vec::new());
+        let _ = app.update(Message::Play("3".into()));
+        let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("8"))));
+        let _ = app.update(Message::Offline(OfflineMsg::Resume("9".into())));
+        let _ = app.update(Message::Offline(OfflineMsg::Done(
+            "5".into(),
+            Err(Some((error.into(), temporary))),
+        )));
+        if temporary {
+            let _ = app.update(Message::Install(crate::install::InstallMsg::Retry));
+        }
+        assert!(
+            app.offline_run.as_ref().is_some_and(|r| r.game_id == "8"),
+            "{error}"
+        );
+    }
+}
+
 /// Installers cut off because GOG could not be reached go on first once it answers, beside a
 /// download paused on request, as they would after a restart.
 #[test]

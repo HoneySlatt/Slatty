@@ -225,30 +225,18 @@ impl App {
             }
         }
         self.drag = None;
-        // The row Download now asked for goes first, wherever it was put meanwhile, the stopped
-        // download right after it; taken out, the stopped download waits as if paused for a game.
-        let asked = match why {
-            Preempt::StartNow => self
-                .starting_now
-                .as_ref()
-                .and_then(|row| self.queue.iter().position(|e| e == row)),
-            Preempt::Play => None,
-        };
-        if let Some(i) = asked {
-            let row = self.queue.remove(i);
-            self.queue.insert(0, row);
-        }
-        self.queue
-            .insert(usize::from(asked.is_some()), entry.to_owned());
+        self.queue.insert(0, entry.to_owned());
         self.save_queue();
         if !self.goes_on.iter().any(|e| e == entry) {
             self.goes_on.push(entry.to_owned());
         }
-        let next = match asked {
-            Some(_) => self.start_first(),
-            // The game may have closed before the download stopped.
-            None => self.start_next(),
-        };
+        // The row Download now asked for goes before it; taken out, the stopped download waits as
+        // if paused for a game. The game may have closed before the download stopped.
+        let next = match why {
+            Preempt::StartNow => self.start_asked(),
+            Preempt::Play => None,
+        }
+        .unwrap_or_else(|| self.start_next());
         // An install is planned again, for its size in the queue.
         let plan = match of_entry(entry) {
             Some(_) => Task::none(),
@@ -371,14 +359,17 @@ impl App {
         self.start_first()
     }
 
-    /// Starts what Download now asked for while the download running paused on request, now that
-    /// it is paused: at once while first in line, a game running or not, as with nothing running.
-    pub(crate) fn start_asked_now(&mut self) -> Task<Message> {
-        match &self.starting_now {
-            Some(e) if self.queue.first() == Some(e) => self.start_first(),
-            Some(_) => self.start_next(),
-            None => Task::none(),
-        }
+    /// Starts the row Download now asked for, now that the download running has stopped, however:
+    /// first, wherever it was put meanwhile, a game running or not. `None` when nothing was asked
+    /// for, or its row was taken out.
+    pub(crate) fn start_asked(&mut self) -> Option<Task<Message>> {
+        let row = self.starting_now.as_ref()?;
+        let at = self.queue.iter().position(|e| e == row)?;
+        self.drag = None;
+        let row = self.queue.remove(at);
+        self.queue.insert(0, row);
+        self.save_queue();
+        Some(self.start_first())
     }
 
     /// Starts the first download of the queue, whatever waits beside it.
