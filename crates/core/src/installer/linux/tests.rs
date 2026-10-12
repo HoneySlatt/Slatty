@@ -235,6 +235,44 @@ async fn a_full_disk_stops_the_other_linux_files() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// A file that cannot be written (a full disk, a quota, a network drive gone) is not taken for a
+/// damaged download: a full disk stops the other files, and the error says what failed.
+#[tokio::test]
+async fn a_file_that_cannot_be_written_is_not_called_corrupted() {
+    let source = Fake::new(vec![game(&big())]);
+    let set = LinuxSet::new(&[Part {
+        installer: installer_of("1"),
+        entries: read_entries(&source, 0).await.unwrap(),
+    }])
+    .unwrap();
+    let dl = LinuxDownload {
+        source: &source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &plenty,
+    };
+    // Every write to `/dev/full` fails as on a full disk: the large file as it is written, the
+    // small one as it is finished.
+    for name in ["data.bin", "lang.txt"] {
+        let file = set.files.iter().find(|f| f.path.ends_with(name)).unwrap();
+        let full = std::fs::OpenOptions::new()
+            .write(true)
+            .open("/dev/full")
+            .unwrap();
+        let err = dl
+            .write_file(
+                full,
+                Path::new("/dev/full"),
+                file,
+                &|_| {},
+                &AtomicU64::new(0),
+            )
+            .await
+            .unwrap_err();
+        assert!(err.is_disk_full(), "{name}: {err}");
+    }
+}
+
 #[tokio::test]
 async fn installs_the_game_files_and_the_dlc_over_them() {
     let big = big();
@@ -515,7 +553,7 @@ async fn a_file_inflating_past_its_stated_size_is_stopped_there() {
     }
     .run(&set, &root.join(".p"), &root.join("Game"))
     .await;
-    assert!(r.is_err());
+    assert!(matches!(r, Err(Error::Refused(_))), "{r:?}");
     assert!(
         *most.lock().unwrap() <= 16,
         "{} written",

@@ -695,7 +695,11 @@ impl<S: Source> LinuxDownload<'_, S> {
         };
         let mut attempt = 0;
         loop {
-            match self.write_file(&tmp, file, &count, network).await {
+            let written = match fsutil::restart_staging(&tmp) {
+                Ok(out) => self.write_file(out, &tmp, file, &count, network).await,
+                Err(e) => Err(e),
+            };
+            match written {
                 Ok(()) => break,
                 Err(Error::Cancelled) => {
                     let _ = std::fs::remove_file(&tmp);
@@ -721,15 +725,16 @@ impl<S: Source> LinuxDownload<'_, S> {
         std::fs::rename(&tmp, dest).map_err(|e| Error::io(format!("rename {}", tmp.display()), e))
     }
 
+    /// Writes `file` into `out`, the staging file at `tmp`.
     async fn write_file(
         &self,
+        out: std::fs::File,
         tmp: &Path,
         file: &LinuxFile,
         count: &(dyn Fn(u64) + Sync),
         network: &AtomicU64,
     ) -> Result<()> {
         let e = &file.entry;
-        let out = fsutil::restart_staging(tmp)?;
         let sink = Sink {
             out: std::io::BufWriter::with_capacity(BATCH, out),
             crc: flate2::Crc::new(),
@@ -800,7 +805,7 @@ impl<S: Source> LinuxDownload<'_, S> {
                 .await
                 .expect("inflate task panicked");
                 inflate = Some(back);
-                count(written.map_err(|_| corrupted(&file.path))?);
+                count(written.map_err(|e| write_failed(e, tmp, &file.path))?);
                 batch = Vec::with_capacity(BATCH);
             }
         }
@@ -809,7 +814,7 @@ impl<S: Source> LinuxDownload<'_, S> {
             tokio::task::spawn_blocking(move || inflate.expect("inflater put back").finish())
                 .await
                 .expect("inflate task panicked")
-                .map_err(|_| corrupted(&file.path))?;
+                .map_err(|e| write_failed(e, tmp, &file.path))?;
         if sink.written != e.size || sink.crc.sum() != e.crc {
             return Err(corrupted(&file.path));
         }
@@ -868,6 +873,16 @@ fn corrupted(path: &Path) -> Error {
     ))
 }
 
+/// Writing `path` into `tmp` failed: on its data, damaged or larger than the installer says, or
+/// on the disk (full, over quota, a network drive gone), which says why.
+fn write_failed(e: std::io::Error, tmp: &Path, path: &Path) -> Error {
+    match e.kind() {
+        // flate2's damaged stream, and the size limit of `Sink`.
+        std::io::ErrorKind::InvalidInput | std::io::ErrorKind::InvalidData => corrupted(path),
+        _ => Error::io(format!("write {}", tmp.display()), e),
+    }
+}
+
 /// True when `path` already holds exactly this file.
 pub fn verify_file(path: &Path, entry: &ZipEntry) -> Result<bool> {
     let Ok(meta) = std::fs::symlink_metadata(path) else {
@@ -905,7 +920,10 @@ struct Sink {
 impl Write for Sink {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         if self.written + buf.len() as u64 > self.limit {
-            return Err(std::io::Error::other("larger than the installer says"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "larger than the installer says",
+            ));
         }
         self.out.write_all(buf)?;
         self.crc.update(buf);
