@@ -62,6 +62,11 @@ impl App {
             .push(achievements)
             .push(couch.menu.map(couch_menu))
             .push(
+                self.launch_prompt
+                    .as_deref()
+                    .map(|id| self.couch_launch(id, couch.launch)),
+            )
+            .push(
                 self.quit_confirm
                     .as_ref()
                     .map(|work| couch_quit(work, couch.quit)),
@@ -115,6 +120,8 @@ impl App {
         let game = self.selected.is_some();
         let hints: &[(Glyph, &str)] = if self.quit_confirm.is_some() {
             &[(Glyph::A, "Choose"), (Glyph::B, "Keep running")]
+        } else if self.launch_prompt.is_some() {
+            &[(Glyph::A, "Start"), (Glyph::B, "Cancel")]
         } else if couch.menu.is_some() {
             &[(Glyph::A, "Select"), (Glyph::B, "Close")]
         } else if couch.keyboard.is_some() && !game {
@@ -647,6 +654,56 @@ impl App {
         container(Column::with_children(items).spacing(12))
             .padding([MARGIN / 2.0, MARGIN])
             .into()
+    }
+}
+
+impl App {
+    /// Asks how a game that can be started several ways is started, the first time.
+    fn couch_launch<'a>(&'a self, game_id: &'a str, at: usize) -> Element<'a, Message> {
+        let ways = self
+            .launch_options
+            .get(game_id)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let choices = ways.iter().enumerate().map(|(i, name)| {
+            let focused = i == at;
+            let note = if focused {
+                tokens().on_accent
+            } else {
+                tokens().muted
+            };
+            button(
+                row![text(name.as_str()).size(22).font(semibold())]
+                    .push((i == 0).then(|| text("Default").size(16).color(note)))
+                    .spacing(14)
+                    .align_y(Alignment::Center),
+            )
+            .width(560)
+            .padding([16, 24])
+            .on_press(Message::LaunchAs(game_id.to_string(), name.clone()))
+            .style(theme::couch_button(focused))
+            .into()
+        });
+        container(
+            container(
+                column![
+                    text(format!("Start {}", self.title_of(game_id)))
+                        .size(28)
+                        .font(bold()),
+                    text("Your choice is kept for the next launches.")
+                        .size(17)
+                        .color(tokens().muted),
+                    Column::with_children(choices).spacing(10),
+                ]
+                .spacing(20)
+                .max_width(720),
+            )
+            .padding(28)
+            .style(theme::couch_panel),
+        )
+        .center(Length::Fill)
+        .style(theme::backdrop)
+        .into()
     }
 }
 

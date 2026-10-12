@@ -660,7 +660,8 @@ one, X the left one, Y the top one.
   search. A keyboard types into the search directly; a letter typed from Home or Library starts
   one.
 - A game's page has its main button (Play, Stop while it runs, Install, Resume, or where its
-  download stands), the favorite, and **Achievements**, a list to scroll. **Install** starts at
+  download stands), the favorite, and **Achievements**, a list to scroll. A game that can be
+  started several ways asks which the first time, as in the desktop window. **Install** starts at
   once with the choices the Install drawer would start with: the default platform and Proton
   build, the installation path of Settings → Installs, every DLC owned; it waits in the queue while
   another download runs.

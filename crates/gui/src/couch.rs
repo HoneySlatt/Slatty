@@ -168,6 +168,8 @@ pub struct Couch {
     pub menu: Option<usize>,
     /// The button with the focus in the quit question.
     pub quit: usize,
+    /// The way with the focus, while asked how a game is started (`App::launch_prompt`).
+    pub launch: usize,
 }
 
 /// A row of covers of the home page.
@@ -300,6 +302,9 @@ impl App {
         };
         if self.quit_confirm.is_some() {
             return self.quit_nav(nav);
+        }
+        if let Some(game_id) = self.launch_prompt.clone() {
+            return self.launch_nav(game_id, nav);
         }
         if couch.menu.is_some() {
             return self.menu_nav(nav);
@@ -519,6 +524,36 @@ impl App {
                     Message::ConfirmQuit
                 } else {
                     Message::CancelQuit
+                });
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// The question asked the first time a game that can be started several ways is played.
+    fn launch_nav(&mut self, game_id: String, nav: Nav) -> Task<Message> {
+        let ways = self
+            .launch_options
+            .get(&game_id)
+            .cloned()
+            .unwrap_or_default();
+        let Some(couch) = &mut self.couch else {
+            return Task::none();
+        };
+        let at = couch.launch.min(ways.len().saturating_sub(1));
+        match nav {
+            Nav::Up => couch.launch = at.saturating_sub(1),
+            Nav::Down => couch.launch = (at + 1).min(ways.len().saturating_sub(1)),
+            Nav::Back => {
+                couch.launch = 0;
+                return self.update(Message::CancelLaunch);
+            }
+            Nav::Confirm => {
+                couch.launch = 0;
+                return self.update(match ways.into_iter().nth(at) {
+                    Some(way) => Message::LaunchAs(game_id, way),
+                    None => Message::CancelLaunch,
                 });
             }
             _ => {}

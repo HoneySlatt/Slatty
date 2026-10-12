@@ -276,6 +276,39 @@ fn an_installed_game_plays_from_its_page() {
 }
 
 #[test]
+fn a_game_started_several_ways_asks_which() {
+    let mut app = couch_app();
+    app.launch_options.insert(
+        "3".into(),
+        vec!["[FAKE] Game 3".into(), "[FAKE] Settings".into()],
+    );
+    let _ = app.update(Message::Select("3".into()));
+    nav(&mut app, Nav::Confirm);
+    assert_eq!(app.launch_prompt.as_deref(), Some("3"));
+    let mut ui = render(&app);
+    snapshot(&mut ui, "couch-launch");
+    assert!(ui.find("[FAKE] Settings").is_ok(), "the ways are shown");
+    drop(ui);
+    // Back leaves the question, which then holds nothing (updates wait while it is asked).
+    nav(&mut app, Nav::Back);
+    assert!(app.launch_prompt.is_none());
+    assert_eq!(app.selected.as_deref(), Some("3"));
+    nav(&mut app, Nav::Confirm);
+    nav(&mut app, Nav::Down);
+    nav(&mut app, Nav::Confirm);
+    assert!(app.launch_prompt.is_none());
+    assert!(
+        app.play
+            .as_ref()
+            .is_some_and(|p| p.running && p.game_id == "3")
+    );
+    assert_eq!(
+        app.launch_choices.get("3").map(String::as_str),
+        Some("[FAKE] Settings")
+    );
+}
+
+#[test]
 fn the_achievements_list_opens_from_the_game_page() {
     let mut app = couch_app();
     app.achievements.insert(
