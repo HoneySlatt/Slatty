@@ -822,3 +822,18 @@ fn quitting_with_work_running_asks_first() {
     nav(&mut app, Nav::Back);
     assert!(app.quit_confirm.is_none());
 }
+
+/// The quit question answered by a tap starts again on Keep running: a press of A then never quits
+/// by a focus left on Quit.
+#[test]
+fn the_quit_question_starts_on_keep_running_each_time() {
+    use super::offline::installing_6;
+    let mut app = couch_app();
+    installing_6(&mut app);
+    let _ = app.update(Message::Couch(CouchMsg::Menu(MenuItem::Quit)));
+    nav(&mut app, Nav::Right);
+    assert_eq!(couch(&app).quit, 1);
+    let _ = app.update(Message::CancelQuit);
+    let _ = app.update(Message::Couch(CouchMsg::Menu(MenuItem::Quit)));
+    assert_eq!(couch(&app).quit, 0);
+}

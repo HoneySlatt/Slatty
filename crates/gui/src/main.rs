@@ -1150,7 +1150,13 @@ impl App {
                 }
                 self.quit_confirm = Some(running);
             }
-            Message::CancelQuit => self.quit_confirm = None,
+            Message::CancelQuit => {
+                self.quit_confirm = None;
+                // The next question starts on Keep running, however this one was answered.
+                if let Some(couch) = &mut self.couch {
+                    couch.quit = 0;
+                }
+            }
             // Work is left as it stands: downloads and updates resume at the next start, as after a
             // crash.
             Message::ConfirmQuit => return iced::exit(),
