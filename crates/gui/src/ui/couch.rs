@@ -54,7 +54,7 @@ impl App {
             .push(self.couch_hints(couch));
         let keyboard = couch
             .keyboard
-            .filter(|_| game.is_none() && couch.tab == Tab::Library)
+            .filter(|_| self.typing())
             .map(|focus| self.couch_keyboard(couch, focus));
         let achievements = game.and_then(|g| self.couch_achievements(couch, g));
         stack![body]
@@ -124,7 +124,7 @@ impl App {
             &[(Glyph::A, "Start"), (Glyph::B, "Cancel")]
         } else if couch.menu.is_some() {
             &[(Glyph::A, "Select"), (Glyph::B, "Close")]
-        } else if couch.keyboard.is_some() && !game {
+        } else if self.typing() {
             &[
                 (Glyph::A, "Type"),
                 (Glyph::X, "Erase"),

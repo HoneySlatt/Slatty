@@ -234,15 +234,13 @@ impl App {
             CouchMsg::Nav(nav) | CouchMsg::Key(Key::Nav(nav)) => return self.couch_nav(nav),
             CouchMsg::Key(Key::Char(c)) => return self.typed(c),
             CouchMsg::Key(Key::Erase) => {
-                let Some(couch) = &mut self.couch else {
-                    return Task::none();
-                };
-                if couch.keyboard.is_some() {
-                    couch.search.pop();
-                    self.searched();
-                } else {
+                if !self.typing() {
                     return self.couch_nav(Nav::Back);
                 }
+                if let Some(couch) = &mut self.couch {
+                    couch.search.pop();
+                }
+                self.searched();
             }
             CouchMsg::Tab(tab) => {
                 self.selected = None;
@@ -315,7 +313,7 @@ impl App {
         if couch.menu.is_some() {
             return self.menu_nav(nav);
         }
-        if couch.keyboard.is_some() {
+        if self.typing() {
             return self.keyboard_nav(nav);
         }
         if let Some(id) = self.selected.clone() {
@@ -638,10 +636,11 @@ impl App {
 
     /// A character typed on a keyboard: into the search, which it opens from a list.
     fn typed(&mut self, c: char) -> Task<Message> {
+        let typing = self.typing();
         let Some(couch) = &mut self.couch else {
             return Task::none();
         };
-        if couch.keyboard.is_some() {
+        if typing {
             couch.search.push(c);
             self.searched();
             return Task::none();
@@ -661,6 +660,16 @@ impl App {
             self.searched();
         }
         Task::none()
+    }
+
+    /// Whether the on-screen keyboard shows, over the library, and so takes the presses: open, it
+    /// is hidden by a game's page or another tab.
+    pub(crate) fn typing(&self) -> bool {
+        self.selected.is_none()
+            && self
+                .couch
+                .as_ref()
+                .is_some_and(|c| c.keyboard.is_some() && c.tab == Tab::Library)
     }
 
     /// The library, with the keyboard over it.

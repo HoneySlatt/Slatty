@@ -339,6 +339,24 @@ fn an_installed_game_plays_from_its_page() {
     assert_eq!(app.selected.as_deref(), Some("3"));
 }
 
+/// A cover tapped above the keyboard opens its game: the keyboard, hidden then, takes no press.
+#[test]
+fn the_keyboard_hidden_by_a_game_page_takes_nothing() {
+    let mut app = couch_app();
+    app.launch_options.insert("3".into(), Vec::new());
+    nav(&mut app, Nav::Search);
+    assert!(couch(&app).keyboard.is_some());
+    let _ = app.update(Message::Select("3".into()));
+    nav(&mut app, Nav::Confirm);
+    key(&mut app, Key::Char('x'));
+    assert_eq!(couch(&app).search, "");
+    assert!(
+        app.play
+            .as_ref()
+            .is_some_and(|p| p.running && p.game_id == "3")
+    );
+}
+
 /// A notice (an install that cannot start, Steam not reached) closes with B, before anything else
 /// B does; the hints say so.
 #[test]
