@@ -817,6 +817,45 @@ fn a_game_owned_on_both_shows_once_as_gogs() {
     assert_eq!(app.library.len(), 14);
 }
 
+/// Steam's download of a game shown as its GOG twin is told for the game the library shows: its
+/// card names it, and a click opens its page.
+#[test]
+fn a_download_steam_makes_of_a_twin_is_told_for_the_game_shown() {
+    let mut app = library_app();
+    app.library[0].steam = Some(vec![440]);
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    assert_eq!(app.steam_twin("1"), Some("steam-440"));
+    let downloading = Update {
+        done: 1_000,
+        total: 4_000,
+        stage_total: 0,
+        started: true,
+        paused: false,
+    };
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        440,
+        0,
+        false,
+        Some(downloading),
+    )])));
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        [("steam-440".into(), Some(installed(440, 4_000, true, None)))].into(),
+        HashMap::new(),
+    )));
+    assert_eq!(
+        toasted(&app),
+        [(
+            "Download complete".to_string(),
+            "Steam installed [FAKE] Game 1: it is ready to play.".to_string()
+        )]
+    );
+    assert_eq!(app.toasts[0].game.as_deref(), Some("1"));
+    let card = app.toasts[0].id;
+    let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Open(card)));
+    assert_eq!(app.selected_game().map(|g| g.id.as_str()), Some("1"));
+}
+
 /// What can go wrong with Steam's files is said, not hidden: a list of apps Steam changed the
 /// format of leaves no game to name, and Settings says why. A library folder slow to answer (a
 /// network drive waking up) is not asked again at each focus of the window meanwhile.

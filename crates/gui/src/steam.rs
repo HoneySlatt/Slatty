@@ -719,11 +719,18 @@ impl App {
             }
         }
         Task::batch(told.into_iter().map(|id| {
+            // A game shown as its GOG twin is told as the GOG game the library shows.
+            let shown = self
+                .steam
+                .twins
+                .iter()
+                .find_map(|(gog, steam)| (*steam == id).then(|| gog.clone()))
+                .unwrap_or(id);
             let body = format!(
                 "Steam installed {}: it is ready to play.",
-                self.title_of(&id)
+                self.title_of(&shown)
             );
-            self.notify(Kind::Downloads, Some(&id), "Download complete", body)
+            self.notify(Kind::Downloads, Some(&shown), "Download complete", body)
         }))
     }
 
