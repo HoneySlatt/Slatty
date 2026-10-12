@@ -657,3 +657,26 @@ fn a_download_the_user_pauses_still_holds_the_queue() {
     assert_eq!(app.offline_stopped, [("5".to_string(), None)]);
     assert_eq!(app.queue, ["6"]);
 }
+
+#[test]
+fn installers_removed_before_download_now_started_them_wait_for_a_pause_once_queued_again() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    queued_job(&app, "5");
+    queued_job(&app, "8");
+    app.queue = vec![entry("5"), entry("8")];
+    let _ = app.start_next();
+    let _ = app.update(Message::Offline(OfflineMsg::Pause("5".into())));
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("8"))));
+    let _ = app.update(Message::Downloads(DownloadsMsg::Remove(entry("8"))));
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    assert_eq!(app.offline_stopped, [("5".to_string(), None)]);
+
+    queued_job(&app, "8");
+    app.queue = vec![entry("8")];
+    let _ = app.start_next();
+    assert!(
+        app.offline_run.is_none(),
+        "the paused download holds the queue"
+    );
+}

@@ -369,6 +369,7 @@ impl App {
                 self.drag = None;
                 self.queue.retain(|e| *e != entry(&game_id));
                 self.save_queue();
+                self.starting_now.take_if(|e| *e == entry(&game_id));
                 self.goes_on.retain(|e| *e != entry(&game_id));
                 return Task::perform(
                     async move {
