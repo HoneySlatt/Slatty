@@ -196,6 +196,58 @@ fn installers_wait_in_the_queue_behind_a_running_install() {
     assert!(ui.find("[FAKE] Game 5 · offline installers").is_ok());
 }
 
+/// Stopped installers asked for again from the drawer into the same folder are taken up as
+/// started, as the command line's: their run checks that their folder is still there (a drive
+/// unplugged) rather than make it again on the system disk.
+#[test]
+fn stopped_installers_asked_for_again_are_taken_up_as_started() {
+    let stopped = |app: &mut App, state: &str| {
+        open(app, "5", Some(Panel::Installers));
+        offered(app);
+        OfflineJob {
+            game_id: "5".into(),
+            os: "windows".into(),
+            languages: vec!["en".into()],
+            dlcs: Vec::new(),
+            folder: "/tmp/[FAKE] installers/[FAKE] Game 5".into(),
+            state: state.into(),
+        }
+        .save(&app.core.as_ref().unwrap().db)
+        .unwrap();
+        app.offline_stopped.push(("5".into(), None));
+    };
+    let state = |app: &App| {
+        OfflineJob::load(&app.core.as_ref().unwrap().db, "5")
+            .unwrap()
+            .unwrap()
+            .state
+    };
+    let mut app = library_app();
+    stopped(&mut app, PAUSED);
+    let _ = app.update(Message::Offline(OfflineMsg::Download("5".into())));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    assert_eq!(state(&app), DOWNLOADING);
+
+    // While another download runs: it waits as started, after a restart too.
+    let mut app = library_app();
+    installing_6(&mut app);
+    stopped(&mut app, FAILED);
+    let _ = app.update(Message::Offline(OfflineMsg::Download("5".into())));
+    assert_eq!(app.queue, [entry("5")]);
+    assert_eq!(app.goes_on, [entry("5")]);
+    assert_eq!(state(&app), DOWNLOADING);
+    let jobs = OfflineJob::list(&app.core.as_ref().unwrap().db).unwrap();
+    let waiting = crate::boot::downloads_from(app.queue.clone(), Vec::new(), &jobs);
+    assert_eq!(waiting.goes_on, [entry("5")]);
+
+    // Into another folder, it starts anew.
+    let mut app = library_app();
+    stopped(&mut app, PAUSED);
+    app.installers_root = "/tmp/[FAKE] other".into();
+    let _ = app.update(Message::Offline(OfflineMsg::Download("5".into())));
+    assert_eq!(state(&app), QUEUED);
+}
+
 /// Two downloads the launcher stopped in turn, for Download now, both go on by themselves once
 /// their rows are done, though a download paused on request holds the rest of the queue.
 #[test]

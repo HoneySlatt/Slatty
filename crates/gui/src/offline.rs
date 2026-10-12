@@ -189,21 +189,37 @@ impl App {
                     );
                     return Task::none();
                 }
-                let job = OfflineJob {
+                // A started download asked for again into the same folder is taken up as one, as
+                // the command line's: its run checks that its folder is still there.
+                let saved = OfflineJob {
                     game_id: game_id.clone(),
                     os: c.os.clone(),
                     languages: c.languages.clone(),
                     dlcs: c.dlcs.clone(),
                     folder: offline::folder_for(&root, &c.offer.title, &game_id),
                     state: QUEUED.into(),
-                };
-                // Not over the command line's own job while it downloads them.
-                if let Err(e) = job.save_if_idle(&core.db, &core.dirs) {
-                    self.notify_error(e.to_string());
-                    return Task::none();
                 }
+                .taken_up(&core.db)
+                .and_then(|mut job| {
+                    let started = job.state != QUEUED;
+                    if started {
+                        job.state = DOWNLOADING.into();
+                    }
+                    // Not over the command line's own job while it downloads them.
+                    job.save_if_idle(&core.db, &core.dirs).map(|()| started)
+                });
+                let started = match saved {
+                    Ok(started) => started,
+                    Err(e) => {
+                        self.notify_error(e.to_string());
+                        return Task::none();
+                    }
+                };
                 self.offline_stopped.retain(|(id, _)| *id != game_id);
                 let entry = entry(&game_id);
+                if started && !self.goes_on.contains(&entry) {
+                    self.goes_on.push(entry.clone());
+                }
                 // Download, as the drawer says when nothing downloads, starts at once, as an
                 // install does, even before a queue that a download paused on request holds.
                 let now = !self.downloads_held()
