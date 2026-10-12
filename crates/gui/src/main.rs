@@ -530,6 +530,8 @@ pub enum Message {
     Rescaled(f32),
     /// Key art made at this width: the source and its copy, if any.
     ArtScaled(PathBuf, u32, Option<PathBuf>),
+    /// The couch mode's covers enlarged at this width: per game, the cover and its copy, if any.
+    CouchCoversScaled(u32, Vec<(String, PathBuf, Option<PathBuf>)>),
     /// The covers found in the account's cache at start, by game id.
     CachedCovers(HashMap<String, PathBuf>),
     /// How these installed games can be started, read from their folders; then the game whose
@@ -628,6 +630,7 @@ impl Message {
                 | Message::CoversScaled(..)
                 | Message::Rescaled(_)
                 | Message::ArtScaled(..)
+                | Message::CouchCoversScaled(..)
                 | Message::Steam(steam::SteamMsg::Cover(..))
                 | Message::CachedCovers(_)
                 | Message::Image(..)
@@ -1072,6 +1075,7 @@ impl App {
             Message::CoversScaled(width, made) => self.covers_scaled(width, made),
             Message::Rescaled(scale) => return self.rescaled(scale),
             Message::ArtScaled(from, width, copy) => self.art_scaled(from, width, copy),
+            Message::CouchCoversScaled(width, made) => self.couch_covers_scaled(width, made),
             Message::LaunchOptions(read, play) => {
                 self.launch_options.extend(read);
                 if let Some(game_id) = play {
@@ -1142,7 +1146,11 @@ impl App {
             Message::Install(msg) => return self.update_install(msg),
             Message::Downloads(msg) => return self.update_downloads(msg),
             Message::Offline(msg) => return self.update_offline(msg),
-            Message::Couch(msg) => return self.update_couch(msg),
+            // A move may show other covers, which a large screen draws enlarged.
+            Message::Couch(msg) => {
+                let task = self.update_couch(msg);
+                return Task::batch([task, self.scale_couch_covers()]);
+            }
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Runners(msg) => return self.update_runners(msg),
@@ -1162,7 +1170,7 @@ impl App {
                 self.fit_screen(Size::new(size.width * applied, size.height * applied));
                 // The parts of the Settings page moved.
                 self.settings_view.tops = Default::default();
-                return self.scale_art();
+                return Task::batch([self.scale_art(), self.scale_couch_covers()]);
             }
             Message::Frame(now) => self.now = now,
             Message::DismissNotice => self.notice = None,

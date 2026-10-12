@@ -43,6 +43,8 @@ pub const HINTS: f32 = 60.0;
 pub const SHELVES: f32 = 72.0;
 /// Height of a notice of one line, above the pages while it shows.
 pub const NOTICE: f32 = 64.0;
+/// Room the focus ring takes around a cover.
+pub const RING: f32 = 4.0;
 /// How many games the Continue row holds.
 const RECENT: usize = 20;
 /// How long the focus stays on a game of Home before its key art's copy is made.
@@ -1066,6 +1068,60 @@ impl App {
         self.window = Size::new(screen.width / self.ui_scale, screen.height / self.ui_scale);
     }
 
+    /// The width a cover is drawn at, inside its focus ring.
+    pub fn couch_cover_width(&self) -> f32 {
+        self.couch_card() - 2.0 * RING
+    }
+
+    /// The first row of covers the library shows: the one kept, moved so that the row with the
+    /// focus shows, whatever changed since the last move (the window grew, the shelf has fewer
+    /// games).
+    pub(crate) fn library_top(&self, couch: &Couch, focused: Option<usize>) -> usize {
+        let row = focused.unwrap_or(0) / self.couch_columns();
+        couch
+            .top
+            .min(row)
+            .max((row + 1).saturating_sub(self.couch_rows()))
+    }
+
+    /// The games whose covers the page shown draws, as places in `library`.
+    pub fn couch_in_view(&self) -> Vec<usize> {
+        let Some(couch) = self.couch.as_ref().filter(|_| self.selected.is_none()) else {
+            return Vec::new();
+        };
+        let across = self.couch_columns();
+        match couch.tab {
+            Tab::Home => {
+                let Some((row, col, _)) = self.home_focus() else {
+                    return Vec::new();
+                };
+                let (_, shown, _) = self.home_layout();
+                let rows = self.home_rows();
+                let mut games = Vec::new();
+                for (r, home_row) in rows.iter().enumerate().skip(row).take(shown) {
+                    let len = home_row.games.len();
+                    let at = match r == row {
+                        true => col,
+                        false => couch.home_cols.get(r).copied().unwrap_or(0).min(len - 1),
+                    };
+                    let start = home_start(at, across, len);
+                    games.extend_from_slice(&home_row.games[start..(start + across).min(len)]);
+                }
+                games
+            }
+            Tab::Library => {
+                let games = self.couch_games();
+                let focused = (couch.on_shelves.is_none() && !games.is_empty())
+                    .then(|| couch.card.min(games.len() - 1));
+                let top = self.library_top(couch, focused);
+                let first = (top * across).min(games.len());
+                let last = ((top + self.couch_rows()) * across).min(games.len());
+                games[first..last].to_vec()
+            }
+            Tab::Downloads => Vec::new(),
+        }
+    }
+
     /// Width of a cover: about eight across the window, the row filling it.
     pub fn couch_card(&self) -> f32 {
         let columns = self.couch_columns() as f32;
@@ -1089,6 +1145,13 @@ impl App {
     pub fn notice_room(&self) -> f32 {
         if self.notice.is_some() { NOTICE } else { 0.0 }
     }
+}
+
+/// The first cover a row of Home shows, of `len`, `across` at once: the one with the focus as far
+/// right as one from the end, the row full when it can be.
+pub(crate) fn home_start(at: usize, across: usize, len: usize) -> usize {
+    at.saturating_sub(across.saturating_sub(2))
+        .min(len.saturating_sub(across))
 }
 
 fn fullscreen(on: bool) -> Task<Message> {

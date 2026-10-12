@@ -52,6 +52,10 @@ pub struct ScaledCovers {
     art_pending: HashSet<(PathBuf, u32)>,
     /// When the first key art copy was asked for: those shown since are kept (`trim`).
     session: Option<SystemTime>,
+    /// Per game: the couch mode's cover enlarged on a large screen, with the cover it was made from
+    /// and its width, or `None` to show that cover as it is (`scale_couch_covers`).
+    couch: HashMap<String, (PathBuf, u32, Option<image::Handle>)>,
+    couch_pending: HashSet<(PathBuf, u32)>,
     /// The width covers are made at, once the window's scale is known.
     width: Option<u32>,
 }
@@ -69,14 +73,110 @@ impl App {
     /// large screen, `ui_scale`). A cover far wider than drawn would be shrunk by sampling a few of
     /// its pixels, worse than a copy a little enlarged.
     pub fn cover_at(&self, game_id: &str, width: f32) -> Option<image::Handle> {
+        let pixels = self.scaled.scale.map(|scale| width * scale * self.ui_scale);
         let copy_wide_enough = self
             .scaled_width()
-            .zip(self.scaled.scale)
-            .is_some_and(|(made, scale)| made as f32 * 1.25 >= width * scale * self.ui_scale);
+            .zip(pixels)
+            .is_some_and(|(made, pixels)| made as f32 * 1.25 >= pixels);
         if copy_wide_enough {
-            self.grid_cover(game_id)
-        } else {
-            self.cover(game_id)
+            return self.grid_cover(game_id);
+        }
+        let cover = self.cover(game_id)?;
+        // Enlarged at the size drawn, once made (`scale_couch_covers`).
+        match (self.scaled.couch.get(game_id), &cover, pixels) {
+            (Some((from, made, Some(copy))), image::Handle::Path(_, path), Some(pixels))
+                if from == path && *made == pixels.ceil() as u32 =>
+            {
+                Some(copy.clone())
+            }
+            _ => Some(cover),
+        }
+    }
+
+    /// Makes the couch mode's covers in view at the size it draws them, where the grid's copies are
+    /// too small (a large screen, `ui_scale`): enlarged as key art is, sharper than the enlarging
+    /// Iced does as it draws. A cover about as wide is shown as it is.
+    pub fn scale_couch_covers(&mut self) -> Task<Message> {
+        let (Some(core), Some(scale)) = (self.core.clone(), self.scaled.scale) else {
+            return Task::none();
+        };
+        let pixels = self.couch_cover_width() * scale * self.ui_scale;
+        let copy_wide_enough = self
+            .scaled_width()
+            .is_some_and(|made| made as f32 * 1.25 >= pixels);
+        if self.couch.is_none() || copy_wide_enough {
+            return Task::none();
+        }
+        let width = pixels.ceil() as u32;
+        let jobs: Vec<(String, PathBuf)> = self
+            .couch_in_view()
+            .into_iter()
+            .filter_map(|i| {
+                let id = self.library[i].id.clone();
+                let image::Handle::Path(_, from) = self.cover(&id)? else {
+                    return None;
+                };
+                let made = self
+                    .scaled
+                    .couch
+                    .get(&id)
+                    .is_some_and(|(f, w, _)| *f == from && *w == width);
+                (!made && self.scaled.couch_pending.insert((from.clone(), width)))
+                    .then_some((id, from))
+            })
+            .collect();
+        if jobs.is_empty() {
+            return Task::none();
+        }
+        let account = self
+            .account
+            .as_ref()
+            .map(|a| core.dirs.account_cache(&a.user_id));
+        let shared = core.dirs.cache.clone();
+        let folders: Vec<PathBuf> = [Some(shared.clone()), account.clone()]
+            .into_iter()
+            .flatten()
+            .map(|c| c.join("art"))
+            .collect();
+        let session = *self
+            .scaled
+            .session
+            .get_or_insert_with(|| SystemTime::now() - Duration::from_secs(10));
+        self.with_account(Task::perform(
+            slatty_core::fsutil::in_background(move || {
+                let made = jobs
+                    .into_iter()
+                    .map(|(id, from)| {
+                        // A GOG cover's copy stays with the account's cache, as the cover does.
+                        let cache = match &account {
+                            Some(c) if from.starts_with(c) => c,
+                            _ => &shared,
+                        };
+                        let dir = cache.join("art").join(width.to_string());
+                        let copy = scaled_copy(&from, width, &dir, true);
+                        (id, from, copy)
+                    })
+                    .collect();
+                trim(&folders, ART_BUDGET, session);
+                made
+            }),
+            move |made| Message::CouchCoversScaled(width, made),
+        ))
+    }
+
+    pub fn couch_covers_scaled(
+        &mut self,
+        width: u32,
+        made: Vec<(String, PathBuf, Option<PathBuf>)>,
+    ) {
+        for (id, from, copy) in made {
+            self.scaled.couch_pending.remove(&(from.clone(), width));
+            // Of a cover replaced since: the new one is made at the next move.
+            if !matches!(self.cover(&id), Some(image::Handle::Path(_, path)) if path == from) {
+                continue;
+            }
+            let copy = copy.map(image::Handle::from_path);
+            self.scaled.couch.insert(id, (from, width, copy));
         }
     }
 
@@ -221,7 +321,11 @@ impl App {
             return Task::none();
         }
         self.scaled.scale = Some(scale);
-        Task::batch([self.resize_covers(), self.scale_art()])
+        Task::batch([
+            self.resize_covers(),
+            self.scale_art(),
+            self.scale_couch_covers(),
+        ])
     }
 
     /// The covers' size changed (the window's scale, Settings → Library): all are made again.

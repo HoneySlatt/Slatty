@@ -194,9 +194,11 @@ load credentials with `Account::load_for`, which refuses when another account is
   `scaled/<width>/` of the cover's cache; copies of the size before stay, for a window moved
   between screens. The key art of the game page, and of the couch mode's Home once its focus rests
   on a game, is made at the window's width rounded up to 1920, 2560 or 3840 pixels; narrower art is enlarged with Lanczos3 and sharpened with AMD's RCAS (FSR 1),
-  up to a 4K screen's pixels. Key art copies take at most 2 GiB, those shown longest ago going
-  first, never one shown in this session. Copies of GOG's images go into the account's cache, so
-  they go with it.
+  up to a 4K screen's pixels. On a large screen the couch mode draws its covers wider than the
+  grid's copies and GOG's covers: those in view are enlarged the same way at the size drawn
+  (`App::scale_couch_covers`), beside the key art. Key art copies take at most 2 GiB, those shown
+  longest ago going first, never one shown in this session. Copies of GOG's images go into the
+  account's cache, so they go with it.
 
 `library_at_10000_games` (an ignored test) measures the views; [testing](testing.md) gives the
 references measured in the application itself.
@@ -618,7 +620,8 @@ are drawn in place of the desktop's while `App::couch` holds its state.
   (`App::ui_scale`, from `App::fit_screen`), so it is drawn at the screen's pixels rather than
   small. `App::window` is then in the interface's units; the sizes Iced gives are converted back
   with the scale it last applied (`App::scale_factor`), so a size never feeds back into the scale.
-  Key art and cover copies are sized from the screen (`App::screen`).
+  Key art and cover copies are sized from the screen (`App::screen`); the covers in view
+  (`App::couch_in_view`) are asked for after each move.
 
 ## Storage
 

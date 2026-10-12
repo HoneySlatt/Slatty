@@ -632,7 +632,8 @@ slatty proton share on
 A mode for a gamepad, full screen, for a television or a Steam Deck: the same library, downloads
 and games as the desktop window, with large covers and a focus moved with the d-pad or the left
 stick. Settings stay in the desktop window. Made for 1920×1080, it fills a larger screen (a 4K
-television) the same way, drawn at the screen's full resolution: text and key art stay sharp.
+television) the same way, drawn at the screen's full resolution: text and key art stay sharp, and
+covers, which GOG makes smaller than they are drawn there, are enlarged as key art is.
 
 It opens:
 

@@ -11,7 +11,8 @@ use slatty_core::library::LibraryGame;
 use super::format::{duration, fraction, relative_day};
 use super::widgets::logo;
 use crate::couch::{
-    Couch, CouchMsg, GAP, HINTS, KEYS, KeyAction, MARGIN, MenuItem, SHELVES, TOP_BAR, Tab,
+    Couch, CouchMsg, GAP, HINTS, KEYS, KeyAction, MARGIN, MenuItem, RING, SHELVES, TOP_BAR, Tab,
+    home_start,
 };
 use crate::icons::{Icon, icon};
 use crate::install::InstallView;
@@ -30,9 +31,6 @@ enum Glyph {
     Rb,
     Menu,
 }
-
-/// Room the focus ring takes around a cover.
-const RING: f32 = 4.0;
 
 impl App {
     pub(super) fn couch_view(&self) -> Element<'_, Message> {
@@ -310,9 +308,7 @@ impl App {
                     .unwrap_or(0)
                     .min(games.len() - 1)
             };
-            let start = at
-                .saturating_sub(across.saturating_sub(2))
-                .min(games.len().saturating_sub(across));
+            let start = home_start(at, across, games.len());
             let covers = games[start..(start + across).min(games.len())]
                 .iter()
                 .enumerate()
@@ -421,10 +417,7 @@ impl App {
             })
         } else {
             let (across, down, card) = (self.couch_columns(), self.couch_rows(), self.couch_card());
-            // The row with the focus stays in view, whatever changed since the last move (the
-            // window grew, the shelf has fewer games).
-            let row = focused.unwrap_or(0) / across;
-            let top = couch.top.min(row).max((row + 1).saturating_sub(down));
+            let top = self.library_top(couch, focused);
             // The rows that fit whole: Iced would squash one more to the room left.
             let rows = (top..top + down)
                 .take_while(|r| r * across < games.len())

@@ -566,6 +566,45 @@ fn the_couch_mode_fills_a_large_screen() {
     assert_eq!(app.ui_scale, 1.0);
 }
 
+/// On a large screen the couch mode draws covers wider than GOG makes them (342 pixels): those in
+/// view are enlarged as key art is, sharper than the enlarging Iced does as it draws; at 1080p the
+/// grid's copies are about as wide, and nothing is made.
+#[test]
+fn the_couch_mode_enlarges_its_covers_in_view_on_a_large_screen() {
+    let mut app = couch_app();
+    app.card_width = 225.0;
+    let cover = PathBuf::from("/covers/5.jpg");
+    app.covers
+        .insert("5".into(), iced::widget::image::Handle::from_path(&cover));
+    let _ = app.update(Message::Rescaled(1.0));
+    let _ = app.update(Message::WindowResized(Size::new(1920.0, 1080.0)));
+    nav(&mut app, Nav::Down);
+    assert!(app.couch_in_view().contains(&4), "game 5, a favorite");
+    assert_eq!(app.scale_couch_covers().units(), 0);
+
+    let resized = app.update(Message::WindowResized(Size::new(3840.0, 2160.0)));
+    assert!(resized.units() > 0, "its enlarged copy asked for");
+    let width = app.couch_cover_width();
+    let pixels = (width * 2.0).ceil() as u32;
+    let path = |h: Option<iced::widget::image::Handle>| match h {
+        Some(iced::widget::image::Handle::Path(_, p)) => p,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        path(app.cover_at("5", width)),
+        cover,
+        "until its copy is made"
+    );
+    let copy = PathBuf::from(format!("/art/{pixels}/5.jpg"));
+    let _ = app.update(Message::CouchCoversScaled(
+        pixels,
+        vec![("5".into(), cover.clone(), Some(copy.clone()))],
+    ));
+    assert_eq!(path(app.cover_at("5", width)), copy);
+    // Asked for once.
+    assert_eq!(app.scale_couch_covers().units(), 0);
+}
+
 /// The couch mode's Home draws key art as wide as the window, not enlarged as a game page does: on
 /// a 1080p television its copy is 1920 pixels wide, not 2560.
 #[test]
