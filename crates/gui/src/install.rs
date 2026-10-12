@@ -338,6 +338,8 @@ impl App {
                 ) {
                     return Task::none();
                 }
+                // Nor is it started by a plan for its resume answering before the discard ends.
+                self.auto_resume.take_if(|id| *id == game_id);
                 self.install_views
                     .insert(game_id.clone(), InstallView::Planning);
                 let id = game_id.clone();
@@ -354,15 +356,23 @@ impl App {
                 );
             }
             InstallMsg::Discarded(game_id, result) => {
-                self.install_views.remove(&game_id);
+                // One started meanwhile (Install pressed on a plan that came in between) keeps its
+                // view and its panel, its Pause and Cancel with them.
+                let started = matches!(
+                    self.install_views.get(&game_id),
+                    Some(InstallView::Running { .. })
+                );
                 // Nor is it started once planned, which the queue may be waiting for.
                 self.auto_resume.take_if(|id| *id == game_id);
-                // Nothing is left to show in its Install panel.
-                self.dialog.take_if(|(id, _)| *id == game_id);
-                if self.selected.as_deref() == Some(game_id.as_str())
-                    && self.panel == Some(crate::Panel::Install)
-                {
-                    self.panel = None;
+                if !started {
+                    self.install_views.remove(&game_id);
+                    // Nothing is left to show in its Install panel.
+                    self.dialog.take_if(|(id, _)| *id == game_id);
+                    if self.selected.as_deref() == Some(game_id.as_str())
+                        && self.panel == Some(crate::Panel::Install)
+                    {
+                        self.panel = None;
+                    }
                 }
                 match result {
                     Ok(()) => self.forget_interrupted(&game_id),

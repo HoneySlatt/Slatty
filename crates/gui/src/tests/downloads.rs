@@ -139,6 +139,46 @@ fn a_game_being_planned_is_not_planned_twice_to_start() {
     assert_eq!(app.auto_resume.as_deref(), Some("6"), "the queue goes on");
 }
 
+/// A cut-off download being planned to resume by itself, then discarded: its plan answering
+/// before the discard ends does not start it; and a download started meanwhile keeps its view,
+/// its Pause and Cancel with it.
+#[test]
+fn a_download_discarded_while_planned_to_resume_is_not_started_by_its_plan() {
+    let mut app = library_app();
+    app.interrupted = vec![("5".into(), crate::Interrupted::Download)];
+    app.install_views.insert("5".into(), InstallView::Planning);
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("5"));
+    let _ = app.update(Message::Install(InstallMsg::Discard("5".into())));
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "5".into(),
+        Ok(fake_plan()),
+    )));
+    assert!(
+        !matches!(
+            app.install_views.get("5"),
+            Some(InstallView::Running { .. })
+        ),
+        "not started"
+    );
+    let _ = app.update(Message::Install(InstallMsg::Start("5".into())));
+    assert!(matches!(
+        app.install_views.get("5"),
+        Some(InstallView::Running { .. })
+    ));
+    let _ = app.update(Message::Install(InstallMsg::Discarded(
+        "5".into(),
+        Err("[FAKE] busy".into()),
+    )));
+    assert!(
+        matches!(
+            app.install_views.get("5"),
+            Some(InstallView::Running { .. })
+        ),
+        "still shown"
+    );
+}
+
 /// A download cut off because GOG stopped answering is left to resume, and holds the queue until
 /// GOG answers again, rather than the next install failing the same way at once.
 #[test]
