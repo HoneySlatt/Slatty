@@ -66,8 +66,10 @@ pub struct SteamView {
     pub download_moved: Option<Instant>,
     /// When each download Steam made was told done.
     pub told: HashMap<String, Instant>,
-    /// Whether the library folders are being read.
+    /// Whether the library folders are being read, and the games installed as that read began: it
+    /// can tell only those gone.
     pub reading_installed: bool,
+    pub read_from: Vec<String>,
     /// How long each game was played and when last, as Steam records it, by game id.
     pub played: HashMap<String, Played>,
     pub achievements: Counts,
@@ -229,12 +231,19 @@ impl App {
             SteamMsg::Cover(..) => {}
             SteamMsg::Installed(games) if self.steam.on => {
                 self.steam.reading_installed = false;
-                let mut read: HashMap<String, Option<Installed>> = self
-                    .steam
-                    .installed
-                    .keys()
-                    .map(|id| (id.clone(), None))
-                    .collect();
+                // Gone: those installed as the read began (one found since by a read of its own
+                // manifest stays), but a game Steam downloads, which a library drive away for a
+                // moment would hide: the read of its own manifest tells when it goes.
+                let downloading = |id: &String| {
+                    (self.steam.installed.get(id))
+                        .is_some_and(|g| g.update.is_some_and(|u| u.started && !u.paused))
+                };
+                let mut read: HashMap<String, Option<Installed>> =
+                    std::mem::take(&mut self.steam.read_from)
+                        .into_iter()
+                        .filter(|id| !downloading(id))
+                        .map(|id| (id, None))
+                        .collect();
                 read.extend(
                     games
                         .into_iter()
@@ -805,6 +814,7 @@ impl App {
             self.steam.read_installed_again = true;
             return Task::none();
         }
+        self.steam.read_from = self.steam.installed.keys().cloned().collect();
         read_installed()
     }
 }

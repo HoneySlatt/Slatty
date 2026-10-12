@@ -664,6 +664,46 @@ fn an_install_asked_of_steam_is_followed_before_the_focus_comes_back() {
     assert!(!app.steam.reading_installed, "once");
 }
 
+/// A read of every library folder takes away only the games it knew of as it began: not a game
+/// asked of Steam whose own manifest was found meanwhile; nor a game Steam downloads, which a
+/// library drive away for a moment would hide: the read of its own manifest tells when it goes.
+#[test]
+fn a_read_of_every_library_takes_away_only_what_it_knew_and_no_download() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    // A read of every library begins as no game is installed (the window's focus back).
+    let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));
+    let began = Update {
+        done: 0,
+        total: 4_000,
+        stage_total: 8_000,
+        started: true,
+        paused: false,
+    };
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        [(
+            "steam-620".into(),
+            Some(installed(620, 0, false, Some(began))),
+        )]
+        .into(),
+        HashMap::new(),
+    )));
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![])));
+    assert!(app.steam.installed.contains_key("steam-620"), "found since");
+
+    // Known as the next read begins, and downloading: not taken away by it.
+    let _ = app.update(Message::Notify(crate::notify::NotifyMsg::Focus(true)));
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![])));
+    assert!(app.steam.installed.contains_key("steam-620"), "downloading");
+    // Its own read finds it gone, its library there: it goes.
+    let _ = app.update(Message::Steam(SteamMsg::Downloads(
+        [("steam-620".into(), None)].into(),
+        HashMap::new(),
+    )));
+    assert!(!app.steam.installed.contains_key("steam-620"));
+}
+
 /// Steam downloads one game at a time: of two it began, the one without a `downloading` folder
 /// while the other has one waits its turn, and the other's progress comes from what it wrote
 /// there, its manifest staying as it was. Its folder growing keeps it followed, every few seconds.
