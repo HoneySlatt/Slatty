@@ -1,5 +1,5 @@
 {
-  description = "SlattyLauncher — native GOG launcher";
+  description = "SlattyLauncher — native Linux launcher for GOG games, Steam games and your own";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -69,7 +69,7 @@
             done
           '';
           meta = {
-            description = "Native GOG launcher for Linux";
+            description = "Native Linux launcher for GOG games, Steam games and your own";
             homepage = "https://github.com/HoneySlatt/SlattyLauncher";
             license = pkgs.lib.licenses.gpl3Plus;
             mainProgram = "slatty-gui";

@@ -2,10 +2,10 @@
 Type=Application
 Name=SlattyLauncher
 GenericName=Game launcher
-Comment=Install and play your GOG games
+Comment=Install and play your GOG games, beside your Steam games and your own
 Exec=slatty-gui
 Icon=io.github.HoneySlatt.SlattyLauncher
 Terminal=false
 Categories=Game;
-Keywords=GOG;Galaxy;Proton;games;launcher;
+Keywords=GOG;Galaxy;Steam;Proton;games;launcher;
 StartupNotify=true

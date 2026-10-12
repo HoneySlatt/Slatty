@@ -4,13 +4,17 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>SlattyLauncher</name>
-  <summary>Install and play your GOG games</summary>
+  <summary>Install and play your GOG games, beside your Steam games and your own</summary>
   <description>
     <p>
-      A native GOG launcher for Linux. It signs in to your GOG account, shows your library,
-      installs Windows games from GOG's Galaxy content system and native Linux games from GOG's
-      installers, runs them through umu and Proton, keeps cloud saves in sync and reports
-      achievements to GOG, without the official client.
+      A native Linux launcher for your GOG games. It signs in to your GOG account, shows your
+      library, installs Windows games from GOG's Galaxy content system and native Linux games from
+      GOG's installers, runs Windows games through umu and Proton, keeps cloud saves in sync and
+      reports achievements to GOG, without the official client.
+    </p>
+    <p>
+      Your Steam games can show in the same library, read from the Steam client's files and
+      played through it, and so can games from no store, added by the program that starts them.
     </p>
     <ul>
       <li>Windows games run isolated from your files by default</li>

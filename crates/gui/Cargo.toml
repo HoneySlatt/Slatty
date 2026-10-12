@@ -1,6 +1,6 @@
 [package]
 name = "slatty-gui"
-description = "SlattyLauncher, a native GOG launcher for Linux"
+description = "SlattyLauncher, a native Linux launcher for GOG games, Steam games and your own"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -18,7 +18,8 @@ chrono = "0.4.45"
 # and the detection waited up to 200 ms for the desktop portal before the window opened, then kept
 # a D-Bus connection whose thread woke the program twice a second for good.
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "thread-pool", "x11", "wayland", "advanced", "image-without-codecs", "selector", "svg", "tokio"] }
-# Only the formats GOG serves and those a custom image may be in: fewer decoders face downloads.
+# Only the formats GOG, Steam and SteamGridDB serve and those a custom image may be in: fewer
+# decoders face downloads.
 image = { version = "0.25", default-features = false, features = ["bmp", "gif", "jpeg", "png", "webp"] }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 serde.workspace = true
@@ -26,7 +27,7 @@ slatty-core.workspace = true
 tokio = { workspace = true, features = ["sync", "macros"] }
 tokio-util = "0.7"
 toml = "0.9"
-# The desktop's notifications; already built for Iced and the keyring, no crate added.
+# The desktop's notifications; already built for the keyring, no crate added.
 zbus = "5"
 tracing-subscriber.workspace = true
 # The graphics backends to start with; already built for Iced, the same version, no crate added.
