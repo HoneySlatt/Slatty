@@ -1,16 +1,19 @@
 //! The Manage drawer: verify, repair, update and uninstall an installed game.
 
 use crate::theme::text;
-use iced::widget::{Column, Space, button, column, container, row, scrollable};
-use iced::{Alignment, Element, Length, Padding};
+use iced::widget::{Column, button, column, container, row, scrollable};
+use iced::{Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 use slatty_core::maintenance::Change;
 
-use super::{inner, note};
-use crate::icons::{Icon, icon};
+use super::game_settings::{stacked, titled};
+use super::note;
+use crate::icons::Icon;
 use crate::maintenance::MaintenanceMsg;
-use crate::theme::{self, semibold, tokens};
+use crate::theme::{self, tokens};
 use crate::{App, Message};
+
+type Style = fn(&iced::Theme, button::Status) -> button::Style;
 
 impl App {
     pub(super) fn manage_drawer<'a>(
@@ -32,96 +35,95 @@ impl App {
         if slatty_core::store::is_local(&g.id) {
             return self.manage_added(g, view.is_some_and(|v| v.confirm_uninstall), busy);
         }
-        let action = |ic, label, msg: MaintenanceMsg| {
-            action_row(ic, label, (!busy).then(|| Message::Maintenance(msg)), false)
-        };
-        let mut col = column![
-            action(
-                Icon::FileCheck,
-                "Verify files",
-                MaintenanceMsg::Check(id(), false)
-            ),
-            action(Icon::Wrench, "Repair", MaintenanceMsg::Check(id(), true)),
-            action(
-                Icon::RefreshCw,
-                "Check for update",
-                MaintenanceMsg::CheckUpdate(id())
+        let on = |msg| (!busy).then(|| Message::Maintenance(msg));
+        let files = column![
+            row![
+                action(
+                    "Verify files",
+                    on(MaintenanceMsg::Check(id(), false)),
+                    theme::tonal
+                ),
+                action(
+                    "Repair",
+                    on(MaintenanceMsg::Check(id(), true)),
+                    theme::tonal
+                ),
+            ]
+            .spacing(10),
+            note(
+                "Verify checks every file against GOG's checksums; Repair downloads again the \
+                 missing or damaged ones."
             ),
         ]
-        .spacing(12);
+        .spacing(10);
+        let mut updates = row![action(
+            "Check for update",
+            on(MaintenanceMsg::CheckUpdate(id())),
+            theme::tonal
+        )]
+        .spacing(10);
         if view.is_some_and(|v| v.update_available) {
-            col = col.push(
-                button(
-                    container(text("Update now").size(16).font(semibold())).center_x(Length::Fill),
-                )
-                .padding([14, 0])
-                .width(Length::Fill)
-                .on_press_maybe(
-                    (!busy)
-                        .then(|| Message::Maintenance(MaintenanceMsg::Apply(id(), Change::Update))),
-                )
-                .style(theme::primary),
-            );
+            updates = updates.push(action(
+                "Update now",
+                on(MaintenanceMsg::Apply(id(), Change::Update)),
+                theme::primary,
+            ));
         }
+        let updates =
+            column![updates, note("Only the files that changed are downloaded.")].spacing(10);
+        let mut sections = vec![
+            titled(Icon::FileCheck, "Files", files.into(), 0.0),
+            titled(Icon::RefreshCw, "Updates", updates.into(), 0.0),
+        ];
         // What the last action found, and the progress of the running one.
-        if let Some(v) = view {
-            col = col
-                .extend(v.lines.iter().map(|l| note(l.as_str())))
-                .extend(self.maintenance_progress(&g.id));
-        }
-        col = col.push(Space::new().height(4)).push(
-            container(Space::new())
-                .width(Length::Fill)
-                .height(1)
-                .style(theme::divider),
-        );
-        col = col.push(Space::new().height(4)).push(action_row(
-            Icon::Trash,
-            "Uninstall…",
-            (!busy).then(|| Message::Maintenance(MaintenanceMsg::AskUninstall(id()))),
-            true,
-        ));
-        if view.is_some_and(|v| v.confirm_uninstall && !v.busy) {
-            let choice =
-                |label,
-                 msg: MaintenanceMsg,
-                 style: fn(&iced::Theme, button::Status) -> button::Style| {
-                    button(container(text(label).size(14)).center_x(Length::Fill))
-                        .padding([12, 0])
-                        .width(Length::Fill)
-                        .on_press(Message::Maintenance(msg))
-                        .style(style)
-                };
-            col = col.push(
-                container(
-                    Column::new()
-                        .push(note(
-                            "Only files installed by SlattyLauncher are deleted; anything else in the \
-                             folder is kept. The Wine prefix holds most local saves.",
-                        ))
-                        .push(choice(
-                            "Uninstall, keep the prefix",
-                            MaintenanceMsg::Uninstall(id(), false),
-                            theme::danger,
-                        ))
-                        .push(choice(
-                            "Also delete the prefix (backed up)",
-                            MaintenanceMsg::Uninstall(id(), true),
-                            theme::danger,
-                        ))
-                        .push(choice(
-                            "Cancel",
-                            MaintenanceMsg::CancelUninstall(id()),
-                            theme::tonal,
-                        ))
-                        .spacing(10),
-                )
-                .padding(16)
-                .width(Length::Fill)
-                .style(inner),
+        if let Some(v) = view.filter(|v| !v.lines.is_empty() || v.progress.is_some()) {
+            sections.push(
+                Column::new()
+                    .extend(v.lines.iter().map(|l| note(l.as_str())))
+                    .extend(self.maintenance_progress(&g.id))
+                    .spacing(10)
+                    .into(),
             );
         }
-        col.into()
+        let uninstall = if view.is_some_and(|v| v.confirm_uninstall && !v.busy) {
+            column![
+                note(
+                    "Only files installed by SlattyLauncher are deleted; anything else in the \
+                     folder is kept. The Wine prefix holds most local saves."
+                ),
+                choice(
+                    "Uninstall, keep the prefix",
+                    MaintenanceMsg::Uninstall(id(), false),
+                    theme::danger,
+                ),
+                choice(
+                    "Also delete the prefix (backed up)",
+                    MaintenanceMsg::Uninstall(id(), true),
+                    theme::danger,
+                ),
+                choice(
+                    "Cancel",
+                    MaintenanceMsg::CancelUninstall(id()),
+                    theme::tonal
+                ),
+            ]
+        } else {
+            column![
+                action(
+                    "Uninstall…",
+                    on(MaintenanceMsg::AskUninstall(id())),
+                    theme::tonal
+                ),
+                note("Only files SlattyLauncher installed are deleted."),
+            ]
+        };
+        sections.push(titled(
+            Icon::Trash,
+            "Uninstall",
+            uninstall.spacing(10).into(),
+            0.0,
+        ));
+        stacked(sections)
     }
 
     /// A game added by hand: nothing to verify or update from GOG, only taking it out of the
@@ -133,34 +135,15 @@ impl App {
         busy: bool,
     ) -> Element<'a, Message> {
         let id = || g.id.clone();
-        let mut col = column![action_row(
-            Icon::Trash,
-            "Remove from library…",
-            (!busy).then(|| Message::Maintenance(MaintenanceMsg::AskUninstall(id()))),
-            true,
-        )]
-        .spacing(12);
-        if let Some(v) = self.maintenance.get(&g.id) {
-            col = col.extend(v.lines.iter().map(|l| note(l.as_str())));
-        }
+        let mut col = Column::new();
         if confirm && !busy {
-            let choice =
-                |label,
-                 msg: MaintenanceMsg,
-                 style: fn(&iced::Theme, button::Status) -> button::Style| {
-                    button(container(text(label).size(14)).center_x(Length::Fill))
-                        .padding([12, 0])
-                        .width(Length::Fill)
-                        .on_press(Message::Maintenance(msg))
-                        .style(style)
-                };
             let install = self.installs.get(&g.id);
             let prefix = install.and_then(|i| i.runner.prefix());
             // Its installer put the game itself in its prefix.
             let in_prefix = install
                 .zip(prefix)
                 .is_some_and(|(i, p)| i.path.starts_with(p));
-            let mut confirm = Column::new()
+            col = col
                 .push(note(match (prefix.is_some(), in_prefix) {
                     (_, true) => {
                         "Only what SlattyLauncher unpacked for it is deleted. The game is in \
@@ -187,56 +170,48 @@ impl App {
                     theme::danger,
                 ));
             if prefix.is_some() {
-                confirm = confirm.push(choice(
+                col = col.push(choice(
                     "Also delete the prefix (backed up)",
                     MaintenanceMsg::Uninstall(id(), true),
                     theme::danger,
                 ));
             }
-            col = col.push(
-                container(
-                    confirm
-                        .push(choice(
-                            "Cancel",
-                            MaintenanceMsg::CancelUninstall(id()),
-                            theme::tonal,
-                        ))
-                        .spacing(10),
-                )
-                .padding(16)
-                .width(Length::Fill)
-                .style(inner),
-            );
+            col = col.push(choice(
+                "Cancel",
+                MaintenanceMsg::CancelUninstall(id()),
+                theme::tonal,
+            ));
+        } else {
+            col = col
+                .push(action(
+                    "Remove from library…",
+                    (!busy).then(|| Message::Maintenance(MaintenanceMsg::AskUninstall(id()))),
+                    theme::tonal,
+                ))
+                .push(note("Your own files stay where they are."));
         }
-        col.into()
+        if let Some(v) = self.maintenance.get(&g.id) {
+            col = col.extend(v.lines.iter().map(|l| note(l.as_str())));
+        }
+        titled(Icon::Trash, "Remove", col.spacing(10).into(), 0.0)
     }
 }
 
-/// One action of the drawer: its icon, its name, and a chevron.
-fn action_row<'a>(
-    ic: Icon,
-    label: &'a str,
-    on_press: Option<Message>,
-    danger: bool,
-) -> Element<'a, Message> {
-    let t = tokens();
-    let color = match (on_press.is_some(), danger) {
-        (false, _) => t.muted,
-        (true, true) => t.danger,
-        (true, false) => t.text,
-    };
-    button(
-        row![
-            icon(ic, 24.0, if danger { t.danger } else { t.accent }),
-            text(label).size(16).color(color).width(Length::Fill),
-            icon(Icon::ChevronRight, 18.0, t.muted),
-        ]
-        .spacing(18)
-        .align_y(Alignment::Center),
-    )
-    .padding([18, 20])
-    .width(Length::Fill)
-    .on_press_maybe(on_press)
-    .style(theme::action_row)
-    .into()
+/// A button of a section, as wide as its label.
+fn action(label: &str, on_press: Option<Message>, style: Style) -> Element<'_, Message> {
+    button(text(label).size(14))
+        .padding([10, 16])
+        .on_press_maybe(on_press)
+        .style(style)
+        .into()
+}
+
+/// One of the answers to an uninstall, across the drawer.
+fn choice(label: &str, msg: MaintenanceMsg, style: Style) -> Element<'_, Message> {
+    button(container(text(label).size(14)).center_x(Length::Fill))
+        .padding([12, 0])
+        .width(Length::Fill)
+        .on_press(Message::Maintenance(msg))
+        .style(style)
+        .into()
 }

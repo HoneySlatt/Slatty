@@ -145,20 +145,25 @@ impl App {
                     .into(),
             ),
         }
-        let mut col = Column::new().spacing(22);
-        for (i, s) in sections.into_iter().enumerate() {
-            if i > 0 {
-                col = col.push(
-                    container(Space::new())
-                        .width(Length::Fill)
-                        .height(1)
-                        .style(theme::divider),
-                );
-            }
-            col = col.push(s);
-        }
-        col.into()
+        stacked(sections)
     }
+}
+
+/// The parts of a drawer, one under the other, a line between each.
+pub(super) fn stacked(sections: Vec<Element<'_, Message>>) -> Element<'_, Message> {
+    let mut col = Column::new().spacing(22);
+    for (i, s) in sections.into_iter().enumerate() {
+        if i > 0 {
+            col = col.push(
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(1)
+                    .style(theme::divider),
+            );
+        }
+        col = col.push(s);
+    }
+    col.into()
 }
 
 /// Whether the game sees the user's files, and the switch that changes it.
@@ -192,7 +197,7 @@ fn isolation(install: &Install) -> Element<'_, Message> {
 }
 
 /// A titled part of the drawer, with its icon.
-fn titled<'a>(
+pub(super) fn titled<'a>(
     ic: Icon,
     title: &'a str,
     content: Element<'a, Message>,

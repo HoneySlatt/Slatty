@@ -15,6 +15,8 @@ fn uninstall_requires_an_explicit_choice() {
     }
     let mut ui = render(&app);
     snapshot(&mut ui, "uninstall-confirm");
+    // The choices take the place of the button that asked for them.
+    assert!(ui.find("Uninstall…").is_err());
     ui.click("Uninstall, keep the prefix").unwrap();
     assert!(ui.into_messages().any(
         |m| matches!(m, Message::Maintenance(MaintenanceMsg::Uninstall(id, false)) if id == "3")

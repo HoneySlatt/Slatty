@@ -456,7 +456,7 @@ pub fn nav_tab(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style
     }
 }
 
-/// A row of the Manage drawer: outlined, filled when hovered.
+/// An outlined button, filled when hovered (Check in the Cloud saves drawer).
 pub fn action_row(_: &Theme, status: button::Status) -> button::Style {
     let t = tokens();
     let (background, text) = match status {
