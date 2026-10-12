@@ -126,6 +126,10 @@ show game titles and achievement names on a lock screen.
   whatever the game prints, which can include identifiers or tickets of its own (one game printed a
   GOG ticket there). Read a log before sharing it. Comet's log from versions before 0.1.0 can hold
   your refresh token: delete it, and sign out and in again if you ever shared it.
+- **Enhance images with AI** (off until turned on) runs `realesrgan-ncnn-vulkan`, a local program
+  that sends nothing anywhere, inside bubblewrap without network, your home folder hidden, writing
+  only to its working folder and shader cache in `~/.cache/slatty/`. It never reads a downloaded
+  image: each one is decoded by SlattyLauncher and given to it as a PNG written again.
 - **Core dumps.** If SlattyLauncher crashes and your system keeps core dumps (systemd-coredump does
   on many distributions), the dump can hold your session tokens.
 

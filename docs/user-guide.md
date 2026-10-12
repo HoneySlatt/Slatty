@@ -776,7 +776,14 @@ type and the key to steamgriddb.com.
 
 **Appearance** picks a built-in theme (Carbonfox, Everforest, Pastel Glow, Gruvbox Dark
 or Light) and the interface font, applied at once and kept, and shows the theme file, `~/.config/slatty/theme.toml`: create it, edit it, and reload it to change colours,
-corners and the page transition. See [theming](theming.md).
+corners and the page transition. See [theming](theming.md). **Enhance images with AI** (off until
+turned on) cleans and enlarges covers and key art with Real-ESRGAN's compact model on the graphics
+card, once each, the images shown first first: about 0.1 s a cover and 0.5 s a key art on a
+recent graphics card, and 0.4 GB of its memory while it works. It never works while a game runs
+(SlattyLauncher's, or one the Steam client started), and picks up a minute after. It may smooth
+grain and change small details. It needs `realesrgan-ncnn-vulkan` and bubblewrap, which the Nix
+package provides; without them the switch is greyed out. Turned off, key art narrower than the
+window is enlarged with Lanczos3 and AMD's RCAS sharpening instead.
 
 ## Where data is stored
 
@@ -796,7 +803,8 @@ corners and the page transition. See [theming](theming.md).
 | `~/.local/share/slatty/diagnostics/` | Cloud copies downloaded by `slatty cloud diff` |
 | `~/.local/share/slatty/comet/`, `~/.config/slatty/comet/` | Comet's data and configuration |
 | `~/.cache/slatty/<user id>/` | Library and covers, and in `scaled/<width>/` and `art/<width>/` the covers and key art made at the size they are drawn; safe to delete |
-| `~/.cache/slatty/scaled/<width>/`, `~/.cache/slatty/art/<width>/` | The same for Steam's images and those you chose; safe to delete |
+| `~/.cache/slatty/scaled/<width>/`, `~/.cache/slatty/art/<width>/` | The same for Steam's images and those you chose (`<width>-ai` when made with Enhance images with AI); safe to delete |
+| `~/.cache/slatty/upscale-shaders/` | The upscaler's shaders, compiled once; safe to delete |
 | `~/.cache/slatty/steam/` | Images of Steam's games downloaded from Steam's image servers, once turned on; safe to delete |
 | `~/.cache/slatty/steamgriddb/` | Thumbnails Edit game showed from SteamGridDB, once turned on; safe to delete |
 | `~/.local/state/slatty/logs/` | Game, prefix creation, setup, Galaxy service and Comet logs: the last run of each and the two before (`.1`, `.2`); a game's go when it is uninstalled |

@@ -317,6 +317,8 @@ pub(super) fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
         sort: None,
         remember_filters: false,
         filters: None,
+        enhance_images: false,
+        upscaler: None,
     })))
 }
 

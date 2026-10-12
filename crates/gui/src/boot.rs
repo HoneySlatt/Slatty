@@ -67,6 +67,8 @@ pub struct Boot {
     pub cover_width: Option<f32>,
     pub sort: Option<Sort>,
     pub remember_filters: bool,
+    pub enhance_images: bool,
+    pub upscaler: Option<crate::upscale::Upscaler>,
     pub filters: Option<Filters>,
 }
 
@@ -189,6 +191,8 @@ async fn boot() -> Result<Boot, String> {
     // Steam libraries, which can sit on a network drive still waking up, are read once the library
     // shows (`App::read_launch_options`, `runners::list`).
     let _ = slatty_core::protons::link_newest(&dirs);
+    // What the upscaler was working on when the interface stopped; one interface runs at a time.
+    let _ = std::fs::remove_dir_all(crate::scaled::work_folder(&dirs));
     let proton_downloads = slatty_core::settings::proton_downloads(&db).map_err(err)?;
     let downloaded_protons = slatty_core::protons::installed(&dirs);
     let proton_updates = slatty_core::settings::proton_updates(&db).map_err(err)?;
@@ -207,6 +211,8 @@ async fn boot() -> Result<Boot, String> {
         .map_err(err)?
         .and_then(|s| Sort::from_key(&s));
     let (remember_filters, filters) = crate::library::kept_filters(&db).map_err(err)?;
+    let enhance_images = slatty_core::settings::enhance_images(&db).map_err(err)?;
+    let upscaler = crate::upscale::Upscaler::find();
     let playtime =
         session::playtime(&db, account.as_ref().map(|a| a.user_id.as_str())).map_err(err)?;
     InstallJob::forget_finished(&db).map_err(err)?;
@@ -274,6 +280,8 @@ async fn boot() -> Result<Boot, String> {
         sort,
         remember_filters,
         filters,
+        enhance_images,
+        upscaler,
     })
 }
 
