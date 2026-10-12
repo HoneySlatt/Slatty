@@ -996,6 +996,41 @@ fn a_stopped_download_that_cannot_resume_after_a_restart_is_listed_as_failed() {
     assert!(app.goes_on.is_empty());
 }
 
+/// An install queued and never started, planned again at its turn while another download runs, is
+/// queued again as never started: no pass past a download paused on request, and its first run
+/// makes its folder.
+#[test]
+fn a_queued_install_planned_again_stays_never_started() {
+    use super::offline::installing_6;
+    use slatty_core::installer::{InstallJob, QUEUED};
+    let mut app = library_app();
+    installing_6(&mut app);
+    ready_to_install(&mut app, "7");
+    let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
+    assert_eq!(app.queue, ["7"]);
+    // Its plan gone (a restart), planned again at its turn; another download started meanwhile.
+    app.install_views.clear();
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("7"));
+    installing_6(&mut app);
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "7".into(),
+        Ok(crate::install::PlanInfo {
+            title: "[FAKE] Game 7".into(),
+            directory: "Game 7".into(),
+            // Its queued job found: the plan says it can be taken up.
+            resumable: true,
+            ..fake_plan()
+        }),
+    )));
+    assert_eq!(app.queue, ["7"]);
+    let job = InstallJob::load(&app.core.as_ref().unwrap().db, "7")
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.state, QUEUED);
+    assert!(app.goes_on.is_empty());
+}
+
 /// A download the launcher stopped, saved as started in the queue, still goes on beside a download
 /// paused on request when GOG could not be reached as it was planned to start: its pass lasts
 /// until it runs.
@@ -1122,6 +1157,18 @@ fn a_paused_install_resumed_while_another_downloads_waits_as_started() {
     if let Some(InstallView::Ready(info)) = app.install_views.get_mut("7") {
         info.resumable = true;
     }
+    slatty_core::installer::InstallJob {
+        game_id: "7".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 7".into(),
+        state: slatty_core::installer::PAUSED.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
     let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
     assert_eq!(app.queue, ["7"]);
     let job = slatty_core::installer::InstallJob::load(&db, "7")

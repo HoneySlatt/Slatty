@@ -275,16 +275,13 @@ impl App {
         let Some(InstallView::Ready(info)) = self.install_views.remove(&game_id) else {
             return Task::none();
         };
-        // A paused install resumed meanwhile waits saved as started: its resume is checked as
-        // one, and it goes on by itself.
-        let started = info.resumable;
-        let job = InstallJob {
+        let mut job = InstallJob {
             game_id: game_id.clone(),
             build_id: info.build_id.clone(),
             language: info.language.clone(),
             root: PathBuf::from(info.root.trim()),
             directory: info.directory.clone(),
-            state: if started { DOWNLOADING } else { QUEUED }.into(),
+            state: QUEUED.into(),
             dlcs: info
                 .dlcs
                 .iter()
@@ -297,17 +294,26 @@ impl App {
         // An interrupted install keeps the decision made when it started. Written under the game's
         // lock: the command line may be installing or updating it, its own job not to be replaced.
         let saved = slatty_core::lock::game(&core.dirs, &game_id).and_then(|_busy| {
-            job.save(&core.db)?;
-            if info.resumable {
-                return Ok(());
+            // A paused install resumed meanwhile waits saved as started: its resume is checked as
+            // one, and it goes on by itself. One queued, never started, stays so.
+            let started = InstallJob::load(&core.db, &game_id)?.is_some_and(|j| !j.is_queued());
+            if started {
+                job.state = DOWNLOADING.into();
             }
-            slatty_core::settings::set_held_back(&core.db, &game_id, !info.newest)
+            job.save(&core.db)?;
+            if !info.resumable {
+                slatty_core::settings::set_held_back(&core.db, &game_id, !info.newest)?;
+            }
+            Ok(started)
         });
-        if let Err(e) = saved {
-            self.install_views.insert(game_id, InstallView::Ready(info));
-            self.notify_error(e.to_string());
-            return Task::none();
-        }
+        let started = match saved {
+            Ok(started) => started,
+            Err(e) => {
+                self.install_views.insert(game_id, InstallView::Ready(info));
+                self.notify_error(e.to_string());
+                return Task::none();
+            }
+        };
         self.install_views
             .insert(game_id.clone(), InstallView::Queued(info));
         self.forget_interrupted(&game_id);
