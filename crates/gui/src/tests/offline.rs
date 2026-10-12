@@ -570,13 +570,15 @@ fn start_up_resumes_installers_cut_off_first_and_keeps_the_stopped_ones_apart() 
     );
     assert_eq!(
         waiting.queue,
-        [entry("5"), entry("7"), "6".into(), entry("10")],
+        [entry("5"), entry("7"), "6".into()],
         "a paused one is not in the queue"
     );
+    // 10, queued but out of the saved order, was taken out to start and stopped before it began.
     let stopped = waiting.offline_stopped;
-    assert_eq!(stopped.len(), 2);
+    assert_eq!(stopped.len(), 3);
     assert_eq!(stopped[0], ("8".to_string(), None));
     assert!(stopped[1].0 == "9" && stopped[1].1.is_some());
+    assert!(stopped[2].0 == "10" && stopped[2].1.is_some());
 }
 
 #[test]
@@ -864,6 +866,26 @@ fn installers_resumed_before_they_began_wait_as_never_started() {
     let waiting = crate::boot::downloads_from(app.queue.clone(), Vec::new(), &jobs);
     assert!(app.goes_on.is_empty());
     assert_eq!(app.goes_on, waiting.goes_on);
+}
+
+/// Installers stopped before their run began (their folder could not be made, a drive not there)
+/// stay listed as stopped after a restart, rather than start again by themselves: the drive may
+/// still be missing, its empty mount point then filled.
+#[test]
+fn installers_stopped_before_they_began_stay_stopped_after_a_restart() {
+    let mut app = library_app();
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.start_next();
+    let _ = app.update(Message::Offline(OfflineMsg::Done(
+        "5".into(),
+        Err(Some(("[FAKE] permission denied".into(), false))),
+    )));
+    assert!(app.queue.is_empty());
+    let jobs = OfflineJob::list(&app.core.as_ref().unwrap().db).unwrap();
+    let waiting = crate::boot::downloads_from(app.queue.clone(), Vec::new(), &jobs);
+    assert!(waiting.queue.is_empty());
+    assert!(matches!(&waiting.offline_stopped[..], [(id, Some(_))] if id == "5"));
 }
 
 #[test]

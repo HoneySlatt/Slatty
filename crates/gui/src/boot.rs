@@ -86,15 +86,16 @@ pub fn summary(r: &InstallRecord) -> InstallSummary {
 
 /// What downloads at start, from the saved order of the queue and the jobs saved.
 pub(crate) struct Waiting {
-    /// The queue, in its saved order (a queued job missing from it goes last); installers cut off
-    /// by a close go first: they resume by themselves.
+    /// The queue, in its saved order (a queued install missing from it goes last); installers cut
+    /// off by a close go first: they resume by themselves.
     pub queue: Vec<String>,
     /// Entries of the queue started already (stopped by the launcher, cut off, resumed while
     /// another ran): they go on beside a download paused on request.
     pub goes_on: Vec<String>,
     /// Installs stopped otherwise: paused, failed, cut off by a close (they resume first).
     pub interrupted: Vec<InstallJob>,
-    /// Offline installers paused, or stopped by an error.
+    /// Offline installers paused, or stopped by an error, before they began too (queued, but taken
+    /// out of the saved order to start).
     pub offline_stopped: Vec<(String, Option<String>)>,
 }
 
@@ -121,11 +122,7 @@ pub(crate) fn downloads_from(
             None => queued.iter().any(|j| &j.game_id == id),
         })
         .collect();
-    for id in queued
-        .into_iter()
-        .map(|j| j.game_id)
-        .chain(offline_in_state(offline, QUEUED))
-    {
+    for id in queued.into_iter().map(|j| j.game_id) {
         if !queue.contains(&id) {
             queue.push(id);
         }
@@ -139,11 +136,18 @@ pub(crate) fn downloads_from(
         .filter(|e| started.contains(e))
         .cloned()
         .collect();
+    // Installers queued but missing from the saved order were taken out of it to start, and stopped
+    // before they began (their folder could not be made): listed as stopped, as before the close,
+    // rather than started again by themselves while their drive may still be missing.
     let offline_stopped = offline
         .iter()
-        .filter(|j| j.state == PAUSED || j.state == FAILED)
+        .filter(|j| {
+            j.state == PAUSED
+                || j.state == FAILED
+                || (j.state == QUEUED && !queue.contains(&offline::entry(&j.game_id)))
+        })
         .map(|j| {
-            let failed = (j.state == FAILED).then(|| "It stopped on an error.".to_string());
+            let failed = (j.state != PAUSED).then(|| "It stopped on an error.".to_string());
             (j.game_id.clone(), failed)
         })
         .collect();
