@@ -193,6 +193,14 @@ impl App {
                 ) => {}
             InstallMsg::Planned(game_id, result) => {
                 let auto = self.auto_resume.take_if(|id| *id == game_id).is_some();
+                // Asked from the couch mode: with the default choices, as soon as planned.
+                let start = self.start_planned.take_if(|id| *id == game_id).is_some();
+                if let (true, Err(e)) = (start, &result) {
+                    self.notify_error(format!(
+                        "{} cannot be installed: {e}",
+                        self.title_of(&game_id)
+                    ));
+                }
                 // GOG answered: nothing waits for it any longer.
                 if result.is_ok() {
                     self.downloads_waiting = None;
@@ -232,7 +240,7 @@ impl App {
                 };
                 let ready = matches!(view, InstallView::Ready(_));
                 self.install_views.insert(game_id.clone(), view);
-                if auto && ready {
+                if (auto || start) && ready {
                     return self.update_install(InstallMsg::Start(game_id));
                 }
                 // One that cannot start does not stop the queue.

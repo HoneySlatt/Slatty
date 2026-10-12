@@ -130,10 +130,11 @@ The interface follows Iced's state, message, update and view split:
 | `steam` | Steam's games beside GOG's |
 | `add`, `edit` | Adding a game by hand; editing a game's title and images |
 | `runners`, `settings` | Settings → Runners; the rest of Settings |
+| `couch`, `pad` | The couch mode: where its focus is, its moves, its lists (home rows, its library, its downloads); gamepads read through gilrs on a thread of their own, a held direction repeating, and its keys (see [Couch mode](#couch-mode)) |
 | `notify` | Cards in the window, desktop notifications |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress |
 | `theme`, `presets`, `icons` | Design tokens and widget styles, built-in themes, Lucide icons |
-| `ui/*` | The views: top bar and layers (`mod`), building blocks (`widgets`), pages (`library`, `game`, `achievements`, `settings`, `downloads`), drawers and dialogs (`install`, `installers`, `game_settings`, `manage`, `cloud`, `edit`, `add`, `panels`), text shown to the user (`format`), `even_grid`, `pointer` |
+| `ui/*` | The views: top bar and layers (`mod`), building blocks (`widgets`), pages (`library`, `game`, `achievements`, `settings`, `downloads`), drawers and dialogs (`install`, `installers`, `game_settings`, `manage`, `cloud`, `edit`, `add`, `panels`), the couch mode's pages and layers (`couch`), text shown to the user (`format`), `even_grid`, `pointer` |
 
 Views never name a colour: every colour, radius and motion comes from `theme::tokens()`, a built-in
 theme (`presets`) with `~/.config/slatty/theme.toml` over it ([theming](theming.md)).
@@ -579,6 +580,32 @@ program isolated through `sh -c`, an AppImage told to unpack itself).
   and removes only links leading into the builds folder. A failure there only leaves builds out of
   Steam and Heroic.
 
+### Couch mode
+
+`gui/src/couch.rs`, `pad.rs` and `ui/couch.rs`. The couch mode is another way around the same
+state: it reads the same library, starts games, installs and downloads through the same messages
+(`Select`, `ToggleFavorite`, `Play`, `InstallMsg`, `DownloadsMsg`, `OfflineMsg`), and its views
+are drawn in place of the desktop's while `App::couch` holds its state.
+
+- Iced 0.14 gives the focus only to text fields, not to buttons: the couch mode keeps its own
+  focus (`Couch`: the tab, the row and cover on Home, the cover and first row shown in Library,
+  the row and button in Downloads, the button on a game's page, the keyboard's key, the menu's
+  item), moved by `Nav`, and draws it with the styles `couch_card`, `couch_button` and
+  `couch_item`.
+- `pad::moves` reads every gamepad through gilrs on a thread of its own, only while the couch mode
+  is on, and turns presses and the left stick into `Nav`; `Repeater` repeats a held direction
+  (after 400 ms, every 110 ms), the stick moving once per lean. Gamepads are read whatever window
+  is in front, so their moves are dropped while the window is behind another one or a game runs.
+  The keyboard (`pad::key`) moves the focus too and types into the search.
+- Its lists are kept like the library's (`library::Lists`): its library by shelf and search, the
+  home rows (`App::home_rows`); a move changes no list (`Message::keeps_lists`). Only the covers in
+  view are built: a row of Home from the cover with the focus, and in Library the rows from
+  `Couch::top`, moved so the focus stays in view.
+- Install from a game's page plans the install with the defaults and starts it once planned
+  (`App::start_planned`); a game's main button is the desktop page's (`App::main_action`).
+- It starts with `--couch` or in a gamescope session (`XDG_CURRENT_DESKTOP=gamescope`,
+  `GAMESCOPE_WAYLAND_DISPLAY`), full screen from the first frame.
+
 ## Storage
 
 Paths follow the XDG variables; the defaults are shown.
@@ -614,6 +641,7 @@ Paths follow the XDG variables; the defaults are shown.
 | GOG never told of other stores' games | GOG learns nothing of what you own elsewhere |
 | Images shown from files, made at the size drawn | The interface held 880 MB of covers at 10,000 games when it kept their bytes; Iced has no smaller copies to sample from |
 | Grids that build only the rows in view | A library of 10,000 games stays within a frame |
+| A couch mode of its own rather than a gamepad on the desktop window | Pages made for a sofa and a Steam Deck (large covers, one focus, the buttons to press shown), without a focus model forced on every desktop page; gilrs reads gamepads, with SDL's mappings for the less common ones |
 | SQLite through rusqlite behind a mutex | One writer per process, simple synchronous queries, futures stay `Send` |
 | Interface in English first | Translations come later |
 | GPL-3.0-or-later | Allows building on heroic-gogdl's GPL code with attribution |

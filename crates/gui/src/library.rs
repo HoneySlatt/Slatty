@@ -519,6 +519,7 @@ impl App {
             self.account_task(covers),
             self.scan_overview(false),
             self.refresh_playtime(all),
+            self.home_art(),
         ])
     }
 
@@ -592,7 +593,9 @@ impl App {
         let shown = match &*kept {
             Some((k, shown)) if *k == key => shown.clone(),
             _ => {
-                let shown: Rc<[usize]> = self.find_visible_games().into();
+                let shown: Rc<[usize]> = self
+                    .find_games(&self.search, self.shelf, self.filters, self.sort)
+                    .into();
                 *kept = Some((key, shown.clone()));
                 shown
             }
@@ -600,16 +603,21 @@ impl App {
         shown.iter().map(|&i| &self.library[i]).collect()
     }
 
-    /// `visible_games`, as places in `library`.
-    fn find_visible_games(&self) -> Vec<usize> {
-        let needle = self.search.to_lowercase();
-        let f = self.filters;
+    /// The games of `shelf` matching `search` and `f`, in `sort` order, as places in `library`.
+    pub(crate) fn find_games(
+        &self,
+        search: &str,
+        shelf: Shelf,
+        f: Filters,
+        sort: Sort,
+    ) -> Vec<usize> {
+        let needle = search.to_lowercase();
         let mut games: Vec<(usize, &LibraryGame)> = self
             .library
             .iter()
             .enumerate()
             .filter(|(_, g)| needle.is_empty() || g.title.to_lowercase().contains(&needle))
-            .filter(|(_, g)| match self.shelf {
+            .filter(|(_, g)| match shelf {
                 Shelf::Hidden => self.is_hidden(&g.id),
                 _ if self.is_hidden(&g.id) => false,
                 Shelf::All => true,
@@ -636,7 +644,7 @@ impl App {
                     && (!f.cloud_saves || o.is_some_and(|o| o.cloud_saves))
             })
             .collect();
-        match self.sort {
+        match sort {
             Sort::NameAsc => games.sort_by_cached_key(|(_, g)| self.sort_name(g)),
             Sort::NameDesc => {
                 games.sort_by_cached_key(|(_, g)| std::cmp::Reverse(self.sort_name(g)));
@@ -756,9 +764,12 @@ pub struct Lists {
     /// How many of GOG's games their data was read for, and how many there are, shown while some
     /// are missing.
     overview_read: RefCell<Option<(usize, usize)>>,
+    /// The couch mode's library and its home rows.
+    pub couch: RefCell<Option<(ListKey, Rc<[usize]>)>>,
+    pub couch_home: RefCell<Option<Rc<[crate::couch::HomeRow]>>>,
 }
 
-type ListKey = (String, Shelf, Filters, Sort, usize);
+pub(crate) type ListKey = (String, Shelf, Filters, Sort, usize);
 pub type AchievementsList = Rc<[(usize, usize, usize)]>;
 
 impl Lists {
@@ -766,6 +777,8 @@ impl Lists {
         self.library.take();
         self.achievements.take();
         self.overview_read.take();
+        self.couch.take();
+        self.couch_home.take();
     }
 }
 

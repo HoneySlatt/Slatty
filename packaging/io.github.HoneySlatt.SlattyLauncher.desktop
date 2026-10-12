@@ -7,5 +7,10 @@ Exec=slatty-gui
 Icon=io.github.HoneySlatt.SlattyLauncher
 Terminal=false
 Categories=Game;
-Keywords=GOG;Galaxy;Steam;Proton;games;launcher;
+Keywords=GOG;Galaxy;Steam;Proton;games;launcher;gamepad;Steam Deck;
 StartupNotify=true
+Actions=couch;
+
+[Desktop Action couch]
+Name=Couch mode
+Exec=slatty-gui --couch

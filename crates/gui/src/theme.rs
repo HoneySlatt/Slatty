@@ -686,6 +686,128 @@ pub fn veil(amount: f32) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A cover of the couch mode: ringed with the accent while it has the focus.
+pub fn couch_card(focused: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, _| {
+        let t = tokens();
+        button::Style {
+            background: None,
+            text_color: t.text,
+            border: Border {
+                color: if focused {
+                    t.accent
+                } else {
+                    Color::TRANSPARENT
+                },
+                width: 3.0,
+                radius: (t.cover_radius + 4.0).into(),
+            },
+            shadow: Shadow::default(),
+            snap: true,
+        }
+    }
+}
+
+/// A button of the couch mode: filled with the accent while it has the focus.
+pub fn couch_button(focused: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let t = tokens();
+        match (focused, status) {
+            // Something that cannot be done now (an update running) still shows the focus.
+            (true, button::Status::Disabled) => {
+                let mut style = base(Some(t.surface_high), t.muted, t.radius);
+                style.border = style.border.color(t.accent).width(3.0);
+                style
+            }
+            (true, _) => base(Some(t.accent), t.on_accent, t.radius),
+            (false, button::Status::Disabled) => base(Some(t.surface_high), t.muted, t.radius),
+            (false, button::Status::Hovered | button::Status::Pressed) => {
+                base(Some(t.outline), t.text, t.radius)
+            }
+            (false, _) => base(Some(t.surface_high), t.text, t.radius),
+        }
+    }
+}
+
+/// A tab of the couch mode's top bar.
+pub fn couch_tab(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, _| {
+        let t = tokens();
+        if active {
+            base(Some(t.surface_high), t.text, t.radius)
+        } else {
+            base(None, t.muted, t.radius)
+        }
+    }
+}
+
+/// The couch mode's bars, above and below its pages.
+pub fn couch_bar(_: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(tokens().background)),
+        text_color: Some(tokens().text),
+        ..Default::default()
+    }
+}
+
+/// A row of a couch mode's list (a download, an achievement): ringed while it has the focus.
+pub fn couch_item(focused: bool) -> impl Fn(&Theme) -> container::Style {
+    move |_| {
+        let t = tokens();
+        container::Style {
+            background: Some(Background::Color(t.surface)),
+            border: round(20.0)
+                .color(if focused {
+                    t.accent
+                } else {
+                    Color::TRANSPARENT
+                })
+                .width(2.0),
+            text_color: Some(t.text),
+            ..Default::default()
+        }
+    }
+}
+
+/// A gamepad button, as the couch mode's hints draw it.
+pub fn couch_glyph(_: &Theme) -> container::Style {
+    let t = tokens();
+    container::Style {
+        background: Some(Background::Color(t.surface_high)),
+        border: round(999.0).color(t.outline).width(1.0),
+        text_color: Some(t.text),
+        ..Default::default()
+    }
+}
+
+/// The bars of a glyph drawn for the Menu button.
+pub fn couch_glyph_bar(_: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(tokens().text)),
+        border: round(1.0),
+        ..Default::default()
+    }
+}
+
+/// A panel over the couch mode's page: its menu, keyboard, achievements and questions.
+pub fn couch_panel(_: &Theme) -> container::Style {
+    let t = tokens();
+    container::Style {
+        background: Some(Background::Color(t.surface)),
+        border: round(20.0).color(t.outline).width(1.0),
+        text_color: Some(t.text),
+        shadow: Shadow {
+            color: Color {
+                a: 0.5,
+                ..Color::BLACK
+            },
+            offset: iced::Vector::new(0.0, 10.0),
+            blur_radius: 30.0,
+        },
+        ..Default::default()
+    }
+}
+
 pub fn backdrop(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(tokens().scrim)),

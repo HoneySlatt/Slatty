@@ -2,6 +2,7 @@ mod achievements;
 mod add;
 mod boot;
 mod cloud;
+mod couch;
 mod downloads;
 mod edit;
 mod graphics;
@@ -12,6 +13,7 @@ mod login;
 mod maintenance;
 mod notify;
 mod offline;
+mod pad;
 mod play;
 mod presets;
 mod runners;
@@ -107,6 +109,7 @@ fn main() -> iced::Result {
         .theme(App::theme)
         .window(iced::window::Settings {
             size: Size::new(1440.0, 900.0),
+            fullscreen: couch::ask_at_start(),
             min_size: Some(Size::new(800.0, 560.0)),
             ..Default::default()
         })
@@ -314,6 +317,10 @@ pub struct App {
     pub preempted: Option<(String, downloads::Preempt)>,
     /// Whether downloads pause while a game runs (Settings → Installs).
     pub pause_while_playing: bool,
+    /// The couch mode, while on, and where its focus is.
+    pub couch: Option<couch::Couch>,
+    /// A game asked to install from the couch mode: it starts once planned.
+    pub start_planned: Option<String>,
     /// Installs finished since the start, the latest first, with their size.
     pub completed: Vec<(String, u64)>,
     /// What GOG offers to download for the games whose Installers drawer opened.
@@ -431,6 +438,8 @@ impl Default for App {
             drag: None,
             preempted: None,
             pause_while_playing: true,
+            couch: None,
+            start_planned: None,
             completed: Vec::new(),
             offline_views: HashMap::new(),
             offline_run: None,
@@ -528,6 +537,7 @@ pub enum Message {
     Notify(notify::NotifyMsg),
     Downloads(downloads::DownloadsMsg),
     Offline(offline::OfflineMsg),
+    Couch(couch::CouchMsg),
     Maintenance(MaintenanceMsg),
     Settings(SettingsMsg),
     Runners(runners::RunnersMsg),
@@ -574,6 +584,11 @@ fn key_message(event: keyboard::Event) -> Option<Message> {
     }
 }
 
+/// The keys the couch mode answers, as a message.
+fn couch_key(event: keyboard::Event) -> Option<Message> {
+    pad::key(event).map(|k| Message::Couch(couch::CouchMsg::Key(k)))
+}
+
 impl Message {
     /// Whether the message leaves the games the Library and Achievements tabs list as they were:
     /// those that come many times a second, and others that change none of them.
@@ -597,6 +612,9 @@ impl Message {
                 | Message::Key(_)
                 | Message::Install(InstallMsg::Progress(..))
                 | Message::Offline(offline::OfflineMsg::Progress(..))
+                // Moves in the couch mode; what they start (a favourite) goes through `update`,
+                // which forgets the lists itself.
+                | Message::Couch(_)
                 | Message::Maintenance(MaintenanceMsg::Progress(..))
                 | Message::Runners(runners::RunnersMsg::Progress(..))
                 // What arrives just after start, read off the interface thread, leaves the lists
@@ -658,7 +676,10 @@ fn err(e: impl std::fmt::Display) -> String {
 impl App {
     fn boot() -> (Self, Task<Message>) {
         (
-            App::default(),
+            App {
+                couch: couch::at_start().then(couch::Couch::default),
+                ..App::default()
+            },
             Task::batch([
                 Task::perform(
                     async { boot::started().await.map(Box::new) },
@@ -702,6 +723,18 @@ impl App {
             }
             None => Subscription::none(),
         };
+        // The couch mode reads gamepads, and keys of its own.
+        let (keys, gamepads) = if self.couch.is_some() {
+            (
+                keyboard::listen().filter_map(couch_key),
+                Subscription::run(pad::moves).map(|nav| Message::Couch(couch::CouchMsg::Nav(nav))),
+            )
+        } else {
+            (
+                keyboard::listen().filter_map(key_message),
+                Subscription::none(),
+            )
+        };
         Subscription::batch([
             frames,
             update_checks,
@@ -709,7 +742,8 @@ impl App {
             steam_games,
             steam_downloads,
             iced::window::events().filter_map(window_message),
-            keyboard::listen().filter_map(key_message),
+            keys,
+            gamepads,
             iced::window::close_requests().map(|_| Message::CloseRequested),
             iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),
         ])
@@ -1070,6 +1104,7 @@ impl App {
             Message::Install(msg) => return self.update_install(msg),
             Message::Downloads(msg) => return self.update_downloads(msg),
             Message::Offline(msg) => return self.update_offline(msg),
+            Message::Couch(msg) => return self.update_couch(msg),
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Runners(msg) => return self.update_runners(msg),

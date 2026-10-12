@@ -19,6 +19,7 @@ guide follows the window, and gives the command where there is one.
 - [Games added by hand](#games-added-by-hand)
 - [Games installed elsewhere](#games-installed-elsewhere)
 - [Proton builds](#proton-builds)
+- [Couch mode](#couch-mode)
 - [Settings](#settings)
 - [Where data is stored](#where-data-is-stored)
 - [Troubleshooting](#troubleshooting)
@@ -72,7 +73,8 @@ are adopted, different ones reported as conflicts for you to settle.
 ## The window
 
 The top bar holds four tabs: **Library**, **Achievements**, the download button for the
-**Downloads** tab, and the gear for **Settings**. The search field (**Search a game**) filters
+**Downloads** tab, and the gear for **Settings**; the gamepad beside them opens the
+[couch mode](#couch-mode). The search field (**Search a game**) filters
 the library by title. Your GOG avatar, top right, comes from your public GOG profile; it also opens
 Settings, and its green dot says you are signed in.
 
@@ -618,6 +620,57 @@ slatty proton list
 slatty proton updates on
 slatty proton share on
 ```
+
+## Couch mode
+
+A mode for a gamepad, full screen, for a television or a Steam Deck: the same library, downloads
+and games as the desktop window, with large covers and a focus moved with the d-pad or the left
+stick. Settings stay in the desktop window.
+
+It opens:
+
+- from the gamepad button of the top bar;
+- with `slatty-gui --couch`, or the **Couch mode** action of SlattyLauncher's desktop entry;
+- by itself in a gamescope session, such as the Steam Deck's Game Mode. On a Steam Deck, add
+  SlattyLauncher to Steam as a non-Steam game from the Desktop Mode, then start it from the Game
+  Mode.
+
+**Menu** → **Desktop mode** goes back to the desktop window; **Menu** → **Quit SlattyLauncher**
+closes it, asking first if a download or a game runs.
+
+| Gamepad | Keyboard | What it does |
+|---|---|---|
+| D-pad, left stick | Arrow keys | Moves the focus; held, it repeats |
+| A | Enter | Opens or presses what has the focus |
+| B | Escape | Back; closes the keyboard, the menu or a list |
+| Y | Space | Adds the game with the focus to the favorites, or takes it out |
+| X | `/`, or a letter typed | Search |
+| LB, RB | Page Up, Page Down, Tab | The tab before or after |
+| Menu (☰) | F1 | The menu |
+
+The buttons are named after an Xbox pad: A is the lowest of the four on the right, B the right
+one, X the left one, Y the top one.
+
+- **Home** shows the key art of the game with the focus, and rows of covers: **Continue playing**
+  (the 20 games played last), **Favorites** and **Installed**; the whole library while none of
+  these has a game yet.
+- **Library** shows every game by name. Above the covers (Up from the first row), the shelves
+  **All**, **Installed** and **Favorites**, and **Search**, which opens a keyboard on the screen: A
+  types the key with the focus, X erases, Y adds a space, B or **Done** closes it, keeping the
+  search. A keyboard types into the search directly; a letter typed from Home or Library starts
+  one.
+- A game's page has its main button (Play, Stop while it runs, Install, Resume, or where its
+  download stands), the favorite, and **Achievements**, a list to scroll. **Install** starts at
+  once with the choices the Install drawer would start with: the default platform and Proton
+  build, the installation path of Settings → Installs, every DLC owned; it waits in the queue while
+  another download runs.
+- **Downloads** lists the download running (Pause), those stopped (Resume, Discard or Remove) and
+  the queue (Download now, Remove).
+
+The gamepad is read through udev, as the desktop gives it to the person at the computer; when
+SlattyLauncher is started from Steam, Steam's controller support hands it the pad Steam presents.
+The gamepad is ignored while the window is behind another one or a game runs: its buttons are
+the game's.
 
 ## Settings
 

@@ -14,6 +14,9 @@ path = "src/main.rs"
 
 [dependencies]
 chrono = "0.4.45"
+# Gamepads for the couch mode, read from evdev through udev, with SDL's mappings for the less
+# common ones. Its defaults stay on: without them it refuses to build, even on Linux.
+gilrs = "0.11"
 # Iced's defaults but its system theme detection: the theme comes from SlattyLauncher's own tokens,
 # and the detection waited up to 200 ms for the desktop portal before the window opened, then kept
 # a D-Bus connection whose thread woke the program twice a second for good.

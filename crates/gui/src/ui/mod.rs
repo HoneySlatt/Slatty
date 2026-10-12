@@ -3,6 +3,7 @@
 mod achievements;
 mod add;
 mod cloud;
+mod couch;
 mod downloads;
 mod edit;
 mod even_grid;
@@ -58,6 +59,10 @@ impl App {
             (None, _) if added && !self.login_open => Some(""),
             _ => None,
         };
+        // The couch mode has pages and layers of its own; signing in stays in the desktop's.
+        if username.is_some() && self.couch.is_some() {
+            return self.with_notice(self.couch_view());
+        }
         // The sign-in page is a page like the others, under the same layers: the quit dialog too.
         let body: Element<'_, Message> = match (username, self.selected_game()) {
             (None, _) => self.login_view(),
@@ -252,6 +257,12 @@ impl App {
                 "settings-tab",
                 self.page == Page::Settings,
                 Message::ShowPage(Page::Settings)
+            ),
+            icon_tab(
+                Icon::Gamepad,
+                "couch-tab",
+                false,
+                Message::Couch(crate::couch::CouchMsg::Enter)
             ),
         ]
         .spacing(8)

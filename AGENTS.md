@@ -25,7 +25,7 @@ Read before coding:
 ## Commands
 
 Everything runs inside the Nix development shell, which provides the toolchain, umu-launcher,
-bubblewrap, Comet, `GalaxyCommunication.exe` and the graphics libraries:
+bubblewrap, Comet, `GalaxyCommunication.exe`, the graphics libraries and udev (gamepads):
 
 ```sh
 nix develop -c cargo build --workspace              # always last: people run target/debug/*
@@ -167,9 +167,13 @@ The interface follows Iced's state / message / update / view split:
 - `main.rs` holds `App` (the state), the `Message` enum and navigation. `update` only dispatches.
 - Each feature keeps its state, its message handling and its background tasks in its own module.
   Most have their own message enum and an `impl App { fn update_<feature>(…) }` block (`add`,
-  `downloads`, `edit`, `install`, `maintenance`, `notify`, `runners`, `settings`, `steam`,
-  `updates`; `play` has `PlayMsg` and `on_play`); `library`, `cloud`, `achievements` and `scaled`
-  handle `Message` variants through methods of `App`. Follow the module you change.
+  `couch`, `downloads`, `edit`, `install`, `maintenance`, `notify`, `offline`, `runners`,
+  `settings`, `steam`, `updates`; `play` has `PlayMsg` and `on_play`); `library`, `cloud`,
+  `achievements` and `scaled` handle `Message` variants through methods of `App`. Follow the
+  module you change.
+- The couch mode (`couch.rs`, `pad.rs`, `ui/couch.rs`) keeps a focus of its own, since Iced gives
+  none to buttons, and starts its work through the same messages as the desktop window: a new
+  action there sends the desktop's message rather than doing the work again.
 - Views live under `ui/`, one module per page or panel. Shared pieces are in `ui/widgets.rs`,
   `ui/panels.rs` (drawers and library dialogs) and `ui/format.rs` (text shown to the user).
 - Nothing slow runs on the interface thread: use `Task::perform`, `tokio::task::spawn_blocking`

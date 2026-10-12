@@ -24,6 +24,8 @@ files by default.
 - Change any game's title, sorting title, cover and background, from a file or from SteamGridDB;
   hide the ones you do not want to see.
 - Built-in themes, your own theme file, the font and the cover size of your choice.
+- A couch mode for a gamepad, full screen, for a television or a Steam Deck, where it starts by
+  itself in the Game Mode.
 
 **Installing**
 - Windows builds from GOG's Galaxy content system, native Linux builds from GOG's offline

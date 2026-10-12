@@ -51,6 +51,9 @@ There are no dates. What has been checked against real services, and what not ye
   cover and background (from a file or SteamGridDB), and hidden games.
 - Fluid at 10,000 games: only the rows in view are built, lists kept, images shown from files at
   the size they are drawn.
+- A couch mode for a gamepad, full screen: home rows, the library with search on a keyboard on the
+  screen, game pages, installs and downloads; it starts by itself in the Steam Deck's Game Mode.
+  Not yet tried with real gamepads or on a Steam Deck.
 
 **Beyond GOG**
 - Steam's games in the same library, read from the client's files and run through it; one card for
@@ -66,7 +69,6 @@ There are no dates. What has been checked against real services, and what not ye
 
 ## Planned
 
-- **A couch mode** for the gamepad, apart from the current interface.
 - **Translations** of the interface, in English for now.
 - **Steam downloads** followed more exactly while the client downloads.
 - **Packaging** for other distributions, with the icon and the window identifier a desktop needs.

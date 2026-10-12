@@ -31,6 +31,8 @@
           libxi
           libxrandr
           dbus
+          # Gamepads, found and followed through udev.
+          udev
         ];
       slattyLauncher =
         pkgs:
@@ -50,7 +52,12 @@
           version = (pkgs.lib.importTOML ./Cargo.toml).workspace.package.version;
           src = pkgs.lib.cleanSource ./.;
           cargoLock.lockFile = ./Cargo.lock;
-          nativeBuildInputs = [ pkgs.makeWrapper ];
+          nativeBuildInputs = [
+            pkgs.makeWrapper
+            pkgs.pkg-config
+          ];
+          # Linked by gilrs, the gamepad library.
+          buildInputs = [ pkgs.udev ];
           # The tests start real processes and read /proc, which the build sandbox narrows; they
           # run in the development shell.
           doCheck = false;

@@ -1031,6 +1031,36 @@ fn library_at_10000_games() {
             t.elapsed() / 1_000
         );
     }
+    // The couch mode: its home page and library, a move (a message and a view, as each press of
+    // the d-pad), and its lists made again after a message that forgets them.
+    {
+        use crate::couch::{CouchMsg, Tab};
+        use crate::pad::Nav;
+        app.window = SIZE;
+        app.page = Page::Library;
+        for g in app.library.iter().take(500) {
+            app.favorites.insert(g.id.clone());
+        }
+        let _ = app.update(Message::Couch(CouchMsg::Enter));
+        time(&app, "couch home");
+        let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+        time(&app, "couch library");
+        let t = std::time::Instant::now();
+        for i in 0..100 {
+            let nav = if i % 10 == 9 { Nav::Down } else { Nav::Right };
+            let _ = app.update(Message::Couch(CouchMsg::Nav(nav)));
+            let _ = app.view();
+        }
+        println!("couch move: {:?} per message and view", t.elapsed() / 100);
+        let t = std::time::Instant::now();
+        for _ in 0..10 {
+            app.lists.clear();
+            let _ = app.couch_games();
+            let _ = app.home_rows();
+        }
+        println!("couch lists made again: {:?}", t.elapsed() / 10);
+        app.couch = None;
+    }
     // Laying out, beyond building: each page at 10,000 games against the same page at 14, both
     // timed alike (the median of a few windows, which carry the test renderer's own start-up).
     let laid_out = |app: &App| {

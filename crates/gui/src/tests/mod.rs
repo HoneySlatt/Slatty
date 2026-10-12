@@ -286,6 +286,7 @@ fn ready_to_install(app: &mut App, id: &str) {
 mod achievements;
 mod added;
 mod cloud;
+mod couch;
 mod downloads;
 mod edit;
 mod game_page;

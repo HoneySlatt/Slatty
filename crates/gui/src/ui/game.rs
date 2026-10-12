@@ -24,6 +24,15 @@ use crate::{App, CloudStatus, Loadable, Message, Page, Panel};
 
 /// Height of the summary cards under the key art.
 const CARD_HEIGHT: f32 = 96.0;
+
+/// A game's main button: what it says, and what it does when it can be pressed.
+pub struct MainAction {
+    pub icon: Icon,
+    pub label: String,
+    pub message: Option<Message>,
+    /// Stop, which ends the game.
+    pub danger: bool,
+}
 /// Width of the row of cards under which play time and the last session lose their icons.
 const NARROW_CARDS: f32 = 1100.0;
 /// Window height under which a game's title is set smaller, for the key art is short.
@@ -208,32 +217,69 @@ impl App {
     }
 
     pub(super) fn play_row<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let main = self.main_action(g);
+        let color = if main.message.is_some() {
+            tokens().on_accent
+        } else {
+            tokens().muted
+        };
+        let main = button(
+            container(
+                row![
+                    icon(main.icon, 22.0, color),
+                    text(main.label).size(20).font(bold())
+                ]
+                .spacing(14)
+                .align_y(Alignment::Center),
+            )
+            .center_x(Length::Fill),
+        )
+        .padding([16, 0])
+        .width(300)
+        .on_press_maybe(main.message)
+        .style(if main.danger {
+            theme::danger
+        } else {
+            theme::primary
+        });
+        let favorite = self.favorites.contains(&g.id);
+        let heart = button(
+            container(icon(
+                if favorite {
+                    Icon::HeartFilled
+                } else {
+                    Icon::Heart
+                },
+                24.0,
+                if favorite {
+                    tokens().accent
+                } else {
+                    tokens().text
+                },
+            ))
+            .center(26),
+        )
+        .padding(16)
+        .on_press(Message::ToggleFavorite(g.id.clone()))
+        .style(theme::tonal);
+        row![main, heart]
+            .spacing(12)
+            .align_y(Alignment::Center)
+            .into()
+    }
+
+    /// The game's main button, as the game page and the couch mode show it: Play, Install, Stop,
+    /// or where its download or update stands.
+    pub(crate) fn main_action(&self, g: &LibraryGame) -> MainAction {
         let running = self.play.as_ref().filter(|p| p.running);
         let this_running = running.is_some_and(|p| p.game_id == g.id);
-        let big = |ic: Icon, label: String, msg: Option<Message>, danger: bool| {
-            let color = if msg.is_some() {
-                tokens().on_accent
-            } else {
-                tokens().muted
-            };
-            button(
-                container(
-                    row![icon(ic, 22.0, color), text(label).size(20).font(bold())]
-                        .spacing(14)
-                        .align_y(Alignment::Center),
-                )
-                .center_x(Length::Fill),
-            )
-            .padding([16, 0])
-            .width(300)
-            .on_press_maybe(msg)
-            .style(if danger {
-                theme::danger
-            } else {
-                theme::primary
-            })
+        let big = |icon: Icon, label: String, message: Option<Message>, danger: bool| MainAction {
+            icon,
+            label,
+            message,
+            danger,
         };
-        let main = if self.steam_game(&g.id).is_some() {
+        if self.steam_game(&g.id).is_some() {
             use crate::steam::SteamMsg;
             use slatty_core::steam::client::Action;
             let ask = |action| Some(Message::Steam(SteamMsg::Ask(g.id.clone(), action)));
@@ -321,31 +367,7 @@ impl App {
                     false,
                 ),
             }
-        };
-        let favorite = self.favorites.contains(&g.id);
-        let heart = button(
-            container(icon(
-                if favorite {
-                    Icon::HeartFilled
-                } else {
-                    Icon::Heart
-                },
-                24.0,
-                if favorite {
-                    tokens().accent
-                } else {
-                    tokens().text
-                },
-            ))
-            .center(26),
-        )
-        .padding(16)
-        .on_press(Message::ToggleFavorite(g.id.clone()))
-        .style(theme::tonal);
-        row![main, heart]
-            .spacing(12)
-            .align_y(Alignment::Center)
-            .into()
+        }
     }
 
     /// Why Install is unavailable, when GOG offers nothing to install.

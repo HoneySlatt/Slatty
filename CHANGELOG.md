@@ -19,6 +19,12 @@ The first public version.
   SteamGridDB (once turned on), and a game can be hidden.
 - Built-in themes, a theme file for colours, corners and motion, the interface font and the cover
   size. Covers and key art are drawn from copies made at the size they are shown.
+- A couch mode for a gamepad or the keyboard, full screen: Home with the games played lately, the
+  favorites and those installed under the key art of the game chosen; the library by shelf, with a
+  search typed on a keyboard on the screen; game pages that play, install with the default
+  choices and list achievements; the Downloads queue. It opens from the top bar, with
+  `slatty-gui --couch` or the desktop entry's **Couch mode**, and by itself in a gamescope session
+  such as the Steam Deck's Game Mode.
 
 ### Installing
 
