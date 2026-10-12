@@ -159,7 +159,7 @@ pub fn forget(ctx: &Ctx, game_id: &str) -> Result<()> {
     get(ctx, game_id)?;
     let install = slatty_core::maintenance::forget(&ctx.db, &ctx.dirs, game_id)?;
     println!(
-        "{} is no longer managed by slatty. Nothing was deleted: {} is untouched.",
+        "{} is no longer managed by slatty: {} and its prefix are untouched.",
         shown(&install.title),
         shown(install.path.display())
     );
