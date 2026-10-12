@@ -159,7 +159,9 @@ impl App {
                     .find(|t| t.id == id)
                     .and_then(|t| t.game.clone());
                 self.toasts.retain(|t| t.id != id);
-                if let Some(game) = game {
+                // Not one the library no longer lists (signed out of GOG since): its page does
+                // not exist.
+                if let Some(game) = game.filter(|id| self.library.iter().any(|g| g.id == *id)) {
                     return self.open_game(game, None);
                 }
             }

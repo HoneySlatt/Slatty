@@ -107,6 +107,20 @@ fn a_game_opened_from_a_card_goes_back_to_where_the_library_was() {
     assert_eq!(app.grid_view.map(|v| v.absolute_offset().y), Some(offset));
 }
 
+/// A card about a game the library no longer lists (signed out of GOG since its download ended)
+/// opens nothing: the page it would select does not exist, and the dialogs over the library,
+/// drawn only with no game selected, would no longer show.
+#[test]
+fn a_card_about_a_game_no_longer_listed_opens_nothing() {
+    let mut app = library_app();
+    let _ = app.notify(Kind::Downloads, Some("5"), "Download complete", "[FAKE]");
+    let card = app.toasts[0].id;
+    app.logged_out();
+    let _ = app.update(Message::Notify(NotifyMsg::Open(card)));
+    assert!(app.selected.is_none());
+    assert!(app.toasts.is_empty(), "the card goes");
+}
+
 /// Achievements unlocked in a game are said once it ends, the only time the launcher learns them.
 #[test]
 fn achievements_unlocked_are_said_when_the_game_ends() {
