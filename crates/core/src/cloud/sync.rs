@@ -502,7 +502,8 @@ pub(crate) fn remote_map(
             continue;
         }
         let rel = rel.to_string();
-        if !Path::new(&rel)
+        // Saves are resolved with backslashes as separators too (`gameinfo::resolve_relative`).
+        if !Path::new(&rel.replace('\\', "/"))
             .components()
             .all(|c| matches!(c, std::path::Component::Normal(_)))
         {

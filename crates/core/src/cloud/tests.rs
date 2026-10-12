@@ -449,6 +449,20 @@ async fn remote_paths_cannot_escape_the_save_folder() {
     assert_eq!(r.downloaded, ["b.sav"]);
 }
 
+/// Windows writes paths with backslashes, which saves are resolved with: a `..` written that way
+/// is left out like any other, rather than refused later with the whole sync.
+#[tokio::test]
+async fn remote_paths_with_backslashes_cannot_escape_the_save_folder() {
+    let env = Env::new("escape-backslash");
+    std::fs::create_dir_all(env.root()).unwrap();
+    env.put_remote("a\\..\\..\\evil.sh", "x");
+    env.put_remote("b.sav", "b");
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(r.is_clean(), "{:?}", r.errors);
+    assert_eq!(r.skipped_remote, ["a\\..\\..\\evil.sh"]);
+    assert_eq!(r.downloaded, ["b.sav"]);
+}
+
 /// `Save.dat` and `save.dat` in the cloud are one file on Windows: that pair is left out, on both
 /// sides, and the location's other saves still sync.
 #[tokio::test]
