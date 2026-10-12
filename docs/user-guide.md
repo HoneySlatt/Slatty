@@ -493,7 +493,10 @@ slatty forget <game-id>
 
 - `slatty import` registers a game installed by another tool, so it can be launched and synced.
 - `--from-heroic` reads Heroic's records without changing them.
-- `slatty forget` drops any game from SlattyLauncher's records without touching its files.
+- `slatty forget` drops any game from SlattyLauncher's records without touching its files or its
+  prefix. For a game SlattyLauncher installed, the list of files it installed and GOG's setup files
+  go too: imported again later, it counts as a game installed elsewhere. Not while the game runs or
+  another operation on it does.
 
 Imported games cannot be verified or uninstalled, because SlattyLauncher does not know which files
 belong to them.

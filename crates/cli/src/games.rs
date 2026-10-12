@@ -156,8 +156,8 @@ pub fn forget(ctx: &Ctx, game_id: &str) -> Result<()> {
     if slatty_core::store::is_local(game_id) {
         bail!("{game_id} was added by hand: `slatty remove {game_id}` takes it out of the library");
     }
-    let install = get(ctx, game_id)?;
-    Install::remove(&ctx.db, game_id)?;
+    get(ctx, game_id)?;
+    let install = slatty_core::maintenance::forget(&ctx.db, &ctx.dirs, game_id)?;
     println!(
         "{} is no longer managed by slatty. Nothing was deleted: {} is untouched.",
         shown(&install.title),

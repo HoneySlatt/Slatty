@@ -214,6 +214,21 @@ pub fn uninstall(
     Ok(report)
 }
 
+/// Stops managing a game, leaving its folder and prefix as they are. What SlattyLauncher kept of
+/// it (its install record, GOG's support files, an unfinished update) goes too: a game imported
+/// later under its id is not taken for the one it installed. A game added by hand goes with
+/// `added::remove` instead.
+pub fn forget(db: &Db, dirs: &Dirs, game_id: &str) -> Result<Install> {
+    let _busy = crate::lock::game(dirs, game_id)?;
+    let install = Install::get(db, game_id)?
+        .ok_or_else(|| Error::NotFound(format!("{game_id} is not installed")))?;
+    Install::remove(db, game_id)?;
+    InstallJob::delete(db, game_id)?;
+    let _ = std::fs::remove_file(InstallRecord::file(dirs, game_id));
+    let _ = std::fs::remove_dir_all(installer::support_dir(dirs, game_id));
+    Ok(install)
+}
+
 /// Verifies an installed game against the build it was installed from; with `repair`,
 /// bad or missing files are downloaded again. Returns the files that were not right.
 #[allow(clippy::too_many_arguments)]
@@ -1187,6 +1202,47 @@ mod tests {
         assert!(env.game().join("data/a.pak").exists());
         assert!(env.dirs.data.join("prefixes/1/drive_c/users").is_dir());
         assert!(Install::get(&env.db, "1").unwrap().is_some());
+    }
+
+    /// Forgetting a game leaves its folder and prefix, and takes what SlattyLauncher kept of it
+    /// (its install record, GOG's support files, an unfinished update): a game imported later under
+    /// its id is not taken for the one it installed. Never while another operation runs on it.
+    #[test]
+    fn forgetting_a_game_drops_what_slatty_kept_of_it_but_never_its_files() {
+        let env = Env::new("forget", true);
+        let support = installer::support_dir(&env.dirs, "1");
+        std::fs::create_dir_all(&support).unwrap();
+        std::fs::write(support.join("script.ini"), b"[FAKE]").unwrap();
+        InstallJob {
+            game_id: "1".into(),
+            build_id: "b2".into(),
+            language: "en-US".into(),
+            root: env.root.join("games"),
+            directory: "Game".into(),
+            state: UPDATING.into(),
+            dlcs: vec![],
+            proton: None,
+        }
+        .save(&env.db)
+        .unwrap();
+        let busy = crate::lock::game(&env.dirs, "1").unwrap();
+        assert!(matches!(
+            forget(&env.db, &env.dirs, "1"),
+            Err(Error::Refused(_))
+        ));
+        assert!(Install::get(&env.db, "1").unwrap().is_some());
+        drop(busy);
+
+        assert_eq!(
+            forget(&env.db, &env.dirs, "1").unwrap().title,
+            "[FAKE] Game"
+        );
+        assert!(Install::get(&env.db, "1").unwrap().is_none());
+        assert!(InstallRecord::load(&env.dirs, "1").unwrap().is_none());
+        assert!(!support.exists());
+        assert!(update_pending(&env.db, "1").unwrap().is_none());
+        assert!(env.game().join("Game.exe").exists());
+        assert!(env.dirs.data.join("prefixes/1/drive_c/users").is_dir());
     }
 
     #[test]
