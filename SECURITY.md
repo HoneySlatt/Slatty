@@ -26,11 +26,13 @@ What is treated as hostile:
 
 - **Everything that comes from the network.** GOG's answers, manifests, installers and cloud
   listings, Proton releases from GitHub, SteamGridDB's and umu's answers. Paths are checked, sizes
-  are bounded before memory is taken, and nothing is written outside the folder it belongs to.
+  are bounded before memory is taken (see [Sizes](#downloads-and-what-they-write) for the
+  exceptions), and nothing is written outside the folder it belongs to.
 - **Games.** A game is code you did not write. Windows games run isolated from your files by
-  default (below). Whatever a game leaves in its folder or prefix (a link, a pipe, a huge file) is
-  never followed or trusted by the launcher's own work there: updates, patches, cloud sync, setup
-  programs, the Galaxy service.
+  default (below). Whatever a game leaves in its folder or prefix (a link, a pipe) is never
+  followed or trusted by the launcher's own work there: updates, patches, cloud sync, setup
+  programs, the Galaxy service. A huge file in a save folder is read whole by the cloud sync that
+  uploads it.
 - **Other users of the computer.** The launcher's folders and database are readable by you only,
   and Comet receives your tokens in a folder only you can open.
 
@@ -57,7 +59,10 @@ account), and a game you run without isolation (it runs as you).
   cache and Comet's achievement records. Games, saves, prefixes and save backups are never
   deleted.
 - **Account changes.** Work started for one account never uses another's tokens: after a switch,
-  its requests are refused and its late results dropped.
+  its requests are refused and its late results dropped. Downloads, updates and other changes to
+  installed games are the exception: they act with the account signed in when they start, so an
+  install queued before a switch downloads with the new account's tokens (from GOG, for a game
+  that account may not own).
 
 ### Comet
 
@@ -86,8 +91,10 @@ No telemetry, no crash reports, no usage statistics.
 
 | Who | What they receive | When | Setting (default) |
 |---|---|---|---|
-| GOG: `auth.gog.com`, `embed.gog.com`, `users.gog.com`, `galaxy-library.gog.com`, `gamesdb.gog.com`, `api.gog.com`, `content-system.gog.com`, `remote-config.gog.com`, `cloudstorage.gog.com`, `gameplay.gog.com`, and the download and image servers GOG's answers name | What each feature needs: sign-in, your library, your avatar, game downloads, cloud saves, achievements | When you use the feature | — |
-| GOG, `content-system.gog.com` | The installed games whose new builds are looked for | At start, at sign-in and every six hours | Update games automatically, Settings → Installs (on) |
+| GOG: `auth.gog.com`, `embed.gog.com`, `users.gog.com`, `galaxy-library.gog.com`, `gamesdb.gog.com`, `api.gog.com`, `content-system.gog.com`, `gog-cdn-fastly.gog.com`, `remote-config.gog.com`, `cloudstorage.gog.com`, `gameplay.gog.com`, and the download and image servers GOG's answers name | What each feature needs: sign-in, your library, your avatar, game downloads, cloud saves, achievements | When you use the feature | — |
+| GOG, `gameplay.gog.com` | Each game of your library, one request each, for its play time | Each time the library loads | — |
+| GOG: `content-system.gog.com`, `gog-cdn-fastly.gog.com`, `remote-config.gog.com`, `auth.gog.com`, `gameplay.gog.com` | For each game: whether it has cloud saves, and its achievements, through a token for the game, as Galaxy asks it (about six requests a game) | When the library loads, for the games not read yet; for all of them on Refresh (Achievements tab) | — |
+| GOG: `content-system.gog.com` (Windows builds), `api.gog.com` (Linux builds) | The installed games whose new builds are looked for | At start, at sign-in and every six hours | Update games automatically, Settings → Installs (on) |
 | GOG, `gameplay.gog.com` | Each play session (game, start, length), as Galaxy sends them; sessions played while off are never sent later | After a session | Play time on GOG, Settings → Privacy (on) |
 | GOG, through Comet: `auth.gog.com`; `gameplay.gog.com` (achievements, statistics, leaderboards, with your system's language); `notifications-pusher.gog.com` (a live connection signed in with your token and subscribed to your friends, presence, chat, library and notification topics); `cfg.gog.com` and the servers it names (Galaxy's "peer" component, downloaded into Comet's folder) | Whether GOG then shows you online, or playing, to your friends has not been checked | While a game that ships Galaxy's SDK runs | Achievements in game, Settings → Privacy (off) |
 | Valve, `repo.steampowered.com`, through umu-launcher | Which version of the Steam Linux Runtime is current; the runtime itself on first use and when it changes | At each launch through umu (Windows games, and Linux games run in umu's container); for isolated games the update itself is made at most once a day, just before a launch | — |
@@ -142,7 +149,9 @@ show game titles and achievement names on a lock screen.
 - **Sizes.** Limits apply before memory or disk is taken: network answers (256 MiB), manifests once
   inflated (512 MiB), download chunks (64 MiB), a game's own `goggame-*.info` and `start.sh`
   (16 MiB), each Linux installer entry (the size its installer gives), a library listing (10,000
-  pages).
+  pages). Not yet bounded: a cloud save is held whole in memory, up to 4 GiB as it downloads and
+  without a limit as it uploads; the archive or Linux installer of a game added by hand is unpacked
+  with each of its files in memory, and a `.tar.xz` one with whatever dictionary it names.
 - **Content.** Galaxy chunks and files are checked against the MD5 sums of GOG's manifests, Linux
   installer entries against their size and CRC-32, files rebuilt from binary patches against GOG's
   sums, Proton archives against the SHA-512 sum published with their release. These catch a
