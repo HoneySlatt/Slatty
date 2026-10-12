@@ -1451,6 +1451,38 @@ fn a_download_resumed_on_a_replaced_installer_starts_again() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// Starting an install again keeps its job while its partial folder cannot be deleted whole: the
+/// new install would otherwise adopt what is left of it.
+#[test]
+fn a_restart_that_cannot_delete_the_download_keeps_it() {
+    let root = std::env::temp_dir().join(format!("slatty-restart-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let db = Db::in_memory().unwrap();
+    let job = InstallJob {
+        game_id: "1".into(),
+        build_id: "b".into(),
+        language: "en-US".into(),
+        root: root.clone(),
+        directory: "Game".into(),
+        state: PAUSED.into(),
+        dlcs: vec![],
+        proton: None,
+    };
+    job.save(&db).unwrap();
+    let locked = partial_dir(&root, "Game").join("[FAKE] data");
+    std::fs::create_dir_all(&locked).unwrap();
+    std::fs::write(locked.join("[FAKE] file.pak"), "x").unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+    assert!(restart(&db, &job).is_err());
+    assert!(InstallJob::load(&db, "1").unwrap().is_some());
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    restart(&db, &job).unwrap();
+    assert!(InstallJob::load(&db, "1").unwrap().is_none());
+    assert!(!partial_dir(&root, "Game").exists());
+    restart(&db, &job).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// Resumed from the queue, a download's job names the build planned when it was queued, GOG's new
 /// installer: the partial folder's mark still tells the one it started with, so its files, some
 /// of the same size as the new installer's, are not taken for the new one's.

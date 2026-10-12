@@ -87,8 +87,7 @@ pub async fn install(
     if req.restart
         && let Some(job) = &previous
     {
-        let _ = std::fs::remove_dir_all(partial_dir(&job.root, &job.directory));
-        InstallJob::delete(db, &job.game_id)?;
+        restart(db, job)?;
     }
     let job = previous.filter(|_| !req.restart);
     let (platform, language, build_id, root, dlcs) = match &job {
@@ -278,6 +277,19 @@ pub async fn install(
         dependencies: plan.meta.dependencies.clone(),
     });
     Ok(install)
+}
+
+/// Forgets an interrupted install to start it again. Its partial folder must go first: left in
+/// part, a new install going into the same folder would take its files for its own.
+fn restart(db: &Db, job: &InstallJob) -> Result<()> {
+    let partial = partial_dir(&job.root, &job.directory);
+    match std::fs::remove_dir_all(&partial) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            return Err(Error::io(format!("delete {}", partial.display()), e));
+        }
+        _ => {}
+    }
+    InstallJob::delete(db, &job.game_id)
 }
 
 /// Deletes the partial folder of a download resumed on another build than it started with: a
