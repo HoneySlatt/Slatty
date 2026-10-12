@@ -100,8 +100,9 @@ pub fn keep_private(db: &Db, user_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Sends every pending session; stops at the first failure so the rest is retried later, except a
-/// session GOG refuses for good, which is skipped. Returns the minutes reported.
+/// Sends every pending session. A network error stops at once, the rest sent later; a session GOG
+/// fails on for now stays pending without holding back the others, and one it refuses for good is
+/// skipped. Returns the minutes reported, or the first failure that left a session pending.
 pub async fn report_pending(db: &Db, dirs: &Dirs, http: &Client, tokens: &Tokens) -> Result<i64> {
     send_pending(db, dirs, &tokens.user_id, |s| async move {
         report(http, tokens, &s.game_id, s.started_at, s.minutes).await
@@ -123,6 +124,7 @@ async fn send_pending<F: Future<Output = Result<()>>>(
     )
     .await?;
     let mut minutes = 0;
+    let mut failed = None;
     for s in unreported(db, user_id)? {
         let (id, played) = (s.id, s.minutes);
         match send(s).await {
@@ -141,10 +143,22 @@ async fn send_pending<F: Future<Output = Result<()>>>(
                     params![id],
                 )?;
             }
+            // GOG failing on this one for now: it is sent again later, and the others go on.
+            Err(e @ Error::Http { status, .. })
+                if status >= 500 || [408, 429].contains(&status) =>
+            {
+                tracing::warn!(
+                    "play time of session {id} not taken by GOG for now (HTTP {status})"
+                );
+                failed.get_or_insert(e);
+            }
             Err(e) => return Err(e),
         }
     }
-    Ok(minutes)
+    match failed {
+        Some(e) => Err(e),
+        None => Ok(minutes),
+    }
 }
 
 #[cfg(test)]
@@ -199,8 +213,9 @@ mod tests {
         );
     }
 
-    /// A session GOG refuses for good does not hold back the ones after it, and is not sent again;
-    /// a network error or a server failing for now stops, so that the rest is sent later.
+    /// A session GOG refuses for good, or fails on for now, does not hold back the ones after it:
+    /// the one it failed on is sent again later, the one it refused never. Offline, the first
+    /// session stops the others, which would fail the same way.
     #[tokio::test]
     async fn a_session_gog_refuses_does_not_hold_back_the_others() {
         let db = Db::in_memory().unwrap();
@@ -228,13 +243,42 @@ mod tests {
             }
         };
         let dirs = Dirs::under(&std::env::temp_dir().join("slatty-playtime-unused"));
+        let pending = || {
+            unreported(&db, "me")
+                .unwrap()
+                .iter()
+                .map(|s| s.id)
+                .collect::<Vec<_>>()
+        };
+        let tried = std::sync::atomic::AtomicUsize::new(0);
+        let offline = |_: Unreported| {
+            tried.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            async {
+                // Nothing listens there.
+                let e = reqwest::Client::new()
+                    .get("http://127.0.0.1:9/")
+                    .send()
+                    .await
+                    .unwrap_err();
+                Err(crate::error::Error::network("test", e))
+            }
+        };
+        let result = send_pending(&db, &dirs, "me", offline).await;
+        assert!(matches!(result, Err(Error::Network { .. })), "{result:?}");
+        assert_eq!(tried.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(pending(), [1, 2, 3]);
+
         assert!(send_pending(&db, &dirs, "me", answer(503)).await.is_err());
-        assert_eq!(unreported(&db, "me").unwrap().len(), 3, "tried again later");
+        assert_eq!(
+            pending(),
+            [1],
+            "the others sent, that one tried again later"
+        );
         assert_eq!(
             send_pending(&db, &dirs, "me", answer(400)).await.unwrap(),
-            20
+            0
         );
-        assert!(unreported(&db, "me").unwrap().is_empty());
+        assert!(pending().is_empty());
     }
 
     /// The interface and the command line, each at the end of a game, send the sessions waiting

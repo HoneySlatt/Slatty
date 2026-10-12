@@ -286,7 +286,8 @@ A launch goes through these steps:
 6. The session is added to your play time on GOG, as GOG Galaxy does. Its length leaves out the
    time the computer was suspended, and does not change if the clock is set meanwhile. Sessions
    shorter than a minute are not sent (GOG ignores them). Offline, it is sent after the next session. A session
-   GOG refuses outright is not sent again, and the ones after it still are.
+   GOG refuses outright is not sent again, and one it fails on for now (a server error) is sent
+   after the next session; the ones after either still are.
 
 Ctrl+C asks the game to quit; a second Ctrl+C forces it. Pressed before the game starts (Ctrl+C,
 or Stop game in the interface), it keeps the game from starting. Options:
