@@ -18,7 +18,7 @@ use crate::maintenance::MaintenanceMsg;
 use crate::notify::Kind;
 use crate::settings::ProtonChoice;
 use crate::work::{paused_or, progress_stream, tokens};
-use crate::{App, Core, Message, err};
+use crate::{App, CloudRequest, Core, Message, err};
 
 #[derive(Debug, Clone)]
 pub struct PlanInfo {
@@ -469,10 +469,14 @@ impl App {
                 );
                 self.installs.insert(game_id.clone(), install);
                 let read = self.refresh_record(&game_id);
-                if self.selected.as_deref() == Some(game_id.as_str()) {
+                // Checked as when the page of an installed game opens.
+                let cloud = if self.selected.as_deref() == Some(game_id.as_str()) {
                     self.panel = None;
-                }
-                return Task::batch([read, done, self.start_next()]);
+                    self.request_cloud(game_id.clone(), CloudRequest::Check)
+                } else {
+                    Task::none()
+                };
+                return Task::batch([read, done, cloud, self.start_next()]);
             }
             // Paused: the queue waits too.
             InstallMsg::Done(game_id, Err(None)) => {

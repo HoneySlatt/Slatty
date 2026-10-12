@@ -87,8 +87,9 @@ impl App {
     }
 
     pub fn request_cloud(&mut self, game_id: String, request: CloudRequest) -> Task<Message> {
-        // A game added by hand has no cloud saves, and GOG is not told of it.
-        if slatty_core::store::is_local(&game_id) {
+        // GOG keeps no cloud saves of a Linux build, nor of a game added by hand, which it is not
+        // told of: asking would only hold Play until it answered.
+        if !self.may_sync_cloud(&game_id) {
             return Task::none();
         }
         let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {

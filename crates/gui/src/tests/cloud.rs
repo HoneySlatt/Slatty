@@ -52,6 +52,43 @@ fn the_cloud_card_reads_nothing_of_the_prefix_as_it_draws() {
     );
 }
 
+/// GOG keeps no cloud saves of a Linux build: a check asked for one (as the end of a session asks,
+/// its page open) asks GOG nothing and leaves Play available.
+#[test]
+fn a_linux_build_asks_gog_for_no_cloud_saves() {
+    use crate::cloud::CloudRequest;
+    let mut app = library_app();
+    app.installs.get_mut("3").unwrap().platform = Platform::Linux;
+    open(&mut app, "3", None);
+    let _ = app.update(Message::Cloud("3".into(), CloudRequest::Check));
+    assert!(!app.cloud.contains_key("3"));
+    assert!(app.can_play("3"));
+}
+
+/// An install ending with its page open has its cloud saves checked at once, as opening the page
+/// of an installed game does, rather than left "Not checked yet"; a Linux build's are not.
+#[test]
+fn an_install_ending_with_its_page_open_has_its_cloud_saves_checked() {
+    let mut app = library_app();
+    let installed = |app: &App, id: &str, platform| Install {
+        game_id: id.into(),
+        title: format!("[FAKE] Game {id}"),
+        platform,
+        ..app.installs["3"].clone()
+    };
+    let _ = app.update(Message::Select("5".into()));
+    settle(&mut app);
+    let windows = installed(&app, "5", Platform::Windows);
+    let _ = app.update(Message::Install(InstallMsg::Done("5".into(), Ok(windows))));
+    assert!(render(&app).find("Checking…").is_ok());
+
+    let _ = app.update(Message::Select("6".into()));
+    settle(&mut app);
+    let linux = installed(&app, "6", Platform::Linux);
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Ok(linux))));
+    assert!(!app.cloud.contains_key("6"));
+}
+
 #[test]
 fn cloud_saves_wait_for_the_first_launch_to_be_written() {
     let mut app = library_app();
