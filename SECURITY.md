@@ -75,7 +75,8 @@ when the game ends, or when the launcher itself is closed or killed.
 
 - It receives your tokens through a file readable by you only, in a folder of `$XDG_RUNTIME_DIR`
   that is checked to be yours alone. The file is deleted as soon as Comet listens. SlattyLauncher
-  only talks to a Comet that runs as you.
+  only talks to a Comet that runs as you. Your GOG user name is in its command line (Comet takes
+  it nowhere else), which other users of the computer can read while it runs.
 - **While it runs, any program on this computer can get your GOG access token from it.** Comet
   listens on 127.0.0.1:9977 and answers a token request from anything that connects, without
   asking who it is: your other programs, an isolated game, a Flatpak with network access, other
