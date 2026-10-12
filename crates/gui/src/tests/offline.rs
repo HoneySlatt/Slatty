@@ -710,6 +710,26 @@ fn a_download_the_user_pauses_still_holds_the_queue() {
     assert_eq!(app.queue, ["6"]);
 }
 
+/// Installers cut off because GOG could not be reached go on first once it answers, beside a
+/// download paused on request, as they would after a restart.
+#[test]
+fn installers_cut_off_by_the_network_go_on_beside_a_paused_download() {
+    let mut app = library_app();
+    app.interrupted
+        .push(("6".into(), crate::Interrupted::Paused));
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.start_first();
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    let _ = app.update(Message::Offline(OfflineMsg::Done(
+        "5".into(),
+        Err(Some(("[FAKE] network error".into(), true))),
+    )));
+    assert_eq!(app.queue, [entry("5")]);
+    let _ = app.update(Message::Install(crate::install::InstallMsg::Retry));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+}
+
 /// The row Download now asked for during a game starts once the download it paused stopped, though
 /// another row was put first meanwhile; the stopped download goes right after it.
 #[test]
