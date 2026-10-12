@@ -61,8 +61,8 @@ recorded in [docs/compatibility.md](docs/compatibility.md): sign-in, library, Wi
 installs, playing isolated (Hollow Knight, Firewatch, Cyberpunk 2077, Blasphemous), cloud saves both
 ways, an achievement earned in game, verify and repair, uninstall, a crash during a download, and
 Steam's library. Not checked against real services yet: pausing an install by hand, applying an
-update, DLC and language changes, redistributables, games added by hand, Steam installs, and
-keeping Proton builds up to date.
+update, DLC and language changes, Visual C++ redistributables, games added by hand, Steam installs,
+and keeping Proton builds up to date.
 
 Linux only, tested and packaged on x86-64; macOS and Windows hosts are not supported. See the
 [roadmap](docs/roadmap.md).
