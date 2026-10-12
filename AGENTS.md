@@ -6,12 +6,14 @@ applies to every change; it adds what an agent most often gets wrong in this rep
 
 ## The project in one paragraph
 
-SlattyLauncher is a native GOG launcher for Linux, in Rust (edition 2024, Rust 1.90+) with an
+SlattyLauncher is a native Linux launcher for GOG games, in Rust (edition 2024, Rust 1.90+) with an
 [Iced](https://iced.rs) 0.14 interface. It signs in to GOG, installs Windows builds from GOG's
 Galaxy content system and native Linux builds from GOG's offline installers, runs games through
-umu and Proton (or natively), syncs cloud saves, and reports achievements through Comet. GOG
-publishes no API for this: every service was understood by reverse engineering. The launcher
-handles people's accounts, saves and disks, so **safety comes before features**.
+umu and Proton (or natively), syncs cloud saves, and reports achievements through Comet. The same
+library also shows the user's Steam games, read from the Steam client's files and run through it,
+and games added by hand (`local-<n>`). GOG publishes no API for this: every service was understood
+by reverse engineering. The launcher handles people's accounts, saves and disks, so **safety comes
+before features**.
 
 Read before coding:
 
@@ -23,7 +25,7 @@ Read before coding:
 ## Commands
 
 Everything runs inside the Nix development shell, which provides the toolchain, umu-launcher,
-Comet, `GalaxyCommunication.exe` and the graphics libraries:
+bubblewrap, Comet, `GalaxyCommunication.exe` and the graphics libraries:
 
 ```sh
 nix develop -c cargo build --workspace              # always last: people run target/debug/*
@@ -44,9 +46,11 @@ SLATTY_SNAPSHOT_DIR=/tmp/slatty-ui cargo test -p slatty-gui
 # Library performance at 10,000 games (see "Performance" below)
 cargo test --release -p slatty-gui library_at_10000_games -- --ignored --nocapture
 
-# Real Proton and real Comet (ignored by default; see docs/testing.md)
-TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> cargo test -- --ignored proton prefix galaxy_service
-unshare -rn sh -c 'ip link set lo up && cargo test -- --ignored comet'   # offline
+# Real Proton and real Comet (ignored by default; see docs/testing.md). Name the test binary:
+# a name filter such as `proton` also runs the isolation checks below, on the real tools.
+TMPDIR=$HOME/.cache SLATTY_TEST_PROTON=<Proton dir> \
+  cargo test -p slatty-cli --test supervisor --test prefix -- --ignored
+unshare -rn sh -c 'ip link set lo up && cargo test -p slatty-cli --test comet -- --ignored'   # offline
 
 # Isolation: a game in umu's container sees nothing of the home folder and cannot change the
 # tools other games run. A failing check writes a probe into umu's runtime and the Proton build:
@@ -160,9 +164,11 @@ crates/gui    slatty-gui   Iced interface
 The interface follows Iced's state / message / update / view split:
 
 - `main.rs` holds `App` (the state), the `Message` enum and navigation. `update` only dispatches.
-- Each feature (`install`, `downloads`, `library`, `settings`, `maintenance`, `cloud`, `play`,
-  `edit`, …) keeps its state, its own message enum (`InstallMsg`, `DownloadsMsg`, …), an
-  `impl App { fn update_<feature>(…) }` block and its background tasks in its own module.
+- Each feature keeps its state, its message handling and its background tasks in its own module.
+  Most have their own message enum and an `impl App { fn update_<feature>(…) }` block (`add`,
+  `downloads`, `edit`, `install`, `maintenance`, `notify`, `runners`, `settings`, `steam`,
+  `updates`; `play` has `PlayMsg` and `on_play`); `library`, `cloud`, `achievements` and `scaled`
+  handle `Message` variants through methods of `App`. Follow the module you change.
 - Views live under `ui/`, one module per page or panel. Shared pieces are in `ui/widgets.rs`,
   `ui/panels.rs` (drawers and library dialogs) and `ui/format.rs` (text shown to the user).
 - Nothing slow runs on the interface thread: use `Task::perform`, `tokio::task::spawn_blocking`
@@ -170,9 +176,10 @@ The interface follows Iced's state / message / update / view split:
   second). `boot.rs` reads everything the first page needs on a thread begun as the program starts,
   while the window and graphics driver are set up, and nothing from game folders or Steam
   libraries: they can be on a network drive still waking up.
-- **Views never name a colour.** Every colour, radius and motion value comes from
-  `theme::tokens()`, and widget styles are functions in `theme.rs`. A new token goes into
-  `Tokens`, the theme file format and docs/theming.md.
+- **Views never name a colour.** Every colour and motion value comes from `theme::tokens()`, and
+  widget styles are functions in `theme.rs`. A new token goes into `Tokens`, the theme file format
+  and docs/theming.md. Controls and covers take their corners from the tokens; cards, drawers and
+  dialogs still have corners of their own in `theme.rs` (and one in `ui/widgets.rs::inner`).
 - Icons are Lucide SVGs in `crates/gui/assets/icons`, added to the `Icon` enum in `icons.rs`.
 - Dialogs and menus are **layers over the page** (`ui/mod.rs`), each over an empty layer, and the
   notice banner keeps its place even when empty. Do not wrap the page in a different widget
@@ -192,14 +199,18 @@ frames: check scrolling in the real application too (docs/testing.md says how).
 
 `view` runs after every message, scroll steps included: keep per-game work out of it, or make it
 once (sort keys are kept by title in `library::SortKeys`; the games each tab lists are kept in
-`library::Lists` until a message other than a scroll step, a frame or progress, see
-`Message::keeps_lists`). A new message that comes many times a second, or with the others just
+`library::Lists` until a message that can change them; scroll steps, frames, covers, progress and
+the others that cannot are listed in `Message::keeps_lists`). A new message that comes many times a second, or with the others just
 after start, and changes no list belongs in `keeps_lists`; one that changes what a list shows must
 not be there, or must clear the lists itself when it does (`App::playtimes_fetched`, only when
 sorted by play time). Sort keys of the whole library are made at start, off the interface thread
 (`library::sort_names`). Images are shown from their cached
 files (`image::Handle::from_path`, files named after their format): never keep image bytes in
-`App`, which held about 880 MB of covers at 10,000 games.
+`App`, which held about 880 MB of covers at 10,000 games. The grid draws covers through
+`App::grid_cover` and the game page its key art through `App::shown_art`, which give the copy
+`scaled.rs` made at the size drawn once it exists: a new place showing a cover or key art goes
+through them too. Work that reads many files or keeps the processor busy (checking game files,
+making those copies) runs at the lowest priority through `fsutil::in_background`.
 
 ## Tests
 
@@ -221,14 +232,17 @@ The public documentation is in English and must match the code. Update it in the
 
 | When you change… | Update |
 |---|---|
-| A command, a panel, a setting, a stored file | [docs/user-guide.md](docs/user-guide.md) |
+| A panel, a setting, a stored file | [docs/user-guide.md](docs/user-guide.md) |
+| A command or an option | [docs/command-line.md](docs/command-line.md), and the user guide where it shows the command |
 | A module, a flow, a design decision | [docs/architecture.md](docs/architecture.md) |
 | A GOG request or what is known about it | [docs/gog-integration.md](docs/gog-integration.md) |
 | Cloud sync rules | [docs/cloud-saves.md](docs/cloud-saves.md) |
 | A theme token | [docs/theming.md](docs/theming.md) |
 | What leaves the computer, how secrets or files are protected | [SECURITY.md](SECURITY.md) |
-| A real check against GOG (pass or fail) | [docs/compatibility.md](docs/compatibility.md) |
-| A finished or newly planned milestone | [docs/roadmap.md](docs/roadmap.md), README's feature table |
+| A real check against GOG or Steam (pass or fail) | [docs/compatibility.md](docs/compatibility.md), and README's summary of it |
+| A finished or newly planned milestone | [docs/roadmap.md](docs/roadmap.md), README's features |
+| Anything a user of the next version will notice | [CHANGELOG.md](CHANGELOG.md) |
+| A benchmark, a test that needs real tools | [docs/testing.md](docs/testing.md) |
 
 ## Style
 
@@ -256,6 +270,10 @@ The public documentation is in English and must match the code. Update it in the
   remove both from `PATH`, because their sandboxes cannot see the test's temporary folder.
 - **umu's runtime cannot see `/tmp/nix-shell.*`.** Point `TMPDIR` inside the home folder for
   tests that run Proton.
+- **`steam-run` mounts an empty `/tmp` of its own.** A temporary folder under `/tmp` the
+  environment names does not exist there (`runner::steam_run_temp` gives `/tmp` instead).
+- **The user's environment is not always UTF-8.** Read it with `std::env::vars_os` or `var_os`:
+  `std::env::vars` panics on a single variable that is not.
 - **umu and its container share more than they are told.** umu shares, writable, the whole
   filesystem under `STEAM_COMPAT_INSTALL_PATH`, which it takes from the environment or from the
   program's folder when the program is a file, relative to the working directory too (a planted
