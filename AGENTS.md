@@ -70,11 +70,12 @@ nix shell nixpkgs#cargo-deny -c cargo deny check
 
 These act on a real person's account, disk or system. Ask the human first, every time:
 
-- **Run commands against GOG with their account.** `slatty install` downloads gigabytes,
-  `slatty cloud sync` writes saves on both sides, `slatty achievements --unlock/--clear` changes
-  a public profile, and `slatty launch` reports play time. Read-only commands
-  (`slatty cloud status`, `slatty install --info`, `slatty update --check`, `slatty library list`)
-  are the safe way to check a change.
+- **Run commands against GOG with their account.** `slatty install` and
+  `slatty installers --download` download gigabytes, `slatty cloud sync` writes saves on both
+  sides, `slatty achievements --unlock/--clear` changes a public profile, and `slatty launch`
+  reports play time. Read-only commands (`slatty cloud status`, `slatty install --info`,
+  `slatty installers <id>`, `slatty update --check`, `slatty library list`) are the safe way to
+  check a change.
 - **Handle secrets.** Never ask for, print, copy or paste a password, a GOG token or the address
   that carries the sign-in code. Never read the keyring. Sign-in is done by the person, in their
   browser.

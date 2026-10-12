@@ -62,6 +62,29 @@ slatty install <id> [options]
 
 Run the same command again to resume an interrupted install; Ctrl+C pauses it.
 
+## Offline installers
+
+GOG's setup programs for a game, as its site offers them, kept in a folder rather than installed.
+
+```
+slatty installers <id> [options]
+```
+
+Without `--download`, lists the installers GOG offers (system, language, version, size), the DLC
+that have some, and the folder they would go into, and downloads nothing.
+
+| Option | Effect |
+|---|---|
+| `--download` | Downloads them, each file checked against GOG's MD5 sums |
+| `--os windows\|linux\|mac` | Which system's installers. Default: Windows |
+| `--language <code>` | A language GOG offers them in (`fr`), as listed. Default: English, which a DLC without the language comes in |
+| `--no-dlc` | The game's installer only. By default those of every DLC GOG offers one for come with it |
+| `--dlc <id>…` | Only these DLC |
+| `--dir <folder>` | The folder that receives the game's folder of installers. Remembered as the default, which is `GOG` in your download folder |
+
+Ctrl+C pauses; run the same command again to resume where it stopped. A file already in the
+folder at its size is kept; one there at another size is never replaced.
+
 ## Playing
 
 | Command | What it does |

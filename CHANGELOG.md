@@ -31,6 +31,9 @@ The first public version.
   language and version changes; verify, repair, uninstall.
 - GOG's post-install setup at the first launch: install scripts, setup programs,
   redistributables.
+- GOG's offline installers downloaded to keep, for Windows, Linux or macOS, in a language, with
+  their DLC's: each file checked against GOG's MD5 sums, damaged parts downloaded again, a download
+  taken up where it stopped (`slatty installers`).
 - File checks at the lowest priority, so the desktop and a running game stay responsive.
 
 ### Playing

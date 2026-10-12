@@ -456,7 +456,7 @@ async fn plan_linux(
 }
 
 /// A folder name from a title: without the characters file systems or shells mind.
-fn folder_name(title: &str) -> String {
+pub(crate) fn folder_name(title: &str) -> String {
     title
         .chars()
         .filter(|c| {

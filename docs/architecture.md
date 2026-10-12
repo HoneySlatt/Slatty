@@ -58,6 +58,7 @@ become the session supervisor (see [Game sessions](#game-sessions)).
 |---|---|
 | `galaxy` | GOG's content system: builds, build metadata, depot manifests, secure links, chunks from the fastest CDN endpoint (`galaxy::speeds`) |
 | `installer` | Install plans (`plan`), staged and verified downloads (`download`), resumable jobs (`job`), install records (`record`); `installer::linux` and `installer::zip` read Linux builds from GOG's offline installers |
+| `offline` | GOG's offline installers downloaded whole to keep: the offer by system and language, resumable jobs, downloads checked against GOG's MD5 sums |
 | `patches` | GOG's binary patches between builds: lookup, delta download, xdelta3 |
 | `install` | Installed games: their record in the database, Proton build, isolation; imports from a folder or from Heroic |
 | `maintenance` | Verify, repair, uninstall, updates and content changes (`reconfigure`) |

@@ -4,6 +4,7 @@ mod auth;
 mod cloud;
 mod games;
 mod install;
+mod installers;
 mod launch;
 mod library;
 mod maintenance;
@@ -34,6 +35,8 @@ enum Command {
     Library(library::LibraryCommand),
     /// Download, verify and register a game's Windows or Linux build
     Install(install::InstallArgs),
+    /// List a game's offline installers, or download them to keep
+    Installers(installers::InstallersArgs),
     /// Register a game that is already installed
     Import(games::ImportArgs),
     /// Add a game from no store, by the program that starts it
@@ -125,6 +128,7 @@ async fn run() -> Result<()> {
         Command::Add(args) => added::add(&ctx, args).await,
         Command::Remove(args) => added::remove(&ctx, args),
         Command::Install(args) => install::run(&ctx, args).await,
+        Command::Installers(args) => installers::run(&ctx, args).await,
         Command::Installs => games::list(&ctx).and_then(|()| install::list_jobs(&ctx)),
         Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),
         Command::Forget { game_id } => games::forget(&ctx, &game_id),

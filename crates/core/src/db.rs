@@ -98,6 +98,18 @@ ALTER TABLE install_jobs ADD COLUMN proton TEXT;
     r#"
 ALTER TABLE sync_roots ADD COLUMN identity TEXT;
 "#,
+    // Offline installers chosen for download, until they are all there.
+    r#"
+CREATE TABLE offline_jobs (
+    game_id TEXT PRIMARY KEY,
+    os TEXT NOT NULL,
+    language TEXT NOT NULL,
+    dlcs TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    state TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+"#,
 ];
 
 pub struct Db {

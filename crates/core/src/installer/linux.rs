@@ -233,7 +233,19 @@ pub struct GogInstallers {
     /// To renew the session during a long download.
     dirs: Option<Dirs>,
     downlinks: Vec<String>,
-    links: tokio::sync::Mutex<HashMap<usize, (String, u64)>>,
+    links: tokio::sync::Mutex<HashMap<usize, Link>>,
+}
+
+/// What GOG hands out for an installer's file.
+#[derive(Debug, Clone)]
+pub(crate) struct Link {
+    url: String,
+    /// Exact, as the CDN tells it.
+    pub(crate) size: u64,
+    /// The last part of the address the CDN serves it from, as given.
+    pub(crate) name: String,
+    /// Where GOG keeps the file's MD5 sums, when it does.
+    pub(crate) checksum: Option<String>,
 }
 
 impl GogInstallers {
@@ -247,8 +259,13 @@ impl GogInstallers {
         }
     }
 
-    /// The download link of `part` and the installer's size.
-    async fn link(&self, part: usize, renew: bool) -> Result<(String, u64)> {
+    /// How many files it reads from.
+    pub(crate) fn parts(&self) -> usize {
+        self.downlinks.len()
+    }
+
+    /// The download link of `part`, with the installer's size.
+    pub(crate) async fn link(&self, part: usize, renew: bool) -> Result<Link> {
         if !renew && let Some(link) = self.links.lock().await.get(&part) {
             return Ok(link.clone());
         }
@@ -264,6 +281,8 @@ impl GogInstallers {
         #[derive(Deserialize)]
         struct Downlink {
             downlink: String,
+            #[serde(default)]
+            checksum: String,
         }
         let api = self
             .downlinks
@@ -288,9 +307,32 @@ impl GogInstallers {
                 context: "asking for a download link",
                 detail: "no installer size".into(),
             })?;
-        let link = (link.downlink, size);
+        // Where the redirects led; its query, which signs the link, is left out.
+        let name = first
+            .url()
+            .path_segments()
+            .and_then(|mut s| s.next_back())
+            .unwrap_or_default()
+            .to_owned();
+        let link = Link {
+            url: link.downlink,
+            size,
+            name,
+            checksum: Some(link.checksum).filter(|c| !c.is_empty()),
+        };
         self.links.lock().await.insert(part, link.clone());
         Ok(link)
+    }
+
+    /// GOG's MD5 sums of `part`'s file, the XML its link names; `None` when it keeps none.
+    pub(crate) async fn checksum_file(&self, part: usize) -> Result<Option<Vec<u8>>> {
+        let Some(url) = self.link(part, false).await?.checksum else {
+            return Ok(None);
+        };
+        // A signed address on GOG's CDN: the account's token does not go with it.
+        http::bytes(self.http.get(url), "reading an installer's checksums")
+            .await
+            .map(Some)
     }
 
     async fn range(&self, url: &str, start: u64, end: u64) -> Result<reqwest::Response> {
@@ -298,7 +340,7 @@ impl GogInstallers {
             self.http
                 .get(url)
                 .header(reqwest::header::RANGE, format!("bytes={start}-{}", end - 1)),
-            "downloading from a Linux installer",
+            "downloading from an installer",
         )
         .await?;
         // A server that ignores the range would send the whole installer.
@@ -313,7 +355,7 @@ impl GogInstallers {
 
 impl Source for GogInstallers {
     async fn size(&self, part: usize) -> Result<u64> {
-        Ok(self.link(part, false).await?.1)
+        Ok(self.link(part, false).await?.size)
     }
 
     async fn open(
@@ -322,14 +364,14 @@ impl Source for GogInstallers {
         start: u64,
         end: u64,
     ) -> Result<BoxStream<'static, Result<Vec<u8>>>> {
-        let (url, _) = self.link(part, false).await?;
+        let url = self.link(part, false).await?.url;
         let resp = match self.range(&url, start, end).await {
             // An expired link.
             Err(Error::Http {
                 status: 401 | 403 | 410,
                 ..
             }) => {
-                let (url, _) = self.link(part, true).await?;
+                let url = self.link(part, true).await?.url;
                 self.range(&url, start, end).await?
             }
             other => other?,
@@ -339,7 +381,7 @@ impl Source for GogInstallers {
                 Ok(Some(bytes)) => Some((Ok(bytes.to_vec()), resp)),
                 Ok(None) => None,
                 Err(e) => Some((
-                    Err(Error::network("downloading from a Linux installer", e)),
+                    Err(Error::network("downloading from an installer", e)),
                     resp,
                 )),
             }
@@ -893,7 +935,7 @@ pub(crate) fn stays_inside(path: &Path, target: &Path) -> bool {
 /// The server stopped sending before the end of the range.
 fn closed() -> Error {
     Error::io(
-        "downloading from a Linux installer",
+        "downloading from an installer",
         std::io::ErrorKind::UnexpectedEof.into(),
     )
 }

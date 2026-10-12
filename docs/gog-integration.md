@@ -101,6 +101,22 @@ Each installer is a MojoSetup shell script followed by a zip; the game's files a
 `data/noarch/`, each checked against its size and CRC-32. GOG offers one Linux installer per game
 at a time.
 
+## Offline installers, kept whole
+
+The setup programs GOG's site offers, downloaded to keep rather than installed.
+
+| Use | Request | Source | Status |
+|---|---|---|---|
+| Installers of a game and its DLC | The products request above, every `os` (`windows`, `linux`, `mac`); an installer comes in one file or several (`files[]`). A DLC the account does not own has no installers listed | gogapidocs, lgogdownloader | Not verified |
+| Download link and checksums | The file's `downlink`, as above: `{"downlink": …, "checksum": …}`, `checksum` empty when GOG keeps none | lgogdownloader, gogrepoc | Not verified |
+| File name | The last segment of the address the link leads to, percent-decoded | lgogdownloader | Not verified |
+| Checksums | `GET` the `checksum` address, without the token: XML, `<file md5="…">` holding `<chunk from="…" to="…" method="md5">…</chunk>`, `to` being the chunk's last byte | lgogdownloader | Not verified |
+| Installer bytes | Ranged requests to the link, as for Linux builds | Capture | Verified (for Linux installers) |
+
+A file is downloaded under a name of its own, taken up from where it stopped, checked against the
+whole file's MD5, and renamed once right. Chunks whose MD5 differs are downloaded again, once; a
+file still wrong is deleted. A file GOG keeps no checksums for is taken on its size.
+
 ## Cloud saves
 
 | Use | Request | Source | Status |

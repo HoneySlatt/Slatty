@@ -5,6 +5,7 @@ use crate::error::Result;
 use crate::install::Platform;
 
 const LIBRARY_ROOT: &str = "library_root";
+const INSTALLERS_ROOT: &str = "installers_root";
 const DEFAULT_PROTON: &str = "default_proton";
 const FAVORITES: &str = "favorites";
 const INTERFACE_FONT: &str = "interface_font";
@@ -43,6 +44,22 @@ pub fn library_root(db: &Db) -> Result<PathBuf> {
 
 pub fn set_library_root(db: &Db, path: &Path) -> Result<()> {
     db.set_setting(LIBRARY_ROOT, Some(&path.to_string_lossy()))
+}
+
+/// Folder that receives offline installers, each game's in a folder of its own: `GOG` in the
+/// download folder until chosen.
+pub fn installers_root(db: &Db) -> Result<PathBuf> {
+    Ok(match db.setting(INSTALLERS_ROOT)? {
+        Some(p) => PathBuf::from(p),
+        None => directories::UserDirs::new()
+            .and_then(|d| d.download_dir().map(Path::to_path_buf))
+            .unwrap_or_else(|| home().join("Downloads"))
+            .join("GOG"),
+    })
+}
+
+pub fn set_installers_root(db: &Db, path: &Path) -> Result<()> {
+    db.set_setting(INSTALLERS_ROOT, Some(&path.to_string_lossy()))
 }
 
 pub fn default_proton(db: &Db) -> Result<Option<PathBuf>> {
@@ -522,6 +539,17 @@ mod tests {
         );
         set_library_filters(&db, None).unwrap();
         assert_eq!(library_filters(&db).unwrap(), None);
+    }
+
+    #[test]
+    fn installers_go_into_a_gog_folder_until_another_is_chosen() {
+        let db = Db::in_memory().unwrap();
+        assert_eq!(installers_root(&db).unwrap().file_name().unwrap(), "GOG");
+        set_installers_root(&db, Path::new("/tmp/[FAKE] installers")).unwrap();
+        assert_eq!(
+            installers_root(&db).unwrap(),
+            Path::new("/tmp/[FAKE] installers")
+        );
     }
 
     #[test]
