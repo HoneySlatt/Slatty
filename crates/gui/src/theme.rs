@@ -95,20 +95,35 @@ pub fn set_preset(preset: Preset) {
     *PRESET.write().unwrap_or_else(|e| e.into_inner()) = preset;
 }
 
-/// Reads the theme file, if there is one, over the chosen preset, and uses the result from the
-/// next frame. Keys left out keep the preset's value; a mistake keeps the look in use and is
+/// Reads the theme file again, if there is one, over the chosen preset, and uses the result from
+/// the next frame. Keys left out keep the preset's value; a mistake keeps the look in use and is
 /// described.
 pub fn load(path: &Path) -> Result<(), String> {
-    let base = preset().tokens();
-    let tokens = match std::fs::read_to_string(path) {
-        Ok(text) => {
-            Tokens::from_toml(&text, base).map_err(|e| format!("{}: {e}", path.display()))?
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => base,
-        Err(e) => return Err(format!("{}: {e}", path.display())),
-    };
-    *TOKENS.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(tokens);
+    apply(read(path, preset().tokens())?);
     Ok(())
+}
+
+/// The look to start with, or once `preset` is picked: the theme file over it, or `preset`
+/// alone when the file has a mistake, which is described.
+pub fn with_preset(path: &Path, preset: Preset) -> (Tokens, Option<String>) {
+    match read(path, preset.tokens()) {
+        Ok(tokens) => (tokens, None),
+        Err(e) => (preset.tokens(), Some(e)),
+    }
+}
+
+/// Uses `tokens` from the next frame.
+pub fn apply(tokens: Tokens) {
+    *TOKENS.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(tokens);
+}
+
+/// The theme file over `base`, or `base` without one.
+fn read(path: &Path, base: Tokens) -> Result<Tokens, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Tokens::from_toml(&text, base).map_err(|e| format!("{}: {e}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(base),
+        Err(e) => Err(format!("{}: {e}", path.display())),
+    }
 }
 
 /// The theme file as written by the user: three tables, every key optional.
@@ -904,6 +919,35 @@ mod tests {
             (t.background, t.cover_radius),
             (d.background, d.cover_radius)
         );
+    }
+
+    /// A theme file with a mistake leaves the built-in theme picked in use, not SlattyLauncher's
+    /// default look, at start and when another one is picked.
+    #[test]
+    fn a_theme_file_with_a_mistake_leaves_the_picked_theme() {
+        let dir = std::env::temp_dir().join(format!("slatty-theme-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("theme.toml");
+        let picked = Preset::Carbonfox;
+        assert_ne!(picked.tokens().background, Tokens::default().background);
+
+        let (tokens, mistake) = with_preset(&file, picked);
+        assert_eq!(tokens.background, picked.tokens().background, "no file");
+        assert!(mistake.is_none());
+
+        std::fs::write(&file, "[colors]\naccent = \"orange\"\n").unwrap();
+        let (tokens, mistake) = with_preset(&file, picked);
+        assert_eq!(tokens.background, picked.tokens().background);
+        assert!(mistake.unwrap().contains("orange"));
+
+        std::fs::write(&file, "[shape]\nradius = 0\n").unwrap();
+        let (tokens, _) = with_preset(&file, picked);
+        assert_eq!(
+            (tokens.background, tokens.radius),
+            (picked.tokens().background, 0.0)
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

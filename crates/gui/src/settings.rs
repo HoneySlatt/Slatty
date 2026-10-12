@@ -524,7 +524,9 @@ impl App {
                     self.notify_error(e.to_string());
                 }
                 theme::set_preset(preset);
-                if let Err(e) = theme::load(&theme::file(&core.dirs.config)) {
+                let (tokens, mistake) = theme::with_preset(&theme::file(&core.dirs.config), preset);
+                theme::apply(tokens);
+                if let Some(e) = mistake {
                     self.notify_error(format!("Theme file not used: {e}"));
                 }
             }

@@ -79,7 +79,9 @@ fn main() -> iced::Result {
         {
             theme::set_preset(preset);
         }
-        if let Err(e) = theme::load(&theme::file(&dirs.config)) {
+        let (tokens, mistake) = theme::with_preset(&theme::file(&dirs.config), theme::preset());
+        theme::apply(tokens);
+        if let Some(e) = mistake {
             let _ = THEME_ERROR.set(e);
         }
         theme::set_font(saved(slatty_core::settings::interface_font).as_deref());
