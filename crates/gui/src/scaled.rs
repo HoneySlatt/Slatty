@@ -89,9 +89,15 @@ impl App {
         }
     }
 
-    /// The width in pixels key art is made at (`ART_WIDTHS`).
+    /// The width in pixels key art is made at (`ART_WIDTHS`). The couch mode draws it as it is; the
+    /// desktop's game page enlarges it a little.
     fn art_width(&self) -> Option<u32> {
-        let drawn = self.window.width * self.scaled.scale? * ART_ENLARGED;
+        let enlarged = if self.couch.is_some() {
+            1.0
+        } else {
+            ART_ENLARGED
+        };
+        let drawn = self.window.width * self.scaled.scale? * enlarged;
         Some(
             ART_WIDTHS
                 .into_iter()
