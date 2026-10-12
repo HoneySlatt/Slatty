@@ -419,6 +419,10 @@ fn couch_covers_are_not_enlarged_from_the_grids_copies() {
     assert_eq!(path(app.cover_at("5", app.couch_card())), cover);
     // Drawn no wider than the copy (Downloads' small covers): the copy.
     assert_eq!(path(app.cover_at("5", 66.0)), copy);
+    // A little wider (a Steam Deck's 173 pixels): the copy still, enlarged a little, rather than
+    // a cover two or three times as wide, which Iced would shrink by sampling a few of its pixels.
+    app.window = Size::new(1280.0, 800.0);
+    assert_eq!(path(app.cover_at("5", app.couch_card() - 8.0)), copy);
 }
 
 /// Home's key art is drawn from its copy at the window's width, as a game page's: the original can

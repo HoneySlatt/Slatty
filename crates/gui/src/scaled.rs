@@ -64,13 +64,15 @@ impl App {
     }
 
     /// The cover of a game drawn `width` wide, in the window's units: the grid's copy when it is
-    /// as wide, else the cover itself, which an enlarged copy would show softer (the couch mode's
-    /// covers are larger than the grid's).
+    /// about as wide (enlarged a quarter at most), else the cover itself, which a copy enlarged
+    /// further would show softer (the couch mode's covers are larger than the grid's). A cover
+    /// far wider than drawn would be shrunk by sampling a few of its pixels, worse than a copy a
+    /// little enlarged.
     pub fn cover_at(&self, game_id: &str, width: f32) -> Option<image::Handle> {
         let copy_wide_enough = self
             .scaled_width()
             .zip(self.scaled.scale)
-            .is_some_and(|(made, scale)| made as f32 >= width * scale);
+            .is_some_and(|(made, scale)| made as f32 * 1.25 >= width * scale);
         if copy_wide_enough {
             self.grid_cover(game_id)
         } else {
