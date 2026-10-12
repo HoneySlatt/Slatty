@@ -300,9 +300,7 @@ impl App {
                     // it (`requeue_preempted`); what Download now asked for meanwhile starts.
                     Err(None) => {
                         self.offline_stopped.push((game_id, None));
-                        if self.starting_now.is_some() {
-                            return self.start_next();
-                        }
+                        return self.start_asked_now();
                     }
                     // GOG out of reach: it keeps its place, and the queue waits for GOG.
                     Err(Some((e, true))) => {

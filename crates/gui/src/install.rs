@@ -526,10 +526,7 @@ impl App {
                 self.sync_interrupted(&game_id);
                 let plan = self.update_install(InstallMsg::Prepare(game_id, None));
                 // What Download now asked for while it was pausing starts, now that it is paused.
-                if self.starting_now.is_some() {
-                    return Task::batch([plan, self.start_next()]);
-                }
-                return plan;
+                return Task::batch([plan, self.start_asked_now()]);
             }
             InstallMsg::Done(game_id, Err(Some(Failure(e, temporary)))) => {
                 self.preempted.take_if(|(e, _)| *e == game_id);

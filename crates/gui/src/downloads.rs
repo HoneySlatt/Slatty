@@ -353,6 +353,16 @@ impl App {
         self.start_first()
     }
 
+    /// Starts what Download now asked for while the download running paused on request, now that
+    /// it is paused: at once while first in line, a game running or not, as with nothing running.
+    pub(crate) fn start_asked_now(&mut self) -> Task<Message> {
+        match &self.starting_now {
+            Some(e) if self.queue.first() == Some(e) => self.start_first(),
+            Some(_) => self.start_next(),
+            None => Task::none(),
+        }
+    }
+
     /// Starts the first download of the queue, whatever waits beside it.
     pub(crate) fn start_first(&mut self) -> Task<Message> {
         if self.queue.is_empty() {

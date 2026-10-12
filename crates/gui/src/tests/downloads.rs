@@ -929,6 +929,42 @@ fn a_download_pausing_on_request_stays_paused() {
     assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
 }
 
+/// Download now pressed while a download pauses on request starts its row once that one is
+/// paused, a game running or not, as it does when nothing downloads.
+#[test]
+fn download_now_while_a_download_pauses_on_request_starts_its_row_during_a_game() {
+    use super::offline::{installing_6, paused_install_job, queued_job};
+    use crate::downloads::DownloadsMsg;
+    use crate::offline::{OfflineMsg, entry};
+    let mut app = library_app();
+    installing_6(&mut app);
+    paused_install_job(&app);
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.update(Message::Install(InstallMsg::Pause("6".into())));
+    play_3(&mut app);
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("5"))));
+    let _ = app.update(Message::Install(InstallMsg::Done("6".into(), Err(None))));
+    assert_eq!(
+        app.interrupted,
+        [("6".to_string(), crate::Interrupted::Paused)]
+    );
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+
+    // Installers pausing on request, the same.
+    let mut app = library_app();
+    queued_job(&app, "5");
+    queued_job(&app, "8");
+    app.queue = vec![entry("5"), entry("8")];
+    let _ = app.start_next();
+    let _ = app.update(Message::Offline(OfflineMsg::Pause("5".into())));
+    play_3(&mut app);
+    let _ = app.update(Message::Downloads(DownloadsMsg::StartNow(entry("8"))));
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    assert_eq!(app.offline_stopped, [("5".to_string(), None)]);
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "8"));
+}
+
 /// The download being planned to start gives way to Download now, as a download running does.
 #[test]
 fn download_now_goes_before_a_download_being_planned() {
