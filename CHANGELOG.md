@@ -7,61 +7,90 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 The first public version.
 
-### Features
+### Library
 
-- Sign-in to GOG in the system browser; session tokens in the system keyring.
-- Library with covers, cached for offline use, fluid at 10,000 games.
-- Install Windows builds from GOG's Galaxy content system (pause, resume, integrity checks, binary
-  patches) and native Linux builds from GOG's offline installers.
-- Launch through umu-launcher and Proton (or natively), following the session until the last
-  process exits; launch options; post-install setup (GOG's scripts, redistributables).
-- Windows games isolated from your files by default, in umu's container inside bubblewrap.
-- Cloud saves: three-way sync on content hashes, conflicts that never resolve themselves, a copy
-  of every save replaced or deleted, locally and in the cloud.
-- Achievements: listed, reported as games unlock them through Comet, or unlocked by hand.
-- Verify, repair, update (automatically for games on their newest build), uninstall; DLC and
-  language changes.
-- Proton builds downloaded from GitHub and kept up to date when asked (off until turned on).
-- Edit a game's title, sorting title, cover and background (SteamGridDB when turned on); hide it.
-- Play time reported to GOG as Galaxy does (can be turned off).
-- Steam games in the same library (off until turned on), read from the Steam client's own files
+- Sign-in to GOG in the system browser; the session in the system keyring.
+- The library with its covers, cached for offline use, fluid at 10,000 games.
+- Shelves (all, installed, favourites, hidden), sort, search, and filters by store (GOG, Steam,
+  added by hand), system, achievements and cloud saves, remembered when asked.
+- A game page with its key art, play time, cloud save and achievement cards, and its tools in
+  drawers; an Achievements tab; notifications in the window and on the desktop.
+- Each game's title, sorting title, cover and background can be changed, from a file or from
+  SteamGridDB (once turned on), and a game can be hidden.
+- Built-in themes, a theme file for colours, corners and motion, the interface font and the cover
+  size. Covers and key art are drawn from copies made at the size they are shown.
+
+### Installing
+
+- Windows builds from GOG's Galaxy content system, with their DLC and language, and native Linux
+  builds from GOG's offline installers, read file by file.
+- A download queue, kept across restarts and reordered by dragging. Downloads resume after a crash
+  or a power cut, and wait while GOG is out of reach.
+- Every file checked against GOG's checksums; the game folder appears only once all are right.
+- Updates in place, automatic for games on their newest build, with GOG's binary patches; DLC,
+  language and version changes; verify, repair, uninstall.
+- GOG's post-install setup at the first launch: install scripts, setup programs,
+  redistributables.
+- File checks at the lowest priority, so the desktop and a running game stay responsive.
+
+### Playing
+
+- Windows games through umu-launcher and a Proton build per game; native Linux games directly, or
+  through `steam-run` or umu's runtime on NixOS; launch options asked at the first Play.
+- Windows games isolated from your files by default: umu's container with a home of the game's
+  own, the tools it runs through read-only inside bubblewrap, no D-Bus, its own processes only.
+  Where bubblewrap cannot hold it (Ubuntu 23.10 and later without an AppArmor profile), the launch
+  is refused with the reason and the way out, never run without isolation; `slatty doctor` checks
+  it too.
+- Sessions followed until the game's last process ends; play time reported to GOG as Galaxy does
+  (can be turned off).
+- Proton builds (GE-Proton, Proton-CachyOS, UMU-Proton) downloaded from GitHub and checked against
+  their sums, followed as `<project>-latest`, kept up to date and listed in Steam and Heroic, each
+  once turned on.
+
+### Saves and achievements
+
+- Cloud saves synced before and after each session, decided on content hashes; conflicts never
+  settle themselves; a copy of every save replaced or deleted, locally and in the cloud.
+- Achievements listed, reported as games unlock them through Comet once **Achievements in game**
+  is turned on, or unlocked and cleared by hand once **Manual achievements** is.
+
+### Beyond GOG
+
+- Steam's games in the same library (off until turned on), read from the Steam client's own files
   and played, installed, verified and uninstalled through the client; no GOG account needed for
-  them. GOG is recommended where you have the choice. Their play time, last session and
-  achievements are Steam's own records, and a game Steam runs shows as running. A game owned on
-  both shows both play times added up, or one store's once preferred in Settings. Images the client
-  has not saved come from Steam's image servers once turned on, and Steam's Web API, with your own
-  key, fills in games and achievements the client has not saved once turned on.
-- Games from no store, added by the program that starts them (`+` above the library, or
-  `slatty add`): a Windows program through Proton in a prefix of its own, a Linux program, script
-  or AppImage natively, isolated like the others. Removing one never deletes its files, and GOG is
-  never told of it.
-- Command line (`slatty`) and interface (`slatty-gui`) on the same core.
+  them. Their play time, last session and achievements are Steam's own. A game owned on both stores
+  shows once, its play times added up or one store's preferred. Images the client has not saved
+  come from Steam's image servers, and what it has not described from Steam's Web API with your own
+  key, each once turned on.
+- Games from no store, added by the program that starts them, by a Windows installer, or by a Linux
+  installer or archive unpacked without running it: a Windows program through Proton in a prefix of
+  its own, a Linux program, script or AppImage natively, isolated like the others. Removing one
+  never deletes its files, but for those SlattyLauncher unpacked, and GOG is never told of it.
+- GOG games installed by another tool, imported from their folder or from Heroic.
+- A command line (`slatty`) and an interface (`slatty-gui`) on the same core; a Nix package with a
+  desktop entry.
 
 ### Security and privacy
 
-Reviewed before publication. Among what changed:
+Reviewed before publication; [SECURITY.md](SECURITY.md) tells the whole of it.
 
 - Nothing is written through a link or into a pipe a game left in its folder, prefix or save
-  folders; files read from a game folder, network answers, manifests and chunks are bounded in
+  folders; network answers, manifests, chunks and the files read from a game folder are bounded in
   size before memory is taken.
 - The account's token goes only to GOG's own addresses, never leaves in a `Referer`, and stays out
-  of Comet's log. Comet gets it through a folder of the user's alone, is taken as ready only when
-  it runs as the user, and stops with the launcher even when the launcher is killed. Comet only
-  runs once **Achievements in game** is turned on: while it runs, any local program can get the
-  access token from it.
-- Isolated games can no longer change umu's runtime, the Proton build or the runtime tool other
-  games run through, nor see or signal the user's other programs.
-- umu's database is read from the Proton build's own copy; asking umu's server is off until
-  turned on. The runtime refresh no longer has umu ask GitHub.
-- The cloud version of a save is kept before an upload replaces it or a deletion removes it.
+  of logs and process arguments. Comet receives it through a folder of the user's alone, is taken
+  as ready only when it runs as the user, and stops with the launcher even when the launcher is
+  killed.
+- Comet runs only once **Achievements in game** is turned on: while it runs, any local program can
+  get the access token from it.
+- umu's database is read from the Proton build's own copy; asking umu's server is off until turned
+  on. The runtime refresh never has umu ask GitHub.
 - **Forget account** deletes what is kept of an account on the computer; saves stay.
-- [SECURITY.md](SECURITY.md) lists everything that leaves the computer, and how to report a
-  vulnerability privately.
-- Where bubblewrap cannot hold an isolated game (Ubuntu 23.10 and later without an AppArmor
-  profile for it), the launch is refused with the reason and the way out, never run without
-  isolation; `slatty doctor` checks it too.
-- Steam's games: the Steam client's files are only read, its sign-in and settings files never;
-  GOG is never asked about a Steam game; Steam's servers are asked nothing until **Images from
-  Steam** or **Steam Web API** is turned on, and the Web API key stays in the keyring.
+- Steam's files are only read, its sign-in and settings files never; GOG is never asked about a
+  Steam game; Steam's servers are asked nothing until **Images from Steam** or **Steam Web API** is
+  turned on, and the Web API key stays in the keyring.
+- Every host contacted is listed in [SECURITY.md](SECURITY.md), with how to report a vulnerability
+  privately.
 
 Known limits are listed in [SECURITY.md](SECURITY.md) and [docs/compatibility.md](docs/compatibility.md).
