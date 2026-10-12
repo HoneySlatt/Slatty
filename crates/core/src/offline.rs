@@ -344,8 +344,9 @@ pub async fn run(
     let _busy = lock(dirs, &job.game_id)?;
     let mut job = job.clone();
     // The folder a started download was going into is gone, its drive unplugged or its share not
-    // mounted: starting again would fill the empty mount point instead. Every run makes its
-    // folder first, so a started one had it.
+    // mounted: starting again would fill the empty mount point instead. A run makes its folder
+    // before it counts as started, so a started one had it; one that cannot make it (the drive
+    // not there yet) stays as it was, to make it once it can.
     if job.state != QUEUED && !job.folder.is_dir() {
         let missing = Error::NotFound(format!(
             "{} is missing: is its drive mounted?",
@@ -355,10 +356,10 @@ pub async fn run(
         job.save(db)?;
         return Err(missing);
     }
+    crate::paths::ensure_dir(&job.folder)?;
     job.state = DOWNLOADING.into();
     job.save(db)?;
     let result = async {
-        crate::paths::ensure_dir(&job.folder)?;
         let offer = offer(http, tokens, &job.game_id).await?;
         let chosen = offer.chosen(&job.os, &job.languages, &job.dlcs);
         if chosen.is_empty() {

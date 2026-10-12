@@ -323,9 +323,10 @@ impl App {
             }
             OfflineMsg::Resume(game_id) => {
                 // Saved as started, as if cut off: it still waits first after a restart, and its
-                // run checks that its folder is still there (a drive unplugged).
+                // run checks that its folder is still there (a drive unplugged). One stopped
+                // before it began (its folder could not be made) stays queued.
                 let saved = OfflineJob::load(&core.db, &game_id).and_then(|job| {
-                    job.map_or(Ok(()), |job| {
+                    job.filter(|j| j.state != QUEUED).map_or(Ok(()), |job| {
                         OfflineJob {
                             state: DOWNLOADING.into(),
                             ..job

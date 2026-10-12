@@ -729,6 +729,64 @@ async fn a_started_download_whose_folder_is_gone_is_not_made_again() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// A first run that could not make its folder (the drive not there yet) leaves its job queued: run
+/// again once the drive is there, it makes the folder rather than take it for a drive gone.
+#[tokio::test]
+async fn a_download_whose_folder_could_not_be_made_makes_it_once_it_can() {
+    let dir = temp("never-made");
+    let dirs = Dirs::under(&dir.join("data"));
+    let db = Db::in_memory().unwrap();
+    // Nothing reaches GOG: the request would go through a closed port.
+    let http = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+        .build()
+        .unwrap();
+    let tokens = Tokens {
+        user_id: "1".into(),
+        access_token: crate::secret::Secret::new("[FAKE]"),
+        refresh_token: crate::secret::Secret::new("[FAKE]"),
+        expires_at: i64::MAX,
+    };
+    let job = OfflineJob {
+        game_id: "1".into(),
+        os: "windows".into(),
+        languages: vec!["en".into()],
+        dlcs: Vec::new(),
+        folder: dir.join("drive/GOG/[FAKE] Game"),
+        state: crate::installer::QUEUED.into(),
+    };
+    job.save(&db).unwrap();
+    let run = |job: OfflineJob| {
+        let (db, dirs, http, tokens) = (&db, &dirs, &http, &tokens);
+        async move {
+            run(
+                db,
+                dirs,
+                http,
+                tokens,
+                &job,
+                &|_| {},
+                &CancellationToken::new(),
+            )
+            .await
+        }
+    };
+    // A file where the drive mounts: nothing can be made under it, as under a mount point of
+    // root's.
+    std::fs::write(dir.join("drive"), b"").unwrap();
+    assert!(matches!(run(job.clone()).await, Err(Error::Io { .. })));
+    let saved = OfflineJob::load(&db, "1").unwrap().unwrap();
+    assert_eq!(saved.state, crate::installer::QUEUED);
+    std::fs::remove_file(dir.join("drive")).unwrap();
+    std::fs::create_dir(dir.join("drive")).unwrap();
+    // Run again, as the command does: it goes on (here to GOG, out of reach).
+    let again = run(job.taken_up(&db).unwrap()).await;
+    let made = dir.join("drive/GOG/[FAKE] Game").is_dir();
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(!matches!(again, Err(Error::NotFound(_))), "{again:?}");
+    assert!(made);
+}
+
 /// Two games whose titles clean to the same folder name share it: removing one's download leaves
 /// the other's unfinished files.
 #[test]

@@ -658,6 +658,27 @@ fn a_download_the_user_pauses_still_holds_the_queue() {
     assert_eq!(app.queue, ["6"]);
 }
 
+/// Installers stopped before their run began (their folder could not be made, the keyring locked)
+/// are resumed as never started: their run makes the folder rather than take it for a drive gone.
+#[test]
+fn installers_that_never_started_are_resumed_as_never_started() {
+    let mut app = library_app();
+    queued_job(&app, "5");
+    app.queue = vec![entry("5")];
+    let _ = app.start_next();
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    let _ = app.update(Message::Offline(OfflineMsg::Done(
+        "5".into(),
+        Err(Some(("[FAKE] permission denied".into(), false))),
+    )));
+    let _ = app.update(Message::Offline(OfflineMsg::Resume("5".into())));
+    let job = OfflineJob::load(&app.core.as_ref().unwrap().db, "5")
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.state, QUEUED);
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+}
+
 #[test]
 fn installers_removed_before_download_now_started_them_wait_for_a_pause_once_queued_again() {
     use crate::downloads::DownloadsMsg;
