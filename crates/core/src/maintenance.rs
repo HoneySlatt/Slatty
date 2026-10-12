@@ -58,14 +58,15 @@ fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, 
     Ok((install, record))
 }
 
-/// Refuses a game whose folder is gone: on a network share not mounted or a drive unplugged, the
-/// whole game would be downloaded again onto the empty mount point.
+/// Refuses a game whose folder is gone, or empty: on a network share not mounted or a drive
+/// unplugged, the whole game would be downloaded again onto the mount point left behind.
 fn folder_present(install: &Install) -> Result<()> {
-    if install.path.is_dir() {
+    let empty = |dir: &Path| std::fs::read_dir(dir).is_ok_and(|mut d| d.next().is_none());
+    if install.path.is_dir() && !empty(&install.path) {
         return Ok(());
     }
     Err(Error::NotFound(format!(
-        "{} is missing: is its drive mounted?",
+        "{} is missing or empty: is its drive mounted?",
         install.path.display()
     )))
 }
@@ -1067,35 +1068,41 @@ mod tests {
             expires_at: i64::MAX,
         };
         let missing = |e: &Error| matches!(e, Error::NotFound(m) if m.contains("mounted"));
-        for repair in [false, true] {
-            let checked = check(
-                &env.db,
-                &env.dirs,
-                &http,
-                &tokens,
-                "1",
-                repair,
-                &|_| {},
-                CancellationToken::new(),
-            )
-            .await;
-            assert!(checked.as_ref().is_err_and(missing), "{:?}", checked.err());
+        // Gone, then an empty folder: a mount point left behind by a drive not mounted.
+        for empty in [false, true] {
+            if empty {
+                std::fs::create_dir_all(env.game()).unwrap();
+            }
+            for repair in [false, true] {
+                let checked = check(
+                    &env.db,
+                    &env.dirs,
+                    &http,
+                    &tokens,
+                    "1",
+                    repair,
+                    &|_| {},
+                    CancellationToken::new(),
+                )
+                .await;
+                assert!(checked.as_ref().is_err_and(missing), "{:?}", checked.err());
+            }
+            for change in [Change::Update, Change::Language("fr-FR".into())] {
+                let updated = reconfigure(
+                    &env.db,
+                    &env.dirs,
+                    &http,
+                    &tokens,
+                    "1",
+                    change,
+                    &|_| {},
+                    CancellationToken::new(),
+                )
+                .await;
+                assert!(updated.as_ref().is_err_and(missing), "{:?}", updated.err());
+            }
         }
-        for change in [Change::Update, Change::Language("fr-FR".into())] {
-            let updated = reconfigure(
-                &env.db,
-                &env.dirs,
-                &http,
-                &tokens,
-                "1",
-                change,
-                &|_| {},
-                CancellationToken::new(),
-            )
-            .await;
-            assert!(updated.as_ref().is_err_and(missing), "{:?}", updated.err());
-        }
-        assert!(!env.game().exists());
+        assert_eq!(std::fs::read_dir(env.game()).unwrap().count(), 0);
         assert!(InstallJob::load(&env.db, "1").unwrap().is_none());
     }
 

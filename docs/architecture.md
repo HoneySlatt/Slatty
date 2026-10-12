@@ -191,9 +191,11 @@ An interrupted install keeps its job in the database, and resumes with the same 
 folder (a Linux build on GOG's current installer once GOG has replaced the one it started with:
 `plan_install`; GOG offers one at a time, and what was staged for the replaced installer is
 deleted, `drop_replaced`: not all of it is the new one's, and none of it would be recorded); when
-that folder is gone (a network share not mounted, a drive unplugged), the job stops as
-failed instead of starting again on the empty mount point, and verify, repair, updates and content
-changes refuse a game whose folder is missing the same way. An install queued in the interface waits as a job in the `queued` state, with the
+that folder is gone (an automounted drive unplugged, a network share's folder not there), the job
+stops as failed instead of starting again on the system disk; a mount point left behind as an
+empty folder is not told apart from a library folder still empty, and the download starts again
+there. Verify, repair, updates and content changes refuse a game whose folder is missing or empty
+(its own mount point not mounted) the same way. An install queued in the interface waits as a job in the `queued` state, with the
 choices made in its panel; the order of the queue is a setting. A queued job is never taken for a
 download already published, even when its folder exists. Its state tells a pause on request (`paused`, resumed when asked) from a cut-off
 (`downloading`, resumed by the interface at start-up). Updates do the same with `updating-paused`
