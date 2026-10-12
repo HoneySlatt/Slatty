@@ -3,6 +3,20 @@ use std::sync::Mutex;
 use super::*;
 use crate::installer::zip::build::{File, installer};
 
+/// A file GOG keeps no sums for: its `checksum` missing, empty or null.
+#[test]
+fn a_download_link_without_sums_is_read() {
+    for body in [
+        r#"{"downlink":"https://fake.invalid/a"}"#,
+        r#"{"downlink":"https://fake.invalid/a","checksum":""}"#,
+        r#"{"downlink":"https://fake.invalid/a","checksum":null}"#,
+    ] {
+        let link: Downlink = serde_json::from_str(body).unwrap();
+        assert_eq!(link.downlink, "https://fake.invalid/a");
+        assert!(link.checksum.filter(|c| !c.is_empty()).is_none());
+    }
+}
+
 /// Installers in memory, sent in small pieces. `drop_once` cuts the first answer for an entry
 /// starting there, as a dropped connection would.
 struct Fake {

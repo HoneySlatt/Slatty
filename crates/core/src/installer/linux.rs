@@ -236,6 +236,15 @@ pub struct GogInstallers {
     links: tokio::sync::Mutex<HashMap<usize, Link>>,
 }
 
+/// GOG's answer to a file's `downlink`: the address to download it from, and that of its sums.
+#[derive(Deserialize)]
+struct Downlink {
+    downlink: String,
+    /// Empty, null or missing when GOG keeps no sums.
+    #[serde(default)]
+    checksum: Option<String>,
+}
+
 /// What GOG hands out for an installer's file.
 #[derive(Debug, Clone)]
 pub(crate) struct Link {
@@ -278,12 +287,6 @@ impl GogInstallers {
             }
             tokens.clone()
         };
-        #[derive(Deserialize)]
-        struct Downlink {
-            downlink: String,
-            #[serde(default)]
-            checksum: String,
-        }
         let api = self
             .downlinks
             .get(part)
@@ -318,7 +321,7 @@ impl GogInstallers {
             url: link.downlink,
             size,
             name,
-            checksum: Some(link.checksum).filter(|c| !c.is_empty()),
+            checksum: link.checksum.filter(|c| !c.is_empty()),
         };
         self.links.lock().await.insert(part, link.clone());
         Ok(link)
