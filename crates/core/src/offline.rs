@@ -498,11 +498,20 @@ pub async fn download<S: Source>(
         }
         // Read with the link, before any bytes: their signed address does not last, and sums that
         // cannot be read stop the download before it fetches gigabytes for nothing.
+        let unreadable = |detail: &str| {
+            Error::Refused(format!(
+                "the checksums GOG keeps for {name} cannot be read ({detail}); nothing was \
+                 downloaded, and Resume reads them again"
+            ))
+        };
         let sums = if there(&folder.join(&name), size)?.is_some() {
             None
         } else {
             match source.checksums(part).await? {
-                Some(xml) => Some(parse_checksums(&xml)?),
+                Some(xml) => Some(parse_checksums(&xml).map_err(|e| match e {
+                    Error::Parse { detail, .. } => unreadable(&detail),
+                    e => e,
+                })?),
                 None => None,
             }
         };
@@ -510,10 +519,7 @@ pub async fn download<S: Source>(
             .as_ref()
             .is_some_and(|s| s.chunks.iter().any(|c| c.to >= size))
         {
-            return Err(Error::parse(
-                "reading an installer's checksums",
-                "a chunk past the end of the file",
-            ));
+            return Err(unreadable("a chunk past the end of the file"));
         }
         files.push((part, name, size, sums));
     }

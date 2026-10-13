@@ -437,9 +437,25 @@ async fn sums_that_cannot_be_read_stop_the_download_before_it_begins() {
         ),
         ("setup_fake-1.bin", a, Some("<broken>".into())),
     ]);
-    assert!(run_download(&fake, &dir).await.is_err());
+    let refused = run_download(&fake, &dir).await;
     assert!(fake.opened.lock().unwrap().is_empty(), "nothing downloaded");
+    // Sums whose parts run past the file's end, the same.
+    let past_end = Fake::new(vec![(
+        "setup_fake-1.bin",
+        data(5000, 27),
+        Some(xml("setup_fake-1.bin", &data(6000, 27), 1024)),
+    )]);
+    let refused_past_end = run_download(&past_end, &dir).await;
+    assert!(
+        past_end.opened.lock().unwrap().is_empty(),
+        "nothing downloaded"
+    );
     std::fs::remove_dir_all(&dir).unwrap();
+    // Said plainly, the file named.
+    for refused in [refused, refused_past_end] {
+        let said = refused.unwrap_err().to_string();
+        assert!(said.contains("setup_fake-1.bin"), "{said}");
+    }
 }
 
 /// A file GOG keeps no sums for is taken on its size: said so, not as checked. One GOG keeps sums
