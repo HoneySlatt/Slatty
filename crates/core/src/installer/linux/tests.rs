@@ -3,6 +3,48 @@ use std::sync::Mutex;
 use super::*;
 use crate::installer::zip::build::{File, installer};
 
+/// An address for a file's sums where GOG keeps none (not found) is taken as no sums: the file is
+/// then taken on its size, as when GOG names no address. Any other refusal stays an error.
+#[tokio::test]
+async fn sums_gog_keeps_none_of_are_no_sums() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    async fn serve(answer: &'static str) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 4096];
+            let _ = socket.read(&mut buf).await;
+            let _ = socket.write_all(answer.as_bytes()).await;
+        });
+        format!("http://{addr}/[FAKE].xml")
+    }
+    let tokens = Tokens {
+        user_id: "1".into(),
+        access_token: crate::secret::Secret::new("[FAKE]"),
+        refresh_token: crate::secret::Secret::new("[FAKE]"),
+        expires_at: i64::MAX,
+    };
+    let source = GogInstallers::new(crate::http::client().unwrap(), tokens, None, Vec::new());
+    let sums_at = |checksum: String| Link {
+        url: String::new(),
+        size: 10,
+        name: "setup_fake.exe".into(),
+        checksum: Some(checksum),
+    };
+    let not_found = "HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
+    let link = sums_at(serve(not_found).await);
+    source.links.lock().await.insert(0, link);
+    assert!(source.checksum_file(0).await.unwrap().is_none());
+    let forbidden = "HTTP/1.1 403 Forbidden\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
+    let link = sums_at(serve(forbidden).await);
+    source.links.lock().await.insert(0, link);
+    assert!(matches!(
+        source.checksum_file(0).await,
+        Err(Error::Http { status: 403, .. })
+    ));
+}
+
 /// Bytes other than those asked for (a cache answering another range, a renewed link leading to
 /// a file GOG has replaced since) are refused rather than written in their place.
 #[tokio::test]

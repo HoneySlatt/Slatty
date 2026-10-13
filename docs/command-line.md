@@ -75,7 +75,7 @@ that have some, and the folder they would go into, and downloads nothing.
 
 | Option | Effect |
 |---|---|
-| `--download` | Downloads them, each file checked against GOG's MD5 sums |
+| `--download` | Downloads them, each file checked against GOG's MD5 sums. A file GOG keeps none for is said not checked |
 | `--os windows\|linux\|mac` | Which system's installers. Default: Windows |
 | `--language <code>…` | One or more languages GOG offers them in (`fr de`), as listed. Default: English, which a DLC without those languages comes in |
 | `--no-dlc` | The game's installer only. By default those of every DLC GOG offers one for come with it |

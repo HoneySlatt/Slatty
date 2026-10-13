@@ -340,7 +340,7 @@ pub async fn run(
     job: &OfflineJob,
     progress: &(dyn Fn(Progress) + Sync),
     cancel: &CancellationToken,
-) -> Result<Vec<PathBuf>> {
+) -> Result<Vec<Downloaded>> {
     let _busy = lock(dirs, &job.game_id)?;
     let mut job = job.clone();
     // The folder a started download was going into is gone, its drive unplugged or its share not
@@ -458,6 +458,14 @@ impl Source for GogInstallers {
     }
 }
 
+/// An installer file in its folder, downloaded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Downloaded {
+    pub path: PathBuf,
+    /// Taken on its size alone: GOG keeps no checksums for it.
+    pub unchecked: bool,
+}
+
 /// Downloads every file of `source` into `folder`, each staged under a name of its own (its size
 /// and its game's id in it), checked, then renamed. A file already there at its size is kept; one
 /// there at another size is not replaced.
@@ -467,7 +475,7 @@ pub async fn download<S: Source>(
     game_id: &str,
     progress: &(dyn Fn(Progress) + Sync),
     cancel: &CancellationToken,
-) -> Result<Vec<PathBuf>> {
+) -> Result<Vec<Downloaded>> {
     // The size in it: a file GOG replaced by another of the same name and another size never takes
     // up the other's beginning. Of the same size, it does: its sums, when GOG keeps them, find the
     // parts that differ.
@@ -535,11 +543,13 @@ pub async fn download<S: Source>(
     let mut done = Vec::new();
     for (part, name, size, sums) in files {
         let target = folder.join(&name);
+        let mut unchecked = false;
         if there(&target, size)?.is_none() {
             let partial = partial_of(&name, size);
             fetch(source, part, size, &partial, &mut p, progress, cancel).await?;
-            if let Some(sums) = sums {
-                check(source, part, &partial, &sums, cancel).await?;
+            match sums {
+                Some(sums) => check(source, part, &partial, &sums, cancel).await?,
+                None => unchecked = true,
             }
             std::fs::rename(&partial, &target)
                 .map_err(|e| Error::io(format!("rename {}", partial.display()), e))?;
@@ -548,7 +558,10 @@ pub async fn download<S: Source>(
         }
         p.files_done += 1;
         progress(p);
-        done.push(target);
+        done.push(Downloaded {
+            path: target,
+            unchecked,
+        });
     }
     // All there: what is left unfinished is an installer GOG has since replaced.
     let _ = remove_staged(folder, game_id);

@@ -121,7 +121,10 @@ pub enum OfflineMsg {
     Start(String),
     Progress(String, Progress),
     /// `Err(None)` when paused; else the error, and whether GOG could not be reached.
-    Done(String, Result<Vec<PathBuf>, Option<(String, bool)>>),
+    Done(
+        String,
+        Result<Vec<offline::Downloaded>, Option<(String, bool)>>,
+    ),
     Pause(String),
     Resume(String),
     Remove(String),
@@ -302,15 +305,19 @@ impl App {
                     Ok(files) => {
                         self.downloads_waiting = None;
                         self.waiting_told = false;
+                        let (count, folder) = (files.len(), run.folder.display());
+                        let body = match files.iter().filter(|f| f.unchecked).count() {
+                            0 => format!("{count} file(s) of {title}, checked, in {folder}"),
+                            unchecked => format!(
+                                "{count} file(s) of {title} in {folder}; {unchecked} not checked: \
+                                 GOG keeps no checksums for them"
+                            ),
+                        };
                         let done = self.notify(
                             Kind::Downloads,
                             Some(&game_id),
                             "Installers downloaded",
-                            format!(
-                                "{} file(s) of {title}, checked, in {}",
-                                files.len(),
-                                run.folder.display()
-                            ),
+                            body,
                         );
                         // What Download now asked for while they ended goes first, game or not.
                         let next = self.start_asked().unwrap_or_else(|| self.start_next());

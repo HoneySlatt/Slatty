@@ -110,7 +110,7 @@ The setup programs GOG's site offers, downloaded to keep rather than installed.
 | Installers of a game and its DLC | The products request above, every `os` (`windows`, `linux`, `mac`); an installer comes in one file or several (`files[]`). A DLC the account does not own has no installers listed | gogapidocs, lgogdownloader | Not verified |
 | Download link and checksums | The file's `downlink`, as above: `{"downlink": …, "checksum": …}`, `checksum` empty when GOG keeps none (null or missing are read the same way) | lgogdownloader, gogrepoc | Not verified |
 | File name | The last segment of the address the link leads to, percent-decoded. A setup for several languages is listed under each of them: the same name and size, downloaded once | lgogdownloader (its duplicate handling) | Not verified |
-| Checksums | `GET` the `checksum` address, without the token: XML, `<file md5="…">` holding `<chunk from="…" to="…" method="md5">…</chunk>`, `to` being the chunk's last byte | lgogdownloader | Not verified |
+| Checksums | `GET` the `checksum` address, without the token: XML, `<file md5="…">` holding `<chunk from="…" to="…" method="md5">…</chunk>`, `to` being the chunk's last byte. Not found there (404) is taken as GOG keeping none | lgogdownloader | Not verified |
 | Installer bytes | Ranged requests to the link, as for Linux builds | Capture | Verified (for Linux installers) |
 
 The sums are read with each file's link, before its bytes, as lgogdownloader does: their address
@@ -118,8 +118,9 @@ is signed for a while only. A file is downloaded under a name of its own, its si
 GOG replaced by another of the same name and another size never takes up the other's part), taken
 up from where it stopped, checked against the whole file's MD5, and renamed once right. Chunks
 whose MD5 differs are downloaded again, once; a file still wrong is deleted. A file GOG keeps no
-checksums for is taken on its size: replaced by another of the same name and size while paused, it
-would be kept mixed.
+checksums for (no address, or nothing found there) is taken on its size and said not checked:
+replaced by another of the same name and size while paused, it would be kept mixed. Sums that are
+there but cannot be read stop the download before its bytes; Resume reads them again.
 
 ## Cloud saves
 

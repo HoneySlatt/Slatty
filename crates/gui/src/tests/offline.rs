@@ -826,6 +826,35 @@ fn download_now_during_a_game_starts_its_row_though_another_came_first() {
     assert_eq!(app.queue, [entry("5"), entry("9")]);
 }
 
+/// Installers GOG keeps no checksums for are said not checked once downloaded, rather than checked
+/// with the others.
+#[test]
+fn installers_gog_keeps_no_sums_for_are_said_unchecked() {
+    let file = |name: &str, unchecked| slatty_core::offline::Downloaded {
+        path: PathBuf::from(format!("/tmp/[FAKE] installers/[FAKE] Game/{name}")),
+        unchecked,
+    };
+    let told = |files| {
+        let mut app = library_app();
+        queued_job(&app, "5");
+        app.queue = vec![entry("5")];
+        let _ = app.start_next();
+        let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Ok(files))));
+        toasted(&app).last().cloned().unwrap()
+    };
+    let (title, body) = told(vec![file("setup_fake.exe", false)]);
+    assert_eq!(title, "Installers downloaded");
+    assert!(
+        body.contains("checked") && !body.contains("not checked"),
+        "{body}"
+    );
+    let (_, body) = told(vec![
+        file("setup_fake.exe", false),
+        file("setup_fake-1.bin", true),
+    ]);
+    assert!(body.contains("1 not checked"), "{body}");
+}
+
 /// Installers stopped before their run began (their folder could not be made, the keyring locked)
 /// are resumed as never started: their run makes the folder rather than take it for a drive gone.
 #[test]

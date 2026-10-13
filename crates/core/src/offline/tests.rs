@@ -132,7 +132,7 @@ fn temp(name: &str) -> PathBuf {
     dir
 }
 
-async fn run_download(fake: &Fake, folder: &Path) -> Result<Vec<PathBuf>> {
+async fn run_download(fake: &Fake, folder: &Path) -> Result<Vec<Downloaded>> {
     download(fake, folder, "1", &|_| {}, &CancellationToken::new()).await
 }
 
@@ -265,6 +265,7 @@ async fn installers_are_downloaded_checked_and_named() {
     )
     .await
     .unwrap();
+    let files: Vec<PathBuf> = files.into_iter().map(|f| f.path).collect();
     assert_eq!(
         files,
         [dir.join("setup_fake.exe"), dir.join("setup_fake-1.bin")]
@@ -441,6 +442,28 @@ async fn sums_that_cannot_be_read_stop_the_download_before_it_begins() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// A file GOG keeps no sums for is taken on its size: said so, not as checked. One GOG keeps sums
+/// for is checked; one already there is kept as it is.
+#[tokio::test]
+async fn files_gog_keeps_no_sums_for_are_said_unchecked() {
+    let dir = temp("unchecked");
+    let (a, b, c) = (data(5000, 41), data(3000, 42), data(2000, 43));
+    std::fs::write(dir.join("setup_fake-2.bin"), &c).unwrap();
+    let fake = Fake::new(vec![
+        (
+            "setup_fake.exe",
+            a.clone(),
+            Some(xml("setup_fake.exe", &a, 1024)),
+        ),
+        ("setup_fake-1.bin", b, None),
+        ("setup_fake-2.bin", c, None),
+    ]);
+    let done = run_download(&fake, &dir).await.unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
+    let unchecked: Vec<bool> = done.iter().map(|d| d.unchecked).collect();
+    assert_eq!(unchecked, [false, true, false]);
+}
+
 #[tokio::test]
 async fn a_file_that_does_not_match_gogs_sums_is_not_kept() {
     let dir = temp("mismatch");
@@ -510,8 +533,9 @@ async fn one_file_listed_under_two_languages_downloads_once() {
         ),
     ]);
     let files = run_download(&fake, &dir).await.unwrap();
-    assert_eq!(files, [dir.join("setup_fake.exe")]);
-    assert_eq!(std::fs::read(&files[0]).unwrap(), a);
+    assert_eq!(files[0].path, dir.join("setup_fake.exe"));
+    assert_eq!(files.len(), 1);
+    assert_eq!(std::fs::read(&files[0].path).unwrap(), a);
     assert!(fake.opened.lock().unwrap().iter().all(|(p, _, _)| *p == 0));
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
 

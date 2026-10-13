@@ -164,9 +164,8 @@ pub async fn run(ctx: &Ctx, args: InstallersArgs) -> Result<()> {
     .await
     {
         Ok(files) => {
-            println!("Downloaded and checked:");
-            for f in files {
-                println!("  {}", f.display());
+            for line in downloaded_lines(&files) {
+                println!("{line}");
             }
             Ok(())
         }
@@ -175,5 +174,48 @@ pub async fn run(ctx: &Ctx, args: InstallersArgs) -> Result<()> {
             Ok(())
         }
         Err(e) => Err(e.into()),
+    }
+}
+
+/// What a download ends with: its files, those GOG keeps no checksums for said not checked.
+fn downloaded_lines(files: &[offline::Downloaded]) -> Vec<String> {
+    let all_checked = files.iter().all(|f| !f.unchecked);
+    let title = match all_checked {
+        true => "Downloaded and checked:",
+        false => "Downloaded:",
+    };
+    std::iter::once(title.to_string())
+        .chain(files.iter().map(|f| {
+            let note = match f.unchecked {
+                true => "  (not checked: GOG keeps no checksums for it)",
+                false => "",
+            };
+            format!("  {}{note}", f.path.display())
+        }))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A file GOG keeps no checksums for is said not checked, rather than checked with the others.
+    #[test]
+    fn files_gog_keeps_no_sums_for_are_said_unchecked() {
+        let file = |name: &str, unchecked| offline::Downloaded {
+            path: PathBuf::from(format!("/tmp/[FAKE] installers/{name}")),
+            unchecked,
+        };
+        let checked = downloaded_lines(&[file("setup_fake.exe", false)]);
+        assert_eq!(checked[0], "Downloaded and checked:");
+        let lines = downloaded_lines(&[
+            file("setup_fake.exe", false),
+            file("setup_fake-1.bin", true),
+        ]);
+        assert_eq!(lines[0], "Downloaded:");
+        assert!(!lines[1].contains("not checked"));
+        assert!(
+            lines[2].ends_with("setup_fake-1.bin  (not checked: GOG keeps no checksums for it)")
+        );
     }
 }

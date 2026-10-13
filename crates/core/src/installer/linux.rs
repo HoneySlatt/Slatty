@@ -327,15 +327,18 @@ impl GogInstallers {
         Ok(link)
     }
 
-    /// GOG's MD5 sums of `part`'s file, the XML its link names; `None` when it keeps none.
+    /// GOG's MD5 sums of `part`'s file, the XML its link names; `None` when it keeps none: no
+    /// address, or nothing found there.
     pub(crate) async fn checksum_file(&self, part: usize) -> Result<Option<Vec<u8>>> {
         let Some(url) = self.link(part, false).await?.checksum else {
             return Ok(None);
         };
         // A signed address on GOG's CDN: the account's token does not go with it.
-        http::bytes(self.http.get(url), "reading an installer's checksums")
-            .await
-            .map(Some)
+        match http::bytes(self.http.get(url), "reading an installer's checksums").await {
+            Ok(xml) => Ok(Some(xml)),
+            Err(Error::Http { status: 404, .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     /// Bytes `start..end` of the file at `url`, which is `total` bytes long when known.
