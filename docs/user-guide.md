@@ -162,7 +162,11 @@ and cloud saves is read from GOG in the background and kept; **Refresh** reads i
   paused, cut off or failed, with **Resume** and **Discard** (**Remove** for installers).
 - **Queue**: installs and offline installers started while another download runs (the button then
   reads **Add to queue**). One download runs at a time. Each starts once the ones before it are
-  done, failed or cancelled. Drag a row by its handle to reorder, or remove it with ×.
+  done, failed or cancelled. Drag a row by its handle to reorder, or take it out with ×: a row
+  that never started is forgotten; one whose download had begun (resumed while another download
+  ran, cut off, or paused by SlattyLauncher for a game or for **Download now**) keeps what it
+  downloaded and goes back among the stopped downloads, paused, with **Resume** and **Discard**
+  (**Remove** for installers). Set aside so, it does not hold the queue until you pause it again.
   **Download now** starts a row at once: the download running is paused and waits right after it,
   then goes on by itself. While a game runs, downloads wait for it to close (**Pause downloads
   while playing**, Settings → Installs); a Steam game too, once SlattyLauncher sees Steam run it
@@ -251,9 +255,10 @@ asks first and says what would be interrupted.
 - **GOG out of reach** (offline, GOG failing or limiting requests): the download and the queue wait
   in place rather than failing one after the other. GOG is asked again every minute; **Try now**
   asks at once.
-- **Paused on request, or stopped by an error**: listed at the top of the Library tab and in the
-  Downloads tab, with **Resume** and **Discard**. An error is tried again only when you ask, since
-  it would most likely fail the same way.
+- **Paused on request (Pause, or × on a download in the queue that had started), or stopped by an
+  error**: listed at the top of the Library tab and in the Downloads tab, with **Resume** and
+  **Discard**. An error is tried again only when you ask, since it would most likely fail the same
+  way.
 
 A resumed download keeps what it already has. Small files are checked again; files of 1 MiB or
 more were written to disk before taking their name, and are kept as they are when their size is
@@ -678,7 +683,7 @@ one, X the left one, Y the top one.
   build, the installation path of Settings → Installs, every DLC owned; it waits in the queue while
   another download runs.
 - **Downloads** lists the download running (Pause), those stopped (Resume, Discard or Remove) and
-  the queue (Download now, Remove).
+  the queue (Download now, Remove, which sets a download that started aside, paused, as × does).
 
 The gamepad is read through udev, as the desktop gives it to the person at the computer; when
 SlattyLauncher is started from Steam, Steam's controller support hands it the pad Steam presents.

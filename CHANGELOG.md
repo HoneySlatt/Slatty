@@ -31,7 +31,9 @@ The first public version.
 - Windows builds from GOG's Galaxy content system, with their DLC and language, and native Linux
   builds from GOG's offline installers, read file by file.
 - A download queue, kept across restarts and reordered by dragging; **Download now** starts a row
-  at once and puts the download it pauses right after it. Downloads and automatic updates pause
+  at once and puts the download it pauses right after it; a row that started already, taken out
+  of the queue, is paused with what it downloaded, without holding the queue. Downloads and
+  automatic updates pause
   while a game runs (a Steam game too, once SlattyLauncher sees it run) and go on once it closes
   (can be turned off), resume after a crash or a power cut, and wait while GOG is out of reach.
 - Every file checked against GOG's checksums; the game folder appears only once all are right.

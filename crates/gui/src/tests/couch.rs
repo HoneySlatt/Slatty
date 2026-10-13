@@ -934,6 +934,39 @@ fn the_downloads_tab_runs_the_queue_from_the_gamepad() {
     assert_eq!(app.queue, ["7"], "Remove on the last row");
 }
 
+/// Remove on a download that started sets it aside among those stopped, its row where the queue's
+/// was: the focus lands on its Resume, so that a second press does not discard it.
+#[test]
+fn remove_on_a_started_download_leaves_the_focus_on_its_resume() {
+    use super::offline::installing_6;
+    use slatty_core::installer::{DOWNLOADING, InstallJob};
+    let mut app = couch_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    installing_6(&mut app);
+    InstallJob {
+        game_id: "7".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 7".into(),
+        state: DOWNLOADING.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    app.queue = vec!["7".into(), "8".into()];
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Downloads)));
+    nav(&mut app, Nav::Down);
+    nav(&mut app, Nav::Right);
+    assert_eq!(app.download_rows()[1].buttons[1].0, "Remove");
+    nav(&mut app, Nav::Confirm);
+    assert_eq!(app.set_aside, ["7"]);
+    let rows = app.download_rows();
+    assert_eq!(rows[1].buttons[0].0, "Resume");
+    assert_eq!(couch(&app).download, (1, 0));
+}
+
 #[test]
 fn a_gamepad_is_ignored_while_the_window_is_behind_another() {
     let mut app = couch_app();

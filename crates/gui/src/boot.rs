@@ -66,6 +66,8 @@ pub struct Boot {
     pub queue: Vec<String>,
     /// Entries of the queue that go on beside a download paused on request (`Waiting::goes_on`).
     pub goes_on: Vec<String>,
+    /// Downloads paused that do not hold the queue (`App::set_aside`).
+    pub set_aside: Vec<String>,
     /// Offline installers paused, or stopped by an error.
     pub offline_stopped: Vec<(String, Option<String>)>,
     pub customs: HashMap<String, slatty_core::custom::Custom>,
@@ -309,6 +311,7 @@ async fn boot() -> Result<Boot, String> {
         InstallJob::list(&db).map_err(err)?,
         &OfflineJob::list(&db).map_err(err)?,
     );
+    let set_aside = slatty_core::settings::downloads_set_aside(&db).map_err(err)?;
     let jobs = waiting
         .interrupted
         .iter()
@@ -357,6 +360,7 @@ async fn boot() -> Result<Boot, String> {
         jobs,
         queue: waiting.queue,
         goes_on: waiting.goes_on,
+        set_aside,
         offline_stopped: waiting.offline_stopped,
         customs,
         sort_keys,

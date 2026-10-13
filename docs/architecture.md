@@ -306,6 +306,11 @@ and folder. Its state tells a pause asked for (`paused`, resumed when asked) fro
 a `queued` job with the choices of its panel; the queue's order is a setting. A download the
 interface paused itself, for a game or for **Download now**, goes back to the queue as a cut-off:
 its resume is checked as one, and it goes on by itself, even beside a download paused on request.
+Taken out of the queue, a download whose job is no longer `queued` (an install or offline
+installers) is saved `paused` and listed with the stopped ones, its entry kept in a setting
+(`downloads_set_aside`) so that it does not hold the queue, until the interface sees it paused on
+request again, finished or discarded (not when it is only asked to resume, which can fail before it
+starts); only a `queued` job, which has nothing downloaded of its own, is discarded.
 
 The partial folder gets a mark (`.slatty-staged`, holding the game's id and the build) as its
 download starts, which the rename carries into the game folder and the registration deletes:

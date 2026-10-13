@@ -1343,6 +1343,200 @@ fn a_paused_install_resumed_while_another_downloads_waits_as_started() {
     assert_eq!(app.goes_on, ["7"]);
 }
 
+/// A download set aside before a restart still lets the queue go on after it.
+#[test]
+fn a_download_set_aside_does_not_hold_the_queue_after_a_restart() {
+    let mut app = library_app();
+    let Message::Booted(Ok(mut boot)) = super::game_page::booted(Vec::new(), &[]) else {
+        unreachable!()
+    };
+    boot.jobs = vec![("7".into(), crate::Interrupted::Paused)];
+    boot.queue = vec!["8".into()];
+    boot.set_aside = vec!["7".into()];
+    let _ = app.update(Message::Booted(Ok(boot)));
+    assert_eq!(app.set_aside, ["7"]);
+    let _ = app.start_next();
+    assert_eq!(app.auto_resume.as_deref(), Some("8"), "planned to start");
+}
+
+/// × on a started install the command line holds leaves it queued, its job and what it downloaded
+/// as they are: an error never falls through to discarding it.
+#[test]
+fn a_started_install_the_command_line_holds_stays_queued() {
+    use super::offline::installing_6;
+    use crate::downloads::DownloadsMsg;
+    use slatty_core::installer::{DOWNLOADING, InstallJob, PAUSED};
+    let mut app = library_app();
+    let dirs = slatty_core::paths::Dirs::under(&super::root().join("unqueue-busy"));
+    app.core.as_mut().unwrap().dirs = dirs.clone();
+    let db = app.core.as_ref().unwrap().db.clone();
+    installing_6(&mut app);
+    ready_to_install(&mut app, "7");
+    InstallJob {
+        game_id: "7".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 7".into(),
+        state: PAUSED.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
+    assert_eq!(app.queue, ["7"]);
+    let busy = slatty_core::lock::game(&dirs, "7").unwrap();
+    let _ = app.update(Message::Downloads(DownloadsMsg::Remove("7".into())));
+    drop(busy);
+    assert_eq!(app.queue, ["7"]);
+    let job = InstallJob::load(&db, "7").unwrap();
+    assert_eq!(job.map(|j| j.state).as_deref(), Some(DOWNLOADING));
+    assert!(matches!(
+        app.install_views.get("7"),
+        Some(InstallView::Queued(_))
+    ));
+    assert!(app.set_aside.is_empty());
+    assert!(app.notice.as_ref().is_some_and(|n| n.error));
+}
+
+/// × on a queued install that started already (paused, then resumed while another downloads) keeps
+/// what it downloaded: it waits paused among those stopped, with Resume and Discard, without
+/// holding the queue. One that never started is still forgotten.
+#[test]
+fn a_started_install_taken_out_of_the_queue_waits_paused_rather_than_be_discarded() {
+    use super::offline::installing_6;
+    use crate::downloads::DownloadsMsg;
+    use slatty_core::installer::{InstallJob, PAUSED};
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    installing_6(&mut app);
+    ready_to_install(&mut app, "7");
+    if let Some(InstallView::Ready(info)) = app.install_views.get_mut("7") {
+        info.resumable = true;
+    }
+    InstallJob {
+        game_id: "7".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 7".into(),
+        state: PAUSED.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
+    ready_to_install(&mut app, "8");
+    let _ = app.update(Message::Install(InstallMsg::Start("8".into())));
+    assert_eq!(app.queue, ["7", "8"]);
+    assert_eq!(app.goes_on, ["7"]);
+
+    let _ = app.update(Message::Downloads(DownloadsMsg::Remove("7".into())));
+    assert_eq!(app.queue, ["8"]);
+    assert_eq!(slatty_core::settings::download_queue(&db).unwrap(), ["8"]);
+    assert!(app.goes_on.is_empty());
+    let job = InstallJob::load(&db, "7").unwrap();
+    assert_eq!(job.map(|j| j.state).as_deref(), Some(PAUSED), "kept");
+    assert_eq!(
+        app.interrupted,
+        [("7".to_string(), crate::Interrupted::Paused)]
+    );
+    assert!(
+        matches!(app.install_views.get("7"), Some(InstallView::Ready(info)) if info.resumable),
+        "its page offers Resume"
+    );
+    assert_eq!(app.set_aside, ["7"]);
+    let saved = slatty_core::settings::downloads_set_aside(&db).unwrap();
+    assert_eq!(saved, ["7"], "still set aside after a restart");
+    app.page = Page::Downloads;
+    app.selected = None;
+    {
+        let mut ui = render(&app);
+        assert!(ui.find("Paused. It resumes where it stopped.").is_ok());
+        assert!(ui.find("Discard").is_ok());
+    }
+    // The download running ends: the queue goes on, the one set aside does not hold it.
+    app.install_views.remove("6");
+    let _ = app.start_next();
+    assert!(matches!(
+        app.install_views.get("8"),
+        Some(InstallView::Running { .. })
+    ));
+    // Never started: forgotten, as before.
+    ready_to_install(&mut app, "9");
+    let _ = app.update(Message::Install(InstallMsg::Start("9".into())));
+    assert_eq!(app.queue, ["9"]);
+    let _ = app.update(Message::Downloads(DownloadsMsg::Remove("9".into())));
+    assert!(app.queue.is_empty());
+    assert!(
+        matches!(app.install_views.get("9"), Some(InstallView::Planning)),
+        "being discarded"
+    );
+    // Resumed, it runs again; paused on request, it holds the queue as any other.
+    app.install_views.remove("8");
+    let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
+    assert!(matches!(
+        app.install_views.get("7"),
+        Some(InstallView::Running { .. })
+    ));
+    let _ = app.update(Message::Install(InstallMsg::Done("7".into(), Err(None))));
+    assert!(app.set_aside.is_empty());
+    assert!(
+        slatty_core::settings::downloads_set_aside(&db)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+/// A download set aside whose resume fails before it starts (GOG out of reach) is still set aside:
+/// it was not paused on request, and does not hold the queue.
+#[test]
+fn a_download_set_aside_whose_resume_fails_still_does_not_hold_the_queue() {
+    use slatty_core::installer::{InstallJob, PAUSED};
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    ready_to_install(&mut app, "7");
+    if let Some(InstallView::Ready(info)) = app.install_views.get_mut("7") {
+        info.resumable = true;
+    }
+    InstallJob {
+        game_id: "7".into(),
+        build_id: "b1".into(),
+        language: "en-US".into(),
+        root: "/games".into(),
+        directory: "Game 7".into(),
+        state: PAUSED.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    }
+    .save(&db)
+    .unwrap();
+    app.interrupted
+        .push(("7".into(), crate::Interrupted::Paused));
+    app.set_aside = vec!["7".into()];
+    let _ = app.update(Message::Install(InstallMsg::Start("7".into())));
+    let failure = crate::install::Failure("[FAKE] GOG cannot be reached".into(), true);
+    let _ = app.update(Message::Install(InstallMsg::Done(
+        "7".into(),
+        Err(Some(failure)),
+    )));
+    assert_eq!(app.set_aside, ["7"]);
+    ready_to_install(&mut app, "8");
+    let queued = match app.install_views.remove("8") {
+        Some(InstallView::Ready(info)) => InstallView::Queued(info),
+        _ => panic!("not ready to install"),
+    };
+    app.install_views.insert("8".into(), queued);
+    app.queue = vec!["8".into()];
+    let _ = app.start_next();
+    assert!(matches!(
+        app.install_views.get("8"),
+        Some(InstallView::Running { .. })
+    ));
+}
+
 #[test]
 fn download_now_starts_a_queued_install_while_a_game_runs() {
     use crate::downloads::DownloadsMsg;

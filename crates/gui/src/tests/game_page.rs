@@ -314,6 +314,7 @@ pub(super) fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
         jobs: Vec::new(),
         queue: Vec::new(),
         goes_on: Vec::new(),
+        set_aside: Vec::new(),
         offline_stopped: Vec::new(),
         customs: Default::default(),
         sort_keys: Vec::new(),

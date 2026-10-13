@@ -452,6 +452,99 @@ fn resumed_installers_start_beside_a_paused_install_and_stay_resumed() {
     assert!(waiting.offline_stopped.is_empty());
 }
 
+/// × on started installers waiting in the queue keeps what they downloaded: paused among those
+/// stopped, after a restart too, without holding the queue.
+#[test]
+fn started_installers_taken_out_of_the_queue_wait_paused() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    paused_job(&mut app, "5");
+    installing_6(&mut app);
+    let _ = app.update(Message::Offline(OfflineMsg::Resume("5".into())));
+    queued_job(&app, "8");
+    app.queue.push(entry("8"));
+    assert_eq!(app.goes_on, [entry("5")]);
+
+    let _ = app.update(Message::Downloads(DownloadsMsg::Remove(entry("5"))));
+    assert_eq!(app.queue, [entry("8")]);
+    assert!(app.goes_on.is_empty());
+    assert_eq!(app.offline_stopped, [("5".to_string(), None)]);
+    let job = OfflineJob::load(&db, "5").unwrap();
+    assert_eq!(job.map(|j| j.state).as_deref(), Some(PAUSED), "kept");
+    let waiting = crate::boot::downloads_from(
+        app.queue.clone(),
+        Vec::new(),
+        &OfflineJob::list(&db).unwrap(),
+    );
+    assert_eq!(waiting.queue, [entry("8")]);
+    assert_eq!(waiting.offline_stopped, [("5".to_string(), None)]);
+    app.page = Page::Downloads;
+    app.selected = None;
+    let found = render(&app)
+        .find("Offline installers paused. They resume where they stopped.")
+        .is_ok();
+    assert!(found);
+    assert_eq!(app.set_aside, [entry("5")]);
+    let saved = slatty_core::settings::downloads_set_aside(&db).unwrap();
+    assert_eq!(saved, [entry("5")], "still set aside after a restart");
+    // The install running ends: the queue goes on beside them.
+    app.install_views.remove("6");
+    let _ = app.start_next();
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "8"));
+    // Resumed, they run again; paused on request, they hold the queue.
+    app.offline_run = None;
+    let _ = app.update(Message::Offline(OfflineMsg::Resume("5".into())));
+    assert!(app.offline_run.as_ref().is_some_and(|r| r.game_id == "5"));
+    let _ = app.update(Message::Offline(OfflineMsg::Done("5".into(), Err(None))));
+    assert!(app.set_aside.is_empty());
+    queued_job(&app, "9");
+    app.queue.push(entry("9"));
+    let _ = app.start_next();
+    assert!(app.offline_run.is_none(), "the pause holds the queue");
+}
+
+/// × on started installers the command line is downloading leaves them queued, their job as it
+/// is: an error never falls through to removing them.
+#[test]
+fn started_installers_the_command_line_holds_stay_queued() {
+    use crate::downloads::DownloadsMsg;
+    let mut app = library_app();
+    let dirs = slatty_core::paths::Dirs::under(&super::root().join("unqueue-installers-busy"));
+    app.core.as_mut().unwrap().dirs = dirs.clone();
+    let db = app.core.as_ref().unwrap().db.clone();
+    paused_job(&mut app, "5");
+    installing_6(&mut app);
+    let _ = app.update(Message::Offline(OfflineMsg::Resume("5".into())));
+    assert_eq!(app.queue, [entry("5")]);
+    let busy = slatty_core::lock::try_acquire(&dirs.locks().join("installers-5.lock"))
+        .unwrap()
+        .unwrap();
+    let _ = app.update(Message::Downloads(DownloadsMsg::Remove(entry("5"))));
+    drop(busy);
+    assert_eq!(app.queue, [entry("5")]);
+    let job = OfflineJob::load(&db, "5").unwrap();
+    assert_eq!(job.map(|j| j.state).as_deref(), Some(DOWNLOADING));
+    assert!(app.offline_stopped.is_empty());
+    assert!(app.set_aside.is_empty());
+    assert!(app.notice.as_ref().is_some_and(|n| n.error));
+}
+
+/// A download set aside, once discarded, leaves no mark behind: a later one of the same game,
+/// paused on request, holds the queue.
+#[test]
+fn a_download_set_aside_then_discarded_is_forgotten() {
+    let mut app = library_app();
+    let db = app.core.as_ref().unwrap().db.clone();
+    app.set_aside = vec!["7".into(), entry("5")];
+    let _ = app.update(Message::Install(InstallMsg::Discarded("7".into(), Ok(()))));
+    assert_eq!(app.set_aside, [entry("5")]);
+    let _ = app.update(Message::Offline(OfflineMsg::Removed("5".into(), Ok(()))));
+    assert!(app.set_aside.is_empty());
+    let saved = slatty_core::settings::downloads_set_aside(&db).unwrap();
+    assert!(saved.is_empty());
+}
+
 #[test]
 fn installers_out_of_reach_of_gog_keep_their_place() {
     let mut app = library_app();

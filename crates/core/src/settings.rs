@@ -14,6 +14,7 @@ const COVER_WIDTH: &str = "cover_width";
 const LIBRARY_SORT: &str = "library_sort";
 const DEFAULT_PLATFORM: &str = "default_platform";
 const DOWNLOAD_QUEUE: &str = "download_queue";
+const SET_ASIDE: &str = "downloads_set_aside";
 const UMU_LOOKUP: &str = "umu_lookup";
 const REPORT_PLAYTIME: &str = "report_playtime";
 const GAME_ACHIEVEMENTS: &str = "game_achievements";
@@ -319,8 +320,25 @@ pub fn set_launch_choice(db: &Db, game_id: &str, choice: &str) -> Result<()> {
 
 /// Game ids waiting in the download queue, in order.
 pub fn download_queue(db: &Db) -> Result<Vec<String>> {
+    id_list(db, DOWNLOAD_QUEUE)
+}
+
+pub fn set_download_queue(db: &Db, ids: &[String]) -> Result<()> {
+    db.set_setting(DOWNLOAD_QUEUE, Some(&ids.join(",")))
+}
+
+/// Downloads taken out of the queue after they started: paused, they do not hold it.
+pub fn downloads_set_aside(db: &Db) -> Result<Vec<String>> {
+    id_list(db, SET_ASIDE)
+}
+
+pub fn set_downloads_set_aside(db: &Db, ids: &[String]) -> Result<()> {
+    db.set_setting(SET_ASIDE, Some(&ids.join(",")))
+}
+
+fn id_list(db: &Db, key: &str) -> Result<Vec<String>> {
     Ok(db
-        .setting(DOWNLOAD_QUEUE)?
+        .setting(key)?
         .map(|v| {
             v.split(',')
                 .filter(|s| !s.is_empty())
@@ -328,10 +346,6 @@ pub fn download_queue(db: &Db) -> Result<Vec<String>> {
                 .collect()
         })
         .unwrap_or_default())
-}
-
-pub fn set_download_queue(db: &Db, ids: &[String]) -> Result<()> {
-    db.set_setting(DOWNLOAD_QUEUE, Some(&ids.join(",")))
 }
 
 /// Font family the interface uses; `None` for the system's default.

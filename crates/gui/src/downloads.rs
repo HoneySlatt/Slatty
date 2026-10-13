@@ -5,7 +5,8 @@
 use std::path::PathBuf;
 
 use iced::Task;
-use slatty_core::installer::{DOWNLOADING, InstallJob, QUEUED};
+use slatty_core::installer::{DOWNLOADING, InstallJob, PAUSED, QUEUED};
+use slatty_core::offline::OfflineJob;
 
 use crate::install::{InstallMsg, InstallView};
 use crate::offline::{OfflineMsg, of_entry};
@@ -17,7 +18,9 @@ pub const ROW_SPACING: f32 = 8.0;
 
 #[derive(Debug, Clone)]
 pub enum DownloadsMsg {
-    /// Takes an install out of the queue and forgets what was chosen for it.
+    /// Takes a download out of the queue. One that never started is forgotten, with what was chosen
+    /// for it; one that started keeps what it downloaded and waits paused among those stopped,
+    /// without holding the queue.
     Remove(String),
     /// A row's handle was pressed: the row follows the pointer until released.
     Grab(usize),
@@ -51,6 +54,16 @@ impl App {
     pub fn update_downloads(&mut self, msg: DownloadsMsg) -> Task<Message> {
         match msg {
             DownloadsMsg::Remove(game_id) => {
+                match self.set_aside_started(&game_id) {
+                    Ok(true) => return self.start_next(),
+                    Ok(false) => {}
+                    // Its job unread or not saved (the command line busy on it): it stays queued,
+                    // nothing deleted.
+                    Err(e) => {
+                        self.notify_error(e.to_string());
+                        return Task::none();
+                    }
+                }
                 if let Some(id) = of_entry(&game_id) {
                     return self.update_offline(OfflineMsg::Remove(id.to_owned()));
                 }
@@ -250,6 +263,83 @@ impl App {
         Some(Task::batch([next, plan]))
     }
 
+    /// A queued download that started already, taken out of the queue: saved paused, it waits among
+    /// those stopped with what it downloaded, and does not hold the queue. `Ok(false)`, changing
+    /// nothing, for one that never started: it has nothing of its own to keep.
+    fn set_aside_started(&mut self, entry: &str) -> slatty_core::Result<bool> {
+        let Some(core) = self.core.clone() else {
+            return Ok(false);
+        };
+        let saved =
+            match of_entry(entry) {
+                Some(id) => match OfflineJob::load(&core.db, id)?.filter(|j| j.state != QUEUED) {
+                    Some(job) => OfflineJob {
+                        state: PAUSED.into(),
+                        ..job
+                    }
+                    .save_if_idle(&core.db, &core.dirs)
+                    .map(|()| true)?,
+                    None => false,
+                },
+                // Under the game's lock, as when it was queued.
+                None => slatty_core::lock::game(&core.dirs, entry).and_then(|_busy| {
+                    match InstallJob::load(&core.db, entry)?.filter(|j| !j.is_queued()) {
+                        Some(job) => InstallJob {
+                            state: PAUSED.into(),
+                            ..job
+                        }
+                        .save(&core.db)
+                        .map(|()| true),
+                        None => Ok(false),
+                    }
+                })?,
+            };
+        if !saved {
+            return Ok(false);
+        }
+        self.drag = None;
+        self.queue.retain(|e| e != entry);
+        self.save_queue();
+        self.starting_now.take_if(|e| e == entry);
+        self.goes_on.retain(|e| e != entry);
+        if !self.set_aside.iter().any(|e| e == entry) {
+            self.set_aside.push(entry.to_owned());
+            self.save_set_aside();
+        }
+        // Its row comes back among those stopped, where the couch mode's focus may land on it: on
+        // Resume, never on Discard, which a second press meant for Remove would reach.
+        if let Some(couch) = &mut self.couch {
+            couch.download.1 = 0;
+        }
+        match of_entry(entry) {
+            Some(id) => self.offline_stopped.push((id.to_owned(), None)),
+            None => {
+                // Its page offers Resume, as a paused one's does.
+                match self.install_views.remove(entry) {
+                    Some(InstallView::Queued(info)) => {
+                        self.install_views
+                            .insert(entry.to_owned(), InstallView::Ready(info));
+                    }
+                    Some(view) => {
+                        self.install_views.insert(entry.to_owned(), view);
+                    }
+                    None => {}
+                }
+                self.sync_interrupted(entry);
+            }
+        }
+        Ok(true)
+    }
+
+    /// A download set aside paused on request again, finished or discarded: from then on it is as
+    /// any other. Not when it is only asked to start, which can fail before it does.
+    pub(crate) fn unset_aside(&mut self, entry: &str) {
+        if self.set_aside.iter().any(|e| e == entry) {
+            self.set_aside.retain(|e| e != entry);
+            self.save_set_aside();
+        }
+    }
+
     /// The queue as shown: while a row is moved, as it would be once dropped.
     pub fn queue_order(&self) -> Vec<&str> {
         let mut order: Vec<&str> = self.queue.iter().map(String::as_str).collect();
@@ -326,7 +416,8 @@ impl App {
 
     /// Starts what downloads next, unless something downloads or a game runs while downloads wait
     /// for it: a download cut off (closed window, crash) first, then the first install of the
-    /// queue. A download paused on request holds the queue until it is resumed or discarded.
+    /// queue. A download paused on request holds the queue until it is resumed or discarded, unless
+    /// it was set aside from the queue.
     pub fn start_next(&mut self) -> Task<Message> {
         // One being planned to start is as good as downloading. Waiting for GOG, the queue is
         // tried again by itself (`InstallMsg::Retry`).
@@ -350,11 +441,16 @@ impl App {
             }
             return self.update_install(InstallMsg::Prepare(game_id, None));
         }
-        let paused = waiting(crate::Interrupted::Paused).is_some()
+        // Those set aside from the queue hold it no longer.
+        let holds = |entry: &str| !self.set_aside.iter().any(|e| e == entry);
+        let paused = self
+            .interrupted
+            .iter()
+            .any(|(id, k)| *k == crate::Interrupted::Paused && holds(id))
             || self
                 .offline_stopped
                 .iter()
-                .any(|(_, failed)| failed.is_none());
+                .any(|(id, failed)| failed.is_none() && holds(&crate::offline::entry(id)));
         // What the launcher stopped goes on, first in line, as does what Download now asked for.
         let head = self.queue.first();
         let goes_on = head.is_some_and(|h| self.goes_on.contains(h));
@@ -423,6 +519,15 @@ impl App {
     pub(crate) fn save_queue(&mut self) {
         if let Some(core) = &self.core
             && let Err(e) = slatty_core::settings::set_download_queue(&core.db, &self.queue)
+        {
+            self.notify_error(e.to_string());
+        }
+    }
+
+    fn save_set_aside(&mut self) {
+        if let Some(core) = &self.core
+            && let Err(e) =
+                slatty_core::settings::set_downloads_set_aside(&core.db, &self.set_aside)
         {
             self.notify_error(e.to_string());
         }

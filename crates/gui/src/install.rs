@@ -412,7 +412,10 @@ impl App {
                     }
                 }
                 match result {
-                    Ok(()) => self.forget_interrupted(&game_id),
+                    Ok(()) => {
+                        self.forget_interrupted(&game_id);
+                        self.unset_aside(&game_id);
+                    }
                     Err(e) => self.notify_error(e),
                 }
                 // A discarded download no longer holds the queue.
@@ -503,6 +506,7 @@ impl App {
             }
             InstallMsg::Done(game_id, Ok(install)) => {
                 self.preempted.take_if(|(e, _)| *e == game_id);
+                self.unset_aside(&game_id);
                 self.downloads_waiting = None;
                 self.waiting_told = false;
                 if let Some(InstallView::Running { progress, .. }) =
@@ -536,6 +540,8 @@ impl App {
                 if let Some(next) = self.requeue_preempted(&game_id) {
                     return next;
                 }
+                // Paused on request, it holds the queue, whether it was set aside before or not.
+                self.unset_aside(&game_id);
                 self.sync_interrupted(&game_id);
                 let plan = self.update_install(InstallMsg::Prepare(game_id, None));
                 // What Download now asked for while it was pausing starts, now that it is paused;

@@ -326,6 +326,9 @@ pub struct App {
     /// request holds the rest of the queue. An install keeps its mark while planned to start, until
     /// it runs.
     pub goes_on: Vec<String>,
+    /// The entries of downloads taken out of the queue after they started: paused, they do not
+    /// hold it, until paused on request again, finished or discarded.
+    pub set_aside: Vec<String>,
     /// Whether downloads pause while a game runs (Settings → Installs).
     pub pause_while_playing: bool,
     /// The couch mode, while on, and where its focus is.
@@ -457,6 +460,7 @@ impl Default for App {
             starting_now: None,
             made_way: None,
             goes_on: Vec::new(),
+            set_aside: Vec::new(),
             pause_while_playing: true,
             couch: None,
             start_planned: HashSet::new(),
@@ -891,6 +895,7 @@ impl App {
                 self.interrupted = boot.jobs;
                 self.queue = boot.queue;
                 self.goes_on = boot.goes_on;
+                self.set_aside = boot.set_aside;
                 self.customs = boot.customs;
                 self.sort_keys.fill(boot.sort_keys);
                 if let Some(sort) = boot.sort {

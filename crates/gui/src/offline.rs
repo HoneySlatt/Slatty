@@ -303,6 +303,7 @@ impl App {
                 let made_way = self.made_way.take();
                 match result {
                     Ok(files) => {
+                        self.unset_aside(&entry(&game_id));
                         self.downloads_waiting = None;
                         self.waiting_told = false;
                         let (count, folder) = (files.len(), run.folder.display());
@@ -327,6 +328,8 @@ impl App {
                     // it (`requeue_preempted`); what Download now asked for meanwhile starts, else
                     // the download Download now stopped for it goes on.
                     Err(None) => {
+                        // Paused on request, they hold the queue, set aside before or not.
+                        self.unset_aside(&entry(&game_id));
                         self.offline_stopped.push((game_id, None));
                         self.made_way = made_way;
                         return self
@@ -432,7 +435,10 @@ impl App {
                     },
                 );
             }
-            OfflineMsg::Removed(_, Ok(())) => return self.start_next(),
+            OfflineMsg::Removed(game_id, Ok(())) => {
+                self.unset_aside(&entry(&game_id));
+                return self.start_next();
+            }
             OfflineMsg::Removed(_, Err(e)) => self.notify_error(e),
         }
         Task::none()
