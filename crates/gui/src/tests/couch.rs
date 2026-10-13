@@ -742,6 +742,61 @@ fn the_hints_are_on_one_line() {
     assert!((search - menu).abs() < 1.0, "{search} and {menu}");
 }
 
+/// The menu and the questions dim the page under them, but not the hints, which name their
+/// buttons: drawn after them (Iced draws a stack's layers in order), once, where they are with
+/// nothing open.
+#[test]
+fn the_hints_are_drawn_over_the_menu_and_the_questions() {
+    use super::offline::installing_6;
+    use iced_test::selector::Candidate;
+    let last_four = |app: &App| {
+        let all = texts(&mut render(app));
+        all[all.len() - 4..].to_vec()
+    };
+    let hint_middle = |app: &App| {
+        render(app)
+            .find(|c: Candidate<'_>| match c {
+                Candidate::Text {
+                    content: "A",
+                    bounds,
+                    ..
+                } => Some(bounds.center_y()),
+                _ => None,
+            })
+            .unwrap()
+    };
+    // The menu.
+    let mut app = couch_app();
+    let resting = hint_middle(&app);
+    nav(&mut app, Nav::Menu);
+    assert_eq!(last_four(&app), ["A", "Select", "B", "Close"]);
+    assert!((hint_middle(&app) - resting).abs() < 0.5, "the bar stays");
+    let all = texts(&mut render(&app));
+    assert_eq!(all.iter().filter(|t| *t == "Select").count(), 1, "once");
+    let mut ui = render(&app);
+    ui.click("Close").unwrap();
+    assert!(ui.into_messages().next().is_none(), "a hint is no button");
+    // The launch question.
+    let mut app = couch_app();
+    app.launch_options.insert(
+        "3".into(),
+        vec!["[FAKE] Game 3".into(), "[FAKE] Settings".into()],
+    );
+    let _ = app.update(Message::Select("3".into()));
+    nav(&mut app, Nav::Confirm);
+    assert!(app.launch_prompt.is_some());
+    assert_eq!(last_four(&app), ["A", "Start", "B", "Cancel"]);
+    // The quit question.
+    let mut app = couch_app();
+    installing_6(&mut app);
+    let _ = app.update(Message::Couch(CouchMsg::Menu(MenuItem::Quit)));
+    assert!(app.quit_confirm.is_some());
+    let mut ui = render(&app);
+    snapshot(&mut ui, "couch-quit");
+    let all = texts(&mut ui);
+    assert_eq!(all[all.len() - 4..], ["A", "Choose", "B", "Keep running"]);
+}
+
 /// On the shelves above the covers, the hints say what A and X do there; Y does nothing.
 #[test]
 fn the_hints_follow_the_focus_onto_the_shelves() {

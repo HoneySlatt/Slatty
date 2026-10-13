@@ -617,6 +617,10 @@ are drawn in place of the desktop's while `App::couch` holds its state.
   home rows (`App::home_rows`); a move changes no list (`Message::keeps_lists`). Only the covers in
   view are built: a row of Home from the cover with the focus, and in Library the rows from
   `Couch::top`, moved so the focus stays in view.
+- Its keyboard, achievements, menu and questions are layers over the page. The hints, which name
+  the buttons to press in them, are a layer of their own above those (under the notification
+  cards only), so the backdrop of the menu and the questions does not dim them; the page keeps
+  their place empty, so it is laid out the same whatever is open.
 - Install from a game's page plans the install with the defaults and starts it once planned
   (`App::start_planned`); a game's main button is the desktop page's (`App::main_action`).
 - It starts with `--couch` or in a gamescope session (`XDG_CURRENT_DESKTOP=gamescope`,

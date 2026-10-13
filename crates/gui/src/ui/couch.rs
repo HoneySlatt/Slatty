@@ -46,10 +46,12 @@ impl App {
                 Tab::Downloads => self.couch_downloads(couch),
             },
         };
+        // The hints' place: they are drawn over the layers, where the backdrop of the menu and of
+        // the questions, whose buttons they name, does not dim them.
         let body = column![]
             .push(game.is_none().then(|| self.couch_top_bar(couch)))
             .push(container(page).height(Length::Fill))
-            .push(self.couch_hints(couch));
+            .push(space().width(Length::Fill).height(HINTS));
         let keyboard = couch
             .keyboard
             .filter(|_| self.typing())
@@ -69,6 +71,7 @@ impl App {
                     .as_ref()
                     .map(|work| couch_quit(work, couch.quit)),
             )
+            .push(container(self.couch_hints(couch)).align_bottom(Length::Fill))
             .push((!self.toasts.is_empty()).then(|| self.toasts()))
             .into()
     }
