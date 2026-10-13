@@ -107,6 +107,12 @@ and hands it requests.
   needed it.
 - Updates and DLC of a native Linux build.
 - Whether a session with Comet shows the account online, or playing, to GOG friends.
+- Offline installers kept in a folder (`slatty installers`, **Download installers…**): GOG's offer
+  for each system, language and DLC, the checksum XML (and an address answering 404), the names
+  taken from the address a link leads to, and a pause in the middle of a file. GOG's offer of a
+  Linux installer and its byte ranges were checked for the Linux install (above).
+- The download queue with real downloads: **Download now**, and downloads and automatic updates
+  pausing while a game runs (a Steam game too), then going on once it closes.
 
 **Running games**
 
@@ -123,3 +129,10 @@ and hands it requests.
 - Install, Verify and Uninstall through the client, and following a download's progress.
 - The Steam Web API.
 - Steam installed as a Flatpak.
+
+**Couch mode**
+
+- A real gamepad: moves, a held direction repeating, plugging and unplugging.
+- A Steam Deck: started from Steam, and by itself in Game Mode (gamescope).
+- A television: the layout made for 1920×1080 filling a 4K screen, covers and key art copied at
+  the size drawn. It was only drawn at 3840×2160 in a headless Wayland compositor.
