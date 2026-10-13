@@ -474,9 +474,11 @@ they stop as failed rather than start over on another disk. Each file is checked
 against the MD5 sums GOG keeps for it before it takes its name; parts found damaged are
 downloaded again. A file GOG keeps no sums for is taken on its size, and the notice that ends the
 download says it was not checked; sums GOG keeps that cannot be read stop the download before it
-begins, and **Resume** reads them again. A file already in the folder at its size is kept, and one
-there at another size is never replaced. **Remove** in the Downloads tab deletes only the files
-left unfinished.
+begins, and **Resume** reads them again. A file already in the folder at its size is checked
+against GOG's sums too, without being downloaded again, unless the download checked it itself and
+it has not changed since; one that does not match them stops the download and is left as it is
+(move it away, then **Resume**), and one there at another size is never replaced. **Remove** in
+the Downloads tab deletes only the files left unfinished.
 
 ```sh
 slatty installers <id>                             # what GOG offers

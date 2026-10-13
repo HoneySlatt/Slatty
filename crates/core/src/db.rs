@@ -110,6 +110,11 @@ CREATE TABLE offline_jobs (
     updated_at INTEGER NOT NULL
 );
 "#,
+    // The installer files an offline download checked itself, one a line, with what tells the
+    // file (inode, size, modification and change times): taken up, it does not read them again.
+    r#"
+ALTER TABLE offline_jobs ADD COLUMN checked TEXT NOT NULL DEFAULT '';
+"#,
 ];
 
 pub struct Db {
@@ -281,7 +286,7 @@ mod tests {
     /// date and keeps that data.
     #[test]
     fn a_database_of_every_earlier_version_is_brought_up_to_date() {
-        let rows: [&[&str]; 8] = [
+        let rows: [&[&str]; 11] = [
             &[
                 "INSERT INTO settings VALUES ('k', 'v')",
                 "INSERT INTO accounts VALUES ('u', '[FAKE] user', 1)",
@@ -299,7 +304,13 @@ mod tests {
             &["INSERT INTO game_custom (game_id, title) VALUES ('1', '[FAKE] Mine')"],
             &[],
             &[],
+            &[],
+            &[],
+            &["INSERT INTO offline_jobs (game_id, os, language, dlcs, folder, state, updated_at)
+               VALUES ('3', 'windows', 'en', '', '/i', 'paused', 1)"],
         ];
+        // Each earlier version is made whole, every migration of it run: `zip` would stop short.
+        assert_eq!(rows.len(), MIGRATIONS.len() - 1);
         for old in 1..MIGRATIONS.len() {
             let mut conn = Connection::open_in_memory().unwrap();
             for (sql, rows) in MIGRATIONS[..old].iter().zip(rows) {
@@ -336,6 +347,11 @@ mod tests {
             assert_eq!(
                 count("game_custom"),
                 i64::from(old >= 6),
+                "from version {old}"
+            );
+            assert_eq!(
+                count("offline_jobs"),
+                i64::from(old >= 11),
                 "from version {old}"
             );
         }

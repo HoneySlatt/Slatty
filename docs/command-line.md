@@ -83,7 +83,9 @@ that have some, and the folder they would go into, and downloads nothing.
 | `--dir <folder>` | The folder that receives the game's folder of installers. Remembered as the default, which is `GOG` in your download folder |
 
 Ctrl+C pauses; run the same command again to resume where it stopped. A file already in the
-folder at its size is kept; one there at another size is never replaced.
+folder at its size is checked against GOG's sums, unless this download checked it itself and it
+has not changed since; one that does not match them stops the download and is left as it is, and
+one there at another size is never replaced.
 
 ## Playing
 

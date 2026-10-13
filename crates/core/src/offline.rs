@@ -5,7 +5,7 @@
 
 use std::future::Future;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::{FileExt, OpenOptionsExt};
+use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
@@ -374,7 +374,7 @@ pub async fn run(
             .map(|f| f.downlink.clone())
             .collect();
         let source = GogInstallers::new(http.clone(), tokens.clone(), Some(dirs), downlinks);
-        download(&source, &job.folder, &job.game_id, progress, cancel).await
+        download(db, &source, &job.folder, &job.game_id, progress, cancel).await
     }
     .await;
     match &result {
@@ -467,9 +467,12 @@ pub struct Downloaded {
 }
 
 /// Downloads every file of `source` into `folder`, each staged under a name of its own (its size
-/// and its game's id in it), checked, then renamed. A file already there at its size is kept; one
-/// there at another size is not replaced.
+/// and its game's id in it), checked, then renamed. A file already there at its size is checked
+/// against GOG's sums where it is, only read, unless `game_id`'s job checked it itself against the
+/// same sums and it has not changed since; one that does not match them, or there at another size,
+/// is not replaced.
 pub async fn download<S: Source>(
+    db: &Db,
     source: &S,
     folder: &Path,
     game_id: &str,
@@ -497,23 +500,20 @@ pub async fn download<S: Source>(
             None => {}
         }
         // Read with the link, before any bytes: their signed address does not last, and sums that
-        // cannot be read stop the download before it fetches gigabytes for nothing.
+        // cannot be read stop the download before it fetches gigabytes for nothing. A file already
+        // there is checked against them too.
         let unreadable = |detail: &str| {
             Error::Refused(format!(
                 "the checksums GOG keeps for {name} cannot be read ({detail}); nothing was \
                  downloaded, and Resume reads them again"
             ))
         };
-        let sums = if there(&folder.join(&name), size)?.is_some() {
-            None
-        } else {
-            match source.checksums(part).await? {
-                Some(xml) => Some(parse_checksums(&xml).map_err(|e| match e {
-                    Error::Parse { detail, .. } => unreadable(&detail),
-                    e => e,
-                })?),
-                None => None,
-            }
+        let sums = match source.checksums(part).await? {
+            Some(xml) => Some(parse_checksums(&xml).map_err(|e| match e {
+                Error::Parse { detail, .. } => unreadable(&detail),
+                e => e,
+            })?),
+            None => None,
         };
         if sums
             .as_ref()
@@ -546,27 +546,59 @@ pub async fn download<S: Source>(
             crate::units::size(free)
         )));
     }
+    // The files this job checked itself, each with GOG's MD5 it matched.
+    let known = checked(db, game_id)?;
+    let line = |sums: &Checksums, stamp: &str| format!("{} {stamp}", sums.md5);
     let mut done = Vec::new();
     for (part, name, size, sums) in files {
         let target = folder.join(&name);
-        let mut unchecked = false;
         if there(&target, size)?.is_none() {
             let partial = partial_of(&name, size);
             fetch(source, part, size, &partial, &mut p, progress, cancel).await?;
-            match sums {
-                Some(sums) => check(source, part, &partial, &sums, cancel).await?,
-                None => unchecked = true,
+            if let Some(sums) = &sums {
+                check(source, part, &partial, sums, cancel).await?;
             }
             std::fs::rename(&partial, &target)
                 .map_err(|e| Error::io(format!("rename {}", partial.display()), e))?;
+            if let Some(sums) = &sums
+                && let Some(stamp) = stamp(&target)
+            {
+                remember(db, game_id, &line(sums, &stamp))?;
+            }
         } else {
+            // Another program may have left it, at its size but not its bytes: read, never through
+            // `check`, which would write over the parts that differ and delete it. One this job
+            // checked itself, unchanged since, is not read again.
+            let changed = || {
+                Error::Refused(format!(
+                    "{} changed while it was checked; Resume checks it again",
+                    target.display()
+                ))
+            };
+            if let Some(sums) = &sums {
+                let before = stamp(&target).ok_or_else(changed)?;
+                if !known.contains(&line(sums, &before)) {
+                    let bad = damaged(&target, sums, cancel).await?;
+                    if stamp(&target).as_ref() != Some(&before) {
+                        return Err(changed());
+                    }
+                    if bad.is_some() {
+                        return Err(Error::Refused(format!(
+                            "{} is already there and does not match GOG's checksums; it was left \
+                             as it is: move it away to download it again",
+                            target.display()
+                        )));
+                    }
+                    remember(db, game_id, &line(sums, &before))?;
+                }
+            }
             p.bytes_done += size;
         }
         p.files_done += 1;
         progress(p);
         done.push(Downloaded {
             path: target,
-            unchecked,
+            unchecked: sums.is_none(),
         });
     }
     // All there: what is left unfinished is an installer GOG has since replaced.
@@ -574,8 +606,47 @@ pub async fn download<S: Source>(
     Ok(done)
 }
 
-/// `Some(size)` when `path` is the file at its size, already downloaded; `None` when it is not
-/// there. Anything else in its place is not overwritten.
+/// What tells the file at `path` from another put in its place or changed since: its inode, size,
+/// modification time and change time, which every write moves and no program can put back. `None`
+/// when nothing is there.
+fn stamp(path: &Path) -> Option<String> {
+    let m = std::fs::symlink_metadata(path).ok()?;
+    Some(format!(
+        "{} {} {}.{:09} {}.{:09} {}",
+        m.ino(),
+        m.len(),
+        m.mtime(),
+        m.mtime_nsec(),
+        m.ctime(),
+        m.ctime_nsec(),
+        path.display()
+    ))
+}
+
+/// The files `game_id`'s job checked itself: GOG's MD5 each matched, then its `stamp` then.
+fn checked(db: &Db, game_id: &str) -> Result<Vec<String>> {
+    let list: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT checked FROM offline_jobs WHERE game_id = ?1",
+            [game_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(list.unwrap_or_default().lines().map(String::from).collect())
+}
+
+/// Notes in `game_id`'s job a file it checked (a line of `checked`); nothing without a job.
+fn remember(db: &Db, game_id: &str, line: &str) -> Result<()> {
+    db.conn().execute(
+        "UPDATE offline_jobs SET checked = checked || ?2 WHERE game_id = ?1",
+        params![game_id, format!("{line}\n")],
+    )?;
+    Ok(())
+}
+
+/// `Some(size)` when `path` is the file at its size, already there; `None` when it is not there.
+/// Anything else in its place is not overwritten.
 fn there(path: &Path, size: u64) -> Result<Option<u64>> {
     match std::fs::symlink_metadata(path) {
         Ok(m) if m.is_file() && m.len() == size => Ok(Some(size)),

@@ -117,8 +117,12 @@ The sums are read with each file's link, before its bytes, as lgogdownloader doe
 is signed for a while only. A file is downloaded under a name of its own, its size in it (a file
 GOG replaced by another of the same name and another size never takes up the other's part), taken
 up from where it stopped, checked against the whole file's MD5, and renamed once right. Chunks
-whose MD5 differs are downloaded again, once; a file still wrong is deleted. A file GOG keeps no
-checksums for (no address, or nothing found there) is taken on its size and said not checked:
+whose MD5 differs are downloaded again, once; a file still wrong is deleted. A file already in the
+folder at its size, which another program may have left, is checked against the same sums without
+downloading anything, and refused, left as it is, when it does not match; the files a download
+checked itself are noted in its job (GOG's MD5, inode, size, modification and change times) and
+not read again when it is taken up. A file GOG keeps no checksums for (no address, or nothing found
+there) is taken on its size and said not checked:
 replaced by another of the same name and size while paused, it would be kept mixed. Sums that are
 there but cannot be read stop the download before its bytes; Resume reads them again.
 

@@ -133,7 +133,8 @@ fn temp(name: &str) -> PathBuf {
 }
 
 async fn run_download(fake: &Fake, folder: &Path) -> Result<Vec<Downloaded>> {
-    download(fake, folder, "1", &|_| {}, &CancellationToken::new()).await
+    let db = Db::in_memory().unwrap();
+    download(&db, fake, folder, "1", &|_| {}, &CancellationToken::new()).await
 }
 
 #[test]
@@ -257,6 +258,7 @@ async fn installers_are_downloaded_checked_and_named() {
     ]);
     let last = Mutex::new(Progress::default());
     let files = download(
+        &Db::in_memory().unwrap(),
         &fake,
         &dir,
         "1",
@@ -408,7 +410,15 @@ async fn a_pause_during_the_check_stops_it() {
         }
     };
     assert!(matches!(
-        download(&fake, &dir, "1", &pressed, &pause).await,
+        download(
+            &Db::in_memory().unwrap(),
+            &fake,
+            &dir,
+            "1",
+            &pressed,
+            &pause
+        )
+        .await,
         Err(Error::Cancelled)
     ));
     assert!(dir.join("setup_fake.exe.5000.1.slatty-dl").exists());
@@ -458,8 +468,8 @@ async fn sums_that_cannot_be_read_stop_the_download_before_it_begins() {
     }
 }
 
-/// A file GOG keeps no sums for is taken on its size: said so, not as checked. One GOG keeps sums
-/// for is checked; one already there is kept as it is.
+/// A file GOG keeps no sums for is taken on its size: said so, not as checked, whether downloaded or
+/// already there. One GOG keeps sums for is checked.
 #[tokio::test]
 async fn files_gog_keeps_no_sums_for_are_said_unchecked() {
     let dir = temp("unchecked");
@@ -477,7 +487,7 @@ async fn files_gog_keeps_no_sums_for_are_said_unchecked() {
     let done = run_download(&fake, &dir).await.unwrap();
     std::fs::remove_dir_all(&dir).unwrap();
     let unchecked: Vec<bool> = done.iter().map(|d| d.unchecked).collect();
-    assert_eq!(unchecked, [false, true, false]);
+    assert_eq!(unchecked, [false, true, true]);
 }
 
 #[tokio::test]
@@ -514,6 +524,167 @@ async fn a_file_already_there_is_kept_and_another_is_not_replaced() {
         b"[FAKE] mine"
     );
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// A file another program left in the folder at its size (a download manager stopped after it made
+/// the whole file) is checked against GOG's sums: one that does not match is refused, named, and
+/// left as it is; one that does is kept as checked. Nothing is downloaded over either.
+#[tokio::test]
+async fn a_file_left_at_its_size_is_checked_against_gogs_sums() {
+    let dir = temp("left-there");
+    let a = data(5000, 44);
+    let fake = Fake::new(vec![(
+        "setup_fake.exe",
+        a.clone(),
+        Some(xml("setup_fake.exe", &a, 1024)),
+    )]);
+    std::fs::write(dir.join("setup_fake.exe"), vec![0u8; 5000]).unwrap();
+    let refused = run_download(&fake, &dir).await;
+    let left = std::fs::read(dir.join("setup_fake.exe")).unwrap();
+    std::fs::write(dir.join("setup_fake.exe"), &a).unwrap();
+    let kept = run_download(&fake, &dir).await;
+    let opened = fake.opened.lock().unwrap().clone();
+    std::fs::remove_dir_all(&dir).unwrap();
+    let said = match refused {
+        Err(Error::Refused(said)) => said,
+        other => panic!("{other:?}"),
+    };
+    assert!(said.contains("setup_fake.exe"), "{said}");
+    assert!(said.contains("move it away"), "says what to do: {said}");
+    assert_eq!(left, vec![0u8; 5000], "left as it is");
+    let kept: Vec<bool> = kept.unwrap().iter().map(|d| d.unchecked).collect();
+    assert_eq!(kept, [false]);
+    assert!(opened.is_empty(), "nothing downloaded over it");
+}
+
+/// The files a download checked itself are not read again when it is taken up after a pause, as
+/// long as they have not changed; one changed since, even with its date put back, is checked again,
+/// and refused when wrong.
+#[tokio::test]
+async fn files_a_download_checked_are_not_read_again_when_taken_up() {
+    let dir = temp("remembered");
+    let db = Db::in_memory().unwrap();
+    OfflineJob {
+        game_id: "1".into(),
+        os: "windows".into(),
+        languages: vec!["en".into()],
+        dlcs: Vec::new(),
+        folder: dir.clone(),
+        state: DOWNLOADING.into(),
+    }
+    .save(&db)
+    .unwrap();
+    let fake = two_checked_files();
+    let exe = dir.join("setup_fake.exe");
+    let pause = CancellationToken::new();
+    let paused_after_one = |p: Progress| {
+        if p.files_done == 1 {
+            pause.cancel();
+        }
+    };
+    let paused = download(&db, &fake(), &dir, "1", &paused_after_one, &pause).await;
+    assert!(matches!(paused, Err(Error::Cancelled)), "{paused:?}");
+    let again = fake();
+    let none = CancellationToken::new();
+    let done = download(&db, &again, &dir, "1", &|_| {}, &none).await;
+    let opened = again.opened.lock().unwrap().clone();
+    // Both checked: taken up once more, neither is read, which a pause would stop.
+    let stopped = CancellationToken::new();
+    stopped.cancel();
+    let unread = download(&db, &fake(), &dir, "1", &|_| {}, &stopped).await;
+    // Its bytes changed in place and its date put back: its change time tells, and it is read.
+    let date = std::fs::metadata(&exe).unwrap().modified().unwrap();
+    let file = std::fs::File::options().write(true).open(&exe).unwrap();
+    file.write_all_at(&[0u8; 100], 0).unwrap();
+    file.set_modified(date).unwrap();
+    drop(file);
+    let changed = download(&db, &fake(), &dir, "1", &|_| {}, &none).await;
+    let left = std::fs::read(&exe).unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
+    let unchecked: Vec<bool> = done.unwrap().iter().map(|d| d.unchecked).collect();
+    assert_eq!(unchecked, [false, false]);
+    assert_eq!(opened, [(1, 0, 3000)], "only the second file downloaded");
+    assert!(unread.is_ok(), "not read again: {unread:?}");
+    assert!(matches!(changed, Err(Error::Refused(_))), "{changed:?}");
+    assert_eq!(left[..100], [0u8; 100], "left as it is");
+}
+
+/// Two installer files with GOG's sums for them, served anew by each fake made.
+fn two_checked_files() -> impl Fn() -> Fake {
+    let (a, b) = (data(5000, 45), data(3000, 46));
+    move || {
+        Fake::new(vec![
+            (
+                "setup_fake.exe",
+                a.clone(),
+                Some(xml("setup_fake.exe", &a, 1024)),
+            ),
+            (
+                "setup_fake-1.bin",
+                b.clone(),
+                Some(xml("setup_fake-1.bin", &b, 1024)),
+            ),
+        ])
+    }
+}
+
+/// A file the job checked, replaced at its size while another downloads, is read once its turn
+/// comes rather than taken for the one checked.
+#[tokio::test]
+async fn a_file_replaced_while_another_downloads_is_checked_at_its_turn() {
+    let dir = temp("replaced-meanwhile");
+    let db = Db::in_memory().unwrap();
+    OfflineJob {
+        game_id: "1".into(),
+        os: "windows".into(),
+        languages: vec!["en".into()],
+        dlcs: Vec::new(),
+        folder: dir.clone(),
+        state: DOWNLOADING.into(),
+    }
+    .save(&db)
+    .unwrap();
+    let fake = two_checked_files();
+    let none = CancellationToken::new();
+    download(&db, &fake(), &dir, "1", &|_| {}, &none)
+        .await
+        .unwrap();
+    std::fs::remove_file(dir.join("setup_fake.exe")).unwrap();
+    let bin = dir.join("setup_fake-1.bin");
+    let replaced = std::sync::atomic::AtomicBool::new(false);
+    let replace = |_: Progress| {
+        if !replaced.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            std::fs::write(dir.join("[FAKE] other"), vec![0u8; 3000]).unwrap();
+            std::fs::rename(dir.join("[FAKE] other"), &bin).unwrap();
+        }
+    };
+    let result = download(&db, &fake(), &dir, "1", &replace, &none).await;
+    let left = std::fs::read(&bin).unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
+    assert_eq!(left, vec![0u8; 3000], "left as it is");
+}
+
+/// A pause while a file already there is read stops it, the file left as it is.
+#[tokio::test]
+async fn a_pause_while_a_file_already_there_is_read_leaves_it() {
+    let dir = temp("there-paused");
+    let a = data(5000, 49);
+    std::fs::write(dir.join("setup_fake.exe"), &a).unwrap();
+    let fake = Fake::new(vec![(
+        "setup_fake.exe",
+        a.clone(),
+        Some(xml("setup_fake.exe", &a, 1024)),
+    )]);
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    let db = Db::in_memory().unwrap();
+    let paused = download(&db, &fake, &dir, "1", &|_| {}, &cancel).await;
+    let left = std::fs::read(dir.join("setup_fake.exe")).unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(matches!(paused, Err(Error::Cancelled)), "{paused:?}");
+    assert_eq!(left, a);
+    assert!(fake.opened.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -587,7 +758,15 @@ async fn a_paused_download_keeps_what_it_has() {
     let cancel = CancellationToken::new();
     cancel.cancel();
     assert!(matches!(
-        download(&fake, &dir, "1", &|_| {}, &cancel).await,
+        download(
+            &Db::in_memory().unwrap(),
+            &fake,
+            &dir,
+            "1",
+            &|_| {},
+            &cancel
+        )
+        .await,
         Err(Error::Cancelled)
     ));
     assert!(dir.join("setup_fake.exe.5000.1.slatty-dl").exists());
