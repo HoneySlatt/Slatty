@@ -438,11 +438,16 @@ fn a_windows_installer_runs_before_the_program_is_picked() {
     let d = app.add_game.as_ref().unwrap();
     assert_eq!(d.installed_by.as_deref(), Some("local-3"));
     assert!(!d.busy);
-    assert!(
-        render(&app)
-            .find("The installer ended: choose the game's program where it installed it.")
-            .is_ok()
-    );
+    {
+        let mut ui = render(&app);
+        let ended = "The installer ended: choose the game's program where it installed it.";
+        assert!(ui.find(ended).is_ok());
+        assert!(
+            ui.find("The folder installed into, or the program's")
+                .is_ok(),
+            "the game's folder it takes when left empty"
+        );
+    }
     let _ = app.update(Message::Add(AddMsg::WithInstaller(false)));
     assert!(
         app.add_game.as_ref().unwrap().with_installer,

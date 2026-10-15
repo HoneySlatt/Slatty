@@ -557,7 +557,9 @@ an installer or archive**:
   the program is looked for in the prefix; thrown away, the folder goes only if nothing was put in
   it. A launcher the installer put on C: (as some online games' are, which then download and update
   the game on D:) can be the program: the game's folder is then the one on D:, which an isolated
-  launcher sees and updates, and nothing else of yours;
+  launcher sees and updates, and nothing else of yours. So it is for a program the installer put
+  deeper on D:, such as a launcher in a folder of its own that downloads the game beside it, unless
+  you choose another **Game folder**;
 - a **Linux installer** (MojoSetup `.sh`, the format of GOG's offline installers) or an
   **archive** (`.zip`, `.tar.gz`, `.tar.xz`) is unpacked, never run, into a folder named after the
   title in **Install into**. Paths that would leave that folder, and links leading out of it, are

@@ -133,7 +133,17 @@ impl App {
                 field("-windowed", &d.args, AddMsg::Args).into(),
                 label("Game folder").into(),
                 row![
-                    field("The program's folder", &d.folder, AddMsg::Folder).width(Length::Fill),
+                    // After an installer, the folder it installed into, when the program is there
+                    // or in the game's prefix (`added::add`).
+                    field(
+                        match d.installed_by.is_some() {
+                            true => "The folder installed into, or the program's",
+                            false => "The program's folder",
+                        },
+                        &d.folder,
+                        AddMsg::Folder,
+                    )
+                    .width(Length::Fill),
                     browse(AddMsg::PickFolder),
                 ]
                 .spacing(10)

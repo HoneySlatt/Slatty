@@ -566,7 +566,8 @@ have GOG's setup, updates and checks run.
   is added read-only (`runner::windows_command_reading`). `NewGame::installed_by` then adds the
   program it installed with that id and prefix, or `discard_installer` throws it away, saves
   backed up, the game's folder removed only if empty. A program in the prefix (a launcher put on
-  C:) keeps the folder installed into as the game's when it holds anything: its task is then
+  C:), or deeper in the folder installed into, keeps that folder as the game's when it holds
+  anything, unless another is given. In the prefix, its task is then
   relative to the prefix (`Task::in_prefix`), the launch starts there (`launch_task`, and
   `runner::check_shared` takes a working directory in the prefix, shared already), and `locate`
   moves drive D: with the folder.
