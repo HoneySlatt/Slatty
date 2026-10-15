@@ -91,6 +91,7 @@ and hands it requests.
 | 2026-10-10 | Hollow Knight (1308320804) | 1.5.12620 | Same, isolated with `HOME` set to its own home and the user's environment kept out | Play isolated | OK | Played 1 min (played and checked by the user); cloud checked, 5 saves uploaded after; Comet started; play time sent. Nothing changed |
 | 2026-10-10 | Cyberpunk 2077 (1423049311) | — | Installed by slatty under `/home`, isolated, Proton-CachyOS 11.0 | Play isolated, with umu's fixes | OK | Played 3 min, no problem seen (played and checked by the user); cloud checked, 1 save uploaded after; Comet started; play time sent. Proton's fixes ran in the container with the GOG database and umu-1091500 (log in its own home): global defaults applied (`OPENSSL_ia32cap`), no fix of its own listed for it |
 | 2026-10-12 | Blasphemous | — | Installed by slatty, isolated | First launch, play isolated, achievement earned in game | OK | Played 5 min (played and checked by the user). First launch: prefix created, GOG's setup script run and the Galaxy service registered, 4 cloud saves downloaded, Comet started. An achievement earned in game reached Comet from the container: shown as unlocked during the session (desktop notification) and recorded on GOG as it ended. 2 saves uploaded after; play time sent |
+| 2026-10-15 | Wuthering Waves (added by hand) | 3.0.1.0 (launcher) | Windows installer run from Add a game, isolated, DW-Proton; installed into a folder on a second SSD (drive D:) | Install, then the launcher on C: as the program | OK | The installer put Kuro's launcher on C: without asking; the launcher listed D: and downloaded the game there (133 GB). Added with the launcher as its program and isolated, the launcher found the game on D: (checked by the user). The launcher shows "Failed to retrieve space info" for C: and D: and calls them "Unknown"; it did not stop the download. The game was added from the command line (`--installed-by`) after an earlier attempt removed from the library had left its prefix without its mark; playing and an update not tried yet |
 
 ## Not checked for real yet
 
@@ -121,7 +122,8 @@ and hands it requests.
 - Valve's Proton Experimental with a real game, isolated (only a throwaway prefix, above).
 - Proton builds downloaded from GitHub kept up to date (Keep up to date), and shared with Steam and
   Heroic.
-- Games added by hand: a Windows or Linux installer, an archive, an AppImage.
+- Games added by hand: a Linux installer, an archive, an AppImage; a game updated by a launcher a
+  Windows installer put on C: (one installed and found again, above).
 - Ubuntu with AppArmor: the steps of the user guide were never tried.
 
 **Steam**
