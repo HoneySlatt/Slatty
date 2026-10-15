@@ -72,8 +72,10 @@ cargo test -p slatty-core a_long_download_is_not_cut_off -- --ignored
 partly not Latin, in no particular order: how long a view takes with the lists kept (as while
 scrolling), how long making the lists again takes (after any other message), and how much longer
 laying out takes than with 14 games. It times the couch mode too: its home page and library, a
-move of the focus (a message and a view, as each press of the d-pad), and its lists made again
-(2026-10-12: views 4–8 µs, a move 7 µs, lists 2.7 ms). A view must build well within a 16 ms frame. Layout times
+move of the focus (a message and a view, as each press of the d-pad), its lists made again, its
+focus found again on its games after a message that forgets them, and a favorite toggled on Home
+(2026-10-13: views 5–8 µs, a move 7.5 µs, lists 3 ms, focus found again 0.45 ms, a favorite
+toggled 0.55 ms). A view must build well within a 16 ms frame. Layout times
 include the test renderer's start-up, so only the difference means something; and the test lays
 out every widget anew, while the application keeps what it laid out for a row in view. Scrolling is
 measured in the application itself (below).

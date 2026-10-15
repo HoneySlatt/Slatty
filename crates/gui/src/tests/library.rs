@@ -1059,6 +1059,24 @@ fn library_at_10000_games() {
             let _ = app.home_rows();
         }
         println!("couch lists made again: {:?}", t.elapsed() / 10);
+        // After each message that forgets the lists, the focus is found again on its games.
+        let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Home)));
+        let t = std::time::Instant::now();
+        for _ in 0..10 {
+            app.lists.clear();
+            app.refocus_couch();
+        }
+        println!("couch home focus found again: {:?}", t.elapsed() / 10);
+        // A favorite toggled on Home, in a row of 500: its rows made again, the focus found again.
+        let t = std::time::Instant::now();
+        for _ in 0..10 {
+            let _ = app.update(Message::Couch(CouchMsg::Nav(Nav::Action)));
+            let _ = app.view();
+        }
+        println!(
+            "couch favorite toggled on Home: {:?} per message and view",
+            t.elapsed() / 10
+        );
         app.couch = None;
     }
     // Laying out, beyond building: each page at 10,000 games against the same page at 14, both

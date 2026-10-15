@@ -672,12 +672,14 @@ one, X the left one, Y the top one.
 
 - **Home** shows the key art of the game with the focus, and rows of covers: **Continue playing**
   (the 20 games played last), **Favorites** and **Installed**; the whole library while none of
-  these has a game yet.
+  these has a game yet. The focus stays on the game chosen when the rows change (a favorite marked
+  or taken out, a download ending, a game played); when its row goes, it moves with its game.
 - **Library** shows every game by name. Above the covers (Up from the first row), the shelves
   **All**, **Installed** and **Favorites**, and **Search**, which opens a keyboard on the screen: A
   types the key with the focus, X erases, Y adds a space, B or **Done** closes it, keeping the
   search. A keyboard types into the search directly, and Enter ends it; a letter typed from Home
-  or Library starts one.
+  or Library starts one. Once moved, the focus stays on its game when the shelf changes, and takes
+  the next one when its game leaves the shelf.
 - A game's page has its main button (Play, Stop while it runs, Install, Resume, or where its
   download stands), the favorite, and **Achievements**, a list to scroll. A game that can be
   started several ways asks which the first time, as in the desktop window. **Install** starts at

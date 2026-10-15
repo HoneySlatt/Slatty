@@ -1061,3 +1061,245 @@ fn the_quit_question_starts_on_keep_running_each_time() {
     let _ = app.update(Message::Couch(CouchMsg::Menu(MenuItem::Quit)));
     assert_eq!(couch(&app).quit, 0);
 }
+
+/// Home's focus: its row's title, its place, its game.
+fn home_focus_of(app: &App) -> (&'static str, usize, String) {
+    let (row, col, g) = app.home_focus().unwrap();
+    (app.home_rows()[row].title, col, g.id.clone())
+}
+
+/// Game 3's install record, for another fake game.
+fn installed(app: &App, id: &str) -> Install {
+    Install {
+        game_id: id.into(),
+        title: format!("[FAKE] Game {id}"),
+        ..app.installs["3"].clone()
+    }
+}
+
+/// An install ending adds a game before the one with the focus in Installed: the focus stays on
+/// its game, and A opens that one.
+#[test]
+fn home_keeps_its_focus_on_its_game_when_an_install_ends() {
+    let mut app = couch_app();
+    nav(&mut app, Nav::Down);
+    nav(&mut app, Nav::Down);
+    assert_eq!(home_focus_of(&app), ("Installed", 0, "3".into()));
+    let one = installed(&app, "1");
+    let _ = app.update(Message::Install(InstallMsg::Done("1".into(), Ok(one))));
+    assert_eq!(home_focus_of(&app), ("Installed", 1, "3".into()));
+    nav(&mut app, Nav::Confirm);
+    assert_eq!(
+        app.selected.as_deref(),
+        Some("3"),
+        "A opens the game chosen"
+    );
+}
+
+/// A game played goes first in Continue playing: the focus goes with it.
+#[test]
+fn home_keeps_its_focus_on_its_game_after_it_was_played() {
+    let mut app = couch_app();
+    app.playtime.insert(
+        "9".into(),
+        Playtime {
+            seconds: 60,
+            last_played: 1_791_300_000,
+        },
+    );
+    app.lists.clear();
+    nav(&mut app, Nav::Right);
+    assert_eq!(home_focus_of(&app), ("Continue playing", 1, "9".into()));
+    nav(&mut app, Nav::Confirm);
+    // Its session ends: play times read again, as `PlayMsg::Done` does.
+    app.playtime.insert(
+        "9".into(),
+        Playtime {
+            seconds: 120,
+            last_played: 1_791_500_000,
+        },
+    );
+    nav(&mut app, Nav::Back);
+    assert_eq!(app.selected, None);
+    assert_eq!(home_focus_of(&app), ("Continue playing", 0, "9".into()));
+}
+
+/// Favorites appears above the row with the focus, or goes when its last game is taken out: the
+/// focus stays on its game, in its row, or follows it into another.
+#[test]
+fn home_keeps_its_focus_on_its_game_when_favorites_come_and_go() {
+    let mut app = couch_app();
+    app.favorites.clear();
+    let one = installed(&app, "1");
+    app.installs.insert("1".into(), one);
+    app.lists.clear();
+    nav(&mut app, Nav::Down);
+    nav(&mut app, Nav::Right);
+    assert_eq!(home_focus_of(&app), ("Installed", 1, "3".into()));
+    nav(&mut app, Nav::Action);
+    assert!(app.favorites.contains("3"));
+    assert_eq!(home_focus_of(&app), ("Installed", 1, "3".into()));
+    nav(&mut app, Nav::Left);
+    nav(&mut app, Nav::Up);
+    assert_eq!(home_focus_of(&app), ("Favorites", 0, "3".into()));
+    nav(&mut app, Nav::Action);
+    assert!(!app.favorites.contains("3"));
+    assert_eq!(home_focus_of(&app), ("Installed", 1, "3".into()));
+}
+
+/// The couch library's shelf changes under the focus (an install ending on Installed): the focus
+/// stays on its game; when its game leaves the shelf, it takes the one now at its place.
+#[test]
+fn the_couch_library_keeps_its_focus_on_its_game_when_its_shelf_changes() {
+    let shown = |app: &App| -> Vec<String> {
+        let games = app.couch_games();
+        games.iter().map(|&i| app.library[i].id.clone()).collect()
+    };
+    let mut app = couch_app();
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    let _ = app.update(Message::Couch(CouchMsg::Shelf(Shelf::Installed)));
+    // The focus chosen (a press, here at the end of the shelf).
+    nav(&mut app, Nav::Right);
+    let one = installed(&app, "1");
+    let _ = app.update(Message::Install(InstallMsg::Done("1".into(), Ok(one))));
+    assert_eq!(shown(&app), ["1", "3"]);
+    assert_eq!(couch(&app).card, 1, "still on game 3");
+    nav(&mut app, Nav::Confirm);
+    assert_eq!(app.selected.as_deref(), Some("3"));
+    let _ = app.update(Message::CloseDetail);
+    let _ = app.update(Message::Couch(CouchMsg::Shelf(Shelf::Favorites)));
+    nav(&mut app, Nav::Action);
+    assert_eq!(shown(&app), ["7"]);
+    nav(&mut app, Nav::Confirm);
+    assert_eq!(app.selected.as_deref(), Some("7"));
+}
+
+/// A favorite taken out and put back on a game's page: back from it, the focus is on that game,
+/// on Home and in Library, not on the one that took its place a moment.
+#[test]
+fn back_from_a_page_the_focus_is_on_its_game() {
+    let mut app = couch_app();
+    nav(&mut app, Nav::Down);
+    assert_eq!(home_focus_of(&app), ("Favorites", 0, "5".into()));
+    nav(&mut app, Nav::Confirm);
+    nav(&mut app, Nav::Action);
+    nav(&mut app, Nav::Action);
+    assert!(app.favorites.contains("5"));
+    nav(&mut app, Nav::Back);
+    assert_eq!(home_focus_of(&app), ("Favorites", 0, "5".into()));
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    let _ = app.update(Message::Couch(CouchMsg::Shelf(Shelf::Favorites)));
+    nav(&mut app, Nav::Confirm);
+    nav(&mut app, Nav::Action);
+    nav(&mut app, Nav::Action);
+    nav(&mut app, Nav::Back);
+    assert_eq!(couch(&app).card, 0);
+}
+
+/// Before the player chooses anything on Home, its focus stays on the first cover of the first row
+/// as the rows fill in: Continue playing coming above is not left out of view.
+#[test]
+fn home_starts_on_its_first_row_whatever_fills_the_rows() {
+    let mut app = library_app();
+    app.window = SIZE;
+    app.favorites.extend(["5".to_string(), "7".to_string()]);
+    let _ = app.update(Message::Couch(CouchMsg::Enter));
+    assert_eq!(home_focus_of(&app), ("Favorites", 0, "5".into()));
+    app.playtime.insert(
+        "9".into(),
+        Playtime {
+            seconds: 60,
+            last_played: 1_791_500_000,
+        },
+    );
+    let _ = app.update(Message::CloseDetail);
+    assert_eq!(home_focus_of(&app), ("Continue playing", 0, "9".into()));
+}
+
+/// Before the player moves the library's focus, it stays on the first cover as the shelf fills in
+/// (Steam's games, a library sync): the new first games are not left above the view.
+#[test]
+fn the_library_starts_on_its_first_cover_whatever_fills_the_shelf() {
+    let mut app = couch_app();
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    for i in 0..20 {
+        app.library.push(fake_game(
+            &(100 + i).to_string(),
+            &format!("[FAKE] A game {i}"),
+        ));
+    }
+    let _ = app.update(Message::CloseDetail);
+    assert_eq!(couch(&app).card, 0, "still on the first cover");
+    assert_eq!(app.library_top(couch(&app), Some(0)), 0);
+}
+
+/// Back on the library, the covers in view are asked for around the focus once found again: the
+/// one with the focus is enlarged with the others on a large screen.
+#[test]
+fn the_library_asks_for_the_covers_around_its_focus_found_again() {
+    let mut app = couch_app();
+    app.card_width = 225.0;
+    let _ = app.update(Message::Rescaled(1.0));
+    let _ = app.update(Message::WindowResized(Size::new(3840.0, 2160.0)));
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    let across = app.couch_columns();
+    nav(&mut app, Nav::Down);
+    for _ in 1..across {
+        nav(&mut app, Nav::Right);
+    }
+    nav(&mut app, Nav::PrevTab);
+    app.library.push(fake_game("15", "[FAKE] Game 0"));
+    for g in &app.library {
+        let path = format!("/covers/{}.jpg", g.id);
+        app.covers
+            .insert(g.id.clone(), iced::widget::image::Handle::from_path(path));
+    }
+    // Forgets the lists, as an install ending would.
+    let _ = app.update(Message::CloseDetail);
+    nav(&mut app, Nav::NextTab);
+    assert_eq!(couch(&app).card, 2 * across);
+    assert_eq!(
+        app.scale_couch_covers().units(),
+        0,
+        "asked for with the tab"
+    );
+}
+
+/// The focus found again on its game in another row of the library brings that row into view, as a
+/// move would: the next press does not scroll the grid for nothing.
+#[test]
+fn the_library_focus_found_again_keeps_its_row_in_view() {
+    let mut app = couch_app();
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    let across = app.couch_columns();
+    for _ in 1..across {
+        nav(&mut app, Nav::Right);
+    }
+    nav(&mut app, Nav::Down);
+    app.library.push(fake_game("15", "[FAKE] Game 0"));
+    let _ = app.update(Message::CloseDetail);
+    let card = couch(&app).card;
+    assert_eq!(card, 2 * across, "on its game, a row down");
+    let shown = app.library_top(couch(&app), Some(card));
+    nav(&mut app, Nav::Up);
+    let now = app.library_top(couch(&app), Some(couch(&app).card));
+    assert_eq!(now, shown, "the rows shown stay");
+}
+
+/// Another shelf, or a search, starts from its first cover, wherever the game with the focus is in
+/// it.
+#[test]
+fn a_new_shelf_or_search_starts_from_the_first_cover() {
+    let mut app = couch_app();
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    let across = app.couch_columns();
+    nav(&mut app, Nav::Down);
+    assert_eq!(couch(&app).card, across);
+    let _ = app.update(Message::Couch(CouchMsg::Shelf(Shelf::Favorites)));
+    assert_eq!(couch(&app).card, 0);
+    let _ = app.update(Message::Couch(CouchMsg::Shelf(Shelf::All)));
+    nav(&mut app, Nav::Down);
+    key(&mut app, Key::Char('g'));
+    assert_eq!(couch(&app).search, "g");
+    assert_eq!(couch(&app).card, 0);
+}

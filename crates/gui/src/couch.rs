@@ -157,12 +157,25 @@ pub struct Couch {
     /// Home: the row with the focus, and the cover each row was left on.
     pub home_row: usize,
     pub home_cols: Vec<usize>,
+    /// Home: the games those places hold, with their row's title, as last seen. When the rows are
+    /// made again (a favorite toggled, an install ended, a game played), the focus finds them where
+    /// they went (`App::refocus_couch`); a move empties them, to be read again from the places.
+    pub home_games: Vec<(&'static str, String)>,
+    /// Whether the player moved or used Home's focus since the couch mode opened: until then it
+    /// stays on the first cover of the first row, whatever comes to fill the rows.
+    pub home_chosen: bool,
     /// Home: the game the focus rested on a moment, whose key art's copy is made (`REST`).
     pub rested: Option<String>,
     /// Library: the shelf shown, the cover with the focus and the first row shown; on the
     /// shelves above, the one with the focus (the search after them).
     pub shelf: Shelf,
     pub card: usize,
+    /// The game at `card` as last seen, found again when the shelf's games are made again; none
+    /// after a move, or another shelf or search, which start from `card`.
+    pub card_game: Option<String>,
+    /// Whether the player moved or used the focus on this shelf: until then it stays on its first
+    /// cover, whatever comes to fill the shelf.
+    pub card_chosen: bool,
     pub top: usize,
     pub on_shelves: Option<usize>,
     pub search: String,
@@ -291,6 +304,8 @@ impl App {
                 if let Some(couch) = &mut self.couch {
                     couch.shelf = shelf;
                     couch.card = 0;
+                    couch.card_game = None;
+                    couch.card_chosen = false;
                     couch.top = 0;
                 }
             }
@@ -397,6 +412,7 @@ impl App {
         if rows.is_empty() {
             return Task::none();
         }
+        couch.home_chosen = true;
         let row = couch.home_row.min(rows.len() - 1);
         if couch.home_cols.len() < rows.len() {
             couch.home_cols.resize(rows.len(), 0);
@@ -410,13 +426,16 @@ impl App {
             Nav::Left => couch.home_cols[row] = col.saturating_sub(1),
             Nav::Right => couch.home_cols[row] = (col + 1).min(len.saturating_sub(1)),
             Nav::Confirm if len > 0 => return self.update(Message::Select(game(col))),
-            // The favorite toggled may change the rows, the focus then on another game.
+            // The favorite toggled may change the rows: the focus finds its game again
+            // (`App::refocus_couch`).
             Nav::Action if len > 0 => {
                 let toggled = self.update(Message::ToggleFavorite(game(col)));
                 return Task::batch([toggled, self.home_art()]);
             }
             _ => return Task::none(),
         }
+        // Moved: which games the focus is on is read again from its places.
+        couch.home_games.clear();
         self.home_art()
     }
 
@@ -427,6 +446,9 @@ impl App {
         if self.couch.is_none() {
             return Task::none();
         }
+        // Its rows may have been made again since the end of the last message (another tab
+        // showed, or a favorite was just toggled): its focus is found again first.
+        self.refocus_couch();
         let Some((_, _, g)) = self.home_focus() else {
             return Task::none();
         };
@@ -453,12 +475,15 @@ impl App {
                 Nav::Confirm => {
                     couch.shelf = Shelf::ALL[i];
                     couch.card = 0;
+                    couch.card_game = None;
+                    couch.card_chosen = false;
                     couch.top = 0;
                 }
                 _ => {}
             }
             return Task::none();
         }
+        couch.card_chosen = true;
         let len = games.len();
         let card = couch.card.min(len.saturating_sub(1));
         match nav {
@@ -486,6 +511,8 @@ impl App {
             }
             _ => {}
         }
+        // Moved: which game the focus is on is read again from its place.
+        couch.card_game = None;
         // The row with the focus stays in view.
         let row = couch.card / columns;
         if row < couch.top {
@@ -757,6 +784,8 @@ impl App {
     fn searched(&mut self) {
         if let Some(couch) = &mut self.couch {
             couch.card = 0;
+            couch.card_game = None;
+            couch.card_chosen = false;
             couch.top = 0;
         }
     }
@@ -858,6 +887,106 @@ impl App {
             .unwrap_or(0)
             .min(games.len().checked_sub(1)?);
         Some((row, col, &self.library[games[col]]))
+    }
+
+    /// Lists made again may have moved the games the focus was on: it finds them where they went,
+    /// and keeps its place where its game left. Run after each message, so that the focus is right
+    /// before the next view and the next press; not while a game's page shows, which draws no
+    /// list: the games last seen are found once it closes, a favorite taken out and put back on
+    /// the page included.
+    pub(crate) fn refocus_couch(&mut self) {
+        if self.selected.is_some() {
+            return;
+        }
+        match self.couch.as_ref().map(|c| c.tab) {
+            Some(Tab::Home) => self.refocus_home(),
+            Some(Tab::Library) => self.refocus_library(),
+            _ => {}
+        }
+    }
+
+    /// Home's part of `refocus_couch`. Each row's focus goes with its game; the row with the focus
+    /// goes with its game too when it is gone (its last favorite taken out), else keeps its place.
+    fn refocus_home(&mut self) {
+        let rows = self.home_rows();
+        let library = &self.library;
+        let Some(couch) = &mut self.couch else {
+            return;
+        };
+        let at = |row: &HomeRow, col: usize| game_at(library, row, col);
+        let place = |row: &HomeRow, id: &str| row.games.iter().position(|&i| library[i].id == id);
+        let unchanged = couch.home_games.len() == rows.len()
+            && rows
+                .iter()
+                .zip(&couch.home_games)
+                .enumerate()
+                .all(|(r, (row, seen))| {
+                    let col = couch.home_cols.get(r).copied().unwrap_or(0);
+                    row.title == seen.0 && at(row, col) == seen.1
+                });
+        if unchanged {
+            return;
+        }
+        let seen = std::mem::take(&mut couch.home_games);
+        if couch.home_chosen
+            && let Some((title, id)) = seen.get(couch.home_row).cloned()
+        {
+            let mut cols: Vec<usize> = rows
+                .iter()
+                .map(|row| match seen.iter().position(|(t, _)| *t == row.title) {
+                    Some(k) => place(row, &seen[k].1)
+                        .unwrap_or_else(|| couch.home_cols.get(k).copied().unwrap_or(0)),
+                    None => 0,
+                })
+                .collect();
+            couch.home_row = match rows.iter().position(|row| row.title == title) {
+                Some(r) => r,
+                None => match rows.iter().position(|row| place(row, &id).is_some()) {
+                    Some(r) => {
+                        cols[r] = place(&rows[r], &id).unwrap_or(0);
+                        r
+                    }
+                    None => couch.home_row.min(rows.len().saturating_sub(1)),
+                },
+            };
+            couch.home_cols = cols;
+        }
+        if couch.home_cols.len() < rows.len() {
+            couch.home_cols.resize(rows.len(), 0);
+        }
+        couch.home_games = rows
+            .iter()
+            .zip(&couch.home_cols)
+            .map(|(row, &col)| (row.title, at(row, col).to_owned()))
+            .collect();
+    }
+
+    /// The library's part of `refocus_couch`: once the player moved or used it, the focus goes with
+    /// its game, and keeps its place where its game left the shelf.
+    fn refocus_library(&mut self) {
+        let games = self.couch_games();
+        let (columns, rows) = (self.couch_columns(), self.couch_rows());
+        let library = &self.library;
+        let Some(couch) = &mut self.couch else {
+            return;
+        };
+        let Some(last) = games.len().checked_sub(1) else {
+            return;
+        };
+        let at = |card: usize| &library[games[card.min(last)]].id;
+        if couch.card_chosen
+            && let Some(id) = &couch.card_game
+            && at(couch.card) != id
+            && let Some(k) = games.iter().position(|&i| library[i].id == *id)
+        {
+            couch.card = k;
+            // Its row in view, where a move would have left the rows shown.
+            let row = k / columns;
+            couch.top = couch.top.min(row).max((row + 1).saturating_sub(rows));
+        }
+        if couch.card_game.as_ref() != Some(at(couch.card)) {
+            couch.card_game = Some(at(couch.card).clone());
+        }
     }
 
     /// The buttons of a game's page: its main action, favorite, achievements.
@@ -1152,6 +1281,14 @@ impl App {
 pub(crate) fn home_start(at: usize, across: usize, len: usize) -> usize {
     at.saturating_sub(across.saturating_sub(2))
         .min(len.saturating_sub(across))
+}
+
+/// The id of the game at `col` in `row`, the last one past its end; empty for an empty row.
+fn game_at<'a>(library: &'a [LibraryGame], row: &HomeRow, col: usize) -> &'a str {
+    let last = row.games.len().saturating_sub(1);
+    row.games
+        .get(col.min(last))
+        .map_or("", |&i| library[i].id.as_str())
 }
 
 fn fullscreen(on: bool) -> Task<Message> {

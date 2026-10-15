@@ -614,9 +614,16 @@ are drawn in place of the desktop's while `App::couch` holds its state.
   (`pad::set_away`, after each message): they would wake the launcher for nothing.
   The keyboard (`pad::key`) moves the focus too and types into the search.
 - Its lists are kept like the library's (`library::Lists`): its library by shelf and search, the
-  home rows (`App::home_rows`); a move changes no list (`Message::keeps_lists`). Only the covers in
-  view are built: a row of Home from the cover with the focus, and in Library the rows from
-  `Couch::top`, moved so the focus stays in view.
+  home rows (`App::home_rows`); a move changes no list (`Message::keeps_lists`). The focus is kept
+  by place and by game (`Couch::home_games`, `Couch::card_game`; a move forgets the games, read
+  again from the places): after each message, and before Home's key art is asked for, lists made
+  again find the games it was on where they went (`App::refocus_couch`); not while a game's page
+  shows, which draws no list, but once it closes. A game gone leaves the focus at its place; a row
+  of Home gone sends the focus with its game to another row. Until the player moves or uses the
+  focus (on Home, or on a shelf of Library), it stays on the first cover, whatever fills the rows
+  or the shelf. Only the
+  covers in view are built: a row of Home from the cover with the focus, and in Library the rows
+  from `Couch::top`, moved so the focus stays in view.
 - Its keyboard, achievements, menu and questions are layers over the page. The hints, which name
   the buttons to press in them, are a layer of their own above those (under the notification
   cards only), so the backdrop of the menu and the questions does not dim them; the page keeps

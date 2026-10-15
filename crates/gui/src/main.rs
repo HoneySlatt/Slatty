@@ -792,6 +792,8 @@ impl App {
         }
         let shown = self.location();
         let task = self.handle(message);
+        // Lists made again may have moved the games the couch mode's focus was on.
+        self.refocus_couch();
         // Whatever ended (a game, an install, an update) may let a waiting update start.
         let task = Task::batch([task, self.next_update()]);
         // The gamepad's reader sends nothing while the player is elsewhere.
@@ -1058,7 +1060,9 @@ impl App {
                 self.selected = None;
                 self.panel = None;
                 self.edit = None;
-                // Back on the couch mode's Home, whose copy is narrower than a page's.
+                // Back on the couch mode's Home, whose copy is narrower than a page's, its focus
+                // found again on its game first.
+                self.refocus_couch();
                 return self.scale_art();
             }
             Message::OpenPanel(panel) => return self.open_panel(panel),
@@ -1154,6 +1158,8 @@ impl App {
             // A move may show other covers, which a large screen draws enlarged.
             Message::Couch(msg) => {
                 let task = self.update_couch(msg);
+                // The covers in view are those around the focus once found again.
+                self.refocus_couch();
                 return Task::batch([task, self.scale_couch_covers()]);
             }
             Message::Maintenance(msg) => return self.update_maintenance(msg),
