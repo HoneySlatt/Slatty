@@ -134,18 +134,22 @@ fn prefix_of(dirs: &Dirs, game_id: &str) -> PathBuf {
 }
 
 /// Runs a Windows installer for a game to add, in a prefix made for it, and waits for it to end:
-/// the game's id, whose prefix now holds what it installed (its `drive_c`). The game is added
-/// once its program is picked there (`NewGame::installed_by`), or the prefix thrown away
-/// (`discard_installer`). The installer's folder is the one it can write in when isolated.
+/// the game's id, and the game's folder. That folder, named after `title` in `into` and made
+/// empty, is drive D: in the prefix, where the installer is to be told to install; the game is
+/// its folder, writable when isolated, and the installer's own folder is only read. The game is
+/// added once its program is picked (`NewGame::installed_by`), or the prefix thrown away
+/// (`discard_installer`).
+#[allow(clippy::too_many_arguments)]
 pub async fn run_installer(
     db: &Db,
     dirs: &Dirs,
     supervisor: &Path,
     installer: &Path,
+    into: &Path,
+    title: &str,
     proton: Option<PathBuf>,
     isolated: bool,
-) -> Result<String> {
-    use crate::session::SessionHandle;
+) -> Result<(String, PathBuf)> {
     let installer = real(installer)?;
     match platform_of(&installer) {
         Ok(Platform::Windows) => {}
@@ -163,16 +167,65 @@ pub async fn run_installer(
         .parent()
         .ok_or_else(|| Error::Refused(format!("{} has no folder", installer.display())))?
         .to_path_buf();
+    // Shared read-only with an isolated installer: not a folder holding the home folder either.
     check_folder(db, dirs, &folder, None)?;
+    crate::paths::ensure_dir(into)?;
+    let target = named_folder(&real(into)?, title)?;
+    let made = match std::fs::symlink_metadata(&target) {
+        Ok(m) if m.is_dir() && std::fs::read_dir(&target).is_ok_and(|mut d| d.next().is_none()) => {
+            false
+        }
+        Ok(_) => {
+            return Err(Error::Refused(format!(
+                "{} exists already and is not empty",
+                target.display()
+            )));
+        }
+        Err(_) => {
+            std::fs::create_dir(&target)
+                .map_err(|e| Error::io(format!("make {}", target.display()), e))?;
+            true
+        }
+    };
+    let ran = install_with(
+        db, dirs, supervisor, &installer, &folder, &target, proton, isolated,
+    )
+    .await;
+    // Only an empty folder goes: what the installer put there is the user's.
+    if ran.is_err() && made {
+        let _ = std::fs::remove_dir(&target);
+    }
+    ran.map(|id| (id, target))
+}
+
+/// `run_installer`, its game's folder `target` ready.
+#[allow(clippy::too_many_arguments)]
+async fn install_with(
+    db: &Db,
+    dirs: &Dirs,
+    supervisor: &Path,
+    installer: &Path,
+    folder: &Path,
+    target: &Path,
+    proton: Option<PathBuf>,
+    isolated: bool,
+) -> Result<String> {
+    use crate::session::SessionHandle;
+    check_folder(db, dirs, target, None)?;
     let game_id = next_id(db, dirs)?;
-    // What says this prefix holds a game waiting to be added, which alone may be thrown away.
-    crate::fsutil::write_atomic(&installer_file(dirs, &game_id), b"")?;
+    // What says this prefix holds a game waiting to be added, which alone may be thrown away; with
+    // the game's folder, which goes too when the installer put nothing in it.
+    crate::fsutil::write_atomic(
+        &installer_file(dirs, &game_id),
+        target.as_os_str().as_encoded_bytes(),
+    )?;
     let install = Install {
-        runner: runner_for(db, dirs, &game_id, Platform::Windows, proton)?,
+        runner: runner_for(db, dirs, &game_id, Platform::Windows, proton)
+            .inspect_err(|_| drop(std::fs::remove_file(installer_file(dirs, &game_id))))?,
         game_id,
         title: String::new(),
         platform: Platform::Windows,
-        path: folder.clone(),
+        path: target.to_path_buf(),
         client_id: None,
         umu_id: None,
         isolated,
@@ -208,10 +261,14 @@ pub async fn run_installer(
             )));
         }
     }
-    let spec = crate::runner::windows_command(
+    if let Some(prefix) = install.runner.prefix() {
+        map_drive(prefix, target).inspect_err(|_| discard())?;
+    }
+    let spec = crate::runner::windows_command_reading(
         dirs,
         &install,
         vec![installer.display().to_string()],
+        target.to_path_buf(),
         folder,
     )
     .inspect_err(|_| discard())?;
@@ -222,6 +279,42 @@ pub async fn run_installer(
         .wait()
         .await?;
     Ok(install.game_id)
+}
+
+/// Makes `folder` drive D: in the Wine prefix `prefix`, for an installer to be told to install
+/// there. A D: Wine left there is replaced; a `dosdevices` that is no folder of its own is not
+/// written through.
+pub fn map_drive(prefix: &Path, folder: &Path) -> Result<()> {
+    let devices = prefix.join("dosdevices");
+    match std::fs::symlink_metadata(&devices) {
+        Ok(m) if m.is_dir() => {}
+        Ok(_) => {
+            return Err(Error::Refused(format!(
+                "{} is not a folder of the prefix",
+                devices.display()
+            )));
+        }
+        Err(_) => crate::paths::ensure_dir(&devices)?,
+    }
+    let drive = devices.join("d:");
+    if std::fs::symlink_metadata(&drive).is_ok() {
+        std::fs::remove_file(&drive)
+            .map_err(|e| Error::io(format!("delete {}", drive.display()), e))?;
+    }
+    std::os::unix::fs::symlink(folder, &drive)
+        .map_err(|e| Error::io(format!("link {}", drive.display()), e))
+}
+
+/// The folder a game added by hand is installed or unpacked into: named after its title, in
+/// `into`.
+fn named_folder(into: &Path, title: &str) -> Result<PathBuf> {
+    // An isolated launch refuses a folder with `:` in its path (`runner::path_list`).
+    let name = title.trim().replace(['/', '\\', '\0', ':'], " ");
+    let name = name.trim();
+    if name.is_empty() || name == "." || name == ".." {
+        return Err(Error::Refused("the game needs a title".into()));
+    }
+    Ok(into.join(name))
 }
 
 /// Throws away what an installer was run for, when the game is not added after all: its prefix,
@@ -244,6 +337,13 @@ pub fn discard_installer(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
         crate::maintenance::back_up_prefix(dirs, game_id, &prefix)?;
         std::fs::remove_dir_all(&prefix)
             .map_err(|e| Error::io(format!("delete {}", prefix.display()), e))?;
+    }
+    // The game's folder goes when the installer put nothing in it; what it did put is the user's.
+    if let Ok(target) = std::fs::read(installer_file(dirs, game_id))
+        && !target.is_empty()
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let _ = std::fs::remove_dir(std::ffi::OsStr::from_bytes(&target));
     }
     let _ = std::fs::remove_file(installer_file(dirs, game_id));
     crate::logs::remove_game(dirs, game_id)
@@ -340,13 +440,8 @@ pub async fn unpack(
 ) -> Result<(String, PathBuf)> {
     let archive = real(archive)?;
     let into = real(into)?;
-    // An isolated launch refuses a folder with `:` in its path (`runner::path_list`).
-    let name = title.trim().replace(['/', '\\', '\0', ':'], " ");
-    let name = name.trim();
-    if name.is_empty() || name == "." || name == ".." {
-        return Err(Error::Refused("the game needs a title".into()));
-    }
-    let target = into.join(name);
+    let target = named_folder(&into, title)?;
+    let name = target.file_name().unwrap_or_default().to_string_lossy();
     if std::fs::symlink_metadata(&target).is_ok() {
         return Err(Error::Refused(format!(
             "{} exists already",
@@ -1757,11 +1852,97 @@ mod tests {
         std::fs::write(&archive, b"7z\xbc\xaf\x27\x1c[FAKE]").unwrap();
         assert!(!is_archive(&archive));
         let supervisor = f.root.join("[FAKE] supervisor");
-        let refused = run_installer(&f.db, &f.dirs, &supervisor, &archive, None, false)
-            .await
-            .unwrap_err()
-            .to_string();
+        let into = f.root.join("games");
+        let refused = run_installer(
+            &f.db,
+            &f.dirs,
+            &supervisor,
+            &archive,
+            &into,
+            "[FAKE] Game",
+            None,
+            false,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
         assert!(refused.contains(".tar.gz"), "{refused}");
+    }
+
+    /// A Windows installer installs into a folder of its own named after the game's title: one
+    /// already holding files is refused before anything is made, it being someone else's.
+    #[tokio::test]
+    async fn a_windows_installer_refuses_a_folder_already_holding_files() {
+        let f = fake("installer-full-folder");
+        let installer = f.root.join("setup/[FAKE] setup.exe");
+        std::fs::create_dir_all(installer.parent().unwrap()).unwrap();
+        std::fs::write(&installer, b"MZ\x90\0").unwrap();
+        let into = f.root.join("games");
+        let target = into.join("[FAKE] Quest");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("[FAKE] mine.txt"), b"[FAKE]").unwrap();
+        let refused = run_installer(
+            &f.db,
+            &f.dirs,
+            &f.root.join("[FAKE] supervisor"),
+            &installer,
+            &into,
+            " [FAKE] Quest ",
+            Some(f.proton.clone()),
+            false,
+        )
+        .await;
+        assert!(
+            matches!(&refused, Err(Error::Refused(m)) if m.contains("not empty")),
+            "{refused:?}"
+        );
+        assert!(target.join("[FAKE] mine.txt").is_file(), "left as it is");
+        assert!(!installer_file(&f.dirs, "local-1").exists());
+        assert!(!prefix_of(&f.dirs, "local-1").exists());
+    }
+
+    /// A game an installer ran for, thrown away, takes its folder along only when the installer
+    /// put nothing in it: what it did put there stays.
+    #[test]
+    fn a_discarded_installers_folder_goes_only_when_empty() {
+        let f = fake("installer-folder-discard");
+        for (id, full) in [("local-1", false), ("local-2", true)] {
+            let target = f.root.join(format!("games/[FAKE] {id}"));
+            std::fs::create_dir_all(&target).unwrap();
+            if full {
+                std::fs::write(target.join("game.exe"), b"MZ").unwrap();
+            }
+            let mark = installer_file(&f.dirs, id);
+            crate::fsutil::write_atomic(&mark, target.as_os_str().as_encoded_bytes()).unwrap();
+            std::fs::create_dir_all(prefix_of(&f.dirs, id).join("drive_c")).unwrap();
+            discard_installer(&f.db, &f.dirs, id).unwrap();
+            assert_eq!(target.exists(), full, "{id}");
+            assert!(!prefix_of(&f.dirs, id).exists());
+        }
+    }
+
+    /// The game's folder is drive D: in its prefix, where the installer is told to install; a D:
+    /// Wine left there goes, the other drives stay.
+    #[test]
+    fn the_game_folder_is_drive_d_in_its_prefix() {
+        let f = fake("drive-d");
+        let prefix = f.root.join("prefix");
+        let devices = prefix.join("dosdevices");
+        std::fs::create_dir_all(&devices).unwrap();
+        std::os::unix::fs::symlink("../drive_c", devices.join("c:")).unwrap();
+        std::os::unix::fs::symlink("/[FAKE] cdrom", devices.join("d:")).unwrap();
+        map_drive(&prefix, &f.game).unwrap();
+        assert_eq!(std::fs::read_link(devices.join("d:")).unwrap(), f.game);
+        assert_eq!(
+            std::fs::read_link(devices.join("c:")).unwrap(),
+            Path::new("../drive_c")
+        );
+        // A prefix whose `dosdevices` is no folder of its own is not written through.
+        let odd = f.root.join("odd-prefix");
+        std::fs::create_dir_all(&odd).unwrap();
+        std::os::unix::fs::symlink(&f.game, odd.join("dosdevices")).unwrap();
+        assert!(map_drive(&odd, &f.game).is_err());
+        assert!(!f.game.join("d:").exists());
     }
 
     /// A Windows installer refused before it starts (here, isolated through a Proton build umu
@@ -1777,11 +1958,14 @@ mod tests {
         std::fs::create_dir_all(installer.parent().unwrap()).unwrap();
         std::fs::write(&installer, b"MZ\x90\0").unwrap();
         let supervisor = f.root.join("[FAKE] supervisor");
+        let into = f.root.join("games");
         let refused = run_installer(
             &f.db,
             &f.dirs,
             &supervisor,
             &installer,
+            &into,
+            "[FAKE] Quest",
             Some(f.proton.clone()),
             true,
         )
@@ -1792,6 +1976,10 @@ mod tests {
         );
         assert!(!installer_file(&f.dirs, "local-1").exists());
         assert!(!prefix_of(&f.dirs, "local-1").exists());
+        assert!(
+            !into.join("[FAKE] Quest").exists(),
+            "its folder, made empty"
+        );
     }
 
     /// Only a folder an earlier attempt left is said to be one to remove: a name the disk refuses

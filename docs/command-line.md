@@ -156,7 +156,7 @@ Manual changes show on your public GOG profile. See [Achievements](user-guide.md
 | `--working-dir <folder>` | Where the program starts. Default: its own folder |
 | `--proton <folder>` | The Proton build a Windows program runs with. Default: the default one |
 | `--isolated` / `--not-isolated` | Whether it runs isolated from your files. Default: as a game installed now |
-| `slatty add --installer <setup.exe>` | Runs a Windows installer in a prefix made for the game (finish it in its window), then says how to add what it installed |
+| `slatty add --installer <setup.exe> --title <title> [--into <folder>]` | Runs a Windows installer in a prefix made for the game (finish it in its window), where a folder named after the title in `--into` (default: the default installation path) is drive D:, to install the game on; then says how to add what it installed |
 | `slatty add --installer <file> --title <title> [--into <folder>]` | Unpacks a Linux installer (MojoSetup `.sh`) or an archive (`.zip`, `.tar.gz`, `.tar.xz`) without running it, into a folder named after the title in `--into` (default: the default installation path) |
 | `slatty add <program> --title <title> --installed-by <id>` | Adds the program an installer put in place, under the id the installer was given. `slatty remove <id>` throws that install away instead |
 | `slatty remove <id>` | Takes the game out of the library. Its files stay, except those SlattyLauncher unpacked |

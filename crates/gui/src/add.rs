@@ -25,8 +25,8 @@ pub struct AddDraft {
     pub busy: bool,
     /// Why the game was not added.
     pub error: Option<String>,
-    /// Whether the game is installed first, from which installer or archive, and where a Linux
-    /// one is unpacked.
+    /// Whether the game is installed first, from which installer or archive, and where: in a
+    /// folder named after its title in `into`.
     pub with_installer: bool,
     pub installer: String,
     pub into: String,
@@ -71,7 +71,7 @@ pub enum AddMsg {
     PickInstaller,
     PickedInstaller(Option<PathBuf>),
     RunInstaller,
-    /// Where a Linux installer or archive is unpacked.
+    /// Where the game is installed or unpacked, in a folder named after its title.
     Into(String),
     PickInto,
     PickedInto(Option<PathBuf>),
@@ -147,7 +147,7 @@ impl App {
                 return Task::perform(
                     async {
                         rfd::AsyncFileDialog::new()
-                            .set_title("Choose where to unpack the game")
+                            .set_title("Choose where to install the game")
                             .pick_folder()
                             .await
                             .map(|f| f.path().to_path_buf())
@@ -172,9 +172,9 @@ impl App {
                             tokio::task::spawn_blocking(move || added::is_archive(&installer2))
                                 .await
                                 .map_err(err)?;
+                        std::fs::create_dir_all(&into)
+                            .map_err(|e| format!("{}: {e}", into.display()))?;
                         if archive {
-                            std::fs::create_dir_all(&into)
-                                .map_err(|e| format!("{}: {e}", into.display()))?;
                             return added::unpack(
                                 &core.db,
                                 &core.dirs,
@@ -187,18 +187,27 @@ impl App {
                             .await
                             .map_err(err);
                         }
-                        let id = added::run_installer(
+                        let (id, folder) = added::run_installer(
                             &core.db,
                             &core.dirs,
                             &slatty_core::session::supervisor_exe(),
                             &installer,
+                            &into,
+                            &title,
                             proton,
                             isolated,
                         )
                         .await
                         .map_err(err)?;
-                        let drive = core.dirs.data.join("prefixes").join(&id).join("drive_c");
-                        Ok((id, drive))
+                        // Installed elsewhere than on D: (its C: drive), the program is looked
+                        // for there.
+                        let empty =
+                            std::fs::read_dir(&folder).is_ok_and(|mut d| d.next().is_none());
+                        if empty {
+                            let drive = core.dirs.data.join("prefixes").join(&id).join("drive_c");
+                            return Ok((id, drive));
+                        }
+                        Ok((id, folder))
                     },
                     |r| Message::Add(AddMsg::InstallerEnded(r)),
                 );

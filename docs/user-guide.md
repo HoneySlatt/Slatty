@@ -550,12 +550,19 @@ Games bought elsewhere, or made by you, join the library by the program that sta
 A game that comes as an installer or an archive is installed first, with **Install it first, from
 an installer or archive**:
 
-- a **Windows installer** runs in a Wine prefix made for the game (finish it in its own window),
-  then you pick the program it installed;
+- a **Windows installer** runs in a Wine prefix made for the game (finish it in its own window).
+  A folder named after the title, in **Install into**, is drive **D:** there: choose D:\ as the
+  installation folder in the installer, then pick the program it installed. Isolated, the
+  installer reads its own folder and writes only in that one. Installed elsewhere (its C: drive),
+  the program is looked for in the prefix; thrown away, the folder goes only if nothing was put in
+  it;
 - a **Linux installer** (MojoSetup `.sh`, the format of GOG's offline installers) or an
   **archive** (`.zip`, `.tar.gz`, `.tar.xz`) is unpacked, never run, into a folder named after the
-  title in the default installation path. Paths that would leave that folder, and links leading out
-  of it, are left out.
+  title in **Install into**. Paths that would leave that folder, and links leading out of it, are
+  left out.
+
+**Install into** is the default installation path (Settings → Installs) until changed; a folder of
+that name already holding files is refused.
 
 Once added, the game gets an id `local-<number>` and is played like any other, isolated or not. Its
 page shows an **Added by hand** card. It has no cloud saves and no achievements, its play time stays

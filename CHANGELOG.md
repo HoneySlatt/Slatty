@@ -79,8 +79,9 @@ The first public version.
   shows once, its play times added up or one store's preferred. Images the client has not saved
   come from Steam's image servers, and what it has not described from Steam's Web API with your own
   key, each once turned on.
-- Games from no store, added by the program that starts them, by a Windows installer, or by a Linux
-  installer or archive unpacked without running it: a Windows program through Proton in a prefix of
+- Games from no store, added by the program that starts them, by a Windows installer (installing on
+  a drive D: that is the folder chosen), or by a Linux installer or archive unpacked without running
+  it, each into a folder of its own: a Windows program through Proton in a prefix of
   its own, a Linux program, script or AppImage natively, isolated like the others. Removing one
   never deletes its files, but for those SlattyLauncher unpacked, and GOG is never told of it.
 - GOG games installed by another tool, imported from their folder or from Heroic.

@@ -561,8 +561,11 @@ have GOG's setup, updates and checks run.
   folder or the whole disk, a folder of programs, another game's folder, one inside or holding it,
   one holding the default installation path (paths compared as resolved on disk).
 - `run_installer` runs a Windows installer under the session supervisor in a prefix made for the
-  game; `NewGame::installed_by` then adds the program it installed with that id and prefix, or
-  `discard_installer` throws it away, saves backed up.
+  game, where the game's folder (named after its title, made empty) is drive D: (`map_drive`, a
+  `dosdevices/d:` link); isolated, that folder is the one shared writable and the installer's own
+  is added read-only (`runner::windows_command_reading`). `NewGame::installed_by` then adds the
+  program it installed with that id and prefix, or `discard_installer` throws it away, saves
+  backed up, the game's folder removed only if empty.
 - `unpack` unpacks a Linux installer or archive without running it (a MojoSetup installer's
   `data/noarch` through `installer::linux`, a zip whole, a tarball through `protons::unpack_tar`)
   and lists the files with their size and modification time; `remove` deletes those alone, and

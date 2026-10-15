@@ -143,7 +143,8 @@ unshare -rn sh -c 'ip link set lo up && cargo test -p slatty-cli --test comet --
 # Isolation: a marker in the home folder stays hidden from a Linux script in umu's runtime and from
 # Wine's z: drive under Proton, and shows when the same launch is not isolated; the game can
 # neither change umu's runtime, the Proton build or the runtime tool, nor reach the user's other
-# processes. A failing check writes a probe into the tools: give it copies (cp -a --reflink=auto)
+# processes; an installer run for a game added by hand reads its own folder, installs on drive D:
+# (the game's folder) and cannot write beside itself. A failing check writes a probe into the tools: give it copies (cp -a --reflink=auto)
 # of ~/.local/share/umu, as <data>/umu, and of a Proton build. Offline: each launch is given a
 # closed proxy
 TMPDIR=$HOME/.cache XDG_DATA_HOME=<data> SLATTY_TEST_PROTON=<copy of a Proton folder> \

@@ -84,12 +84,16 @@ impl App {
                     .align_y(Alignment::Center),
                 )
                 .push(note(match (d.busy, d.windows()) {
-                    (true, true) => "Installing: finish the installer in its own window.",
+                    (true, true) => {
+                        "Installing: finish the installer in its own window, and install the game \
+                         on drive D:, its folder."
+                    }
                     (true, false) => "Unpacking…",
                     (false, true) => {
-                        "A Windows installer installs the game into a Wine prefix made for it; \
-                         its program is chosen there once it ends. Its folder is the one it can \
-                         write in when isolated."
+                        "A Windows installer runs in a Wine prefix made for the game, where a \
+                         folder named after the title is drive D:: install the game there. Its \
+                         program is chosen once it ends. Isolated, the installer can write in \
+                         that folder alone."
                     }
                     (false, false) => {
                         "A Linux installer (MojoSetup .sh) or archive (.zip, .tar.gz, .tar.xz) is \
@@ -98,9 +102,9 @@ impl App {
                     }
                 }))
                 .push(label("Title"))
-                .push(field("Game", &d.title, AddMsg::Title));
-            if !d.windows() {
-                fields = fields.push(label("Unpack into")).push(
+                .push(field("Game", &d.title, AddMsg::Title))
+                .push(label("Install into"))
+                .push(
                     row![
                         field("/games", &d.into, AddMsg::Into).width(Length::Fill),
                         browse(AddMsg::PickInto),
@@ -108,7 +112,6 @@ impl App {
                     .spacing(10)
                     .align_y(Alignment::Center),
                 );
-            }
         } else {
             if d.installed_by.is_some() {
                 fields = fields.push(note(

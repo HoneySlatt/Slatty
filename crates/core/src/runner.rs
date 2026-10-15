@@ -263,6 +263,34 @@ pub fn windows_command(
     windows_spec(dirs, install, args, cwd, false)
 }
 
+/// `windows_command` for a program outside the game's folder, its own folder `read` shared
+/// read-only with an isolated game: an installer, which installs into the game's folder.
+pub fn windows_command_reading(
+    dirs: &Dirs,
+    install: &Install,
+    args: Vec<String>,
+    cwd: PathBuf,
+    read: &Path,
+) -> Result<LaunchSpec> {
+    let mut spec = windows_command(dirs, install, args, cwd)?;
+    if install.isolated {
+        share_read_only(&mut spec.env, read)?;
+    }
+    Ok(spec)
+}
+
+/// Adds `folder` to what the container of an isolated launch reads, never writes.
+fn share_read_only(env: &mut [(String, String)], folder: &Path) -> Result<()> {
+    let folder = path_list(&[folder.to_path_buf()])?;
+    let (_, read) = env
+        .iter_mut()
+        .find(|(k, _)| k == "PRESSURE_VESSEL_FILESYSTEMS_RO")
+        .ok_or_else(|| Error::Refused("the launch is not isolated".into()))?;
+    read.push(':');
+    read.push_str(&folder);
+    Ok(())
+}
+
 /// Proton's fixes for the game apply to the game only: some add arguments to whatever runs with
 /// its id (DOOM's `+r_renderAPI 1`), which other programs refuse.
 fn windows_spec(
@@ -1422,6 +1450,38 @@ mod tests {
         assert!(locks[0].is_file());
         assert!(!root.join("outside/x").exists() && !root.join("outside/y").exists());
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// An installer run for an isolated game reads its own folder and writes the game's: its
+    /// folder joins those the container reads, never those it writes; a path the container cannot
+    /// be told is refused.
+    #[test]
+    fn an_installers_folder_is_shared_read_only() {
+        let mut env = vec![
+            (
+                "PRESSURE_VESSEL_FILESYSTEMS_RW".into(),
+                "/games/game".into(),
+            ),
+            (
+                "PRESSURE_VESSEL_FILESYSTEMS_RO".into(),
+                "/umu:/redist".into(),
+            ),
+        ];
+        share_read_only(&mut env, Path::new("/downloads/setup")).unwrap();
+        assert_eq!(
+            value(&env, "PRESSURE_VESSEL_FILESYSTEMS_RO"),
+            Some("/umu:/redist:/downloads/setup")
+        );
+        assert_eq!(
+            value(&env, "PRESSURE_VESSEL_FILESYSTEMS_RW"),
+            Some("/games/game")
+        );
+        assert!(share_read_only(&mut env, Path::new("/odd:setup")).is_err());
+        let mut none: Vec<(String, String)> = Vec::new();
+        assert!(
+            share_read_only(&mut none, Path::new("/setup")).is_err(),
+            "not isolated"
+        );
     }
 
     /// pressure-vessel looks at `$HOME/.steam`, here the game's own home, which the game writes,

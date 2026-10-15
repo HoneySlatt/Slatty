@@ -384,21 +384,26 @@ fn the_game_added_goes_back_to_where_the_library_was() {
 fn a_windows_installer_runs_before_the_program_is_picked() {
     use crate::add::AddMsg;
     let mut app = library_app();
+    // Into the default installation path until told, as a Linux one is unpacked.
+    app.library_root = "/games".into();
     let _ = app.update(Message::Add(AddMsg::Open));
     let _ = app.update(Message::Add(AddMsg::WithInstaller(true)));
     let _ = app.update(Message::Add(AddMsg::PickedInstaller(Some(
         "/downloads/[FAKE] setup_quest.exe".into(),
     ))));
-    assert_eq!(app.add_game.as_ref().unwrap().title, "[FAKE] setup_quest");
+    let d = app.add_game.as_ref().unwrap();
+    assert_eq!(
+        (d.into.as_str(), d.title.as_str()),
+        ("/games", "[FAKE] setup_quest")
+    );
     {
         let mut ui = render(&app);
         assert!(ui.find("Run installer").is_ok());
         assert!(ui.find("Program").is_err(), "picked once installed");
-        assert!(ui.find("Unpack into").is_err(), "a Windows one runs");
+        assert!(ui.find("Install into").is_ok(), "a Windows one too");
         snapshot(&mut ui, "add-game-installer");
     }
-    // A Linux one is unpacked, into the default installation path until told.
-    app.library_root = "/games".into();
+    // A Linux one is unpacked there.
     let _ = app.update(Message::Add(AddMsg::Open));
     let _ = app.update(Message::Add(AddMsg::WithInstaller(true)));
     let _ = app.update(Message::Add(AddMsg::PickedInstaller(Some(
@@ -411,7 +416,7 @@ fn a_windows_installer_runs_before_the_program_is_picked() {
     );
     {
         let mut ui = render(&app);
-        assert!(ui.find("Unpack into").is_ok() && ui.find("Unpack").is_ok());
+        assert!(ui.find("Install into").is_ok() && ui.find("Unpack").is_ok());
         snapshot(&mut ui, "add-game-archive");
     }
     let _ = app.update(Message::Add(AddMsg::PickedInstaller(Some(

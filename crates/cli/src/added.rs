@@ -14,12 +14,14 @@ pub struct AddArgs {
     /// The title shown in the library
     #[arg(long, required_unless_present = "installer")]
     title: Option<String>,
-    /// Install the game first: a Windows installer runs in a Wine prefix made for it; a Linux
-    /// installer (MojoSetup .sh) or archive (.zip, .tar.gz, .tar.xz) is unpacked, never run, into
-    /// a folder named after --title in --into. Its program is then added with `--installed-by`
+    /// Install the game first, into a folder named after --title in --into: a Windows installer
+    /// runs in a Wine prefix made for it, where that folder is drive D:; a Linux installer
+    /// (MojoSetup .sh) or archive (.zip, .tar.gz, .tar.xz) is unpacked there, never run. Its
+    /// program is then added with `--installed-by`
     #[arg(long, conflicts_with_all = ["program", "installed_by"])]
     installer: Option<PathBuf>,
-    /// Where a Linux installer or archive is unpacked [default: the default installation path]
+    /// Where the game is installed or unpacked, in a folder named after its title [default: the
+    /// default installation path]
     #[arg(long, requires = "installer")]
     into: Option<PathBuf>,
     /// The game an installer was run for (`local-<number>`), whose prefix holds the program
@@ -49,7 +51,7 @@ pub struct AddArgs {
 
 pub async fn add(ctx: &Ctx, args: AddArgs) -> Result<()> {
     let isolated = (args.isolated || args.not_isolated).then_some(args.isolated);
-    if let Some(installer) = args.installer.as_ref().filter(|i| added::is_archive(i)) {
+    if let Some(installer) = &args.installer {
         let Some(title) = args.title else {
             anyhow::bail!("give the game a --title: its folder is named after it");
         };
@@ -58,6 +60,34 @@ pub async fn add(ctx: &Ctx, args: AddArgs) -> Result<()> {
             None => slatty_core::settings::library_root(&ctx.db)?,
         };
         std::fs::create_dir_all(&into)?;
+        if !added::is_archive(installer) {
+            let isolated = match isolated {
+                Some(isolated) => isolated,
+                None => slatty_core::settings::isolate_new_games(&ctx.db)?,
+            };
+            println!(
+                "Running the installer; finish it in its own window, installing the game on \
+                 drive D:."
+            );
+            let (id, folder) = added::run_installer(
+                &ctx.db,
+                &ctx.dirs,
+                &slatty_core::session::supervisor_exe(),
+                installer,
+                &into,
+                &title,
+                args.proton,
+                isolated,
+            )
+            .await?;
+            println!(
+                "The installer ended. Add the game it installed in {} with:\n  slatty add '{}/<program>.exe' --title {} --installed-by {id}\nor throw it away with `slatty remove {id}`.",
+                shown(folder.display()),
+                shown(folder.display()),
+                shown(&title)
+            );
+            return Ok(());
+        }
         let (id, folder) = added::unpack(
             &ctx.db,
             &ctx.dirs,
@@ -73,28 +103,6 @@ pub async fn add(ctx: &Ctx, args: AddArgs) -> Result<()> {
             shown(folder.display()),
             shown(folder.display()),
             shown(&title)
-        );
-        return Ok(());
-    }
-    if let Some(installer) = args.installer {
-        let isolated = match isolated {
-            Some(isolated) => isolated,
-            None => slatty_core::settings::isolate_new_games(&ctx.db)?,
-        };
-        println!("Running the installer; finish it in its own window.");
-        let id = added::run_installer(
-            &ctx.db,
-            &ctx.dirs,
-            &slatty_core::session::supervisor_exe(),
-            &installer,
-            args.proton,
-            isolated,
-        )
-        .await?;
-        let drive = ctx.dirs.data.join("prefixes").join(&id).join("drive_c");
-        println!(
-            "The installer ended. Add the game it installed with:\n  slatty add '{}/<folder>/<game>.exe' --title <title> --installed-by {id}\nor throw it away with `slatty remove {id}`.",
-            shown(drive.display())
         );
         return Ok(());
     }

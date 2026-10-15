@@ -574,3 +574,63 @@ async fn an_isolated_windows_game_sees_nothing_of_the_home_folder_through_z() {
     assert_eq!(result(&root, "result.txt"), "VISIBLE");
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// An installer run for an isolated game added by hand reads its own folder, writes the game's
+/// folder as drive D:, and cannot write beside itself.
+#[tokio::test]
+#[ignore]
+async fn an_isolated_installer_reads_its_folder_and_installs_on_drive_d() {
+    let proton = std::env::var("SLATTY_TEST_PROTON").expect("SLATTY_TEST_PROTON");
+    let (root, dirs) = fixture("installer");
+    let windows = |p: &Path| format!("Z:{}", p.display()).replace('/', "\\");
+    let setup = root.join("setup");
+    std::fs::create_dir_all(&setup).unwrap();
+    std::fs::write(setup.join("data.txt"), b"[FAKE] game data").unwrap();
+    std::fs::write(
+        setup.join("setup.bat"),
+        format!(
+            "@echo off\r\ncopy \"{}\" D:\\installed.txt\r\necho x> \"{}\"\r\n",
+            windows(&setup.join("data.txt")),
+            windows(&setup.join("written.txt"))
+        ),
+    )
+    .unwrap();
+    let mut install = Install {
+        game_id: "local-1".into(),
+        title: "[FAKE] Game".into(),
+        platform: Platform::Windows,
+        path: root.join("game"),
+        client_id: None,
+        runner: Runner::Umu {
+            proton: proton.into(),
+            prefix: root.join("pfx"),
+        },
+        umu_id: None,
+        isolated: true,
+    };
+    let log = root.join("game.log");
+    let init = runner::prefix_init_spec(&dirs, &install).unwrap().unwrap();
+    run(&init, &log).await;
+    slatty_core::added::map_drive(&root.join("pfx"), &root.join("game")).unwrap();
+    let args = vec!["cmd".into(), "/c".into(), windows(&setup.join("setup.bat"))];
+    let installer = |install: &Install, read: bool| match read {
+        true => {
+            runner::windows_command_reading(&dirs, install, args.clone(), root.join("game"), &setup)
+        }
+        false => runner::windows_command(&dirs, install, args.clone(), root.join("game")),
+    };
+    // Without its folder shared, the installer is not even found: the share means something.
+    run(&installer(&install, false).unwrap(), &log).await;
+    assert!(!root.join("game/installed.txt").exists());
+    run(&installer(&install, true).unwrap(), &log).await;
+    assert_eq!(result(&root, "installed.txt"), "[FAKE] game data");
+    assert!(!setup.join("written.txt").exists(), "read-only");
+
+    // Not isolated, it could write beside itself: the check above means something.
+    std::fs::remove_file(root.join("game/installed.txt")).unwrap();
+    install.isolated = false;
+    run(&installer(&install, true).unwrap(), &log).await;
+    assert_eq!(result(&root, "installed.txt"), "[FAKE] game data");
+    assert!(setup.join("written.txt").exists());
+    std::fs::remove_dir_all(root).unwrap();
+}

@@ -159,7 +159,8 @@ show game titles and achievement names on a lock screen.
   game could rewrite what the other starts), nor hold the default installation path. A Linux
   installer or archive is unpacked, never run (a MojoSetup installer's script included), with the
   same path checks as GOG's installers. A Windows installer runs in the game's own prefix, isolated
-  when asked. GOG is never told of these games, nor is umu's database asked about them.
+  when asked: it then writes only in the game's folder (its drive D:) and reads its own folder,
+  which passes the same checks. GOG is never told of these games, nor is umu's database asked about them.
 - **Content.** Galaxy chunks and files are checked against the MD5 sums of GOG's manifests, Linux
   installer entries against their size and CRC-32, files rebuilt from binary patches against GOG's
   sums, Proton archives against the SHA-512 sum published with their release. These catch a
