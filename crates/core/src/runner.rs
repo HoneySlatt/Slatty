@@ -645,7 +645,13 @@ fn check_shared(install: &Install, args: &[String], cwd: &Path) -> Result<()> {
             cwd.display()
         )));
     }
-    if !crate::installer::leads_inside(&install.path, cwd) {
+    // Or in its prefix, shared with it already: a launcher an installer put on C:.
+    let shared = crate::installer::leads_inside(&install.path, cwd)
+        || install
+            .runner
+            .prefix()
+            .is_some_and(|prefix| crate::installer::leads_inside(prefix, cwd));
+    if !shared {
         return Err(Error::Refused(format!(
             "{} leads out of the game folder through a link; the container would share where it \
              leads",
@@ -1449,6 +1455,40 @@ mod tests {
         assert_eq!(locks, [runtime.join("sniper_platform_0.1/files/.ref")]);
         assert!(locks[0].is_file());
         assert!(!root.join("outside/x").exists() && !root.join("outside/y").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// An isolated game starts in its folder or in its prefix (a launcher an installer put on C:),
+    /// both shared with it; never through a link leading elsewhere, as Wine's own `z:` in the
+    /// prefix does.
+    #[test]
+    fn an_isolated_game_starts_in_its_folder_or_its_prefix_only() {
+        let root = std::env::temp_dir().join(format!("slatty-cwd-prefix-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (game, prefix) = (root.join("game"), root.join("prefix"));
+        let launcher = prefix.join("drive_c/Program Files/[FAKE] Launcher");
+        std::fs::create_dir_all(&game).unwrap();
+        std::fs::create_dir_all(&launcher).unwrap();
+        std::fs::create_dir_all(prefix.join("dosdevices")).unwrap();
+        std::os::unix::fs::symlink("/", prefix.join("dosdevices/z:")).unwrap();
+        let install = Install {
+            game_id: "local-1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: game.clone(),
+            client_id: None,
+            runner: Runner::Umu {
+                proton: root.join("proton"),
+                prefix: prefix.clone(),
+            },
+            umu_id: None,
+            isolated: true,
+        };
+        let args = ["C:\\launcher.exe".to_string()];
+        assert!(check_shared(&install, &args, &game).is_ok());
+        assert!(check_shared(&install, &args, &launcher).is_ok());
+        assert!(check_shared(&install, &args, &prefix.join("dosdevices/z:/tmp")).is_err());
+        assert!(check_shared(&install, &args, &root).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 

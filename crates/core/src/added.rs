@@ -29,6 +29,10 @@ pub struct Task {
     pub args: Vec<String>,
     /// Where it starts; the folder itself when empty.
     pub working_dir: PathBuf,
+    /// Whether `program` and `working_dir` are in the game's prefix rather than its folder: a
+    /// launcher an installer put on C:, for the game it installs on D:, the game's folder.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub in_prefix: bool,
     /// The files SlattyLauncher unpacked into the folder, which removing the game deletes while
     /// they are as they were unpacked.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -339,11 +343,8 @@ pub fn discard_installer(db: &Db, dirs: &Dirs, game_id: &str) -> Result<()> {
             .map_err(|e| Error::io(format!("delete {}", prefix.display()), e))?;
     }
     // The game's folder goes when the installer put nothing in it; what it did put is the user's.
-    if let Ok(target) = std::fs::read(installer_file(dirs, game_id))
-        && !target.is_empty()
-    {
-        use std::os::unix::ffi::OsStrExt;
-        let _ = std::fs::remove_dir(std::ffi::OsStr::from_bytes(&target));
+    if let Some(target) = installed_into(dirs, game_id) {
+        let _ = std::fs::remove_dir(target);
     }
     let _ = std::fs::remove_file(installer_file(dirs, game_id));
     crate::logs::remove_game(dirs, game_id)
@@ -359,6 +360,14 @@ fn waiting(db: &Db, dirs: &Dirs, game_id: &str) -> Result<bool> {
 
 fn installer_file(dirs: &Dirs, game_id: &str) -> PathBuf {
     dirs.data.join("added").join(format!("{game_id}.installer"))
+}
+
+/// The folder a Windows installer run for `game_id` installed into (its drive D:), while the game
+/// waits to be added.
+fn installed_into(dirs: &Dirs, game_id: &str) -> Option<PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    let target = std::fs::read(installer_file(dirs, game_id)).ok()?;
+    (!target.is_empty()).then(|| PathBuf::from(std::ffi::OsStr::from_bytes(&target)))
 }
 
 /// A number never given, whose id nothing is left of either (a database made again while the
@@ -653,10 +662,24 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
         }
         None => None,
     };
-    let folder = match (&unpacked, &new.folder) {
-        (Some(unpacked), _) => real(&unpacked.folder)?,
-        (None, Some(folder)) => real(folder)?,
-        (None, None) => program
+    // A program in the prefix a Windows installer ran in (a launcher it put on C:), and the folder
+    // it installed into (drive D:), which then is the game's when it holds anything.
+    let prefix = match &new.installed_by {
+        Some(id) if platform == Platform::Windows => real(&prefix_of(dirs, id))
+            .ok()
+            .filter(|prefix| program.starts_with(prefix)),
+        _ => None,
+    };
+    let installed_into = new
+        .installed_by
+        .as_deref()
+        .and_then(|id| installed_into(dirs, id))
+        .filter(|d| std::fs::read_dir(d).is_ok_and(|mut d| d.next().is_some()));
+    let folder = match (&unpacked, &new.folder, &prefix, installed_into) {
+        (Some(unpacked), ..) => real(&unpacked.folder)?,
+        (None, Some(folder), ..) => real(folder)?,
+        (None, None, Some(_), Some(into)) => real(&into)?,
+        (None, None, ..) => program
             .parent()
             .ok_or_else(|| Error::Refused(format!("{} has no folder", program.display())))?
             .to_path_buf(),
@@ -666,7 +689,12 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
         Some(dir) => real(dir)?,
         None => program.parent().unwrap_or(&folder).to_path_buf(),
     };
-    let inside = |path: &Path| path.strip_prefix(&folder).map(Path::to_path_buf).ok();
+    // The program and where it starts, in the game's folder, or else both in its prefix.
+    let base = match &prefix {
+        Some(prefix) if !program.starts_with(&folder) => prefix,
+        _ => &folder,
+    };
+    let inside = |path: &Path| path.strip_prefix(base).map(Path::to_path_buf).ok();
     let task = Task {
         program: inside(&program).ok_or_else(|| {
             Error::Refused(format!(
@@ -680,9 +708,10 @@ pub fn add(db: &Db, dirs: &Dirs, new: NewGame) -> Result<Install> {
             Error::Refused(format!(
                 "{} is not in the game's folder {}",
                 working_dir.display(),
-                folder.display()
+                base.display()
             ))
         })?,
+        in_prefix: base != &folder,
         unpacked: unpacked.map(|u| u.files).unwrap_or_default(),
     };
     if !working_dir.is_dir() {
@@ -839,16 +868,22 @@ pub fn locate(db: &Db, dirs: &Dirs, game_id: &str, folder: &Path) -> Result<Inst
     let folder = real(folder)?;
     check_folder(db, dirs, &folder, Some(game_id))?;
     let task = load_task(dirs, game_id)?;
-    let program = folder.join(&task.program);
-    if !program.is_file() || !leads_inside(&folder, &program) {
-        return Err(Error::Refused(format!(
-            "{} is not in {}",
-            task.program.display(),
-            folder.display()
-        )));
-    }
-    if install.platform == Platform::Linux {
-        check_executable(&program, &task, install.isolated)?;
+    match install.runner.prefix().filter(|_| task.in_prefix) {
+        // A launcher in the prefix stays there; the folder it installed into is drive D:.
+        Some(prefix) => map_drive(prefix, &folder)?,
+        None => {
+            let program = folder.join(&task.program);
+            if !program.is_file() || !leads_inside(&folder, &program) {
+                return Err(Error::Refused(format!(
+                    "{} is not in {}",
+                    task.program.display(),
+                    folder.display()
+                )));
+            }
+            if install.platform == Platform::Linux {
+                check_executable(&program, &task, install.isolated)?;
+            }
+        }
     }
     install.path = folder;
     install.save(db)?;
@@ -859,7 +894,16 @@ pub fn locate(db: &Db, dirs: &Dirs, game_id: &str, folder: &Path) -> Result<Inst
 /// in its folder still (a link could lead out of it since).
 pub fn launch_task(dirs: &Dirs, install: &Install) -> Result<(PathBuf, Vec<String>, PathBuf)> {
     let task = load_task(dirs, &install.game_id)?;
-    let folder = &install.path;
+    let folder = match install.runner.prefix() {
+        Some(prefix) if task.in_prefix => prefix,
+        _ if task.in_prefix => {
+            return Err(Error::Refused(format!(
+                "{} starts in a prefix it has not",
+                install.game_id
+            )));
+        }
+        _ => &install.path,
+    };
     let program = folder.join(&task.program);
     let cwd = folder.join(&task.working_dir);
     for path in [&program, &cwd] {
@@ -1435,6 +1479,68 @@ mod tests {
         std::fs::remove_dir_all(f.game.join("bin")).unwrap();
         std::os::unix::fs::symlink(&elsewhere, f.game.join("bin")).unwrap();
         assert!(launch_task(&f.dirs, &install).is_err());
+    }
+
+    /// A launcher an installer put on C: (its prefix), for a game it installs on D: (the game's
+    /// folder): the game's folder is D:'s, shared when isolated, and the launcher starts from the
+    /// prefix. Moved, the game is found again and D: follows it. With nothing on D:, the program's
+    /// folder in the prefix stays the game's, as before.
+    #[test]
+    fn a_launcher_on_c_runs_the_game_installed_on_d() {
+        let f = fake("launcher-on-c");
+        let prefix = prefix_of(&f.dirs, "local-1");
+        let launcher = prefix.join("drive_c/Program Files/[FAKE] Quest");
+        std::fs::create_dir_all(&launcher).unwrap();
+        std::fs::write(launcher.join("launcher.exe"), b"MZ\x90\0").unwrap();
+        let target = f.root.join("games/[FAKE] Quest");
+        std::fs::create_dir_all(target.join("Game")).unwrap();
+        std::fs::write(target.join("Game/quest.exe"), b"MZ\x90\0").unwrap();
+        next_number(&f.db).unwrap();
+        let mark = installer_file(&f.dirs, "local-1");
+        crate::fsutil::write_atomic(&mark, target.as_os_str().as_encoded_bytes()).unwrap();
+        map_drive(&prefix, &target).unwrap();
+        let new = NewGame {
+            title: "[FAKE] Quest".into(),
+            program: launcher.join("launcher.exe"),
+            proton: Some(f.proton.clone()),
+            installed_by: Some("local-1".into()),
+            isolated: Some(true),
+            ..Default::default()
+        };
+        let install = add(&f.db, &f.dirs, new.clone()).unwrap();
+        assert_eq!(install.path, target.canonicalize().unwrap());
+        let (program, _, cwd) = launch_task(&f.dirs, &install).unwrap();
+        let launcher_real = launcher.canonicalize().unwrap();
+        assert_eq!(program, launcher_real.join("launcher.exe"));
+        assert_eq!(cwd, launcher_real);
+
+        let moved = f.root.join("moved/[FAKE] Quest");
+        std::fs::create_dir_all(moved.parent().unwrap()).unwrap();
+        std::fs::rename(&target, &moved).unwrap();
+        let found = locate(&f.db, &f.dirs, "local-1", &moved).unwrap();
+        assert_eq!(found.path, moved.canonicalize().unwrap());
+        let drive = std::fs::read_link(prefix.join("dosdevices/d:")).unwrap();
+        assert_eq!(drive, moved.canonicalize().unwrap(), "D: follows");
+        assert!(launch_task(&f.dirs, &found).is_ok());
+
+        // Nothing installed on D:: the launcher's own folder is the game's.
+        let f = fake("launcher-on-c-only");
+        let prefix = prefix_of(&f.dirs, "local-1");
+        let launcher = prefix.join("drive_c/Program Files/[FAKE] Quest");
+        std::fs::create_dir_all(&launcher).unwrap();
+        std::fs::write(launcher.join("launcher.exe"), b"MZ\x90\0").unwrap();
+        let target = f.root.join("games/[FAKE] Quest");
+        std::fs::create_dir_all(&target).unwrap();
+        next_number(&f.db).unwrap();
+        let mark = installer_file(&f.dirs, "local-1");
+        crate::fsutil::write_atomic(&mark, target.as_os_str().as_encoded_bytes()).unwrap();
+        let new = NewGame {
+            program: launcher.join("launcher.exe"),
+            proton: Some(f.proton.clone()),
+            ..new
+        };
+        let install = add(&f.db, &f.dirs, new).unwrap();
+        assert_eq!(install.path, launcher.canonicalize().unwrap());
     }
 
     /// A game moved elsewhere is found there again, by its program at the same place.

@@ -575,6 +575,95 @@ async fn an_isolated_windows_game_sees_nothing_of_the_home_folder_through_z() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// A launcher an installer put on C: (as Wuthering Waves' does), added as the game's program, runs
+/// isolated with the game's folder, installed on D:, in view, and nothing else of the user's. The
+/// same launch with the launcher's own folder as the game's, as it was, does not see D:.
+#[tokio::test]
+#[ignore]
+async fn an_isolated_launcher_on_c_sees_the_game_it_installed_on_d() {
+    let proton = PathBuf::from(std::env::var("SLATTY_TEST_PROTON").expect("SLATTY_TEST_PROTON"));
+    let (root, dirs) = fixture("launcher");
+    let db = slatty_core::db::Db::in_memory().unwrap();
+    // No runtime refresh (it would ask Valve), nor any address reached.
+    slatty_core::settings::set_umu_runtimes_checked_at(&db, chrono::Utc::now().timestamp())
+        .unwrap();
+    // SAFETY: the ignored tests run one at a time (`--test-threads=1`).
+    unsafe {
+        std::env::set_var("UMU_RUNTIME_UPDATE", "0");
+        for key in ["http_proxy", "https_proxy", "all_proxy"] {
+            std::env::set_var(key, "http://127.0.0.1:9");
+            std::env::set_var(key.to_uppercase(), "http://127.0.0.1:9");
+        }
+    }
+    // An "installer" that ends by itself.
+    let setup = root.join("setup");
+    std::fs::create_dir_all(&setup).unwrap();
+    let wine = proton.join("files/lib/wine/x86_64-windows");
+    std::fs::copy(wine.join("hostname.exe"), setup.join("setup.exe")).unwrap();
+    let into = root.join("games");
+    let (id, folder) = slatty_core::added::run_installer(
+        &db,
+        &dirs,
+        Path::new(env!("CARGO_BIN_EXE_slatty")),
+        &setup.join("setup.exe"),
+        &into,
+        "[FAKE] Quest",
+        Some(proton.clone()),
+        true,
+    )
+    .await
+    .unwrap();
+    // What it would have done: a launcher on C:, the game on D:.
+    std::fs::write(folder.join("installed.txt"), b"[FAKE] game").unwrap();
+    let prefix = dirs.data.join("prefixes").join(&id);
+    let launcher = prefix.join("drive_c/Program Files/[FAKE] Quest");
+    std::fs::create_dir_all(&launcher).unwrap();
+    std::fs::copy(
+        prefix.join("drive_c/windows/system32/cmd.exe"),
+        launcher.join("launcher.exe"),
+    )
+    .unwrap();
+    std::fs::write(
+        launcher.join("check.bat"),
+        "@echo off\r\nif exist D:\\installed.txt (echo VISIBLE> out.txt) else (echo hidden> out.txt)\r\n",
+    )
+    .unwrap();
+    let mut install = slatty_core::added::add(
+        &db,
+        &dirs,
+        slatty_core::added::NewGame {
+            title: "[FAKE] Quest".into(),
+            program: launcher.join("launcher.exe"),
+            args: vec!["/c".into(), "check.bat".into()],
+            proton: Some(proton),
+            isolated: Some(true),
+            installed_by: Some(id),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(install.path, folder.canonicalize().unwrap());
+    let seen = || {
+        let seen = std::fs::read_to_string(launcher.join("out.txt")).unwrap_or_default();
+        let _ = std::fs::remove_file(launcher.join("out.txt"));
+        seen.trim().to_string()
+    };
+    let log = root.join("game.log");
+    run(&runner::launch_spec(&dirs, &install, None).unwrap(), &log).await;
+    assert_eq!(
+        seen(),
+        "VISIBLE",
+        "{}",
+        std::fs::read_to_string(&log).unwrap()
+    );
+
+    // The launcher's folder as the game's, as it was before: D: is out of its view.
+    install.path = launcher.canonicalize().unwrap();
+    run(&runner::launch_spec(&dirs, &install, None).unwrap(), &log).await;
+    assert_eq!(seen(), "hidden");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// An installer run for an isolated game added by hand reads its own folder, writes the game's
 /// folder as drive D:, and cannot write beside itself.
 #[tokio::test]

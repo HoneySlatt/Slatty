@@ -555,7 +555,9 @@ an installer or archive**:
   installation folder in the installer, then pick the program it installed. Isolated, the
   installer reads its own folder and writes only in that one. Installed elsewhere (its C: drive),
   the program is looked for in the prefix; thrown away, the folder goes only if nothing was put in
-  it;
+  it. A launcher the installer put on C: (as some online games' are, which then download and update
+  the game on D:) can be the program: the game's folder is then the one on D:, which an isolated
+  launcher sees and updates, and nothing else of yours;
 - a **Linux installer** (MojoSetup `.sh`, the format of GOG's offline installers) or an
   **archive** (`.zip`, `.tar.gz`, `.tar.xz`) is unpacked, never run, into a folder named after the
   title in **Install into**. Paths that would leave that folder, and links leading out of it, are
