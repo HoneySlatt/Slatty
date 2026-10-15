@@ -420,6 +420,12 @@ async fn an_isolated_game_cannot_lead_its_working_directory_out_through_a_link()
     // that leads out of the game folder.
     std::fs::create_dir_all(root.join("proton")).unwrap();
     std::fs::write(root.join("proton/proton"), b"").unwrap();
+    // A build umu runs in its container (the sniper runtime): one naming none is refused isolated.
+    std::fs::write(
+        root.join("proton/toolmanifest.vdf"),
+        "\"manifest\"\n{\n\t\"commandline\"\t\"/proton %verb%\"\n\t\"require_tool_appid\"\t\"1628350\"\n}\n",
+    )
+    .unwrap();
     let windows = Install {
         platform: Platform::Windows,
         runner: Runner::Umu {
