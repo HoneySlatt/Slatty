@@ -1,8 +1,6 @@
 # SlattyLauncher
 
 <img width="3840" height="2121" alt="Screenshot from 2026-10-16 05-19-20" src="https://github.com/user-attachments/assets/92b1c9ba-2551-44b2-867a-f3192db4f72a" />
-<img width="3840" height="2121" alt="Screenshot from 2026-10-16 05-19-28" src="https://github.com/user-attachments/assets/ae40ad46-e379-4241-b2e9-5c011f2c4e4e" />
-
 A native Linux launcher for your GOG games, written in Rust with an [Iced](https://iced.rs)
 interface. Your Steam games and the games you add yourself can sit in the same library.
 
