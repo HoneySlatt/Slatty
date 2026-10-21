@@ -10,6 +10,11 @@ until 1.0, a minor version may change commands and on-disk formats.
 - Game settings no longer says controller compatibility was checked with UMU-Proton only: it was
   checked with GE-Proton and Proton-CachyOS too.
 
+### Fixed
+
+- In a Steam Deck's Game Mode, Slatty is no longer drawn about twice too large: it uses the
+  screen's pixels, as in the Desktop Mode.
+
 ## 0.1.0 (2026-10-21)
 
 The first public version.

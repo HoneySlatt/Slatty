@@ -3,6 +3,7 @@
 //! messages; only the way around differs, a focus moved with the d-pad, the left stick or the
 //! arrow keys. Settings stay in the desktop window.
 
+use std::ffi::OsStr;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -22,12 +23,22 @@ use crate::{App, Interrupted, Message, Page, Panel};
 static AT_START: AtomicBool = AtomicBool::new(false);
 
 pub fn ask_at_start() -> bool {
-    let wanted = std::env::args_os().any(|a| a == "--couch")
-        || std::env::var_os("XDG_CURRENT_DESKTOP")
-            .is_some_and(|d| d.eq_ignore_ascii_case("gamescope"))
-        || std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some();
+    let wanted = std::env::args_os().any(|a| a == "--couch") || under_gamescope();
     AT_START.store(wanted, Ordering::Relaxed);
     wanted
+}
+
+/// Whether the program runs in a gamescope session, such as the Steam Deck's Game Mode.
+pub fn under_gamescope() -> bool {
+    std::env::var_os("XDG_CURRENT_DESKTOP").is_some_and(|d| d.eq_ignore_ascii_case("gamescope"))
+        || std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some()
+}
+
+/// The scale to give winit's X11 windows (`WINIT_X11_SCALE_FACTOR`): 1 in a gamescope session,
+/// whose Xwayland gives the Steam Deck's small screen a scale of about 2, at which everything was
+/// drawn twice too large; none when the user chose one.
+pub fn x11_scale(gamescope: bool, chosen: Option<&OsStr>) -> Option<&'static str> {
+    (gamescope && chosen.is_none()).then_some("1")
 }
 
 pub fn at_start() -> bool {

@@ -679,8 +679,9 @@ It opens:
 
 - from the gamepad button of the top bar;
 - with `slatty-gui --couch`, or the **Couch mode** action of Slatty's desktop entry;
-- by itself in a gamescope session, such as the Steam Deck's Game Mode. On a Steam Deck, add
-  Slatty to Steam as a non-Steam game from the Desktop Mode, then start it from the Game
+- by itself in a gamescope session, such as the Steam Deck's Game Mode, drawn at the screen's
+  pixels as in the Desktop Mode (a `WINIT_X11_SCALE_FACTOR` of your own still wins). On a Steam
+  Deck, add Slatty to Steam as a non-Steam game from the Desktop Mode, then start it from the Game
   Mode. Neither has been tried on a Steam Deck yet.
 
 **Menu** → **Desktop mode** goes back to the desktop window; **Menu** → **Quit Slatty**

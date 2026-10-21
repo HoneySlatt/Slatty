@@ -94,6 +94,13 @@ fn main() -> iced::Result {
         // SAFETY: no other thread runs yet; `boot::start` begins the first one.
         unsafe { std::env::set_var("WGPU_BACKEND", "vulkan") };
     }
+    if let Some(scale) = couch::x11_scale(
+        couch::under_gamescope(),
+        std::env::var_os("WINIT_X11_SCALE_FACTOR").as_deref(),
+    ) {
+        // SAFETY: as above.
+        unsafe { std::env::set_var("WINIT_X11_SCALE_FACTOR", scale) };
+    }
     boot::start(backends);
     // Iced reads them once the graphics driver is set up: up to a tenth of a second more before
     // the first frame when they are not in the disk cache yet, as after the computer starts.

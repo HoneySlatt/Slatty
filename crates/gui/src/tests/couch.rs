@@ -566,6 +566,17 @@ fn the_couch_mode_fills_a_large_screen() {
     assert_eq!(app.ui_scale, 1.0);
 }
 
+/// In a gamescope session (a Steam Deck's Game Mode) the window is drawn at the screen's pixels:
+/// gamescope's Xwayland gives the Deck's small screen a scale of about 2, at which the couch mode
+/// showed three covers where the Desktop Mode shows six. A scale the user chose stays.
+#[test]
+fn gamescope_draws_at_the_screens_pixels() {
+    use std::ffi::OsStr;
+    assert_eq!(crate::couch::x11_scale(true, None), Some("1"));
+    assert_eq!(crate::couch::x11_scale(true, Some(OsStr::new("2"))), None);
+    assert_eq!(crate::couch::x11_scale(false, None), None);
+}
+
 /// On a large screen the couch mode draws covers wider than GOG makes them (342 pixels): those in
 /// view are enlarged as key art is, sharper than the enlarging Iced does as it draws; at 1080p the
 /// grid's copies are about as wide, and nothing is made.
