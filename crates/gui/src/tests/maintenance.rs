@@ -1,5 +1,15 @@
 use super::*;
 
+fn scroll_game_settings_to_bottom(ui: &mut Simulator<'_, Message>) {
+    ui.point_at(iced::Point::new(SIZE.width - 100.0, SIZE.height / 2.0));
+    let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+        delta: iced::mouse::ScrollDelta::Pixels {
+            x: 0.0,
+            y: -2_000.0,
+        },
+    })]);
+}
+
 #[test]
 fn uninstall_requires_an_explicit_choice() {
     let mut app = library_app();
@@ -104,6 +114,7 @@ fn game_settings_panel_applies_dlc_changes_only_when_something_changed() {
         Ok(content),
     )));
     let mut ui = render(&app);
+    scroll_game_settings_to_bottom(&mut ui);
     let _ = ui.click("Apply DLC changes");
     assert!(
         ui.into_messages().next().is_none(),
@@ -116,6 +127,7 @@ fn game_settings_panel_applies_dlc_changes_only_when_something_changed() {
     )));
     let mut ui = render(&app);
     snapshot(&mut ui, "game-settings");
+    scroll_game_settings_to_bottom(&mut ui);
     ui.click("Apply DLC changes").unwrap();
     assert!(ui.into_messages().any(|m| matches!(
         m,
@@ -273,6 +285,60 @@ fn game_settings_isolate_a_game_from_the_users_files_or_not() {
 }
 
 #[test]
+fn controller_compatibility_is_optional_in_game_settings() {
+    use crate::settings::SettingsMsg;
+    let mut app = library_app();
+    let core = app.core.clone().unwrap();
+    open(&mut app, "3", Some(Panel::GameSettings));
+    assert!(!app.controller_compatibility.contains("3"));
+    assert!(render(&app).find("Controller").is_ok());
+    // The simulator cannot read a toggler's label; drive its message and check the saved state.
+    let _ = app.update(Message::Settings(SettingsMsg::ControllerCompatibility(
+        "3".into(),
+        true,
+    )));
+    assert!(app.controller_compatibility.contains("3"));
+    assert!(slatty_core::settings::controller_compatibility(&core.db, "3").unwrap());
+    assert!(!slatty_core::settings::controller_compatibility(&core.db, "4").unwrap());
+    snapshot(&mut render(&app), "game-settings-controller");
+    // The switches read at start restore the UI, including after changing the Proton build.
+    let Message::Booted(Ok(mut boot)) =
+        super::game_page::booted(vec![app.installs["3"].clone()], &[])
+    else {
+        unreachable!()
+    };
+    boot.core = core.clone();
+    boot.controller_compatibility.insert("3".into());
+    if let Runner::Umu { proton, .. } = &mut boot.installs[0].runner {
+        *proton = "/proton/proton-cachyos".into();
+    }
+    let mut restarted = App::default();
+    let _ = restarted.update(Message::Booted(Ok(boot)));
+    assert!(restarted.controller_compatibility.contains("3"));
+    let _ = app.update(Message::Settings(SettingsMsg::ControllerCompatibility(
+        "3".into(),
+        false,
+    )));
+    assert!(!app.controller_compatibility.contains("3"));
+    assert!(!slatty_core::settings::controller_compatibility(&core.db, "3").unwrap());
+    for runner in [
+        Runner::Native,
+        Runner::Wine {
+            wine: "wine".into(),
+            prefix: "/fake-prefix".into(),
+        },
+    ] {
+        app.installs.get_mut("3").unwrap().runner = runner;
+        assert!(render(&app).find("Controller").is_err());
+        let _ = app.update(Message::Settings(SettingsMsg::ControllerCompatibility(
+            "3".into(),
+            true,
+        )));
+        assert!(!slatty_core::settings::controller_compatibility(&core.db, "3").unwrap());
+    }
+}
+
+#[test]
 fn the_session_says_when_a_game_runs_isolated() {
     use crate::play::{PlayMsg, PlayState};
     let mut app = library_app();
@@ -331,6 +397,7 @@ fn game_settings_show_the_language_and_switch_it_when_gog_offers_others() {
         "fr-FR".into(),
     )));
     let mut ui = render(&app);
+    scroll_game_settings_to_bottom(&mut ui);
     ui.click("Switch language").unwrap();
     assert!(ui.into_messages().any(|m| matches!(
         m,

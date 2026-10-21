@@ -35,6 +35,7 @@ const STEAM_WEB_API: &str = "steam_web_api";
 const TWIN_PLAYTIME: &str = "twin_playtime";
 const REMEMBER_FILTERS: &str = "remember_filters";
 const LIBRARY_FILTERS: &str = "library_filters";
+const CONTROLLER_COMPATIBILITY: &str = "controller_compatibility";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -318,6 +319,23 @@ pub fn set_launch_choice(db: &Db, game_id: &str, choice: &str) -> Result<()> {
     db.set_setting(&format!("launch_task:{game_id}"), Some(choice))
 }
 
+/// Whether this game's Proton uses SDL for controllers. Off until turned on for that game.
+pub fn controller_compatibility(db: &Db, game_id: &str) -> Result<bool> {
+    crate::paths::check_owned_id(game_id)?;
+    Ok(db
+        .setting(&format!("{CONTROLLER_COMPATIBILITY}:{game_id}"))?
+        .as_deref()
+        == Some("on"))
+}
+
+pub fn set_controller_compatibility(db: &Db, game_id: &str, on: bool) -> Result<()> {
+    crate::paths::check_owned_id(game_id)?;
+    db.set_setting(
+        &format!("{CONTROLLER_COMPATIBILITY}:{game_id}"),
+        on.then_some("on"),
+    )
+}
+
 /// Game ids waiting in the download queue, in order.
 pub fn download_queue(db: &Db) -> Result<Vec<String>> {
     id_list(db, DOWNLOAD_QUEUE)
@@ -548,6 +566,24 @@ fn home() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn controller_compatibility_is_opt_in_for_each_owned_game() {
+        let db = Db::in_memory().unwrap();
+        assert!(!controller_compatibility(&db, "1").unwrap());
+        assert!(!controller_compatibility(&db, "local-2").unwrap());
+        set_controller_compatibility(&db, "1", true).unwrap();
+        assert!(controller_compatibility(&db, "1").unwrap());
+        assert!(!controller_compatibility(&db, "local-2").unwrap());
+        set_controller_compatibility(&db, "local-2", true).unwrap();
+        set_controller_compatibility(&db, "1", false).unwrap();
+        assert!(!controller_compatibility(&db, "1").unwrap());
+        assert!(controller_compatibility(&db, "local-2").unwrap());
+        for id in ["steam-1", "../1", ""] {
+            assert!(set_controller_compatibility(&db, id, true).is_err());
+            assert!(controller_compatibility(&db, id).is_err());
+        }
+    }
 
     #[test]
     fn filters_are_forgotten_until_asked_to_remember_them() {

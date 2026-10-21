@@ -158,13 +158,12 @@ pub async fn play(
             "an update of this game is unfinished; finish it before playing".into(),
         ));
     }
-    let choice = crate::settings::launch_choice(db, &install.game_id)?;
     // Before the check, which refuses an isolated game whose runtime umu does not have yet.
     if install.isolated {
         runner::refresh_runtimes(db, dirs, runner::container(&install)).await;
     }
     // Checked now, before the prefix and the setup, so a game that cannot start says so first.
-    runner::launch_spec(dirs, &install, choice.as_deref())?;
+    runner::game_launch_spec(db, dirs, &install)?;
     // GOG keeps no cloud saves for Linux builds, and they lack the Galaxy SDK that Comet talks to.
     // A game added by hand is not GOG's at all: GOG is not asked anything about it.
     let native = install.platform == Platform::Linux;
@@ -266,7 +265,7 @@ pub async fn play(
 
     // Built again: the setup steps above ran the game's own programs in its folder, which an
     // isolated launch checks for what umu would share (`runner::launch_spec`).
-    let spec = runner::launch_spec(dirs, &install, choice.as_deref())?;
+    let spec = runner::game_launch_spec(db, dirs, &install)?;
 
     if cloud {
         match cloud_sync(db, dirs, http, &install, user_id.as_deref()).await {

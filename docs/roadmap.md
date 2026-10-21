@@ -27,6 +27,10 @@ There are no dates. What has been checked against real services, and what not ye
   sums (not yet checked against GOG's services).
 
 **Playing**
+- Controller compatibility per game, off by default, using the SDL input mode in UMU-Proton,
+  GE-Proton and Proton-CachyOS. The SDL mode was checked by the user with UMU-Proton and a
+  DualSense, through `PROTON_ADD_CONFIG=sdlinput`; not yet the switch itself, nor GE-Proton and
+  Proton-CachyOS.
 - umu and a Proton build per game; native Linux games through `steam-run` or umu's runtime on
   NixOS; launch options asked at the first Play.
 - Isolation from your files, on by default for Windows games: umu's container with a home of the

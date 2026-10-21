@@ -35,6 +35,41 @@ pub struct LaunchSpec {
     pub env: Vec<(String, String)>,
 }
 
+/// Builds the game's launch command with its saved choice and controller compatibility setting.
+pub fn game_launch_spec(db: &crate::db::Db, dirs: &Dirs, install: &Install) -> Result<LaunchSpec> {
+    let choice = crate::settings::launch_choice(db, &install.game_id)?;
+    let mut spec = launch_spec(dirs, install, choice.as_deref())?;
+    if install.platform == Platform::Windows
+        && matches!(install.runner, Runner::Umu { .. })
+        && crate::settings::controller_compatibility(db, &install.game_id)?
+    {
+        // UMU-Proton accepts sdlinput through PROTON_ADD_CONFIG; GE and CachyOS also expose
+        // environment switches, which must not disable this choice when inherited as zero.
+        spec.env.extend([
+            (
+                "PROTON_ADD_CONFIG".into(),
+                sdl_config(std::env::var_os("PROTON_ADD_CONFIG").unwrap_or_default())?,
+            ),
+            ("PROTON_USE_SDL".into(), "1".into()),
+            ("PROTON_PREFER_SDL".into(), "1".into()),
+        ]);
+    }
+    Ok(spec)
+}
+
+fn sdl_config(config: OsString) -> Result<String> {
+    let mut config = config
+        .into_string()
+        .map_err(|_| Error::Refused("PROTON_ADD_CONFIG is not valid UTF-8".into()))?;
+    if !config.split(',').any(|option| option == "sdlinput") {
+        if !config.is_empty() && !config.ends_with(',') {
+            config.push(',');
+        }
+        config.push_str("sdlinput");
+    }
+    Ok(config)
+}
+
 /// How to start a game: as `choice` (one of its `launch_options`) when given and still offered,
 /// else as its main task.
 pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Result<LaunchSpec> {
@@ -1791,6 +1826,96 @@ mod tests {
             steam_run_temp(vars),
             [("TMP".to_string(), "/tmp".to_string())]
         );
+    }
+
+    #[test]
+    fn controller_compatibility_preserves_other_proton_options() {
+        for (before, after) in [
+            ("", "sdlinput"),
+            ("noesync", "noesync,sdlinput"),
+            ("noesync,", "noesync,sdlinput"),
+            ("sdlinput,noesync", "sdlinput,noesync"),
+        ] {
+            assert_eq!(sdl_config(before.into()).unwrap(), after);
+        }
+        use std::os::unix::ffi::OsStringExt;
+        assert!(sdl_config(OsString::from_vec(b"\xff".to_vec())).is_err());
+    }
+
+    #[test]
+    fn controller_compatibility_applies_only_to_the_selected_proton_game() {
+        let dir = std::env::temp_dir().join(format!("slatty-controller-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("goggame-1.info"),
+            r#"{"gameId":"1","name":"[FAKE] Game","playTasks":[
+              {"category":"game","isPrimary":true,"name":"Game","path":"game.exe","type":"FileTask"},
+              {"category":"launcher","name":"Configuration","path":"config.exe","type":"FileTask"}]}"#,
+        )
+        .unwrap();
+        for exe in ["game.exe", "config.exe"] {
+            std::fs::write(dir.join(exe), b"[FAKE]").unwrap();
+        }
+        let db = crate::db::Db::in_memory().unwrap();
+        let dirs = Dirs::under(&dir.join("slatty"));
+        let mut install = Install {
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: dir.clone(),
+            client_id: None,
+            runner: Runner::Native,
+            umu_id: None,
+            isolated: false,
+        };
+        for build in ["UMU-Proton", "GE-Proton", "proton-cachyos"] {
+            let proton = dir.join(build);
+            std::fs::create_dir_all(&proton).unwrap();
+            std::fs::write(proton.join("proton"), b"[FAKE]").unwrap();
+            install.runner = Runner::Umu {
+                proton,
+                prefix: dir.join("prefix"),
+            };
+            crate::settings::set_controller_compatibility(&db, "1", false).unwrap();
+            assert_eq!(
+                game_launch_spec(&db, &dirs, &install).unwrap(),
+                launch_spec(&dirs, &install, None).unwrap(),
+                "off leaves the launch unchanged"
+            );
+            crate::settings::set_controller_compatibility(&db, "1", true).unwrap();
+            let spec = game_launch_spec(&db, &dirs, &install).unwrap();
+            assert!(
+                value(&spec.env, "PROTON_ADD_CONFIG")
+                    .unwrap()
+                    .split(',')
+                    .any(|s| s == "sdlinput")
+            );
+            assert_eq!(value(&spec.env, "PROTON_USE_SDL"), Some("1"));
+            assert_eq!(value(&spec.env, "PROTON_PREFER_SDL"), Some("1"));
+            let setup = windows_command(&dirs, &install, vec!["reg".into()], dir.clone()).unwrap();
+            assert_eq!(value(&setup.env, "PROTON_ADD_CONFIG"), None);
+        }
+        crate::settings::set_launch_choice(&db, "1", "Configuration").unwrap();
+        let spec = game_launch_spec(&db, &dirs, &install).unwrap();
+        assert!(spec.args[0].ends_with("config.exe"), "launch choice kept");
+        install.runner = Runner::Wine {
+            wine: "wine".into(),
+            prefix: dir.join("prefix"),
+        };
+        assert_eq!(
+            game_launch_spec(&db, &dirs, &install).unwrap(),
+            launch_spec(&dirs, &install, Some("Configuration")).unwrap(),
+            "Wine alone is unchanged"
+        );
+        install.platform = Platform::Linux;
+        install.runner = Runner::Native;
+        std::fs::write(dir.join("start.sh"), b"#!/bin/sh\nexit 0\n").unwrap();
+        assert_eq!(
+            game_launch_spec(&db, &dirs, &install).unwrap(),
+            launch_spec(&dirs, &install, None).unwrap(),
+            "native games are unchanged"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     /// Proton's fixes for a game target the game: DOOM's adds `+r_renderAPI 1` to every program

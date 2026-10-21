@@ -124,7 +124,7 @@ The tools open in drawers beside the page:
 | Where | Drawer |
 |---|---|
 | Install button | Version, download and disk size, free space, platform, folder, language, DLC, Proton and game version; Start or Discard |
-| Sliders (top right, installed games) | **Game settings**: folder, launch option, Proton build, isolation, game version, language and DLC |
+| Sliders (top right, installed games) | **Game settings**: folder, launch option, Proton build, controller compatibility, isolation, game version, language and DLC |
 | ⋮ (top right, GOG games and games added by hand) | **Manage**: verify, repair, check for update, uninstall. Verify, repair and updates show their progress and can be paused. For a GOG game, installed or not, **Download installers…** opens **Offline installers** (see [Offline installers](#offline-installers)) |
 | Cloud saves card | Status, save folder, what a sync would do, **Check**, **Sync now**, conflict choices |
 | Achievements card | Every achievement, from the most common to the rarest, with Unlock and Clear once allowed |
@@ -305,6 +305,24 @@ A game's output goes to its log (see [Where data is stored](#where-data-is-store
 Some games can be started several ways: the game, and tools such as a configuration program. The
 first Play of such a game asks which one to start, and the choice is kept; **Launch** in Game
 settings changes it.
+
+### Controller compatibility
+
+For a Windows game run through Proton, **Game settings → Controller → Controller compatibility**
+can help when a controller is not recognized, for example a DualSense in a game expecting Xbox
+input. It is **off by default for every game**. Turn it on only for games that need it; the choice
+is saved per game, kept when changing Proton builds, and applies from the next launch in both
+the interface and the command line.
+
+This uses Proton's SDL input mode, supported by UMU-Proton, GE-Proton and Proton-CachyOS; Valve's
+Proton builds (Proton Experimental, Proton 10.0) have no such mode, and the switch changes nothing
+with them. It does not need Steam running. Games may show Xbox button icons, and native PlayStation features such
+as adaptive triggers may be unavailable. It does not provide Steam Input's remapping or profiles.
+Native Linux games, games run through Wine alone, and Steam-managed games do not use this option.
+
+If testing with `PROTON_ADD_CONFIG=sdlinput` or `PROTON_USE_SDL=1` on the launcher command, restart
+SlattyLauncher normally before using the switch: environment options still apply to every game
+launched from that session, even when its switch is off.
 
 ### Stopping a game
 

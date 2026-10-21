@@ -117,6 +117,27 @@ impl App {
                 _ => note(runner_label(install)),
             },
         ));
+        if install.platform == Platform::Windows && matches!(install.runner, Runner::Umu { .. }) {
+            let id = g.id.clone();
+            sections.push(section(
+                Icon::Gamepad,
+                "Controller",
+                column![
+                    toggler(self.controller_compatibility.contains(&g.id))
+                        .label("Controller compatibility")
+                        .text_size(15)
+                        .font(theme::font())
+                        .on_toggle(move |on| Message::Settings(
+                            SettingsMsg::ControllerCompatibility(id.clone(), on)
+                        ))
+                        .size(22),
+                    note("Turn on if the game does not recognize your controller. Works with UMU-Proton, GE-Proton and Proton-CachyOS. Used from the next launch."),
+                    note("May show Xbox button icons and limit PlayStation features. Leave off when the controller already works."),
+                ]
+                .spacing(10)
+                .into(),
+            ));
+        }
         sections.push(section(Icon::Shield, "Isolation", isolation(install)));
         let view = self.maintenance.get(&g.id);
         let busy = self.maintenance_busy(&g.id);

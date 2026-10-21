@@ -40,6 +40,7 @@ files by default.
   MD5 sums.
 
 **Playing**
+- Optional controller compatibility per game with UMU-Proton, GE-Proton and Proton-CachyOS.
 - Windows games through [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and
   the Proton build of your choice, per game; Linux games natively.
 - Isolation from your files: an isolated game sees its own folder and a home of its own, and
@@ -69,6 +70,10 @@ Steam's library. Not checked against real services yet: pausing an install by ha
 update, DLC and language changes, Visual C++ redistributables, offline installers, downloads
 pausing while a game runs, games added by hand, Steam installs, and keeping Proton builds up to
 date; nor the couch mode with a real gamepad, on a Steam Deck or on a television.
+
+A DualSense over USB was also checked by the user in Bleak Faith: Forsaken with UMU-Proton's
+SDL input mode. The new per-game switch and controller behavior with GE-Proton and
+Proton-CachyOS still need a real-game check.
 
 Linux only, tested and packaged on x86-64; macOS and Windows hosts are not supported. See the
 [roadmap](docs/roadmap.md).

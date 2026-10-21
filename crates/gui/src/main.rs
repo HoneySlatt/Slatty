@@ -283,6 +283,8 @@ pub struct App {
     /// The ways each installed game can be started, its main one first, and the one chosen.
     pub launch_options: HashMap<String, Vec<String>>,
     pub launch_choices: HashMap<String, String>,
+    /// Games whose Proton uses SDL for controllers, off for every other game.
+    pub controller_compatibility: HashSet<String>,
     /// A game whose Play asks how to start it, the first time.
     pub launch_prompt: Option<String>,
     /// A game whose Play waits for its folder to be read.
@@ -437,6 +439,7 @@ impl Default for App {
             steamgriddb_key_input: String::new(),
             launch_options: HashMap::new(),
             launch_choices: HashMap::new(),
+            controller_compatibility: HashSet::new(),
             launch_prompt: None,
             launch_reading: None,
             notifications: Default::default(),
@@ -885,6 +888,7 @@ impl App {
                 self.manual_achievements = boot.manual_achievements;
                 self.steamgriddb = boot.steamgriddb;
                 self.launch_choices = boot.launch_choices;
+                self.controller_compatibility = boot.controller_compatibility;
                 self.installs = boot
                     .installs
                     .into_iter()

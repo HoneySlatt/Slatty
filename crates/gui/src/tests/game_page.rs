@@ -285,6 +285,7 @@ pub(super) fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
         installs,
         records: Default::default(),
         launch_choices: Default::default(),
+        controller_compatibility: Default::default(),
         interrupted: interrupted.iter().map(|id| id.to_string()).collect(),
         library_root: "/games".into(),
         installers_root: "/installers".into(),

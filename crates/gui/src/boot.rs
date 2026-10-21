@@ -1,6 +1,6 @@
 //! Start-up: everything read before the first page shows, off the interface thread.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -26,6 +26,7 @@ pub struct Boot {
     pub installs: Vec<Install>,
     pub records: HashMap<String, InstallSummary>,
     pub launch_choices: HashMap<String, String>,
+    pub controller_compatibility: HashSet<String>,
     pub interrupted: Vec<String>,
     pub library_root: PathBuf,
     pub installers_root: PathBuf,
@@ -262,6 +263,12 @@ async fn boot() -> Result<Boot, String> {
                 .map(|r| (i.game_id.clone(), summary(&r)))
         })
         .collect();
+    let mut controller_compatibility = HashSet::new();
+    for install in &installs {
+        if slatty_core::settings::controller_compatibility(&db, &install.game_id).map_err(err)? {
+            controller_compatibility.insert(install.game_id.clone());
+        }
+    }
     let library_root = slatty_core::settings::library_root(&db).map_err(err)?;
     let proton = slatty_core::settings::default_proton(&db).map_err(err)?;
     let default_platform = slatty_core::settings::default_platform(&db).map_err(err)?;
@@ -330,6 +337,7 @@ async fn boot() -> Result<Boot, String> {
         library,
         installs,
         launch_choices,
+        controller_compatibility,
         records,
         interrupted,
         library_root,

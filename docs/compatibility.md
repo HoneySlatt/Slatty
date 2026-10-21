@@ -93,6 +93,7 @@ and hands it requests.
 | 2026-10-12 | Blasphemous | — | Installed by slatty, isolated | First launch, play isolated, achievement earned in game | OK | Played 5 min (played and checked by the user). First launch: prefix created, GOG's setup script run and the Galaxy service registered, 4 cloud saves downloaded, Comet started. An achievement earned in game reached Comet from the container: shown as unlocked during the session (desktop notification) and recorded on GOG as it ended. 2 saves uploaded after; play time sent |
 | 2026-10-15 | Wuthering Waves (added by hand) | 3.0.1.0 (launcher) | Windows installer run from Add a game, isolated, DW-Proton; installed into a folder on a second SSD (drive D:) | Install, then the launcher on C: as the program | OK | The installer put Kuro's launcher on C: without asking; the launcher listed D: and downloaded the game there (133 GB). Added with the launcher as its program and isolated, the launcher found the game on D: (checked by the user). The launcher shows "Failed to retrieve space info" for C: and D: and calls them "Unknown"; it did not stop the download. The game was added from the command line (`--installed-by`) after an earlier attempt removed from the library had left its prefix without its mark; playing and an update not tried yet |
 | 2026-10-15 | Arknights: Endfield (added by hand) | 1.6.0 (launcher) | Windows installer run from Add a game, isolated, DW-Proton; installed into a folder on a second SSD (drive D:) | Install, then the launcher on D: as the program | OK | The installer put its launcher (GRYPHLINK) on D:, in a folder of its own; the launcher downloaded the game on D:. Added with the launcher as its program, isolated, the game folder being the whole D: folder (filled in by hand: the interface running predated it being the default), the install ended and worked (checked by the user). Playing and an update not tried yet |
+| 2026-10-19 | Bleak Faith: Forsaken | — | UMU-Proton (version not noted), SlattyLauncher started with `PROTON_ADD_CONFIG=sdlinput` | Controller (DualSense, USB) through Proton's SDL input mode | OK | The controller did not work normally in the game, and worked with the SDL mode (checked by the user); individual inputs, vibration and DualSense features were not reported one by one. The per-game switch, which sets the same mode, was not used |
 
 ## Not checked for real yet
 
@@ -126,6 +127,9 @@ and hands it requests.
 - Games added by hand: a Linux installer, an archive, an AppImage; a game updated by a launcher a
   Windows installer put on C: (one installed and found again, above).
 - Ubuntu with AppArmor: the steps of the user guide were never tried.
+- Controller compatibility: the per-game switch in a real game (the same SDL mode was checked by
+  starting SlattyLauncher with `PROTON_ADD_CONFIG=sdlinput`, above), and the mode with GE-Proton
+  and Proton-CachyOS.
 
 **Steam**
 

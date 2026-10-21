@@ -276,6 +276,8 @@ pub enum SettingsMsg {
     IsolateNewGames(bool),
     /// Whether an installed game runs isolated from the user's files.
     GameIsolated(String, bool),
+    /// Whether this game's Proton uses SDL for controllers from the next launch.
+    ControllerCompatibility(String, bool),
     /// Whether achievements can be unlocked and cleared by hand.
     ManualAchievements(bool),
     /// Whether Edit game offers art from SteamGridDB.
@@ -564,6 +566,24 @@ impl App {
                 }
             }
             SettingsMsg::LaunchTask(game_id, choice) => self.choose_launch(&game_id, choice),
+            SettingsMsg::ControllerCompatibility(game_id, on) => {
+                if !self.installs.get(&game_id).is_some_and(|install| {
+                    install.platform == Platform::Windows
+                        && matches!(install.runner, slatty_core::runner::Runner::Umu { .. })
+                }) {
+                    return Task::none();
+                }
+                match settings::set_controller_compatibility(&core.db, &game_id, on) {
+                    Ok(()) => {
+                        if on {
+                            self.controller_compatibility.insert(game_id);
+                        } else {
+                            self.controller_compatibility.remove(&game_id);
+                        }
+                    }
+                    Err(e) => self.notify_error(e.to_string()),
+                }
+            }
             SettingsMsg::CoverSize(size) => {
                 self.card_width = size.width();
                 if let Err(e) = settings::set_cover_width(&core.db, self.card_width) {

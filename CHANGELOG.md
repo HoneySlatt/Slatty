@@ -51,6 +51,8 @@ The first public version.
 
 ### Playing
 
+- Optional controller compatibility per game for UMU-Proton, GE-Proton and Proton-CachyOS,
+  using SDL input; off by default, saved in Game settings and applied to command-line launches too.
 - Windows games through umu-launcher and a Proton build per game; native Linux games directly, or
   through `steam-run` or umu's runtime on NixOS; launch options asked at the first Play.
 - Windows games isolated from your files by default: umu's container with a home of the game's

@@ -91,8 +91,7 @@ pub fn list(ctx: &Ctx) -> Result<()> {
 
 pub fn print_spec(ctx: &Ctx, game_id: &str) -> Result<()> {
     let install = get(ctx, game_id)?;
-    let choice = slatty_core::settings::launch_choice(&ctx.db, game_id)?;
-    let spec = runner::launch_spec(&ctx.dirs, &install, choice.as_deref())?;
+    let spec = runner::game_launch_spec(&ctx.db, &ctx.dirs, &install)?;
     // The program, its arguments and its folder come from the game's own goggame-*.info.
     println!("program: {}", shown(spec.program.display()));
     println!("args:    {:?}", spec.args);

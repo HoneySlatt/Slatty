@@ -400,6 +400,23 @@ and content changes refuse a game whose folder is missing or empty (its drive no
 GOG is never asked anything about a game added by hand, and Linux builds skip setup, cloud saves and
 Comet.
 
+`runner::game_launch_spec` applies the saved launch choice and the per-game
+`controller_compatibility:<id>` setting, off when absent. Both `play` and `slatty launch-spec`
+use it. For Windows games through Proton, it adds `sdlinput` to `PROTON_ADD_CONFIG` while
+preserving the user's other options, and sets `PROTON_USE_SDL=1` and `PROTON_PREFER_SDL=1`.
+UMU-Proton reads only `PROTON_ADD_CONFIG`, Proton-CachyOS only the two variables, GE-Proton all
+three; set to 1, the variables also keep an inherited zero from cancelling the mode. Valve's
+Proton builds have no SDL input mode and ignore all three. Setup tools do not receive these
+additions. With the switch off, the launch
+environment is unchanged; explicit options inherited from the launcher still apply.
+The interface reads the switches at start, keeps them in memory and saves each change to the
+settings table; no game folder or prefix is edited for the setting.
+
+The input mode comes from [UMU-Proton's launcher](https://github.com/Open-Wine-Components/umu-proton/blob/proton_10.0/proton),
+[GE-Proton's options](https://github.com/GloriousEggroll/proton-ge-custom#options) and
+[Proton-CachyOS's options](https://github.com/CachyOS/proton-cachyos#proton-cachyos-config-options).
+Actual controller behavior remains a per-game, per-build check.
+
 A **native Linux game** runs through `start.sh`: on NixOS inside `steam-run` when present (which
 mounts an empty `/tmp` of its own, so temporary folders under `/tmp` become `/tmp`,
 `runner::steam_run_temp`), else inside umu's Steam Linux Runtime 3.0 through a compatibility tool of
