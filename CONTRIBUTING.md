@@ -87,5 +87,6 @@ decoders face downloaded files.
 When you rely on a GOG behaviour, cite where it comes from (a project, a document, a capture you
 made) and record its status in [docs/gog-integration.md](docs/gog-integration.md).
 
-Code derived from GPL projects such as heroic-gogdl is welcome, with a note naming the source. Do
-not copy code from projects without a licence.
+Code derived from GPL projects such as heroic-gogdl is welcome, with a note naming the source.
+heroic-gogdl and Heroic are GPL-3.0-only: what is derived from them is distributed under GPL-3.0.
+Do not copy code from projects without a licence.

@@ -1,5 +1,5 @@
 //! Galaxy content system, generation 2. Formats and endpoints follow heroic-gogdl
-//! (GPL-3.0, https://github.com/Heroic-Games-Launcher/heroic-gogdl).
+//! (GPL-3.0-only, https://github.com/Heroic-Games-Launcher/heroic-gogdl).
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;

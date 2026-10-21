@@ -179,7 +179,7 @@ Slatty stands on the work of others:
 
 - [Comet](https://github.com/imLinguin/comet) (Apache-2.0) implements the Galaxy communication service
   games talk to; Slatty runs it beside them.
-- [heroic-gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl) (GPL-3.0) is the reference
+- [heroic-gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl) (GPL-3.0-only) is the reference
   for Galaxy depots, cloud storage and sessions. Parts of Slatty follow its logic.
 - [Heroic Games Launcher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) showed how
   save locations, Proton and Comet fit together.

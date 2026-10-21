@@ -702,7 +702,7 @@ Paths follow the XDG variables; the defaults are shown.
 | A couch mode of its own rather than a gamepad on the desktop window | Pages made for a sofa and a Steam Deck (large covers, one focus, the buttons to press shown), without a focus model forced on every desktop page; gilrs reads gamepads, with SDL's mappings for the less common ones |
 | SQLite through rusqlite behind a mutex | One writer per process, simple synchronous queries, futures stay `Send` |
 | Interface in English first | Translations come later |
-| GPL-3.0-or-later | Allows building on heroic-gogdl's GPL code with attribution |
+| GPL-3.0-or-later | Can build on heroic-gogdl's and Heroic's code, which is GPL-3.0-only: a part derived from them is distributed under GPL-3.0, with a note naming the source |
 
 ## Security principles
 

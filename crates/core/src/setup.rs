@@ -1,6 +1,6 @@
 //! The post-install setup GOG Galaxy runs: the GOG script interpreter or each product's temporary
 //! executable, then shared redistributables. Order and arguments follow Heroic
-//! (GPL-3.0, https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher).
+//! (GPL-3.0-only, https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher).
 
 use std::path::{Path, PathBuf};
 
