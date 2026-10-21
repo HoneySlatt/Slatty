@@ -275,7 +275,7 @@ fn slatty_record(dirs: &Dirs, install: &Install) -> Result<InstallRecord> {
         return Err(Error::Unsupported("setup needs a Wine prefix".into()));
     }
     InstallRecord::load(dirs, &install.game_id)?.ok_or_else(|| {
-        Error::Refused("setup is only available for games installed by SlattyLauncher".into())
+        Error::Refused("setup is only available for games installed by Slatty".into())
     })
 }
 

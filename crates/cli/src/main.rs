@@ -17,7 +17,7 @@ use slatty_core::db::Db;
 use slatty_core::paths::Dirs;
 
 #[derive(Parser)]
-#[command(name = "slatty", version, about = "SlattyLauncher command line")]
+#[command(name = "slatty", version, about = "Slatty command line")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -42,17 +42,17 @@ enum Command {
     /// Add a game from no store, by the program that starts it
     Add(added::AddArgs),
     /// Take a game added by hand out of the library; its files are left untouched, except those
-    /// SlattyLauncher unpacked
+    /// Slatty unpacked
     Remove(added::RemoveArgs),
     /// List installed games and interrupted installs
     Installs,
     /// Show the command that would launch a game
     LaunchSpec { game_id: String },
-    /// Remove a game from SlattyLauncher's records; files, prefix and saves are left untouched
+    /// Remove a game from Slatty's records; files, prefix and saves are left untouched
     Forget { game_id: String },
     /// Show whether a game runs isolated from your files, or change it
     Isolation(games::IsolationArgs),
-    /// Delete a game installed by SlattyLauncher (saves are kept unless asked otherwise)
+    /// Delete a game installed by Slatty (saves are kept unless asked otherwise)
     Uninstall(maintenance::UninstallArgs),
     /// Check an installed game's files, optionally repairing them
     Verify(maintenance::VerifyArgs),

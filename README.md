@@ -1,18 +1,18 @@
-# SlattyLauncher
+# Slatty
 
 <img width="3840" height="2121" alt="Screenshot from 2026-10-16 05-19-20" src="https://github.com/user-attachments/assets/92b1c9ba-2551-44b2-867a-f3192db4f72a" />
 A native Linux launcher for your GOG games, written in Rust with an [Iced](https://iced.rs)
 interface. Your Steam games and the games you add yourself can sit in the same library.
 
-SlattyLauncher signs in to your GOG account, installs your games (Windows builds through Proton,
+Slatty signs in to your GOG account, installs your games (Windows builds through Proton,
 or GOG's native Linux builds), keeps their cloud saves in sync and reports their achievements to
 GOG, all without the GOG Galaxy client and without a web view. Windows games run isolated from your
 files by default.
 
-> **Status: early development.** SlattyLauncher is used daily by its author but has no release
+> **Status: early development.** Slatty is used daily by its author but has no release
 > yet. Commands and on-disk formats may still change.
 >
-> **Not affiliated with GOG or Valve.** GOG publishes no API for launchers: SlattyLauncher uses the
+> **Not affiliated with GOG or Valve.** GOG publishes no API for launchers: Slatty uses the
 > services GOG Galaxy uses, understood by reverse engineering (see [credits](#credits)). They may
 > change or stop working at any time.
 
@@ -85,7 +85,7 @@ Linux only, tested and packaged on x86-64; macOS and Windows hosts are not suppo
 - A Secret Service keyring (GNOME Keyring, KeePassXC, KWallet with its Secret Service bridge).
 - [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) (checked with 1.4) and a
   Proton build: one in `~/.local/share/Steam/compatibilitytools.d`, one of Valve's that Steam
-  downloaded, one umu downloaded, or one SlattyLauncher downloads (Settings → Runners).
+  downloaded, one umu downloaded, or one Slatty downloads (Settings → Runners).
 - [bubblewrap](https://github.com/containers/bubblewrap), able to start a sandbox, for isolated
   games. On Ubuntu 23.10 and later it needs an AppArmor profile first, for umu as well
   ([how](docs/user-guide.md#ubuntu-and-apparmor)).
@@ -144,7 +144,7 @@ The [user guide](docs/user-guide.md) covers the window, and the
 
 ## Security and privacy
 
-- You sign in on GOG's own page; SlattyLauncher never sees your password. Your session is kept in
+- You sign in on GOG's own page; Slatty never sees your password. Your session is kept in
   the system keyring, never in a log or a process argument.
 - No telemetry. Besides GOG, every host contacted is listed in
   [SECURITY.md](SECURITY.md#what-leaves-your-computer) with the setting that controls it; the
@@ -175,12 +175,12 @@ Report vulnerabilities privately, as [SECURITY.md](SECURITY.md#reporting-a-vulne
 
 ## Credits
 
-SlattyLauncher stands on the work of others:
+Slatty stands on the work of others:
 
 - [Comet](https://github.com/imLinguin/comet) (GPL-3.0-or-later) implements the Galaxy communication service
-  games talk to; SlattyLauncher runs it beside them.
+  games talk to; Slatty runs it beside them.
 - [heroic-gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl) (GPL-3.0) is the reference
-  for Galaxy depots, cloud storage and sessions. Parts of SlattyLauncher follow its logic.
+  for Galaxy depots, cloud storage and sessions. Parts of Slatty follow its logic.
 - [Heroic Games Launcher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) showed how
   save locations, Proton and Comet fit together.
 - [gogapidocs](https://gogapidocs.readthedocs.io) documents many GOG endpoints.

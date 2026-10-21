@@ -181,7 +181,7 @@ static INSTANCE: std::sync::OnceLock<FileLock> = std::sync::OnceLock::new();
 fn hold_interface(dirs: &Dirs) -> Result<FileLock, String> {
     slatty_core::lock::try_acquire(&dirs.locks().join("interface.lock"))
         .map_err(err)?
-        .ok_or_else(|| "SlattyLauncher is already open.".to_string())
+        .ok_or_else(|| "Slatty is already open.".to_string())
 }
 
 /// The start-up read, begun by `start` before the window opens.
@@ -393,7 +393,7 @@ mod tests {
         let first = hold_interface(&dirs).unwrap();
         assert_eq!(
             hold_interface(&dirs).unwrap_err(),
-            "SlattyLauncher is already open."
+            "Slatty is already open."
         );
         drop(first);
         assert!(

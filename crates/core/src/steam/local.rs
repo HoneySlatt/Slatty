@@ -361,7 +361,7 @@ fn read(path: &Path) -> Option<Vdf> {
 pub(crate) mod tests {
     use super::*;
 
-    /// A Steam installation made of the files SlattyLauncher reads, all `[FAKE]`.
+    /// A Steam installation made of the files Slatty reads, all `[FAKE]`.
     pub(crate) struct FakeSteam {
         pub home: PathBuf,
         pub steam: Steam,

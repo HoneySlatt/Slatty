@@ -1,6 +1,6 @@
 [package]
 name = "slatty-cli"
-description = "Command line of SlattyLauncher, a native Linux launcher for GOG games, Steam games and your own"
+description = "Command line of Slatty, a native Linux launcher for GOG games, Steam games and your own"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

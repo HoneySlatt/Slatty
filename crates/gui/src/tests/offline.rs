@@ -370,7 +370,7 @@ fn an_install_waits_while_installers_download() {
         render(&app)
             .find(
                 "Downloading the installers of [FAKE] Game 5 (0%). It stops here and resumes \
-                 where it stopped when SlattyLauncher starts again."
+                 where it stopped when Slatty starts again."
             )
             .is_ok()
     );

@@ -170,7 +170,7 @@ fn removing_a_game_added_by_hand_asks_first() {
     let mut ui = render(&app);
     assert!(
         ui.find(
-            "Only what SlattyLauncher unpacked for it is deleted: your own files stay where they \
+            "Only what Slatty unpacked for it is deleted: your own files stay where they \
              are."
         )
         .is_ok()
@@ -192,7 +192,7 @@ fn removing_a_game_added_by_hand_asks_first() {
     assert_eq!(app.selected, None);
 }
 
-/// Once removed, what was deleted is told: the files SlattyLauncher unpacked for it, the game its
+/// Once removed, what was deleted is told: the files Slatty unpacked for it, the game its
 /// installer put in the prefix deleted, with where its copy is; then never that its files are
 /// untouched.
 #[test]
@@ -214,7 +214,7 @@ fn removing_a_game_added_by_hand_tells_what_was_deleted() {
         ..Default::default()
     });
     assert!(
-        unpacked.contains("3 file(s) SlattyLauncher unpacked")
+        unpacked.contains("3 file(s) Slatty unpacked")
             && unpacked.contains("1 other file(s) kept")
             && !unpacked.contains("untouched"),
         "{unpacked}"

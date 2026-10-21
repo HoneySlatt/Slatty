@@ -1,6 +1,6 @@
 [package]
 name = "slatty-core"
-description = "SlattyLauncher's behaviour, shared by its command line and its interface"
+description = "Slatty's behaviour, shared by its command line and its interface"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

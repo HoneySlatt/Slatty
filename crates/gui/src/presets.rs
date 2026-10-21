@@ -44,7 +44,7 @@ impl Preset {
         Preset::ALL.into_iter().find(|p| p.key() == key)
     }
 
-    /// Its colours; corners and motion stay SlattyLauncher's.
+    /// Its colours; corners and motion stay Slatty's.
     pub fn tokens(self) -> Tokens {
         let base = Tokens::default();
         let scrim = |rgb: Color, a: f32| Color { a, ..rgb };

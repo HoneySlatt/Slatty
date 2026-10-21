@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 rust-version = "1.90"
-repository = "https://github.com/HoneySlatt/SlattyLauncher"
+repository = "https://github.com/HoneySlatt/Slatty"
 # An application, not a library: never sent to crates.io.
 publish = false
 

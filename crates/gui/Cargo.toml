@@ -1,6 +1,6 @@
 [package]
 name = "slatty-gui"
-description = "SlattyLauncher, a native Linux launcher for GOG games, Steam games and your own"
+description = "Slatty, a native Linux launcher for GOG games, Steam games and your own"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -17,7 +17,7 @@ chrono = "0.4.45"
 # Gamepads for the couch mode, read from evdev through udev, with SDL's mappings for the less
 # common ones. Its defaults stay on: without them it refuses to build, even on Linux.
 gilrs = "0.11"
-# Iced's defaults but its system theme detection: the theme comes from SlattyLauncher's own tokens,
+# Iced's defaults but its system theme detection: the theme comes from Slatty's own tokens,
 # and the detection waited up to 200 ms for the desktop portal before the window opened, then kept
 # a D-Bus connection whose thread woke the program twice a second for good.
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "thread-pool", "x11", "wayland", "advanced", "image-without-codecs", "selector", "svg", "tokio"] }

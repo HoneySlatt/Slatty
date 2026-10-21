@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 
 pub type HttpClient = Client;
 
-pub const USER_AGENT: &str = concat!("SlattyLauncher/", env!("CARGO_PKG_VERSION"));
+pub const USER_AGENT: &str = concat!("Slatty/", env!("CARGO_PKG_VERSION"));
 
 /// A connection silent for 30 seconds is given up; a slow one never is, whatever it carries: a
 /// file of a Linux installer comes in a single request, and may take many minutes. A redirect does

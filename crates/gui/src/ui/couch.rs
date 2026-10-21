@@ -783,7 +783,7 @@ fn couch_quit<'a>(work: &'a [String], at: usize) -> Element<'a, Message> {
     container(
         container(
             column![
-                text("Quit SlattyLauncher?").size(28).font(bold()),
+                text("Quit Slatty?").size(28).font(bold()),
                 Column::with_children(
                     work.iter()
                         .map(|w| text(w.as_str()).size(17).color(tokens().muted).into())

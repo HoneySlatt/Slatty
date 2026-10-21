@@ -48,7 +48,7 @@ fn bubblewrap(bwrap: Option<PathBuf>) -> Check {
 }
 
 /// Why `bwrap` cannot hold an isolated game here, if it cannot: it must start a sandbox, and
-/// another inside it, as umu's own container starts inside SlattyLauncher's. About 5 ms.
+/// another inside it, as umu's own container starts inside Slatty's. About 5 ms.
 pub fn sandbox_problem(bwrap: &Path) -> Option<String> {
     let restricted =
         std::fs::read_to_string("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
@@ -94,7 +94,7 @@ fn sandbox_problem_with(bwrap: &Path, apparmor_restricted: bool) -> Option<Strin
     if !starts(&[&[bwrap.as_os_str()], &inner[..]].concat()) {
         return Some(format!(
             "bubblewrap cannot start a sandbox inside another, which an isolated game needs (umu's \
-             container starts inside SlattyLauncher's); an AppArmor profile, such as Ubuntu's \
+             container starts inside Slatty's); an AppArmor profile, such as Ubuntu's \
              bwrap-userns-restrict, can forbid it ({see})"
         ));
     }

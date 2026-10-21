@@ -1,7 +1,7 @@
 //! Games added by hand: a game from no store, started from the program the user picked. A Windows
 //! program runs through umu and Proton in a prefix of its own, a Linux one as GOG's native builds
 //! do. Their files are the user's: removing such a game never deletes them, except those
-//! SlattyLauncher unpacked itself from a Linux installer or archive (`unpack`).
+//! Slatty unpacked itself from a Linux installer or archive (`unpack`).
 //!
 //! The game is an install (`installs`, with its folder, runner and isolation) whose id is
 //! `local-<number>` (`store::local_id`), never given twice; what it starts, and the files unpacked
@@ -33,13 +33,13 @@ pub struct Task {
     /// launcher an installer put on C:, for the game it installs on D:, the game's folder.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub in_prefix: bool,
-    /// The files SlattyLauncher unpacked into the folder, which removing the game deletes while
+    /// The files Slatty unpacked into the folder, which removing the game deletes while
     /// they are as they were unpacked.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unpacked: Vec<UnpackedFile>,
 }
 
-/// A file SlattyLauncher unpacked for a game, with its size and modification time just after; a
+/// A file Slatty unpacked for a game, with its size and modification time just after; a
 /// list written before they were kept names the file alone.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -159,7 +159,7 @@ pub async fn run_installer(
         Ok(Platform::Windows) => {}
         Ok(Platform::Linux) | Err(Error::Refused(_)) => {
             return Err(Error::Refused(format!(
-                "{} is no installer or archive SlattyLauncher can use: choose a Windows \
+                "{} is no installer or archive Slatty can use: choose a Windows \
                  installer (.exe), a Linux one (MojoSetup .sh), or a .zip, .tar.gz or .tar.xz \
                  archive",
                 installer.display()
@@ -417,7 +417,7 @@ fn deletable(folder: &Path, files: &[UnpackedFile]) -> Result<Vec<PathBuf>> {
     Ok(out)
 }
 
-/// Whether SlattyLauncher can unpack this file for a Linux game: a MojoSetup installer (GOG's
+/// Whether Slatty can unpack this file for a Linux game: a MojoSetup installer (GOG's
 /// offline ones, also sold elsewhere), a `.zip`, or a `.tar.gz` / `.tar.xz`.
 pub fn is_archive(path: &Path) -> bool {
     let name = path.to_string_lossy().to_lowercase();
@@ -476,7 +476,7 @@ pub async fn unpack(
         // game.
         if let Some(odd) = files.iter().find(|f| f.to_str().is_none()) {
             return Err(Error::Refused(format!(
-                "{} holds a file whose name is not UTF-8, {}; SlattyLauncher cannot unpack it",
+                "{} holds a file whose name is not UTF-8, {}; Slatty cannot unpack it",
                 archive.display(),
                 odd.display()
             )));
@@ -541,7 +541,7 @@ async fn unpack_into(
             .await
             .map_err(|_| {
                 Error::Refused(format!(
-                    "{} is no installer or archive SlattyLauncher can unpack",
+                    "{} is no installer or archive Slatty can unpack",
                     archive.display()
                 ))
             })?;
@@ -789,7 +789,7 @@ pub fn library_game(install: &Install) -> crate::library::LibraryGame {
 }
 
 /// Takes a game added by hand out of the library. Its folder is left as it is: its files are the
-/// user's. Its prefix, which SlattyLauncher made, is deleted only when asked, its saves copied to
+/// user's. Its prefix, which Slatty made, is deleted only when asked, its saves copied to
 /// the backups first.
 pub fn remove(
     db: &Db,
@@ -805,7 +805,7 @@ pub fn remove(
     let _busy = crate::lock::game(dirs, game_id)?;
     let install = Install::get(db, game_id)?
         .ok_or_else(|| Error::NotFound(format!("{game_id} is not in the library")))?;
-    // What SlattyLauncher unpacked for it goes, checked whole before anything is deleted.
+    // What Slatty unpacked for it goes, checked whole before anything is deleted.
     let unpacked = load_task(dirs, game_id)
         .map(|t| t.unpacked)
         .unwrap_or_default();
@@ -822,10 +822,10 @@ pub fn remove(
     }
     let mut report = crate::maintenance::UninstallReport::default();
     if let Some(prefix) = install.runner.prefix().filter(|_| delete_prefix) {
-        // Its own, as SlattyLauncher named it: no other game's, nor one reached through `..`.
+        // Its own, as Slatty named it: no other game's, nor one reached through `..`.
         if prefix != prefix_of(dirs, game_id) {
             return Err(Error::Refused(format!(
-                "{} was not made by SlattyLauncher; nothing was deleted",
+                "{} was not made by Slatty; nothing was deleted",
                 prefix.display()
             )));
         }
@@ -935,7 +935,7 @@ pub fn is_program(path: &Path) -> bool {
 }
 
 /// Refuses a Linux program that would not start for want of an execute bit: a program (ELF)
-/// always, a script unless isolated (then started through its interpreter). One SlattyLauncher
+/// always, a script unless isolated (then started through its interpreter). One Slatty
 /// unpacked for the game is made executable instead: an archive made on Windows keeps no modes.
 fn check_executable(program: &Path, task: &Task, isolated: bool) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
@@ -966,7 +966,7 @@ pub fn platform_of(program: &Path) -> Result<Platform> {
         Ok(Platform::Linux)
     } else {
         Err(Error::Refused(format!(
-            "{} is not a program SlattyLauncher can start: choose a Windows .exe, or a Linux \
+            "{} is not a program Slatty can start: choose a Windows .exe, or a Linux \
              program or script",
             program.display()
         )))
@@ -991,8 +991,8 @@ pub fn gog_game_in(folder: &Path) -> Option<String> {
 
 /// Refuses a game folder an isolated game, which can write in it, could reach the rest of the
 /// system through: the whole disk; one holding the home folder, a folder of programs (`PATH`),
-/// SlattyLauncher's own data or the session's sockets; one inside what holds settings, sockets,
-/// programs or temporary files, or inside SlattyLauncher's data, but for the game's own prefix
+/// Slatty's own data or the session's sockets; one inside what holds settings, sockets,
+/// programs or temporary files, or inside Slatty's data, but for the game's own prefix
 /// (`game_id`'s), where its installer put it. Nor may it be, hold or lie inside another game's
 /// folder, or hold the folder games are installed in.
 fn check_folder(db: &Db, dirs: &Dirs, folder: &Path, game_id: Option<&str>) -> Result<()> {
@@ -1345,7 +1345,7 @@ mod tests {
         assert!(refused(&bin), "a folder of programs");
         std::fs::create_dir_all(f.dirs.data.join("prefixes/local-7/drive_c/Game")).unwrap();
         let in_prefix = f.dirs.data.join("prefixes/local-7/drive_c/Game");
-        assert!(refused(&f.dirs.data), "SlattyLauncher's data");
+        assert!(refused(&f.dirs.data), "Slatty's data");
         assert!(refused(&in_prefix), "another game's prefix");
         assert!(
             check_folder(
@@ -1834,7 +1834,7 @@ mod tests {
         );
     }
 
-    /// Removing a game deletes what SlattyLauncher unpacked for it only as it was unpacked: a file
+    /// Removing a game deletes what Slatty unpacked for it only as it was unpacked: a file
     /// the game rewrote since (a save slot or settings it ships) stays, listed as kept.
     #[tokio::test]
     async fn files_the_game_rewrote_stay_when_it_is_removed() {
@@ -1935,7 +1935,7 @@ mod tests {
 
     /// A Linux program without an execute bit (an AppImage a browser saved) would not start: it is
     /// refused, saying how to allow it, as is such a script not isolated (then started itself, not
-    /// through its interpreter). One SlattyLauncher unpacked for the game is made executable.
+    /// through its interpreter). One Slatty unpacked for the game is made executable.
     #[tokio::test]
     async fn a_linux_program_that_may_not_run_is_refused_unless_unpacked_for_it() {
         use std::os::unix::fs::PermissionsExt;
@@ -1988,7 +1988,7 @@ mod tests {
         assert_eq!(mode(&folder.join("Game/game")) & 0o777, 0o755);
     }
 
-    /// An installer SlattyLauncher neither runs nor unpacks (a .7z, a .msi) is refused saying
+    /// An installer Slatty neither runs nor unpacks (a .7z, a .msi) is refused saying
     /// which it takes, not which programs it starts.
     #[tokio::test]
     async fn an_installer_neither_run_nor_unpacked_is_refused_saying_which_are() {

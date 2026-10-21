@@ -166,7 +166,7 @@ impl Account {
         })
     }
 
-    /// Signs out the account signed in, and with `forget` deletes what SlattyLauncher keeps of it
+    /// Signs out the account signed in, and with `forget` deletes what Slatty keeps of it
     /// (`forget_data`); the account signed out. Its tokens are not needed: an account whose keyring
     /// entry is gone is signed out all the same.
     pub async fn sign_out(db: &Db, dirs: &Dirs, forget: bool) -> Result<AccountInfo> {
@@ -196,7 +196,7 @@ impl Account {
     }
 }
 
-/// Deletes what SlattyLauncher keeps of an account: its name, its play sessions (those not yet
+/// Deletes what Slatty keeps of an account: its name, its play sessions (those not yet
 /// sent to GOG included), its cloud sync history, its library cache (covers, key art, avatar) and
 /// Comet's record of its achievements. Saves are never deleted: the games, their prefixes and own
 /// homes, and the save backups stay.

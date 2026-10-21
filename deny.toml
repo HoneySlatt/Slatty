@@ -7,7 +7,7 @@ targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
 version = 2
 yanked = "deny"
 # Both come with Iced 0.14 and should go with an Iced update. They read fonts and the icons
-# SlattyLauncher ships, and the system's fonts, never data from the network.
+# Slatty ships, and the system's fonts, never data from the network.
 ignore = [
   { id = "RUSTSEC-2026-0206", reason = "rustybuzz: unmaintained, text shaping in Iced's SVG rendering" },
   { id = "RUSTSEC-2026-0192", reason = "ttf-parser: unmaintained, font reading in Iced's text and SVG rendering" },

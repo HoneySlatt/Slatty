@@ -1,5 +1,5 @@
 //! What is asked of the Steam client: installing, launching, verifying and uninstalling a game,
-//! through its `steam://` URLs. The client does the work; SlattyLauncher never touches the files.
+//! through its `steam://` URLs. The client does the work; Slatty never touches the files.
 
 use crate::error::{Error, Result};
 

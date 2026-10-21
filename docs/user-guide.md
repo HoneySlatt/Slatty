@@ -1,6 +1,6 @@
 # User guide
 
-SlattyLauncher comes as two programs that share everything: `slatty-gui`, the window, and
+Slatty comes as two programs that share everything: `slatty-gui`, the window, and
 `slatty`, the [command line](command-line.md). A game installed from one shows in the other. This
 guide follows the window, and gives the command where there is one.
 
@@ -39,11 +39,11 @@ folder. Each line says what is missing and what it is for.
 ### Signing in
 
 Click **Open the GOG sign-in page** (or run `slatty auth login`). Your browser opens GOG's own
-sign-in page; SlattyLauncher never sees your password. Once signed in, the browser lands on an
-almost blank page on `embed.gog.com`: copy its full address, paste it into SlattyLauncher
+sign-in page; Slatty never sees your password. Once signed in, the browser lands on an
+almost blank page on `embed.gog.com`: copy its full address, paste it into Slatty
 (**Paste**, then **Sign in**), and you are in.
 
-That address holds a one-time code, which SlattyLauncher exchanges for a session. The session is
+That address holds a one-time code, which Slatty exchanges for a session. The session is
 kept in your system keyring, never in a file of its own. GOG accepts no other way for a launcher
 other than Galaxy to sign in, which is why the address is pasted back.
 
@@ -61,7 +61,7 @@ offers **Sign in to GOG** later.
 Your library cache, games and saves stay.
 
 **Forget account** (Settings → Account, or `slatty auth logout --forget`) asks first, then also
-deletes what SlattyLauncher keeps of that account: its name, its play history (play time not yet
+deletes what Slatty keeps of that account: its name, its play history (play time not yet
 sent to GOG included), its cloud sync history, its library cache (covers, images, avatar) and
 Comet's record of its achievements. It never deletes games, saves, prefixes, the home folders of
 isolated games, save backups, logs, or the cloud copies `slatty cloud diff` made. The play history
@@ -110,7 +110,7 @@ The game's key art fills the top of the page, with its title, the big button (**
 
 - **Time played** and **Last played**. Play time is the total GOG records, so it counts sessions
   from GOG Galaxy and other launchers too. GOG keeps no "last played" date that a launcher can
-  read: that one only counts sessions started from SlattyLauncher;
+  read: that one only counts sessions started from Slatty;
 - the **Cloud saves** status;
 - **Achievements**: how many are unlocked, and the latest ones.
 
@@ -139,7 +139,7 @@ Right-click a cover, or a game page's key art, and choose **Edit game**. You can
 - the **Title**, and the **Sorting title** used when sorting by name ("Witcher 3" for "The
   Witcher 3");
 - the **Cover** and the **Background** (the key art of the game page): click a picture to pick an
-  image file (PNG, JPEG, WebP, GIF or BMP), copied into SlattyLauncher's data so the original can
+  image file (PNG, JPEG, WebP, GIF or BMP), copied into Slatty's data so the original can
   go. With SteamGridDB turned on (Settings → Advanced), **From SteamGridDB** searches its
   community's covers and backgrounds by name;
 - **Hide game**: out of every shelf and search, listed only under Hidden games, where the same
@@ -164,18 +164,18 @@ and cloud saves is read from GOG in the background and kept; **Refresh** reads i
   reads **Add to queue**). One download runs at a time. Each starts once the ones before it are
   done, failed or cancelled. Drag a row by its handle to reorder, or take it out with ×: a row
   that never started is forgotten; one whose download had begun (resumed while another download
-  ran, cut off, or paused by SlattyLauncher for a game or for **Download now**) keeps what it
+  ran, cut off, or paused by Slatty for a game or for **Download now**) keeps what it
   downloaded and goes back among the stopped downloads, paused, with **Resume** and **Discard**
   (**Remove** for installers). Set aside so, it does not hold the queue until you pause it again.
   **Download now** starts a row at once: the download running is paused and waits right after it,
   then goes on by itself. While a game runs, downloads wait for it to close (**Pause downloads
-  while playing**, Settings → Installs); a Steam game too, once SlattyLauncher sees Steam run it
+  while playing**, Settings → Installs); a Steam game too, once Slatty sees Steam run it
   (it looks while a game it started runs, and as its window comes to the front). Pausing the
   running download yourself holds the queue; when Download now started it, the download it paused
   goes on all the same.
-  The queue is kept when SlattyLauncher closes and goes on at the next start.
+  The queue is kept when Slatty closes and goes on at the next start.
 - **Updates**: games waiting for their automatic update, and the one being applied.
-- **Completed**: installs finished since SlattyLauncher started, with **Play**.
+- **Completed**: installs finished since Slatty started, with **Play**.
 - **In Steam**, with Steam's games on: what the Steam client is downloading.
 
 Sizes read as in Steam: in decimal megabytes and gigabytes, and the speed in megabits a second of
@@ -184,13 +184,13 @@ what arrives from the network (GOG sends it compressed, so it can differ from th
 ### Notifications
 
 A download done or failed, an update applied, an achievement unlocked in a game, cloud saves
-needing attention: SlattyLauncher tells you as Steam does. While its window is in front, a card
+needing attention: Slatty tells you as Steam does. While its window is in front, a card
 shows in the corner for a few seconds (click it to open the game); otherwise, a desktop
 notification with the game's cover. Each kind can be turned off in Settings → Notifications.
 
 ## Installing GOG games
 
-SlattyLauncher installs a game's **Windows** build from GOG's Galaxy content system and runs it
+Slatty installs a game's **Windows** build from GOG's Galaxy content system and runs it
 through Proton, or its **native Linux** build when GOG offers one.
 
 ### Windows or Linux
@@ -249,7 +249,7 @@ asks first and says what would be interrupted.
 
 ### When a download is interrupted
 
-- **Cut off** (window closed, crash, power cut): it resumes by itself when SlattyLauncher starts
+- **Cut off** (window closed, crash, power cut): it resumes by itself when Slatty starts
   again, signed in to GOG, one download at a time. On the command line, run the same `slatty
   install` again.
 - **GOG out of reach** (offline, GOG failing or limiting requests): the download and the queue wait
@@ -321,7 +321,7 @@ as adaptive triggers may be unavailable. It does not provide Steam Input's remap
 Native Linux games, games run through Wine alone, and Steam-managed games do not use this option.
 
 If testing with `PROTON_ADD_CONFIG=sdlinput` or `PROTON_USE_SDL=1` on the launcher command, restart
-SlattyLauncher normally before using the switch: environment options still apply to every game
+Slatty normally before using the switch: environment options still apply to every game
 launched from that session, even when its switch is off.
 
 ### Stopping a game
@@ -420,12 +420,12 @@ of use. A game that keeps its own record can unlock a cleared achievement again 
 ### Updates
 
 With **Update games automatically** on (Settings → Installs, on until turned off), the window
-checks the games SlattyLauncher installed at start, at sign-in and every six hours, and updates
+checks the games Slatty installed at start, at sign-in and every six hours, and updates
 those on their newest build one after the other, never while a game runs, an install or offline
 installers download, or saves sync. They wait in the Updates part of the Downloads tab; while a game updates, its page
 shows **Updating** instead of Play. With **Pause downloads while playing** on, an update being
 applied when a game starts pauses, and goes on once the game closes (at the next start if
-SlattyLauncher is closed first).
+Slatty is closed first).
 
 A game on an older build you chose stays on it until you update it, or choose the newest build
 again. **Check for update** and **Update now** are in the game's Manage drawer.
@@ -439,7 +439,7 @@ slatty update <id>             # apply, or finish an interrupted update
 An update replaces only what changed: unchanged files are kept; a changed file is rebuilt from
 GOG's binary patch when there is one, or its unchanged parts are copied from the installed file
 and only the rest is downloaded; files the new build no longer has are removed, but only those
-SlattyLauncher installed.
+Slatty installed.
 
 An update cut off half way keeps the game from starting until it is finished: it resumes at the
 next start, or with `slatty update <id>`. A paused one waits for **Finish update**, at the top of
@@ -460,12 +460,12 @@ slatty content <id> --remove-dlc <id>
 
 ## Verify, repair, uninstall
 
-The game's Manage drawer (⋮) offers them for games SlattyLauncher installed.
+The game's Manage drawer (⋮) offers them for games Slatty installed.
 
 - **Verify** reads every file and checks it against the installed build; **Repair** downloads again
   only the damaged pieces of the files that are missing or wrong. Both run at the lowest priority,
   so the desktop and a running game stay responsive.
-- **Uninstall** deletes the files SlattyLauncher installed, nothing else: saves, mods or settings
+- **Uninstall** deletes the files Slatty installed, nothing else: saves, mods or settings
   in the game folder stay, and are listed. The Wine prefix, where most saves live, stays unless you
   choose to delete it too; then its `users` folder, Wine's registry files and `C:\ProgramData` are
   copied to the backups first.
@@ -509,7 +509,7 @@ The games of the account signed in to the Steam client can show beside GOG's: tu
 games** in Settings → Steam (off until then), or choose **Use my Steam games without GOG** on the
 sign-in page.
 
-- **Read from Steam's files, never written.** SlattyLauncher finds Steam (native or Flatpak) and
+- **Read from Steam's files, never written.** Slatty finds Steam (native or Flatpak) and
   the account last signed in to it, and reads its games, their names and images, what is installed,
   play time and last session from the client's own files. No Steam password is asked for, and the
   client's settings and sign-in files (`config.vdf`, `local.vdf`, `ssfn*`, `registry.vdf`) are
@@ -524,7 +524,7 @@ sign-in page.
   window comes back to the front. They are never sent to GOG.
 - **Achievements** show in the Achievements tab and on the game's page, as the Steam client keeps
   them: those of games played on this computer or whose page was shown in Steam. They cannot be
-  changed from SlattyLauncher.
+  changed from Slatty.
 - **Images from Steam** (off until turned on): covers, backgrounds and logos the client has not
   saved on this computer, and achievement icons, are downloaded from Steam's image servers, without
   any account. Off, those games show without them.
@@ -551,7 +551,7 @@ running, and their saves and achievements reach GOG without one.
 
 `slatty steam status` says whether Steam is found, who is signed in, and how many of its games
 there are and are installed. If a Steam update changes the format of its list of apps, no Steam
-game can show until SlattyLauncher reads the new one: Settings → Steam and `slatty steam status`
+game can show until Slatty reads the new one: Settings → Steam and `slatty steam status`
 say so.
 
 ## Games added by hand
@@ -593,12 +593,12 @@ on this computer, and GOG is never told of it, nor is umu's database asked about
 - **Locate…** in Game settings finds a game moved elsewhere: its program must be at the same place
   in the folder chosen.
 - **Remove from library** (Manage) takes it out, asking first. Its files are yours and stay, except
-  those SlattyLauncher unpacked, which are deleted while they are as they were unpacked (a save
-  or setting the game rewrote stays). You can also delete the prefix SlattyLauncher made for it;
+  those Slatty unpacked, which are deleted while they are as they were unpacked (a save
+  or setting the game rewrote stays). You can also delete the prefix Slatty made for it;
   its saves, and a game its installer put in it, are copied to the backups first.
 
 An isolated game can write in its folder, so the folder cannot be one through which it would reach
-more: your home folder or one holding it, a folder of programs, `~/.config`, SlattyLauncher's own
+more: your home folder or one holding it, a folder of programs, `~/.config`, Slatty's own
 folders, another game's folder (or one inside or holding it), or one holding the default
 installation path. Put the game in a folder of its own.
 
@@ -614,14 +614,14 @@ slatty import --from-heroic <id>      # read from Heroic's records, never change
 slatty forget <id>                    # drop it again; its files and prefix are untouched
 ```
 
-Imported games cannot be verified or uninstalled: SlattyLauncher does not know which files are
+Imported games cannot be verified or uninstalled: Slatty does not know which files are
 theirs. A Windows game imported to run through Proton is isolated as a new install would be.
 `slatty forget` refuses a game added by hand (use `slatty remove`) and a game while it runs or
 another operation on it does.
 
 ## Proton builds
 
-Every Proton menu lists, first, the builds SlattyLauncher downloaded, then those of Steam's
+Every Proton menu lists, first, the builds Slatty downloaded, then those of Steam's
 `compatibilitytools.d` (native or Flatpak), Valve's builds (Proton Experimental, stable, Hotfix)
 that Steam downloaded in any of its libraries, and those umu downloaded.
 
@@ -677,12 +677,12 @@ covers, which GOG makes smaller than they are drawn there, are enlarged as key a
 It opens:
 
 - from the gamepad button of the top bar;
-- with `slatty-gui --couch`, or the **Couch mode** action of SlattyLauncher's desktop entry;
+- with `slatty-gui --couch`, or the **Couch mode** action of Slatty's desktop entry;
 - by itself in a gamescope session, such as the Steam Deck's Game Mode. On a Steam Deck, add
-  SlattyLauncher to Steam as a non-Steam game from the Desktop Mode, then start it from the Game
+  Slatty to Steam as a non-Steam game from the Desktop Mode, then start it from the Game
   Mode.
 
-**Menu** → **Desktop mode** goes back to the desktop window; **Menu** → **Quit SlattyLauncher**
+**Menu** → **Desktop mode** goes back to the desktop window; **Menu** → **Quit Slatty**
 closes it, asking first if a download or a game runs. The menu opens with the Menu button (☰),
 B or Escape at a tab, or a click on its hint at the bottom.
 
@@ -719,7 +719,7 @@ one, X the left one, Y the top one.
   the queue (Download now, Remove, which sets a download that started aside, paused, as × does).
 
 The gamepad is read through udev, as the desktop gives it to the person at the computer; when
-SlattyLauncher is started from Steam, Steam's controller support hands it the pad Steam presents.
+Slatty is started from Steam, Steam's controller support hands it the pad Steam presents.
 The gamepad is ignored while the window is behind another one or a game runs: its buttons are
 the game's.
 
@@ -732,7 +732,7 @@ Settings lists its parts on the left; the list follows the page as it scrolls.
 | Setting | What it does |
 |---|---|
 | **Signed in as** | The GOG account, with **Log out** |
-| **Forget** | **Forget account**: signs out and deletes what SlattyLauncher keeps of the account (see [above](#signing-out-and-forgetting-an-account)) |
+| **Forget** | **Forget account**: signs out and deletes what Slatty keeps of the account (see [above](#signing-out-and-forgetting-an-account)) |
 | **GOG** | Signed out: which games show, with **Sign in to GOG** |
 
 ### Library
@@ -773,7 +773,7 @@ Settings lists its parts on the left; the list follows the page as it scrolls.
 | **Keep up to date** | Off | Updates the builds games follow as `-latest`, with **Update now** |
 | **Newest builds** | | The newest build of each project, with **Check GitHub** and **Install** |
 | **Share with Steam and Heroic** | Off | Lists the downloaded builds in Steam and Heroic |
-| **Downloaded** | | The builds SlattyLauncher downloaded, with **Delete** |
+| **Downloaded** | | The builds Slatty downloaded, with **Delete** |
 
 ### Appearance
 
@@ -797,7 +797,7 @@ updates**, **Achievements**, **Cloud saves**. All are on until turned off.
 | **Isolate new Windows games** | On | Windows games installed from now on run [isolated from your files](#isolation-from-your-files) |
 | **Play time on GOG** | On | Sends each session to GOG, as Galaxy does. Sessions played while off are never sent |
 
-SlattyLauncher has no telemetry. [SECURITY.md](../SECURITY.md#what-leaves-your-computer) lists
+Slatty has no telemetry. [SECURITY.md](../SECURITY.md#what-leaves-your-computer) lists
 everything that leaves your computer, and when.
 
 ### Advanced
@@ -811,7 +811,7 @@ Keys you paste go to the system keyring and are never shown again; **Remove** de
 
 ### About
 
-The version, and the licences of SlattyLauncher and of what it includes.
+The version, and the licences of Slatty and of what it includes.
 
 ## Where data is stored
 
@@ -820,12 +820,12 @@ Folders follow the XDG variables (`XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG
 
 | Path | What it holds |
 |---|---|
-| System keyring, `slatty-launcher` / `gog:<user id>` | Your GOG session |
-| System keyring, `slatty-launcher` / `key:steamgriddb`, `key:steam-web-api` | Your SteamGridDB and Steam Web API keys, once saved |
+| System keyring, `slatty` / `gog:<user id>` | Your GOG session |
+| System keyring, `slatty` / `key:steamgriddb`, `key:steam-web-api` | Your SteamGridDB and Steam Web API keys, once saved |
 | `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings, your changes to games |
 | `~/.local/share/slatty/prefixes/<id>/` | Wine prefixes (most saves live here) |
 | `~/.local/share/slatty/homes/<id>/` | The home folders of isolated games, a Linux game's saves among them. Kept when the game is uninstalled |
-| `~/.local/share/slatty/backups/` | Copies made before any save is replaced or a prefix deleted. Never deleted by SlattyLauncher |
+| `~/.local/share/slatty/backups/` | Copies made before any save is replaced or a prefix deleted. Never deleted by Slatty |
 | `~/.local/share/slatty/manifests/<id>.json` | The files installed for each game |
 | `~/.local/share/slatty/support/<id>/`, `redist/` | GOG's setup files for each game, and the redistributables shared by games |
 | `~/.local/share/slatty/added/` | What each game added by hand starts, and the files unpacked for it |
@@ -902,4 +902,4 @@ so. Choose one of these, from the most to the least protective, then check with 
    program may then create user namespaces again: not recommended.
 
 These steps come from Ubuntu's AppArmor profiles and from what umu, Lutris and Heroic users found;
-they have not been tried with SlattyLauncher on Ubuntu yet.
+they have not been tried with Slatty on Ubuntu yet.

@@ -1,4 +1,4 @@
-//! Proton builds SlattyLauncher downloads and keeps itself, in `<data>/protons/<name>`, from the
+//! Proton builds Slatty downloads and keeps itself, in `<data>/protons/<name>`, from the
 //! GitHub releases of their projects. Each archive is checked against the SHA-512 sum its release
 //! publishes before it is unpacked, and nothing in it is written out of its folder.
 
@@ -662,7 +662,7 @@ pub fn remove(db: &Db, dirs: &Dirs, path: &Path) -> Result<()> {
         || path.is_symlink()
     {
         return Err(Error::Refused(format!(
-            "{} is not a Proton build SlattyLauncher downloaded",
+            "{} is not a Proton build Slatty downloaded",
             path.display()
         )));
     }

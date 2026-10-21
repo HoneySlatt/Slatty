@@ -437,7 +437,7 @@ pub fn set_favorites(db: &Db, ids: &[String]) -> Result<()> {
     db.set_setting(FAVORITES, Some(&ids.join(",")))
 }
 
-/// Proton builds that can run games: those SlattyLauncher downloaded, custom ones in Steam's
+/// Proton builds that can run games: those Slatty downloaded, custom ones in Steam's
 /// `compatibilitytools.d`, Valve's own (Proton Experimental, stable, Hotfix) in every Steam
 /// library, and those umu downloaded. A build found twice (`~/.steam/steam` is the same folder, or
 /// the same name in two places) is listed once.
@@ -775,7 +775,7 @@ mod tests {
         .unwrap();
         std::fs::create_dir_all(home.join(".steam")).unwrap();
         std::os::unix::fs::symlink(&steam, home.join(".steam/steam")).unwrap();
-        // Downloaded by SlattyLauncher: listed first; a download half done is not a build.
+        // Downloaded by Slatty: listed first; a download half done is not a build.
         let downloaded = home.join("slatty/protons");
         build(&downloaded.join("GE-Proton11-7-x86_64"));
         std::fs::create_dir_all(downloaded.join(".staging/GE-Proton11-8-x86_64")).unwrap();

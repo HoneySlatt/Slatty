@@ -1,4 +1,4 @@
-//! Play time as GOG records it, and reporting of sessions played through SlattyLauncher, as GOG
+//! Play time as GOG records it, and reporting of sessions played through Slatty, as GOG
 //! Galaxy does after each game.
 
 use reqwest::Client;

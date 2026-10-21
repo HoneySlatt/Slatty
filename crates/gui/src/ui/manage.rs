@@ -93,7 +93,7 @@ impl App {
         let uninstall = if view.is_some_and(|v| v.confirm_uninstall && !v.busy) {
             column![
                 note(
-                    "Only files installed by SlattyLauncher are deleted; anything else in the \
+                    "Only files installed by Slatty are deleted; anything else in the \
                      folder is kept. The Wine prefix holds most local saves."
                 ),
                 choice(
@@ -119,7 +119,7 @@ impl App {
                     on(MaintenanceMsg::AskUninstall(id())),
                     theme::tonal
                 ),
-                note("Only files SlattyLauncher installed are deleted."),
+                note("Only files Slatty installed are deleted."),
             ]
         };
         sections.push(titled(
@@ -179,17 +179,17 @@ impl App {
             col = col
                 .push(note(match (prefix.is_some(), in_prefix) {
                     (_, true) => {
-                        "Only what SlattyLauncher unpacked for it is deleted. The game is in \
-                         the Wine prefix SlattyLauncher made for it: deleting the prefix deletes \
+                        "Only what Slatty unpacked for it is deleted. The game is in \
+                         the Wine prefix Slatty made for it: deleting the prefix deletes \
                          the game, copied to the backups first with the prefix's saves."
                     }
                     (true, false) => {
-                        "Only what SlattyLauncher unpacked for it is deleted: your own files stay \
-                         where they are. The Wine prefix SlattyLauncher made for it holds most of \
+                        "Only what Slatty unpacked for it is deleted: your own files stay \
+                         where they are. The Wine prefix Slatty made for it holds most of \
                          its saves."
                     }
                     (false, _) => {
-                        "Only what SlattyLauncher unpacked for it is deleted: your own files stay \
+                        "Only what Slatty unpacked for it is deleted: your own files stay \
                          where they are."
                     }
                 }))

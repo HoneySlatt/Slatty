@@ -120,7 +120,7 @@ pub async fn download(http: &Client, url: &str) -> Result<Vec<u8>> {
     http::bytes(http.get(url), "downloading SteamGridDB art").await
 }
 
-/// The file of a thumbnail in SlattyLauncher's cache, downloaded when missing: shared by every
+/// The file of a thumbnail in Slatty's cache, downloaded when missing: shared by every
 /// account, as Steam's images are, it tells nothing of one and shows signed out of GOG too. Only
 /// from SteamGridDB's own servers.
 pub async fn thumbnail(http: &Client, dirs: &Dirs, url: &str) -> Result<PathBuf> {

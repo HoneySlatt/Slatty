@@ -3,7 +3,7 @@
 //! games added by hand, from no store, `local-<number>`.
 //! `paths::check_game_id` accepts GOG's alone and guards every request to GOG, so GOG never
 //! learns of another store's game. `paths::check_owned_id` accepts GOG's and those added by hand:
-//! what installs, records or deletes a game's files uses it, so nothing SlattyLauncher writes or
+//! what installs, records or deletes a game's files uses it, so nothing Slatty writes or
 //! deletes can be a Steam game's, which Steam owns.
 
 use crate::error::{Error, Result};
@@ -13,7 +13,7 @@ use crate::error::{Error, Result};
 pub enum Store {
     Gog,
     Steam,
-    /// Added by hand: a game from no store, or one SlattyLauncher cannot install.
+    /// Added by hand: a game from no store, or one Slatty cannot install.
     Local,
 }
 
@@ -104,7 +104,7 @@ mod tests {
     /// What installs, records or deletes a game's files accepts GOG's ids and those of games added
     /// by hand, never a Steam game's; what asks GOG accepts GOG's alone.
     #[test]
-    fn steam_games_never_enter_what_slattylauncher_writes() {
+    fn steam_games_never_enter_what_slatty_writes() {
         use crate::paths::{check_game_id, check_owned_id};
         assert!(check_owned_id("1456487183").is_ok());
         assert!(check_owned_id("local-7").is_ok());

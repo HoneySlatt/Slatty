@@ -10,7 +10,7 @@ use crate::icons::{Icon, icon};
 use crate::library::GridWindow;
 use crate::theme::{self, bold, semibold, tokens};
 
-/// SlattyLauncher's emblem, in the accent colour.
+/// Slatty's emblem, in the accent colour.
 pub fn logo<'a>(height: f32) -> Element<'a, Message> {
     // Made once: a handle hashes the whole file (159 KB), and the top bar is in every view.
     static LOGO: std::sync::LazyLock<svg::Handle> = std::sync::LazyLock::new(|| {

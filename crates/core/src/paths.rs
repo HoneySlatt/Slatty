@@ -36,7 +36,7 @@ impl Dirs {
         }
     }
 
-    /// Creates SlattyLauncher's folders readable by the user only (0700), and closes those an
+    /// Creates Slatty's folders readable by the user only (0700), and closes those an
     /// earlier version left readable by others: they hold the library, play times, saves
     /// backups and Wine prefixes.
     pub fn keep_private(&self) -> Result<()> {
@@ -84,7 +84,7 @@ pub fn check_game_id(game_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Refuses a game id SlattyLauncher may not name its own files after (records, prefixes, homes,
+/// Refuses a game id Slatty may not name its own files after (records, prefixes, homes,
 /// logs): GOG's, or a game added by hand. A Steam game's files are Steam's.
 pub fn check_owned_id(game_id: &str) -> Result<()> {
     match crate::store::of(game_id)? {

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest. SlattyLauncher is young; an issue saying what works or fails with a given
+Thanks for your interest. Slatty is young; an issue saying what works or fails with a given
 game is as valuable as code.
 
 If you work with an AI coding agent, point it to [AGENTS.md](AGENTS.md) first: it also holds the
@@ -61,7 +61,7 @@ Both download the advisory database. The last audit (2026-10-11) found no vulner
 `paste` (unmaintained; only in macOS's Metal backend, not built on Linux), `rustybuzz` and
 `ttf-parser` (unmaintained; text and font reading, ignored in `deny.toml` with the reason), and
 `lru` (unsound only when a key's `Drop` panics, which the glyph cache's keys never do). Image
-decoding is limited to the formats SlattyLauncher shows (JPEG, PNG, WebP, GIF, BMP), so fewer
+decoding is limited to the formats Slatty shows (JPEG, PNG, WebP, GIF, BMP), so fewer
 decoders face downloaded files.
 
 ## Code style

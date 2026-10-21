@@ -178,7 +178,7 @@ impl App {
                 .font(theme::font()),
         );
         fields = fields.push(note(
-            "Removing it from the library deletes only what SlattyLauncher unpacked for it: your \
+            "Removing it from the library deletes only what Slatty unpacked for it: your \
              own files stay. It has no cloud saves or achievements, and GOG is not told of it.",
         ));
         let (label_of, ready, next) = if d.installer_first() {

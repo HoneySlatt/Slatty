@@ -19,7 +19,7 @@ pub fn partial_dir(root: &Path, directory: &str) -> PathBuf {
 
 /// Written into a partial folder as its download starts, with the game's id, then the build on a
 /// line of its own, carried into the game folder by the rename and removed once the game is
-/// registered: a game folder holding it was published by SlattyLauncher for that game and is
+/// registered: a game folder holding it was published by Slatty for that game and is
 /// finished by resuming its job; one without it, or with another game's id (two products sharing a
 /// folder name), is not its own, never adopted.
 pub const STAGED_MARK: &str = ".slatty-staged";
@@ -51,7 +51,7 @@ pub(crate) fn mark_staged(partial: &Path, game_id: &str, build_id: &str) -> Resu
     }
 }
 
-/// Whether SlattyLauncher published `target` for `game_id` (see `STAGED_MARK`).
+/// Whether Slatty published `target` for `game_id` (see `STAGED_MARK`).
 pub(crate) fn staged_here(target: &Path, game_id: &str) -> bool {
     staged_mark(target).is_some_and(|(id, _)| id == game_id)
 }

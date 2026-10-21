@@ -209,7 +209,7 @@ fn desktop(title: &str, body: &str, image: Option<&std::path::Path>) {
         Some("org.freedesktop.Notifications"),
         "Notify",
         &(
-            "SlattyLauncher",
+            "Slatty",
             0u32,
             "",
             title,

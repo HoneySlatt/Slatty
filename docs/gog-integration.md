@@ -1,6 +1,6 @@
 # GOG integration
 
-GOG publishes no API for third-party launchers. SlattyLauncher signs in with GOG Galaxy's public
+GOG publishes no API for third-party launchers. Slatty signs in with GOG Galaxy's public
 OAuth client and uses the services Galaxy uses. This page lists every GOG service involved, where
 the knowledge comes from, and whether it was checked against GOG.
 
@@ -8,7 +8,7 @@ the knowledge comes from, and whether it was checked against GOG.
 - **Verified:** used successfully against real GOG services (see [compatibility.md](compatibility.md)).
 - **Implemented:** coded and tested against simulated services only.
 
-Requests name SlattyLauncher in their `User-Agent`, except those to cloud storage, which send the
+Requests name Slatty in their `User-Agent`, except those to cloud storage, which send the
 Galaxy user agent heroic-gogdl sends.
 
 ## Authentication
@@ -51,7 +51,7 @@ client or PKCE flow is known to work, which is why the user pastes the final add
 Each product (the game and every DLC) has its own download links; DLC chunks are fetched through the
 DLC's links. Download links expire; on 401 or 403 they are asked for again.
 
-GOG's answer lists several CDN endpoints. SlattyLauncher measures each on a first request and uses
+GOG's answer lists several CDN endpoints. Slatty measures each on a first request and uses
 the fastest, and asks a late chunk again from another endpoint (verified: on a 17 MB/s connection,
 the endpoint GOG listed first gave about 1 MB/s, the second up to 13 MB/s).
 

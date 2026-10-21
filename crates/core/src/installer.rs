@@ -314,7 +314,7 @@ fn drop_replaced(
 
 /// The partial folder of a resumed install is gone and the game folder it became exists: the
 /// download finished and was renamed into place, but the game was not registered yet. A folder
-/// already there that SlattyLauncher did not publish for this game is never taken for it.
+/// already there that Slatty did not publish for this game is never taken for it.
 fn published_unregistered(resumed: bool, partial: &Path, target: &Path, game_id: &str) -> bool {
     resumed && !partial.exists() && staged_here(target, game_id)
 }

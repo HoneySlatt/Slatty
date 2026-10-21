@@ -104,7 +104,7 @@ fn main() -> iced::Result {
     for font in theme::FONTS {
         app = app.font(font);
     }
-    app.title("SlattyLauncher")
+    app.title("Slatty")
         .subscription(App::subscription)
         .theme(App::theme)
         .scale_factor(App::scale_factor)
@@ -1288,13 +1288,13 @@ impl App {
         let mut work = Vec::new();
         if let Some((_, title, p)) = self.installing() {
             work.push(format!(
-                "Downloading {title} ({:.0}%). It stops here and resumes where it stopped when SlattyLauncher starts again.",
+                "Downloading {title} ({:.0}%). It stops here and resumes where it stopped when Slatty starts again.",
                 ui::format::fraction(p) * 100.0
             ));
         }
         if let Some(run) = &self.offline_run {
             work.push(format!(
-                "Downloading the installers of {} ({:.0}%). It stops here and resumes where it stopped when SlattyLauncher starts again.",
+                "Downloading the installers of {} ({:.0}%). It stops here and resumes where it stopped when Slatty starts again.",
                 self.title_of(&run.game_id),
                 ui::format::fraction(run.progress) * 100.0
             ));

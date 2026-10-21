@@ -93,7 +93,7 @@ impl MenuItem {
     pub fn label(self) -> &'static str {
         match self {
             MenuItem::Desktop => "Desktop mode",
-            MenuItem::Quit => "Quit SlattyLauncher",
+            MenuItem::Quit => "Quit Slatty",
         }
     }
 }

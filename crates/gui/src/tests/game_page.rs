@@ -194,7 +194,7 @@ fn closing_asks_first_only_when_something_is_running() {
     let mut ui = render(&app);
     assert!(
         ui.find(
-            "Downloading [FAKE] Game 5 (50%). It stops here and resumes where it stopped when SlattyLauncher starts again."
+            "Downloading [FAKE] Game 5 (50%). It stops here and resumes where it stopped when Slatty starts again."
         )
         .is_ok()
     );
@@ -234,14 +234,8 @@ fn closing_from_the_sign_in_page_asks_first_too() {
     // Where it sits over the library: the page fills the window, as the layers over it do.
     let mut library = library_app();
     library.quit_confirm = app.quit_confirm.clone();
-    let over_library = render(&library)
-        .find("Quit SlattyLauncher?")
-        .unwrap()
-        .bounds();
-    assert_eq!(
-        ui.find("Quit SlattyLauncher?").unwrap().bounds(),
-        over_library
-    );
+    let over_library = render(&library).find("Quit Slatty?").unwrap().bounds();
+    assert_eq!(ui.find("Quit Slatty?").unwrap().bounds(), over_library);
     ui.click("Keep running").unwrap();
     for m in ui.into_messages().collect::<Vec<_>>() {
         let _ = app.update(m);

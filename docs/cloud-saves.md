@@ -1,6 +1,6 @@
 # Cloud saves
 
-SlattyLauncher synchronises save folders with GOG's cloud storage. Losing a save is the worst thing
+Slatty synchronises save folders with GOG's cloud storage. Losing a save is the worst thing
 a launcher can do, so the design favours refusing over guessing. This page describes the rules and
 their known limits.
 
@@ -59,7 +59,7 @@ not there.
 - **Nor is a cloud file.** Before an upload replaces it (a game that crashed while saving would
   otherwise put a damaged save over a good one) or a deletion removes it, the cloud version is
   downloaded to `…/<location>/remote/` beside the local copies. Backups are flushed to the disk
-  and never deleted by SlattyLauncher. Each sync that backs up files gets a folder of its own, even
+  and never deleted by Slatty. Each sync that backs up files gets a folder of its own, even
   two syncs in the same second.
 - **Deletions need permission.** They are applied only with `slatty cloud sync <id>
   --allow-deletions`, which covers that whole sync; the interface never passes it on its own. Two

@@ -463,7 +463,7 @@ fn uninstall_notice(added: bool, r: &UninstallReport) -> String {
         format!("Uninstalled. {} file(s) deleted.", r.removed_files)
     } else if r.removed_files > 0 {
         format!(
-            "Removed from the library with {} file(s) SlattyLauncher unpacked for it.",
+            "Removed from the library with {} file(s) Slatty unpacked for it.",
             r.removed_files
         )
     } else if r.game_backup.is_none() {
@@ -476,7 +476,7 @@ fn uninstall_notice(added: bool, r: &UninstallReport) -> String {
             format!("{} other file(s) kept in its folder.", r.kept.len())
         } else {
             format!(
-                "{} file(s) not installed by SlattyLauncher kept in the game folder.",
+                "{} file(s) not installed by Slatty kept in the game folder.",
                 r.kept.len()
             )
         });

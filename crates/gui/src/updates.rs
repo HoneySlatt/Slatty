@@ -205,7 +205,7 @@ impl App {
         let held = self.updates.held.as_deref() == Some(game_id);
         match result {
             // Paused for a game: it goes on once the game closes (`next_update`), and at the next
-            // start if SlattyLauncher is closed meanwhile.
+            // start if Slatty is closed meanwhile.
             Err(None) if held => {
                 if let Some(core) = self.core.clone()
                     && let Err(e) = maintenance::resume_later(&core.db, &core.dirs, game_id)

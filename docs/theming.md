@@ -30,7 +30,7 @@ theme shows alone until the mistake is fixed.
 ## Font
 
 The font is chosen in the interface: **Settings → Appearance → Font**. The default is Geist, built
-into SlattyLauncher so the look is the same on every system; the menu also lists the font families
+into Slatty so the look is the same on every system; the menu also lists the font families
 installed on the system, applied at once. A family without a semibold weight shows bold where the
 interface uses semibold.
 

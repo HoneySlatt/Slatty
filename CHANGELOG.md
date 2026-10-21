@@ -34,7 +34,7 @@ The first public version.
   at once and puts the download it pauses right after it; a row that started already, taken out
   of the queue, is paused with what it downloaded, without holding the queue. Downloads and
   automatic updates pause
-  while a game runs (a Steam game too, once SlattyLauncher sees it run) and go on once it closes
+  while a game runs (a Steam game too, once Slatty sees it run) and go on once it closes
   (can be turned off), resume after a crash or a power cut, and wait while GOG is out of reach.
 - Every file checked against GOG's checksums; the game folder appears only once all are right.
 - Updates in place, automatic for games on their newest build, with GOG's binary patches; DLC,
@@ -85,7 +85,7 @@ The first public version.
   a drive D: that is the folder chosen), or by a Linux installer or archive unpacked without running
   it, each into a folder of its own: a Windows program through Proton in a prefix of
   its own, a Linux program, script or AppImage natively, isolated like the others. Removing one
-  never deletes its files, but for those SlattyLauncher unpacked, and GOG is never told of it.
+  never deletes its files, but for those Slatty unpacked, and GOG is never told of it.
 - GOG games installed by another tool, imported from their folder or from Heroic.
 - A command line (`slatty`) and an interface (`slatty-gui`) on the same core; a Nix package with a
   desktop entry.

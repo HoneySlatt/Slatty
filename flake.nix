@@ -1,5 +1,5 @@
 {
-  description = "SlattyLauncher — native Linux launcher for GOG games, Steam games and your own";
+  description = "Slatty — native Linux launcher for GOG games, Steam games and your own";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -34,7 +34,7 @@
           # Gamepads, found and followed through udev.
           udev
         ];
-      slattyLauncher =
+      slatty =
         pkgs:
         let
           # Programs the launcher starts, found in PATH: umu and Proton run Windows games,
@@ -48,7 +48,7 @@
           ];
         in
         pkgs.rustPlatform.buildRustPackage {
-          pname = "slatty-launcher";
+          pname = "slatty";
           version = (pkgs.lib.importTOML ./Cargo.toml).workspace.package.version;
           src = pkgs.lib.cleanSource ./.;
           cargoLock.lockFile = ./Cargo.lock;
@@ -62,8 +62,8 @@
           # run in the development shell.
           doCheck = false;
           postInstall = ''
-            install -Dm644 packaging/io.github.HoneySlatt.SlattyLauncher.desktop -t $out/share/applications
-            install -Dm644 packaging/io.github.HoneySlatt.SlattyLauncher.metainfo.xml -t $out/share/metainfo
+            install -Dm644 packaging/io.github.HoneySlatt.Slatty.desktop -t $out/share/applications
+            install -Dm644 packaging/io.github.HoneySlatt.Slatty.metainfo.xml -t $out/share/metainfo
           '';
           # The libraries go into the interface's own search path rather than LD_LIBRARY_PATH,
           # which every game started from it would inherit.
@@ -77,7 +77,7 @@
           '';
           meta = {
             description = "Native Linux launcher for GOG games, Steam games and your own";
-            homepage = "https://github.com/HoneySlatt/SlattyLauncher";
+            homepage = "https://github.com/HoneySlatt/Slatty";
             license = pkgs.lib.licenses.gpl3Plus;
             mainProgram = "slatty-gui";
             platforms = systems;
@@ -86,8 +86,8 @@
     in
     {
       packages = forAll (pkgs: {
-        default = slattyLauncher pkgs;
-        slatty-launcher = slattyLauncher pkgs;
+        default = slatty pkgs;
+        slatty = slatty pkgs;
         galaxy-communication = galaxyCommunication pkgs;
       });
 

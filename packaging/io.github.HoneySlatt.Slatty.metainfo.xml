@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.HoneySlatt.SlattyLauncher</id>
+  <id>io.github.HoneySlatt.Slatty</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <name>SlattyLauncher</name>
+  <name>Slatty</name>
   <summary>Install and play your GOG games, beside your Steam games and your own</summary>
   <description>
     <p>
@@ -23,17 +23,17 @@
       <li>A couch mode for a gamepad, full screen, for a television or a Steam Deck</li>
       <li>No telemetry</li>
     </ul>
-    <p>SlattyLauncher is not affiliated with GOG.</p>
+    <p>Slatty is not affiliated with GOG.</p>
   </description>
-  <launchable type="desktop-id">io.github.HoneySlatt.SlattyLauncher.desktop</launchable>
+  <launchable type="desktop-id">io.github.HoneySlatt.Slatty.desktop</launchable>
   <provides>
     <binary>slatty-gui</binary>
     <binary>slatty</binary>
   </provides>
-  <url type="homepage">https://github.com/HoneySlatt/SlattyLauncher</url>
-  <url type="bugtracker">https://github.com/HoneySlatt/SlattyLauncher/issues</url>
-  <url type="vcs-browser">https://github.com/HoneySlatt/SlattyLauncher</url>
-  <developer id="io.github.HoneySlatt">
+  <url type="homepage">https://github.com/HoneySlatt/Slatty</url>
+  <url type="bugtracker">https://github.com/HoneySlatt/Slatty/issues</url>
+  <url type="vcs-browser">https://github.com/HoneySlatt/Slatty</url>
+  <developer id="io.github.honeyslatt">
     <name>HoneySlatt</name>
   </developer>
   <categories>

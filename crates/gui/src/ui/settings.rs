@@ -80,7 +80,7 @@ impl App {
                 Section::Privacy => self.privacy_rows(wide),
                 Section::Advanced => self.advanced_rows(wide),
                 Section::About => vec![note(format!(
-                    "SlattyLauncher {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL) \
+                    "Slatty {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL) \
                      · image sharpening from AMD FidelityFX FSR 1 (MIT)",
                     env!("CARGO_PKG_VERSION")
                 ))],
@@ -135,7 +135,7 @@ impl App {
             logo(72.0),
             text("Sign in to GOG").size(30).font(bold()),
             text(
-                "Sign-in happens in your browser; SlattyLauncher never sees your password. \
+                "Sign-in happens in your browser; Slatty never sees your password. \
                  Once signed in, the browser shows an almost blank page on embed.gog.com: \
                  copy that page's full address and paste it below."
             )
@@ -291,7 +291,7 @@ impl App {
                 None,
             ),
             note(
-                "No telemetry: SlattyLauncher talks to GOG, to the download servers GOG names, \
+                "No telemetry: Slatty talks to GOG, to the download servers GOG names, \
                  to umu's database when allowed above, to GitHub once Proton downloads are \
                  turned on in Runners, to SteamGridDB once turned on in Advanced, and to Steam's \
                  image servers and Web API once turned on in Steam. umu, which runs Windows games, \
@@ -754,7 +754,7 @@ impl App {
                 wide,
                 "Forget",
                 note(
-                    "Signs out and deletes what SlattyLauncher keeps of this account on this \
+                    "Signs out and deletes what Slatty keeps of this account on this \
                      computer. Games and saves stay.",
                 ),
                 Some(action("Forget account", Message::AskForget)),

@@ -154,7 +154,7 @@ library shows. The system's fonts are read on another thread begun at the same t
 
 `main` reads the theme, the font and the graphics backend before the first frame, so the window
 never shows another look first. One interface runs at a time: `boot` takes
-`locks/interface.lock`, and a second window says SlattyLauncher is already open. The command line
+`locks/interface.lock`, and a second window says Slatty is already open. The command line
 still runs beside it.
 
 `graphics` chooses the backends: Iced has wgpu start every backend and pick the best adapter. Where
@@ -215,14 +215,14 @@ references measured in the application itself.
   or changing content, uninstalling, syncing cloud saves (checking does not), running setup and
   playing each hold `locks/game-<id>.lock`. A second one on the same game, from the same process
   or another (command line and interface), is refused rather than touch files in use. A game
-  started from SlattyLauncher keeps it busy until its last process ends, even once the launcher
+  started from Slatty keeps it busy until its last process ends, even once the launcher
   closed or crashed: the session supervisor holds `session-<id>.lock` while it runs.
 - **Staged writes.** Files are written under a temporary name, then renamed
   (`fsutil::write_atomic`, `temp_sibling`). A game folder appears only once every file is
   verified. Nothing is written through a symbolic link that leads out of the game folder
   (`installer::refuse_outside`, `leads_inside`), and every path from GOG goes through
   `installer::safe_relative`.
-- **Destructive actions refuse or keep a copy.** Only files SlattyLauncher installed (its install
+- **Destructive actions refuse or keep a copy.** Only files Slatty installed (its install
   record) are ever deleted from a game folder; saves are copied before they are replaced.
 - **Network behind traits.** `galaxy::ContentSource`, `cloud::CloudTransport` and
   `installer::linux::Source` have in-memory fakes with fault injection, so tests need no network.
@@ -236,7 +236,7 @@ references measured in the application itself.
 GOG accepts only its Galaxy client's redirect address (`https://embed.gog.com/on_login_success`).
 
 1. The system browser opens GOG's sign-in page.
-2. The user pastes the address they land on; SlattyLauncher takes the code from it.
+2. The user pastes the address they land on; Slatty takes the code from it.
 3. The code is exchanged for tokens, which go to the keyring.
 
 Refreshes take a file lock, so the command line and the interface never refresh at once; GOG does
@@ -355,11 +355,11 @@ DLC.
 It records an `updating` job with the target just before the first file changes, so a change
 refused or paused before (not enough space, GOG not answering) leaves the game playable. Then the
 new file list is filled in place with the install's routine, GOG's binary patches applied where
-GOG offers them, files the new build no longer has deleted if SlattyLauncher installed them, and
+GOG offers them, files the new build no longer has deleted if Slatty installed them, and
 the install record rewritten. While the job exists, launching and verifying the game are refused,
 and running the change again resumes it with the pinned build.
 
-Automatic updates (`gui/src/updates.rs`) take the games SlattyLauncher installed that are not held
+Automatic updates (`gui/src/updates.rs`) take the games Slatty installed that are not held
 on an older build (`maintenance::auto_update_candidates`), check them at start, at sign-in and every
 six hours, and apply them one at a time through Manage's own update, once no game runs, no install
 downloads and no cloud sync or other work on a game is busy. One being applied when a game starts
@@ -420,7 +420,7 @@ Actual controller behavior remains a per-game, per-build check.
 A **native Linux game** runs through `start.sh`: on NixOS inside `steam-run` when present (which
 mounts an empty `/tmp` of its own, so temporary folders under `/tmp` become `/tmp`,
 `runner::steam_run_temp`), else inside umu's Steam Linux Runtime 3.0 through a compatibility tool of
-SlattyLauncher's own (`runner::runtime_tool`) rather than umu's `UMU_NO_PROTON`, which asks GitHub
+Slatty's own (`runner::runtime_tool`) rather than umu's `UMU_NO_PROTON`, which asks GitHub
 at each launch; on other systems through the interpreter its first line names.
 
 ### Game sessions
@@ -511,7 +511,7 @@ use, an in-memory transport with fault injection for the tests.
 
 Comet listens on the fixed port 127.0.0.1:9977, so only one runs at a time.
 
-- **Tokens.** SlattyLauncher passes them through Comet's Lutris importer: a 0600 file in a private
+- **Tokens.** Slatty passes them through Comet's Lutris importer: a 0600 file in a private
   folder under `$XDG_RUNTIME_DIR`, removed as soon as Comet listens, never in process arguments.
   `$XDG_RUNTIME_DIR` must belong to the user and be closed to others (`comet::private_dir`). Comet
   is taken as ready only once a listener of the user's own holds the port (`/proc/net/tcp`).
@@ -545,7 +545,7 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one runs at a time.
   KeyValues, bounded in size, depth and entries;
 - `stats` reads a game's achievements from the client's stats files;
 - `running` finds the games the client runs, from the user's own processes named `reaper` started
-  from the client's folders, as `reaper SteamLaunch AppId=<id>`, but the one SlattyLauncher itself
+  from the client's folders, as `reaper SteamLaunch AppId=<id>`, but the one Slatty itself
   runs under when Steam started it (a non-Steam game on a Steam Deck); no other process's
   arguments are read;
 - `library` turns them into library games, and `twins` pairs a GOG game with the Steam game it also
@@ -691,7 +691,7 @@ Paths follow the XDG variables; the defaults are shown.
 | No web view; the address pasted back after sign-in | A native application; GOG accepts only Galaxy's redirect address, and no local redirect is known to work |
 | Linux builds from GOG's offline installers, read file by file | GOG's content system has no Linux builds; ranged reads keep the installer off the disk |
 | Isolation through umu's own container, with bubblewrap around umu | pressure-vessel already runs every Proton game and keeps GPUs, sound and gamepads working; its options hide the home folder. Bubblewrap only makes the tools read-only. It keeps games out of files and D-Bus, not out of the system |
-| Proton builds downloaded by SlattyLauncher, not by umu | umu fetches them at a game's launch, which would wait for half a gigabyte, and replaces its "latest" in place under a running game. A folder per build, followed through a link umu resolves at launch, keeps a running game on its build and the build before at hand |
+| Proton builds downloaded by Slatty, not by umu | umu fetches them at a game's launch, which would wait for half a gigabyte, and replaces its "latest" in place under a running game. A folder per build, followed through a link umu resolves at launch, keeps a running game on its build and the build before at hand |
 | Comet as a supervised process beside the game, off until turned on | Its library is not meant for embedding (global state, fixed port); while it runs, any local program can get the access token from it |
 | A subreaper supervisor process for sessions | Launchers that exit early and Wine processes must not end the session too soon |
 | Content hashes, not dates, for cloud sync | Dates are unreliable across machines and Wine; hashes and per-file history show real changes |
@@ -712,8 +712,8 @@ The protections are told from the user's side in [SECURITY.md](../SECURITY.md); 
   in process arguments or logs, wrapped in `Secret`;
 - network errors stripped of their address (`Error::network`), since some GOG endpoints take tokens
   in the query string; the token sent only to `https://` addresses on `gog.com` (`http::gog_only`);
-- SlattyLauncher's folders 0700 and its database 0600, set again at every start;
-- every request SlattyLauncher itself sends to a host other than GOG's has a switch in Settings,
+- Slatty's folders 0700 and its database 0600, set again at every start;
+- every request Slatty itself sends to a host other than GOG's has a switch in Settings,
   off until turned on, and a line in SECURITY.md, which also lists what the programs it starts
   contact (umu asks Valve about its runtime, Comet talks to GOG);
 - no telemetry.

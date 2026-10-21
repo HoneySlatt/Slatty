@@ -76,13 +76,13 @@ There are no dates. What has been checked against real services, and what not ye
 - **Translations** of the interface, in English for now.
 - **Steam downloads** followed more exactly while the client downloads.
 - **Packaging** for other distributions, with the icon and the window identifier a desktop needs.
-- **More runners**: Wine without Proton for the games SlattyLauncher installs (it exists for
+- **More runners**: Wine without Proton for the games Slatty installs (it exists for
   imported games).
 - **Windows hosts**, some day: the core relies on Linux in many places today.
 
 ## Out of scope
 
 Store purchases, friends and chat, multiplayer services, an in-game overlay, mods, plugins.
-SlattyLauncher has no friends or chat feature; Comet, which it starts for achievements once turned
+Slatty has no friends or chat feature; Comet, which it starts for achievements once turned
 on, still subscribes to those topics on GOG for the account (see
 [SECURITY.md](../SECURITY.md#comet)).

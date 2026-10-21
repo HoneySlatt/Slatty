@@ -1,12 +1,12 @@
 # AGENTS.md
 
-Instructions for AI coding agents (and the people driving them) working on SlattyLauncher. Read
+Instructions for AI coding agents (and the people driving them) working on Slatty. Read
 this file before changing anything. It does not replace [CONTRIBUTING.md](CONTRIBUTING.md), which
 applies to every change; it adds what an agent most often gets wrong in this repository.
 
 ## The project in one paragraph
 
-SlattyLauncher is a native Linux launcher for GOG games, in Rust (edition 2024, Rust 1.90+) with an
+Slatty is a native Linux launcher for GOG games, in Rust (edition 2024, Rust 1.90+) with an
 [Iced](https://iced.rs) 0.14 interface. It signs in to GOG, installs Windows builds from GOG's
 Galaxy content system and native Linux builds from GOG's offline installers, runs games through
 umu and Proton (or natively), syncs cloud saves, and reports achievements through Comet. The same
@@ -98,7 +98,7 @@ These act on a real person's account, disk or system. Ask the human first, every
 - Wrap sensitive values in `secret::Secret`; its `Debug` hides the value.
 - Turn `reqwest` errors into `Error::network(context, e)`, which strips the URL: some GOG
   endpoints carry tokens in the query string.
-- Besides GOG and the download servers it names, SlattyLauncher itself contacts only umu's game
+- Besides GOG and the download servers it names, Slatty itself contacts only umu's game
   database, GitHub (Proton builds), SteamGridDB, Steam's image servers and Steam's Web API, each
   off until turned on. The programs it
   starts contact others (umu asks Valve about its runtime, Comet talks to GOG): a change that adds
@@ -124,7 +124,7 @@ These act on a real person's account, disk or system. Ask the human first, every
   records or deletes a game's files, so a Steam game's, which Steam owns, never is;
   `paths::check_game_id` accepts GOG's alone and guards every request to GOG about a game.
 - A destructive action either refuses when the situation looks wrong, or keeps a copy first. Only
-  files SlattyLauncher installed (its install record) are ever deleted from a game folder.
+  files Slatty installed (its install record) are ever deleted from a game folder.
 - Cloud sync decides with content hashes and per-file history, never dates. Conflicts never
   resolve themselves. Read docs/cloud-saves.md and add a test for every new case.
 - The database schema changes only by **appending** a migration to `db::MIGRATIONS`. Never edit

@@ -385,7 +385,7 @@ pub struct Playtime {
     pub last_played: i64,
 }
 
-/// Play time per game, from the sessions SlattyLauncher supervised for the account `user_id` (or
+/// Play time per game, from the sessions Slatty supervised for the account `user_id` (or
 /// with none signed in): another account's play history is its own. A game added by hand is no
 /// account's: its sessions count whoever was signed in.
 pub fn playtime(db: &Db, user_id: Option<&str>) -> Result<HashMap<String, Playtime>> {

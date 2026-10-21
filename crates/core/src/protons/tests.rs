@@ -634,7 +634,7 @@ fn a_build_a_game_or_the_default_uses_is_not_removed() {
     crate::settings::set_default_proton(&db, &build).unwrap();
     assert!(matches!(remove(&db, &dirs, &build), Err(Error::Refused(_))));
     crate::settings::set_default_proton(&db, &root.join("other")).unwrap();
-    // Only what SlattyLauncher downloaded.
+    // Only what Slatty downloaded.
     for other in [root.join("game"), dir(&dirs).join(".staging"), dir(&dirs)] {
         assert!(
             matches!(remove(&db, &dirs, &other), Err(Error::Refused(_))),

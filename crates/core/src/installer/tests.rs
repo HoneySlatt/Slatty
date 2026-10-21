@@ -1399,7 +1399,7 @@ fn an_install_cut_off_after_publishing_is_checked_where_it_landed() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
-/// A folder already where the game goes that SlattyLauncher did not publish (another launcher's
+/// A folder already where the game goes that Slatty did not publish (another launcher's
 /// copy of the game, modded) is never adopted by a retried install, which would overwrite its
 /// files and record them as its own; its job can be discarded without touching it.
 #[test]

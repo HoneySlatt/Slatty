@@ -39,7 +39,7 @@ fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, 
             )
         } else {
             format!(
-                "{} was not installed by SlattyLauncher; use `forget` to drop it without touching \
+                "{} was not installed by Slatty; use `forget` to drop it without touching \
                  its files",
                 install.title
             )
@@ -196,7 +196,7 @@ pub fn uninstall(
     if let Some(prefix) = prefix {
         report.prefix_backup = back_up_prefix(dirs, game_id, prefix)?;
     }
-    // Its install's mark, when the install could not delete it, is SlattyLauncher's own file too.
+    // Its install's mark, when the install could not delete it, is Slatty's own file too.
     let _ = std::fs::remove_file(root.join(installer::STAGED_MARK));
     delete_listed(root, &files, &mut report)?;
 
@@ -217,7 +217,7 @@ pub fn uninstall(
     Ok(report)
 }
 
-/// Stops managing a game, leaving its folder and prefix as they are. What SlattyLauncher kept of
+/// Stops managing a game, leaving its folder and prefix as they are. What Slatty kept of
 /// it (its install record, GOG's support files, an unfinished update) goes too: a game imported
 /// later under its id is not taken for the one it installed. A game added by hand goes with
 /// `added::remove` instead.
@@ -1007,7 +1007,7 @@ mod tests {
     fn deleting_the_prefix_backs_up_its_user_folder_first() {
         let env = Env::new("prefix", true);
         std::fs::remove_dir_all(env.game().join("saves")).unwrap();
-        // Left by an install that could not delete it: SlattyLauncher's own file.
+        // Left by an install that could not delete it: Slatty's own file.
         std::fs::write(env.game().join(installer::STAGED_MARK), "").unwrap();
         let r = uninstall(&env.db, &env.dirs, "1", true).unwrap();
         assert!(r.folder_removed && r.prefix_removed);
@@ -1246,7 +1246,7 @@ mod tests {
         assert!(Install::get(&env.db, "1").unwrap().is_some());
     }
 
-    /// Forgetting a game leaves its folder and prefix, and takes what SlattyLauncher kept of it
+    /// Forgetting a game leaves its folder and prefix, and takes what Slatty kept of it
     /// (its install record, GOG's support files, an unfinished update): a game imported later under
     /// its id is not taken for the one it installed. Never while another operation runs on it.
     #[test]

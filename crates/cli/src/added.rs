@@ -146,7 +146,7 @@ pub async fn add(ctx: &Ctx, args: AddArgs) -> Result<()> {
 #[derive(Args)]
 pub struct RemoveArgs {
     game_id: String,
-    /// Also delete the Wine prefix SlattyLauncher made for it (its saves, and a game its installer
+    /// Also delete the Wine prefix Slatty made for it (its saves, and a game its installer
     /// put in it, are copied to the backups first)
     #[arg(long)]
     delete_prefix: bool,
@@ -167,7 +167,7 @@ pub fn remove(ctx: &Ctx, args: RemoveArgs) -> Result<()> {
     println!("{} is no longer in the library.", shown(&title));
     if report.removed_files > 0 {
         println!(
-            "{} file(s) SlattyLauncher unpacked for it were deleted.",
+            "{} file(s) Slatty unpacked for it were deleted.",
             report.removed_files
         );
     } else if report.game_backup.is_none() {

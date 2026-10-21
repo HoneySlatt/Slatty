@@ -243,7 +243,7 @@ pub fn is_server_image(url: &str) -> bool {
     url.starts_with(IMAGE_SERVER)
 }
 
-/// The file of an image of Steam's image servers in SlattyLauncher's cache, downloaded when
+/// The file of an image of Steam's image servers in Slatty's cache, downloaded when
 /// missing. Shared by every account: it tells nothing of one. Any other address is refused.
 pub async fn image(http: &Client, dirs: &Dirs, url: &str) -> Result<PathBuf> {
     if !is_server_image(url) {

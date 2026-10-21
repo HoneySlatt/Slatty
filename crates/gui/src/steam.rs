@@ -674,7 +674,7 @@ impl App {
         store::steam_app(game_id)
     }
 
-    /// Whether a game is installed, by SlattyLauncher or by Steam.
+    /// Whether a game is installed, by Slatty or by Steam.
     pub fn is_installed(&self, game_id: &str) -> bool {
         // Steam's whole once installed, updates included; a first install still downloads.
         let on_steam = |id: &str| self.steam.installed.get(id).is_some_and(|g| g.ready);
@@ -684,7 +684,7 @@ impl App {
     }
 
     /// When a game was last played: as Steam records it for a Steam game, else from the sessions
-    /// SlattyLauncher followed (GOG does not tell).
+    /// Slatty followed (GOG does not tell).
     pub fn last_played(&self, game_id: &str) -> Option<i64> {
         let on_steam = |id: &str| {
             self.steam

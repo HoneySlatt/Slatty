@@ -330,7 +330,7 @@ fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a
     });
     let dialog = container(
         column![
-            text("Quit SlattyLauncher?").size(24).font(bold()),
+            text("Quit Slatty?").size(24).font(bold()),
             Column::with_children(items).spacing(10),
             row![
                 space().width(Length::Fill),
@@ -364,14 +364,14 @@ fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a
     .into()
 }
 
-/// Asks before deleting what SlattyLauncher keeps of the signed-in account.
+/// Asks before deleting what Slatty keeps of the signed-in account.
 fn forget_dialog<'a>(page: Element<'a, Message>, name: &str) -> Element<'a, Message> {
     let paragraph = |s: &'a str| text(s).size(14).color(tokens().muted);
     let dialog = container(
         column![
             text(format!("Forget {name}?")).size(24).font(bold()),
             paragraph(
-                "SlattyLauncher signs out, then deletes what it keeps of this account on this \
+                "Slatty signs out, then deletes what it keeps of this account on this \
                  computer: play history, play time not yet sent to GOG included, cloud sync \
                  history, the library cache and the achievement records of Comet."
             ),

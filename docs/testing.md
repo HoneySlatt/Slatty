@@ -7,7 +7,7 @@ nix develop
 cargo test --workspace      # about 650 tests, in about 15 s; no network, no real game
 ```
 
-They check SlattyLauncher's own logic against simulated services and fake data (`[FAKE]` titles,
+They check Slatty's own logic against simulated services and fake data (`[FAKE]` titles,
 made-up ids, throwaway folders named after the process id):
 
 - **Cloud sync:** every three-way case, conflicts, deletions, empty, moved or remade folders,
@@ -183,7 +183,7 @@ Settings → Privacy for steps 4 and 6 (the command line has no switch for it).
 
 ## Checks against Steam
 
-These need the Steam client installed and signed in; SlattyLauncher only reads its files and hands
+These need the Steam client installed and signed in; Slatty only reads its files and hands
 it requests. Record each result in [compatibility.md](compatibility.md).
 
 1. **Status:** `slatty steam status` names the installation, the account, and how many of its games

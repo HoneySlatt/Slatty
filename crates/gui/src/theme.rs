@@ -12,7 +12,7 @@ use crate::presets::Preset;
 use iced::widget::{button, container, pick_list, progress_bar, scrollable, text_input};
 use iced::{Background, Border, Color, Font, Shadow, Theme, border, color, font};
 
-/// Colours, corner radii and motion of the interface. The defaults are SlattyLauncher's own look.
+/// Colours, corner radii and motion of the interface. The defaults are Slatty's own look.
 #[derive(Debug, Clone)]
 pub struct Tokens {
     pub background: Color,
@@ -296,7 +296,7 @@ impl Tokens {
             ),
         ];
         let mut out = String::from(
-            "# SlattyLauncher theme. Every key is optional: one left out keeps its default.\n\
+            "# Slatty theme. Every key is optional: one left out keeps its default.\n\
              # Settings → Appearance → Reload applies changes without restarting.\n\n[colors]\n",
         );
         for (key, color, note) in colors {
@@ -1043,7 +1043,7 @@ mod tests {
         );
     }
 
-    /// A theme file with a mistake leaves the built-in theme picked in use, not SlattyLauncher's
+    /// A theme file with a mistake leaves the built-in theme picked in use, not Slatty's
     /// default look, at start and when another one is picked.
     #[test]
     fn a_theme_file_with_a_mistake_leaves_the_picked_theme() {

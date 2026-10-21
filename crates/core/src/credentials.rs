@@ -2,7 +2,7 @@ use crate::auth::Tokens;
 use crate::error::{Error, Result};
 use crate::secret::Secret;
 
-const SERVICE: &str = "slatty-launcher";
+const SERVICE: &str = "slatty";
 
 fn entry(user_id: &str) -> Result<keyring::Entry> {
     keyring::Entry::new(SERVICE, &format!("gog:{user_id}")).map_err(describe)
@@ -65,5 +65,15 @@ pub fn delete_key(name: &str) -> Result<()> {
     match key_entry(name)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(describe(e)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// The keyring finds a sign-in and the keys by this name, given in SECURITY.md and the user
+    /// guide: changing it makes everyone sign in and enter their keys again.
+    #[test]
+    fn secrets_are_kept_under_the_programs_name() {
+        assert_eq!(super::SERVICE, "slatty");
     }
 }

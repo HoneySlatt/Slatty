@@ -25,7 +25,7 @@ pub struct RunnersView {
     pub releases: Vec<(Source, Result<Release, String>)>,
     /// The build being downloaded, how far it is, and what stops it.
     pub installing: Option<(String, Option<Stage>, CancellationToken)>,
-    /// The builds SlattyLauncher downloaded.
+    /// The builds Slatty downloaded.
     pub downloaded: Vec<PathBuf>,
 }
 

@@ -204,7 +204,7 @@ async fn an_isolated_linux_game_sees_nothing_of_the_home_folder() {
         "hidden",
         "the D-Bus system bus"
     );
-    // Its home is its own: what it writes there lands in SlattyLauncher's folder for it.
+    // Its home is its own: what it writes there lands in Slatty's folder for it.
     let home = runner::isolated_home(&dirs, "1").unwrap();
     assert_eq!(result(&root, "out-home"), home.display().to_string());
     assert!(home.join("written-by-the-game").is_file());

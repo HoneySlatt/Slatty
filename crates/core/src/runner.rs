@@ -173,7 +173,7 @@ enum Wrapper {
     /// Steam).
     SteamRun(PathBuf),
     /// umu without Proton: the Steam Linux Runtime 3.0 (sniper) container, which umu already
-    /// downloads for Windows games, through SlattyLauncher's own tool for it (`runtime_tool`).
+    /// downloads for Windows games, through Slatty's own tool for it (`runtime_tool`).
     Umu(PathBuf, PathBuf),
 }
 
@@ -550,7 +550,7 @@ fn steam_sdk_links(home: &Path, libs: &[PathBuf; 2]) -> Result<()> {
 /// Takes away the links in `home/.steam`, and that folder itself when it is one: pressure-vessel
 /// looks at `$HOME/.steam` from outside the container to share the Steam installation, and a game
 /// writes its own home, so it could have linked the user's there (the client's settings and
-/// tokens). SlattyLauncher's own `sdk64` and `sdk32` are folders, which stay.
+/// tokens). Slatty's own `sdk64` and `sdk32` are folders, which stay.
 fn forget_steam_links(home: &Path) -> Result<()> {
     let steam = home.join(".steam");
     let unlink = |path: &Path| {
@@ -1075,7 +1075,7 @@ mod tests {
 
     /// umu takes `true` for a program in its working directory when one of that name is there:
     /// started from a game's folder, the refresh would run a `true` the game wrote there, not
-    /// isolated. It runs in a folder of SlattyLauncher's own.
+    /// isolated. It runs in a folder of Slatty's own.
     #[test]
     fn the_runtime_refresh_runs_in_a_folder_of_its_own() {
         let dirs = Dirs::under(Path::new("/[FAKE]/slatty"));
@@ -1562,7 +1562,7 @@ mod tests {
     /// pressure-vessel looks at `$HOME/.steam`, here the game's own home, which the game writes,
     /// from outside the container: a link the game put there to the user's Steam installation would
     /// have it shared as the user's own (the client's settings and tokens). Such links go before
-    /// each isolated launch; SlattyLauncher's own `sdk64` and `sdk32` folders stay.
+    /// each isolated launch; Slatty's own `sdk64` and `sdk32` folders stay.
     #[test]
     fn links_a_game_put_in_its_steam_folder_go_before_it_starts() {
         let root = std::env::temp_dir().join(format!("slatty-home-steam-{}", std::process::id()));
@@ -1782,7 +1782,7 @@ mod tests {
             native_command(&script, Some(Wrapper::SteamRun(run.clone()))),
             (run, arg.clone(), Vec::new())
         );
-        // umu without Proton, in the Steam Linux Runtime 3.0, through SlattyLauncher's tool.
+        // umu without Proton, in the Steam Linux Runtime 3.0, through Slatty's tool.
         let umu = PathBuf::from("/bin/umu-run");
         let tool = PathBuf::from("/data/umu-runtimes/tools/steamrt3");
         let (program, args, env) =

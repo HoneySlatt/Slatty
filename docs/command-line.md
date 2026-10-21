@@ -31,7 +31,7 @@ the interface; the command line only lists them.
 | `slatty auth status` | The account signed in, and when its access token expires |
 | `slatty auth refresh` | Renews the session now (it renews itself when needed) |
 | `slatty auth logout` | Deletes the session from the keyring. Cached data and saves stay |
-| `slatty auth logout --forget` | Also deletes what SlattyLauncher keeps of the account (see [Signing out](user-guide.md#signing-out-and-forgetting-an-account)) |
+| `slatty auth logout --forget` | Also deletes what Slatty keeps of the account (see [Signing out](user-guide.md#signing-out-and-forgetting-an-account)) |
 | `slatty auth probe-rotation` | A developer's check: whether refreshing the session changes the refresh token |
 
 ## Library
@@ -125,7 +125,7 @@ Manual changes show on your public GOG profile. See [Achievements](user-guide.md
 
 | Command | What it does |
 |---|---|
-| `slatty update` | Checks every game SlattyLauncher installed |
+| `slatty update` | Checks every game Slatty installed |
 | `slatty update <id> --check` | Only says whether an update is available |
 | `slatty update <id>` | Applies it, or finishes an interrupted one |
 | `slatty update --automatic on\|off` | Automatic updates in the interface (on until turned off) |
@@ -134,7 +134,7 @@ Manual changes show on your public GOG profile. See [Achievements](user-guide.md
 | `slatty content <id> --add-dlc <id>…` / `--remove-dlc <id>…` | Adds or removes DLC |
 | `slatty verify <id>` | Checks every file against the installed build |
 | `slatty verify <id> --repair` | Downloads again the files that are missing or damaged |
-| `slatty uninstall <id>` | Deletes the files SlattyLauncher installed, and nothing else. Asks first (`--yes` does not) |
+| `slatty uninstall <id>` | Deletes the files Slatty installed, and nothing else. Asks first (`--yes` does not) |
 | `slatty uninstall <id> --delete-prefix` | Also deletes the Wine prefix, its saves backed up first |
 
 ## Games installed elsewhere
@@ -145,7 +145,7 @@ Manual changes show on your public GOG profile. See [Achievements](user-guide.md
 | `slatty import <folder> --runner wine --wine <program> --prefix <folder>` | The same, through Wine alone |
 | `slatty import <folder> --runner native --game-id <id>` | A GOG Linux game (its id is needed) |
 | `slatty import --from-heroic <id>` | A GOG game Heroic installed, read from Heroic's records without changing them |
-| `slatty forget <id>` | Drops a game from SlattyLauncher's records without touching its files or prefix |
+| `slatty forget <id>` | Drops a game from Slatty's records without touching its files or prefix |
 
 ## Games added by hand
 
@@ -159,14 +159,14 @@ Manual changes show on your public GOG profile. See [Achievements](user-guide.md
 | `slatty add --installer <setup.exe> --title <title> [--into <folder>]` | Runs a Windows installer in a prefix made for the game (finish it in its window), where a folder named after the title in `--into` (default: the default installation path) is drive D:, to install the game on; then says how to add what it installed |
 | `slatty add --installer <file> --title <title> [--into <folder>]` | Unpacks a Linux installer (MojoSetup `.sh`) or an archive (`.zip`, `.tar.gz`, `.tar.xz`) without running it, into a folder named after the title in `--into` (default: the default installation path) |
 | `slatty add <program> --title <title> --installed-by <id>` | Adds the program an installer put in place, under the id the installer was given. `slatty remove <id>` throws that install away instead |
-| `slatty remove <id>` | Takes the game out of the library. Its files stay, except those SlattyLauncher unpacked |
-| `slatty remove <id> --delete-prefix` | Also deletes the prefix SlattyLauncher made for it, its saves backed up first |
+| `slatty remove <id>` | Takes the game out of the library. Its files stay, except those Slatty unpacked |
+| `slatty remove <id> --delete-prefix` | Also deletes the prefix Slatty made for it, its saves backed up first |
 
 ## Proton builds
 
 | Command | What it does |
 |---|---|
-| `slatty proton list` | The Proton builds on this computer, those SlattyLauncher downloaded first |
+| `slatty proton list` | The Proton builds on this computer, those Slatty downloaded first |
 | `slatty proton downloads on\|off` | Allows listing and downloading builds from GitHub (off until turned on) |
 | `slatty proton available` | The newest build of each project on GitHub |
 | `slatty proton install ge-proton\|proton-cachyos\|umu-proton` | Downloads a project's newest build, checked against its published sum |
@@ -183,7 +183,7 @@ Manual changes show on your public GOG profile. See [Achievements](user-guide.md
 
 ## Diagnostics
 
-`slatty doctor` checks what SlattyLauncher needs: umu-launcher, bubblewrap (and whether it can
+`slatty doctor` checks what Slatty needs: umu-launcher, bubblewrap (and whether it can
 start a sandbox inside another, as isolated games need), Comet and its port, the Galaxy service
 file, the keyring and the runtime folder.
 
