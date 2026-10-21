@@ -45,7 +45,7 @@ files by default.
   the Proton build of your choice, per game; Linux games natively. A game that can be started
   several ways asks which at its first Play.
 - Optional controller compatibility per game, through the SDL input mode of UMU-Proton, GE-Proton
-  and Proton-CachyOS (checked with UMU-Proton only).
+  and Proton-CachyOS.
 - Isolation from your files: an isolated game sees its own folder and a home of its own, and
   cannot change the tools other games run through.
 - The session followed until the game's last process ends; play time reported to GOG as Galaxy
@@ -66,18 +66,15 @@ files by default.
 - Proton builds (GE-Proton, Proton-CachyOS, UMU-Proton) downloaded from GitHub, checked, and kept
   up to date once you turn it on.
 
-Everything has automated tests. What has also been checked against real services and games is
-recorded in [docs/compatibility.md](docs/compatibility.md): sign-in, library, Windows and Linux
-installs, playing isolated (Hollow Knight, Firewatch, Cyberpunk 2077, Blasphemous), cloud saves both
-ways, an achievement earned in game, verify and repair, uninstall, a crash during a download,
-Steam's library and Play, two games added by hand through their Windows installers, and a
-DualSense through UMU-Proton's SDL input mode. Not checked against real services yet: pausing an
-install by hand, applying an update, DLC and language changes, Visual C++ redistributables, cloud
-deletions, offline installers, downloads pausing while a game runs, games added from a Linux
-installer, an archive or an AppImage, Steam installs and the Steam Web API, keeping Proton builds
-up to date, the controller compatibility switch itself and its mode with GE-Proton and
-Proton-CachyOS, and Ubuntu; nor the couch mode with a real gamepad, on a Steam Deck or on a
-television.
+Everything has automated tests. What has also been checked against real services, games and
+hardware is recorded in [docs/compatibility.md](docs/compatibility.md): sign-in, library, Windows
+and Linux installs, updates, DLC and languages, pausing and resuming, playing isolated, cloud
+saves both ways and their deletions, achievements earned in game, verify, repair and uninstall,
+offline installers, the download queue, Proton builds kept up to date, games added by hand,
+Steam's client and Web API, controller compatibility, and the couch mode with a real gamepad.
+Not checked yet: a redistributable asking for a restart, the account shown online to GOG friends,
+an offline installer whose checksums GOG does not keep, Ubuntu with AppArmor, Steam as a Flatpak,
+and the couch mode on a Steam Deck or on a television.
 
 Linux only, tested and packaged on x86-64; macOS and Windows hosts are not supported. See the
 [roadmap](docs/roadmap.md).

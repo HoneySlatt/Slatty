@@ -5,6 +5,11 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 ## Unreleased
 
+### Changed
+
+- Game settings no longer says controller compatibility was checked with UMU-Proton only: it was
+  checked with GE-Proton and Proton-CachyOS too.
+
 ## 0.1.0 (2026-10-21)
 
 The first public version.

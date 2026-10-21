@@ -314,9 +314,9 @@ input. It is **off by default for every game**. Turn it on only for games that n
 is saved per game, kept when changing Proton builds, and applies from the next launch in both
 the interface and the command line.
 
-This uses Proton's SDL input mode, supported by UMU-Proton, GE-Proton and Proton-CachyOS (only
-UMU-Proton's was checked with a real game, and not yet through the switch); Valve's Proton builds
-(Proton Experimental, Proton 10.0) have no such mode, and the switch changes nothing with them.
+This uses Proton's SDL input mode, supported by UMU-Proton, GE-Proton and Proton-CachyOS; Valve's
+Proton builds (Proton Experimental, Proton 10.0) have no such mode, and the switch changes nothing
+with them.
 It does not need Steam running. Games may show Xbox button icons, and native PlayStation features
 such as adaptive triggers may be unavailable. It does not provide Steam Input's remapping or
 profiles.
@@ -853,7 +853,6 @@ identifiers of its own, and Comet's holds game client identifiers.
 |---|---|
 | A game does not start | Its log, `~/.local/state/slatty/logs/game-<id>.log`. `slatty launch-spec <id>` prints the exact command |
 | The first launch fails while creating the prefix | `~/.local/state/slatty/logs/prefix-<id>.log` |
-| Nothing starts with GE-Proton | With umu-launcher 1.4.4, GE-Proton's Steam Linux Runtime 4 did not start when last tried ([compatibility](compatibility.md#runners)): choose UMU-Proton or Proton-CachyOS in Game settings |
 | A game misbehaves since it runs isolated (files or settings not found) | `slatty isolation <id> --off`, and tell us which game |
 | "bubblewrap (bwrap) is needed", or an isolated game does not start | Install bubblewrap (Flatpak needs it too). `slatty doctor` says whether it can start a sandbox, and one inside another. On Ubuntu, see [below](#ubuntu-and-apparmor) |
 | Achievements are not reported | **Achievements in game** must be on. Then `~/.local/state/slatty/logs/comet.log`; `slatty doctor` must find `GalaxyCommunication.exe` |

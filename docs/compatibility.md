@@ -95,51 +95,47 @@ and hands it requests.
 | 2026-10-15 | Arknights: Endfield (added by hand) | 1.6.0 (launcher) | Windows installer run from Add a game, isolated, DW-Proton; installed into a folder on a second SSD (drive D:) | Install, then the launcher on D: as the program | OK | The installer put its launcher (GRYPHLINK) on D:, in a folder of its own; the launcher downloaded the game on D:. Added with the launcher as its program, isolated, the game folder being the whole D: folder (filled in by hand: the interface running predated it being the default), the install ended and worked (checked by the user). Playing and an update not tried yet |
 | 2026-10-19 | Bleak Faith: Forsaken | — | UMU-Proton (version not noted), Slatty started with `PROTON_ADD_CONFIG=sdlinput` | Controller (DualSense, USB) through Proton's SDL input mode | OK | The controller did not work normally in the game, and worked with the SDL mode (checked by the user); individual inputs, vibration and DualSense features were not reported one by one. The per-game switch, which sets the same mode, was not used |
 
+## Checked by the user after 0.1.0
+
+The user reported each of these as working on 2026-10-21, on the setup above; the games, versions
+and details were not recorded.
+
+| Area | Feature | Result |
+|---|---|---|
+| GOG | Pausing an install by hand and resuming it | OK |
+| GOG | Applying an update to an installed game | OK |
+| GOG | Installing, adding or removing DLC; switching language | OK |
+| GOG | Visual C++ redistributables and a game-folder dependency | OK |
+| GOG | Cloud deletions | OK |
+| GOG | A game that needs the Galaxy dummy service | OK |
+| GOG | Updates and DLC of a native Linux build | OK |
+| GOG | Offline installers kept in a folder (`slatty installers`, **Download installers…**): GOG's offer for each system, language and DLC, the checksum XML, the names taken from the address a link leads to, a pause in the middle of a file | OK |
+| GOG | The download queue with real downloads: **Download now**, and downloads and automatic updates pausing while a game runs (a Steam game too), then going on once it closes | OK |
+| Running games | Isolated: a game with a Proton fix of its own, and a Linux game | OK |
+| Running games | Valve's Proton Experimental with a real game, isolated | OK |
+| Running games | GE-Proton through umu-launcher 1.4.4, which failed on 2026-10-09 (see Runners) | OK |
+| Running games | Proton builds downloaded from GitHub kept up to date (Keep up to date), and shared with Steam and Heroic | OK |
+| Running games | Games added by hand: a Linux installer, an archive, an AppImage; playing a game a Windows installer installed, and updating it through its launcher | OK |
+| Running games | Controller compatibility: the per-game switch in a real game, with UMU-Proton, GE-Proton and Proton-CachyOS | OK |
+| Steam | Install, Verify and Uninstall through the client, and following a download's progress | OK |
+| Steam | The Steam Web API | OK |
+| Couch mode | A real gamepad: moves, a held direction repeating, plugging and unplugging | OK |
+
 ## Not checked for real yet
 
 **GOG**
 
-- Pausing an install by hand and resuming it (resuming after a crash was checked, Stardew Valley).
-- Applying an update to an installed game, and reusing chunks during one (checked during a repair).
-- Installing, adding or removing DLC; switching language.
-- Shared redistributables other than DOOM's DirectX (Visual C++), a game-folder dependency, and a
-  redistributable that asks for a restart (exit code 3010).
-- Cloud deletions.
-- A game that needs the Galaxy dummy service. Its registration was checked under UMU-Proton 10.0-4
-  in a throwaway prefix, and at Blasphemous's first launch, which did not show whether the game
-  needed it.
-- Updates and DLC of a native Linux build.
+- A redistributable that asks for a restart (exit code 3010).
 - Whether a session with Comet shows the account online, or playing, to GOG friends.
-- Offline installers kept in a folder (`slatty installers`, **Download installers…**): GOG's offer
-  for each system, language and DLC, the checksum XML (and an address answering 404), the names
-  taken from the address a link leads to, and a pause in the middle of a file. GOG's offer of a
-  Linux installer and its byte ranges were checked for the Linux install (above).
-- The download queue with real downloads: **Download now**, and downloads and automatic updates
-  pausing while a game runs (a Steam game too), then going on once it closes.
+- An offline installer whose checksum XML GOG does not keep (an address answering 404).
 
-**Running games**
+**Systems**
 
-- Isolated: a game with a Proton fix of its own (Cyberpunk 2077 got only the global defaults), and
-  a Linux game.
-- Valve's Proton Experimental with a real game, isolated (only a throwaway prefix, above).
-- Proton builds downloaded from GitHub kept up to date (Keep up to date), and shared with Steam and
-  Heroic.
-- Games added by hand: a Linux installer, an archive, an AppImage; playing a game a Windows
-  installer installed, and updating it through its launcher (two installed and started, above).
 - Ubuntu with AppArmor: the steps of the user guide were never tried.
-- Controller compatibility: the per-game switch in a real game (the same SDL mode was checked by
-  starting Slatty with `PROTON_ADD_CONFIG=sdlinput`, above), and the mode with GE-Proton
-  and Proton-CachyOS.
-
-**Steam**
-
-- Install, Verify and Uninstall through the client, and following a download's progress.
-- The Steam Web API.
 - Steam installed as a Flatpak.
 
 **Couch mode**
 
-- A real gamepad: moves, a held direction repeating, plugging and unplugging.
 - A Steam Deck: started from Steam, and by itself in Game Mode (gamescope).
 - A television: the layout made for 1920×1080 filling a 4K screen, covers and key art copied at
   the size drawn. It was only drawn at 3840×2160 in a headless Wayland compositor.

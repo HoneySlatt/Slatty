@@ -131,7 +131,7 @@ impl App {
                             SettingsMsg::ControllerCompatibility(id.clone(), on)
                         ))
                         .size(22),
-                    note("Turn on if the game does not recognize your controller. For UMU-Proton, GE-Proton and Proton-CachyOS (checked with UMU-Proton only). Used from the next launch."),
+                    note("Turn on if the game does not recognize your controller. For UMU-Proton, GE-Proton and Proton-CachyOS. Used from the next launch."),
                     note("May show Xbox button icons and limit PlayStation features. Leave off when the controller already works."),
                 ]
                 .spacing(10)
