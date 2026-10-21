@@ -124,8 +124,8 @@ and hands it requests.
 - Valve's Proton Experimental with a real game, isolated (only a throwaway prefix, above).
 - Proton builds downloaded from GitHub kept up to date (Keep up to date), and shared with Steam and
   Heroic.
-- Games added by hand: a Linux installer, an archive, an AppImage; a game updated by a launcher a
-  Windows installer put on C: (one installed and found again, above).
+- Games added by hand: a Linux installer, an archive, an AppImage; playing a game a Windows
+  installer installed, and updating it through its launcher (two installed and started, above).
 - Ubuntu with AppArmor: the steps of the user guide were never tried.
 - Controller compatibility: the per-game switch in a real game (the same SDL mode was checked by
   starting Slatty with `PROTON_ADD_CONFIG=sdlinput`, above), and the mode with GE-Proton

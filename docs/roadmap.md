@@ -14,13 +14,13 @@ There are no dates. What has been checked against real services, and what not ye
 
 **Installing and looking after games**
 - Windows builds from GOG's Galaxy content system (generation 2): DLC and language chosen at
-  install and changed later, any build GOG offers.
+  install and changed later (the change not yet checked for real), any build GOG offers.
 - Native Linux builds from GOG's offline installers, read file by file; a default platform and a
   choice per install.
 - Staged, verified downloads; a queue reordered by dragging, kept across restarts; resume after a
   crash, wait while GOG is out of reach.
 - Updates in place, automatic for games on their newest build, with GOG's binary patches and
-  unchanged chunks copied rather than downloaded.
+  unchanged chunks copied rather than downloaded (applying an update not yet checked for real).
 - Verify, repair, uninstall; post-install setup (GOG's scripts, setup programs, redistributables,
   game-folder dependencies); Comet's Galaxy service in each prefix.
 - GOG's offline installers downloaded to keep, through the same queue, checked against GOG's MD5
@@ -37,7 +37,7 @@ There are no dates. What has been checked against real services, and what not ye
   game's own, tools read-only through bubblewrap, no D-Bus, a process namespace of its own.
 - Proton builds downloaded from GitHub (GE-Proton, Proton-CachyOS, UMU-Proton), checked against
   their sums, followed as `<project>-latest`, kept up to date and shared with Steam and Heroic once
-  turned on.
+  turned on (keeping them up to date and sharing them not yet checked for real).
 
 **Saves and achievements**
 - Three-way cloud sync on content hashes, conflicts that never settle themselves, a copy of every
@@ -62,8 +62,9 @@ There are no dates. What has been checked against real services, and what not ye
 **Beyond GOG**
 - Steam's games in the same library, read from the client's files and run through it; one card for
   a game owned on both stores; images and data the client lacks from Steam's servers once turned
-  on. No GOG account needed for them.
-- Games from no store, added by their program, a Windows installer or a Linux installer or archive.
+  on. No GOG account needed for them. Installing through the client not yet checked for real.
+- Games from no store, added by their program, a Windows installer or a Linux installer or archive
+  (a Linux installer or an archive not yet checked for real).
 - GOG games installed by another tool, imported from their folder or from Heroic.
 
 **Privacy, security and packaging**
@@ -75,7 +76,7 @@ There are no dates. What has been checked against real services, and what not ye
 
 - **Translations** of the interface, in English for now.
 - **Steam downloads** followed more exactly while the client downloads.
-- **Packaging** for other distributions, with the icon and the window identifier a desktop needs.
+- **Packaging** for other distributions, and an application icon.
 - **More runners**: Wine without Proton for the games Slatty installs (it exists for
   imported games).
 - **Windows hosts**, some day: the core relies on Linux in many places today.
