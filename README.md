@@ -26,7 +26,7 @@ files by default.
   hide the ones you do not want to see.
 - Built-in themes, your own theme file, the font and the cover size of your choice.
 - A couch mode for a gamepad, full screen, for a television or a Steam Deck, where it starts by
-  itself in the Game Mode.
+  itself in the Game Mode (not tried on a Steam Deck yet).
 
 **Installing**
 - Windows builds from GOG's Galaxy content system, native Linux builds from GOG's offline
@@ -82,14 +82,15 @@ Linux only, tested and packaged on x86-64; macOS and Windows hosts are not suppo
 ## Requirements
 
 - Linux with Wayland or X11, on x86-64 (the platform tested). Development happens on NixOS with
-  niri.
-- A Secret Service keyring (GNOME Keyring, KeePassXC, KWallet with its Secret Service bridge).
+  niri; X11 has not been tried yet.
+- A Secret Service keyring: GNOME Keyring (the one checked), or KeePassXC or KWallet with its
+  Secret Service bridge (not tried yet).
 - [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) (checked with 1.4) and a
   Proton build: one in `~/.local/share/Steam/compatibilitytools.d`, one of Valve's that Steam
   downloaded, one umu downloaded, or one Slatty downloads (Settings → Runners).
 - [bubblewrap](https://github.com/containers/bubblewrap), able to start a sandbox, for isolated
   games. On Ubuntu 23.10 and later it needs an AppArmor profile first, for umu as well
-  ([how](docs/user-guide.md#ubuntu-and-apparmor)).
+  ([how](docs/user-guide.md#ubuntu-and-apparmor); those steps were not tried yet).
 - On NixOS, `steam-run` (or `steam-run-free`) for native Linux games; without it they run in umu's
   runtime.
 - Optional:

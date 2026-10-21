@@ -511,8 +511,8 @@ The games of the account signed in to the Steam client can show beside GOG's: tu
 games** in Settings → Steam (off until then), or choose **Use my Steam games without GOG** on the
 sign-in page.
 
-- **Read from Steam's files, never written.** Slatty finds Steam (native or Flatpak) and
-  the account last signed in to it, and reads its games, their names and images, what is installed,
+- **Read from Steam's files, never written.** Slatty finds Steam (native, or Flatpak: not tried
+  yet) and the account last signed in to it, and reads its games, their names and images, what is installed,
   play time and last session from the client's own files. No Steam password is asked for, and the
   client's settings and sign-in files (`config.vdf`, `local.vdf`, `ssfn*`, `registry.vdf`) are
   never read.
@@ -624,8 +624,8 @@ another operation on it does.
 ## Proton builds
 
 Every Proton menu lists, first, the builds Slatty downloaded, then those of Steam's
-`compatibilitytools.d` (native or Flatpak), Valve's builds (Proton Experimental, stable, Hotfix)
-that Steam downloaded in any of its libraries, and those umu downloaded.
+`compatibilitytools.d` (native, or Flatpak: not tried yet), Valve's builds (Proton Experimental,
+stable, Hotfix) that Steam downloaded in any of its libraries, and those umu downloaded.
 
 **Downloading builds.** Once **Proton downloads** is on (Settings → Runners, off until then),
 **Check GitHub** shows the newest GE-Proton, Proton-CachyOS (its x86-64-v3 build on processors that
@@ -682,7 +682,7 @@ It opens:
 - with `slatty-gui --couch`, or the **Couch mode** action of Slatty's desktop entry;
 - by itself in a gamescope session, such as the Steam Deck's Game Mode. On a Steam Deck, add
   Slatty to Steam as a non-Steam game from the Desktop Mode, then start it from the Game
-  Mode.
+  Mode. Neither has been tried on a Steam Deck yet.
 
 **Menu** → **Desktop mode** goes back to the desktop window; **Menu** → **Quit Slatty**
 closes it, asking first if a download or a game runs. The menu opens with the Menu button (☰),
@@ -858,7 +858,7 @@ identifiers of its own, and Comet's holds game client identifiers.
 | "bubblewrap (bwrap) is needed", or an isolated game does not start | Install bubblewrap (Flatpak needs it too). `slatty doctor` says whether it can start a sandbox, and one inside another. On Ubuntu, see [below](#ubuntu-and-apparmor) |
 | Achievements are not reported | **Achievements in game** must be on. Then `~/.local/state/slatty/logs/comet.log`; `slatty doctor` must find `GalaxyCommunication.exe` |
 | `slatty doctor` says Comet's port is busy | Another Comet runs, usually Heroic's: close the game in Heroic |
-| "secret storage unavailable" | A Secret Service keyring (GNOME Keyring, KeePassXC, KWallet with its Secret Service bridge) must be running and unlocked |
+| "secret storage unavailable" | A Secret Service keyring (GNOME Keyring, the one checked; KeePassXC or KWallet with its Secret Service bridge, not tried yet) must be running and unlocked |
 | A cloud conflict blocks the launch | Open the Cloud saves drawer, or `slatty cloud diff <id>` then `slatty cloud sync <id> --prefer local` or `--prefer remote` |
 | A session was cut off (crash, power cut) | The next launch says so. Check `slatty cloud status <id>` before playing |
 | "another operation on this game is running" | An install, update, repair, uninstall, cloud sync or session of that game still runs, maybe from the command line, or the game itself still runs. Wait for it to end |
