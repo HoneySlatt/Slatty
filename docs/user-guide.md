@@ -106,7 +106,7 @@ copies made at the size they are shown, so they stay sharp at every size and scr
 ### A game's page
 
 The game's key art fills the top of the page, with its title, the big button (**Play**,
-**Install**, **Resume**, **Updating**…) and the favourite button. Below, cards give:
+**Install**, **Resume**, **Updating**…) and the favorite button. Below, cards give:
 
 - **Time played** and **Last played**. Play time is the total GOG records, so it counts sessions
   from GOG Galaxy and other launchers too. GOG keeps no "last played" date that a launcher can
@@ -322,9 +322,8 @@ such as adaptive triggers may be unavailable. It does not provide Steam Input's 
 profiles.
 Native Linux games, games run through Wine alone, and Steam-managed games do not use this option.
 
-If testing with `PROTON_ADD_CONFIG=sdlinput` or `PROTON_USE_SDL=1` on the launcher command, restart
-Slatty normally before using the switch: environment options still apply to every game
-launched from that session, even when its switch is off.
+Started with `PROTON_ADD_CONFIG=sdlinput` or `PROTON_USE_SDL=1` in its environment, Slatty passes
+them to every game, whatever its switch: start it without them to let the switch decide.
 
 ### Stopping a game
 

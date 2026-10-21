@@ -4,7 +4,7 @@
 
 ```sh
 nix develop
-cargo test --workspace      # about 650 tests, in about 15 s; no network, no real game
+cargo test --workspace      # about 840 tests, in about 15 s; no network, no real game
 ```
 
 They check Slatty's own logic against simulated services and fake data (`[FAKE]` titles,

@@ -20,7 +20,7 @@ files by default.
 
 **Library**
 - Your GOG games with their covers, kept for offline use, fluid at 10,000 games.
-- Shelves (all, installed, favourites, hidden), sorting, and filters by store, system,
+- Shelves (all, installed, favorites, hidden), sorting, and filters by store, system,
   achievements and cloud saves.
 - Change any game's title, sorting title, cover and background, from a file or from SteamGridDB;
   hide the ones you do not want to see.
@@ -34,14 +34,15 @@ files by default.
 - A download queue you reorder by dragging; downloads that resume after a crash or a power cut,
   and wait while GOG is out of reach.
 - Every file checked against GOG's checksums; the game folder appears only once all are right.
-- Updates in place (automatically for games on their newest build), with GOG's binary patches when
-  there are; DLC and language changes; verify, repair and uninstall.
+- Updates in place (automatically for games on their newest build), with GOG's binary patches
+  where GOG offers them; DLC and language changes; verify, repair and uninstall.
 - GOG's offline installers kept in a folder, for Windows, Linux or macOS, checked against GOG's
   MD5 sums.
 
 **Playing**
 - Windows games through [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and
-  the Proton build of your choice, per game; Linux games natively.
+  the Proton build of your choice, per game; Linux games natively. A game that can be started
+  several ways asks which at its first Play.
 - Optional controller compatibility per game, through the SDL input mode of UMU-Proton, GE-Proton
   and Proton-CachyOS (checked with UMU-Proton only).
 - Isolation from your files: an isolated game sees its own folder and a home of its own, and
@@ -60,6 +61,7 @@ files by default.
 - Steam games, read from the Steam client's own files and played, installed and uninstalled
   through it. A game owned on both stores shows once. No GOG account needed for them.
 - Games from no store, added by the program that starts them, or from an installer or archive.
+- GOG games installed by another tool, imported from their folder or from Heroic.
 - Proton builds (GE-Proton, Proton-CachyOS, UMU-Proton) downloaded from GitHub, checked, and kept
   up to date once you turn it on.
 
@@ -152,7 +154,8 @@ The [user guide](docs/user-guide.md) covers the window, and the
 - You sign in on GOG's own page; Slatty never sees your password. Your session is kept in
   the system keyring, never in a log or a process argument.
 - No telemetry. Besides GOG, every host contacted is listed in
-  [SECURITY.md](SECURITY.md#what-leaves-your-computer) with the setting that controls it; the
+  [SECURITY.md](SECURITY.md#what-leaves-your-computer) with the setting that controls it, where
+  there is one; the
   optional ones (GitHub, SteamGridDB, Steam's servers, umu's database) are off until you turn them
   on.
 - Windows games run isolated from your files by default, inside umu's container and bubblewrap.

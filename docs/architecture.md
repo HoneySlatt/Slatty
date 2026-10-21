@@ -415,7 +415,7 @@ settings table; no game folder or prefix is edited for the setting.
 The input mode comes from [UMU-Proton's launcher](https://github.com/Open-Wine-Components/umu-proton/blob/proton_10.0/proton),
 [GE-Proton's options](https://github.com/GloriousEggroll/proton-ge-custom#options) and
 [Proton-CachyOS's options](https://github.com/CachyOS/proton-cachyos#proton-cachyos-config-options).
-Actual controller behavior remains a per-game, per-build check.
+Actual controller behaviour remains a per-game, per-build check.
 
 A **native Linux game** runs through `start.sh`: on NixOS inside `steam-run` when present (which
 mounts an empty `/tmp` of its own, so temporary folders under `/tmp` become `/tmp`,

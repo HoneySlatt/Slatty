@@ -11,7 +11,7 @@ The first public version.
 
 - Sign-in to GOG in the system browser; the session in the system keyring.
 - The library with its covers, cached for offline use, fluid at 10,000 games.
-- Shelves (all, installed, favourites, hidden), sort, search, and filters by store (GOG, Steam,
+- Shelves (all, installed, favorites, hidden), sort, search, and filters by store (GOG, Steam,
   added by hand), system, achievements and cloud saves, remembered when asked.
 - A game page with its key art, play time, cloud save and achievement cards, and its tools in
   drawers; an Achievements tab; notifications in the window and on the desktop.
@@ -33,9 +33,9 @@ The first public version.
 - A download queue, kept across restarts and reordered by dragging; **Download now** starts a row
   at once and puts the download it pauses right after it; a row that started already, taken out
   of the queue, is paused with what it downloaded, without holding the queue. Downloads and
-  automatic updates pause
-  while a game runs (a Steam game too, once Slatty sees it run) and go on once it closes
-  (can be turned off), resume after a crash or a power cut, and wait while GOG is out of reach.
+  automatic updates pause while a game runs (a Steam game too, once Slatty sees it run) and go on
+  once it closes (can be turned off), resume after a crash or a power cut, and wait while GOG is
+  out of reach.
 - Every file checked against GOG's checksums; the game folder appears only once all are right.
 - Updates in place, automatic for games on their newest build, with GOG's binary patches; DLC,
   language and version changes; verify, repair, uninstall.
@@ -44,9 +44,9 @@ The first public version.
 - GOG's offline installers downloaded to keep, for Windows, Linux or macOS, in one or more
   languages, with their DLC's, from a game's Manage drawer (installed or not) through the download
   queue, into a folder chosen in Settings: each file checked against GOG's MD5 sums, one already in
-  the folder too, never replaced when it does not match (one GOG keeps none for said not checked),
-  damaged parts downloaded again, a download taken up where it stopped
-  (`slatty installers` too).
+  the folder too, never replaced when it does not match (a file GOG keeps no sums for is said not
+  checked), damaged parts downloaded again, a download taken up where it stopped (`slatty
+  installers` too).
 - File checks at the lowest priority, so the desktop and a running game stay responsive.
 
 ### Playing
