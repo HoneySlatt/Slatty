@@ -177,7 +177,7 @@ Report vulnerabilities privately, as [SECURITY.md](SECURITY.md#reporting-a-vulne
 
 Slatty stands on the work of others:
 
-- [Comet](https://github.com/imLinguin/comet) (GPL-3.0-or-later) implements the Galaxy communication service
+- [Comet](https://github.com/imLinguin/comet) (Apache-2.0) implements the Galaxy communication service
   games talk to; Slatty runs it beside them.
 - [heroic-gogdl](https://github.com/Heroic-Games-Launcher/heroic-gogdl) (GPL-3.0) is the reference
   for Galaxy depots, cloud storage and sessions. Parts of Slatty follow its logic.

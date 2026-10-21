@@ -17,7 +17,8 @@
           sourceRoot = "source/dummy-service";
           buildPhase = "$CC -O2 -static communication.c -o GalaxyCommunication.exe";
           installPhase = "install -Dm644 GalaxyCommunication.exe $out/share/slatty/GalaxyCommunication.exe";
-          meta.license = pkgs.comet-gog.meta.license;
+          # Comet's LICENSE is Apache-2.0 since 2025; nixpkgs's comet-gog still says GPL-3.0-or-later.
+          meta.license = pkgs.lib.licenses.asl20;
         };
       # Loaded by the interface at run time (window, input, graphics, the file chooser).
       runtimeLibs =
