@@ -102,14 +102,16 @@ Linux only, tested and packaged on x86-64; macOS and Windows hosts are not suppo
 
 ## Install
 
-**With Nix**, from a checkout:
+**With Nix** (flakes enabled):
 
 ```sh
-nix run .            # or: nix build, then result/bin/slatty-gui
+nix run github:HoneySlatt/Slatty     # or, from a checkout: nix run .
+nix profile install github:HoneySlatt/Slatty
 ```
 
 The package brings umu-launcher, bubblewrap, Comet, `GalaxyCommunication.exe` (built from Comet's
-sources) and `steam-run-free`, and installs a desktop entry.
+sources) and `steam-run-free`, and installs a desktop entry. It was only used on NixOS; Nix on
+another distribution was not tried yet.
 
 **From source**, for development:
 
@@ -120,9 +122,10 @@ slatty doctor        # checks umu, bubblewrap, Comet, the keyring…
 slatty-gui
 ```
 
-`nix develop` provides the toolchain and every tool above, and puts `target/debug` on `PATH`.
-Without Nix you need Rust 1.90 or newer, `pkg-config`, the Wayland, X11 and Vulkan development
-libraries, umu-launcher and Comet on `PATH`, and `GalaxyCommunication.exe` in
+`nix develop` provides the toolchain, umu-launcher, bubblewrap, Comet and
+`GalaxyCommunication.exe` (not `steam-run`), and puts `target/debug` on `PATH`. Without Nix
+(not tried yet) you need Rust 1.90 or newer, a C compiler, `pkg-config`, the Wayland, X11, Vulkan
+and libudev development files, umu-launcher and Comet on `PATH`, and `GalaxyCommunication.exe` in
 `~/.local/share/slatty/` (or its path in `SLATTY_GALAXY_COMMUNICATION`).
 
 ## First steps
