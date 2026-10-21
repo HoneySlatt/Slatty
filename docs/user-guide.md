@@ -314,10 +314,12 @@ input. It is **off by default for every game**. Turn it on only for games that n
 is saved per game, kept when changing Proton builds, and applies from the next launch in both
 the interface and the command line.
 
-This uses Proton's SDL input mode, supported by UMU-Proton, GE-Proton and Proton-CachyOS; Valve's
-Proton builds (Proton Experimental, Proton 10.0) have no such mode, and the switch changes nothing
-with them. It does not need Steam running. Games may show Xbox button icons, and native PlayStation features such
-as adaptive triggers may be unavailable. It does not provide Steam Input's remapping or profiles.
+This uses Proton's SDL input mode, supported by UMU-Proton, GE-Proton and Proton-CachyOS (only
+UMU-Proton's was checked with a real game, and not yet through the switch); Valve's Proton builds
+(Proton Experimental, Proton 10.0) have no such mode, and the switch changes nothing with them.
+It does not need Steam running. Games may show Xbox button icons, and native PlayStation features
+such as adaptive triggers may be unavailable. It does not provide Steam Input's remapping or
+profiles.
 Native Linux games, games run through Wine alone, and Steam-managed games do not use this option.
 
 If testing with `PROTON_ADD_CONFIG=sdlinput` or `PROTON_USE_SDL=1` on the launcher command, restart

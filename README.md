@@ -40,9 +40,10 @@ files by default.
   MD5 sums.
 
 **Playing**
-- Optional controller compatibility per game with UMU-Proton, GE-Proton and Proton-CachyOS.
 - Windows games through [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and
   the Proton build of your choice, per game; Linux games natively.
+- Optional controller compatibility per game, through the SDL input mode of UMU-Proton, GE-Proton
+  and Proton-CachyOS (checked with UMU-Proton only).
 - Isolation from your files: an isolated game sees its own folder and a home of its own, and
   cannot change the tools other games run through.
 - The session followed until the game's last process ends; play time reported to GOG as Galaxy
@@ -65,15 +66,15 @@ files by default.
 Everything has automated tests. What has also been checked against real services and games is
 recorded in [docs/compatibility.md](docs/compatibility.md): sign-in, library, Windows and Linux
 installs, playing isolated (Hollow Knight, Firewatch, Cyberpunk 2077, Blasphemous), cloud saves both
-ways, an achievement earned in game, verify and repair, uninstall, a crash during a download, and
-Steam's library. Not checked against real services yet: pausing an install by hand, applying an
-update, DLC and language changes, Visual C++ redistributables, offline installers, downloads
-pausing while a game runs, games added by hand, Steam installs, and keeping Proton builds up to
-date; nor the couch mode with a real gamepad, on a Steam Deck or on a television.
-
-A DualSense over USB was also checked by the user in Bleak Faith: Forsaken with UMU-Proton's
-SDL input mode. The new per-game switch and controller behavior with GE-Proton and
-Proton-CachyOS still need a real-game check.
+ways, an achievement earned in game, verify and repair, uninstall, a crash during a download,
+Steam's library and Play, two games added by hand through their Windows installers, and a
+DualSense through UMU-Proton's SDL input mode. Not checked against real services yet: pausing an
+install by hand, applying an update, DLC and language changes, Visual C++ redistributables, cloud
+deletions, offline installers, downloads pausing while a game runs, games added from a Linux
+installer, an archive or an AppImage, Steam installs and the Steam Web API, keeping Proton builds
+up to date, the controller compatibility switch itself and its mode with GE-Proton and
+Proton-CachyOS, and Ubuntu; nor the couch mode with a real gamepad, on a Steam Deck or on a
+television.
 
 Linux only, tested and packaged on x86-64; macOS and Windows hosts are not supported. See the
 [roadmap](docs/roadmap.md).
