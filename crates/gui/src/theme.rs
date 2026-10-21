@@ -630,14 +630,6 @@ pub fn card(_: &Theme) -> container::Style {
     }
 }
 
-pub fn circle(_: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(tokens().surface_high)),
-        border: round(999.0),
-        ..Default::default()
-    }
-}
-
 pub fn avatar(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(tokens().outline)),

@@ -433,11 +433,7 @@ impl App {
         let last_played = self.last_played(&g.id);
         let stat = |ic: Icon, value: String, label: &'a str| {
             row![]
-                .push((!narrow).then(|| {
-                    container(icon(ic, 20.0, tokens().text))
-                        .center(40)
-                        .style(theme::circle)
-                }))
+                .push((!narrow).then(|| container(icon(ic, 20.0, tokens().text)).center(40)))
                 .push(
                     column![
                         text(value)
@@ -490,9 +486,7 @@ impl App {
         // (a drawer narrows the page).
         let card = responsive(move |size| {
             let mut content = row![
-                container(icon(Icon::Cloud, 22.0, tokens().text))
-                    .center(40)
-                    .style(theme::circle),
+                container(icon(Icon::Cloud, 22.0, tokens().text)).center(40),
                 column![
                     text("Cloud saves")
                         .size(15)
@@ -625,7 +619,6 @@ impl App {
         } else {
             container(icon(Icon::Trophy, 22.0, tokens().text))
                 .center(40)
-                .style(theme::circle)
                 .into()
         };
         let body: Element<'_, Message> = match self.achievements.get(&g.id) {
@@ -718,11 +711,10 @@ impl App {
         let isolated = self.installs.get(&g.id).is_some_and(|i| i.isolated);
         let card = responsive(move |size| {
             let content = row![]
-                .push((size.width >= 240.0).then(|| {
-                    container(icon(Icon::Folder, 22.0, tokens().text))
-                        .center(40)
-                        .style(theme::circle)
-                }))
+                .push(
+                    (size.width >= 240.0)
+                        .then(|| container(icon(Icon::Folder, 22.0, tokens().text)).center(40)),
+                )
                 .push(
                     column![
                         text("Added by hand")
@@ -774,11 +766,10 @@ impl App {
     fn steam_card(&self) -> Element<'_, Message> {
         let card = responsive(move |size| {
             let content = row![]
-                .push((size.width >= 240.0).then(|| {
-                    container(icon(Icon::Globe, 22.0, tokens().text))
-                        .center(40)
-                        .style(theme::circle)
-                }))
+                .push(
+                    (size.width >= 240.0)
+                        .then(|| container(icon(Icon::Globe, 22.0, tokens().text)).center(40)),
+                )
                 .push(
                     column![
                         text("Runs through Steam")
