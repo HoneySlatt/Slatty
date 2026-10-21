@@ -12,6 +12,7 @@ use slatty_core::installer::Progress;
 use slatty_core::library::{LibraryGame, NotInstallable};
 use slatty_core::store::Store;
 
+use super::achievements::{achievement_bar, achievement_share, completed};
 use super::format::*;
 use super::panels::runner_label;
 use super::{inner, note};
@@ -601,9 +602,22 @@ impl App {
     }
 
     pub(super) fn achievements_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let trophy = container(icon(Icon::Trophy, 22.0, tokens().text))
-            .center(40)
-            .style(theme::circle);
+        let lit = matches!(
+            self.achievements.get(&g.id),
+            Some(Loadable::Ready(l)) if completed(
+                l.iter().filter(|a| a.date_unlocked.is_some()).count(),
+                l.len(),
+            )
+        );
+        let trophy = if lit {
+            container(icon(Icon::Trophy, 22.0, tokens().on_accent))
+                .center(40)
+                .style(theme::lit_badge)
+        } else {
+            container(icon(Icon::Trophy, 22.0, tokens().text))
+                .center(40)
+                .style(theme::circle)
+        };
         let body: Element<'_, Message> = match self.achievements.get(&g.id) {
             None | Some(Loadable::Loading) => text("Loading achievements…")
                 .size(14)
@@ -635,7 +649,6 @@ impl App {
             }
             Some(Loadable::Ready(list)) => {
                 let done = list.iter().filter(|a| a.date_unlocked.is_some()).count();
-                let share = done as f32 / list.len() as f32;
                 // The latest unlocks, named on hover, only when the card is wide enough for them
                 // (the achievements drawer narrows the page).
                 responsive(move |size| {
@@ -644,13 +657,10 @@ impl App {
                         row![
                             text(format!("{done} / {}", list.len())).size(14),
                             space().width(Length::Fill),
-                            text(format!("{:.0}%", share * 100.0))
-                                .size(14)
-                                .color(tokens().muted),
-                        ],
-                        progress_bar(0.0..=1.0, share)
-                            .girth(8)
-                            .style(theme::progress),
+                            achievement_share(done, list.len(), 14.0),
+                        ]
+                        .align_y(Alignment::Center),
+                        achievement_bar(done, list.len(), 8.0),
                     ]
                     .spacing(6)
                     .width(Length::Fill);

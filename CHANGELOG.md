@@ -7,6 +7,8 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 ### Changed
 
+- A game whose achievements are all unlocked says Completed in place of 100%, its progress lit
+  with the theme's accent: on its page, in the Achievements tab and in the couch mode.
 - Game settings no longer says controller compatibility was checked with UMU-Proton only: it was
   checked with GE-Proton and Proton-CachyOS too.
 

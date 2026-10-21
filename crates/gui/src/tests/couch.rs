@@ -979,6 +979,41 @@ fn the_achievements_list_opens_from_the_game_page() {
     assert_eq!(app.selected.as_deref(), Some("3"), "the page stays");
 }
 
+/// A game whose achievements are all unlocked has them lit with the accent: on its line under the
+/// title, and Completed beside the list's title.
+#[test]
+fn a_completed_game_says_so_in_the_couch_mode() {
+    let mut app = couch_app();
+    app.achievements.insert(
+        "3".into(),
+        crate::Loadable::Ready(vec![
+            fake_achievement("Alpha", true),
+            fake_achievement("Beta", true),
+        ]),
+    );
+    app.overview.insert(
+        "3".into(),
+        GameOverview {
+            achievements: Some((2, 2)),
+            ..Default::default()
+        },
+    );
+    let _ = app.update(Message::Select("3".into()));
+    let mut ui = render(&app);
+    assert!(ui.find("2 / 2 achievements").is_ok());
+    assert!(ui.find("Completed").is_err(), "the list is closed");
+    snapshot(&mut ui, "couch-completed-game");
+    drop(ui);
+    nav(&mut app, Nav::Right);
+    nav(&mut app, Nav::Right);
+    nav(&mut app, Nav::Confirm);
+    assert_eq!(couch(&app).achievements, Some(0));
+    let mut ui = render(&app);
+    assert!(ui.find("Achievements  ·  2 / 2").is_ok());
+    assert!(ui.find("Completed").is_ok());
+    snapshot(&mut ui, "couch-completed-achievements");
+}
+
 #[test]
 fn the_downloads_tab_runs_the_queue_from_the_gamepad() {
     use super::offline::installing_6;

@@ -394,7 +394,8 @@ saves and achievements are not checked with the new account at the end: sign bac
 ## Achievements
 
 The Achievements tab and each game's page list achievements as GOG records them, with how common
-each one is.
+each one is. A game whose achievements are all unlocked says **Completed** in place of 100%, its
+progress lit with the theme's accent, there and in the couch mode.
 
 **Earned in game:** with **Achievements in game** on (Settings → Privacy, off until you turn it
 on), Comet runs beside Windows games that ship GOG's Galaxy SDK and sends what they unlock to GOG,

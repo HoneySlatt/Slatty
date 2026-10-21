@@ -8,6 +8,7 @@ use iced::widget::{
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 
+use super::achievements::{completed, lit_badge};
 use super::format::{duration, fraction, relative_day};
 use super::widgets::logo;
 use crate::couch::{
@@ -224,28 +225,46 @@ impl App {
             .into()
     }
 
-    /// Play time, last session, achievements and whether it is installed, on one line.
-    fn couch_meta(&self, g: &LibraryGame) -> String {
+    /// Play time, last session, achievements and whether it is installed, on one line; the
+    /// achievements lit with the accent once all are unlocked.
+    fn couch_meta<'a>(&self, g: &LibraryGame) -> Element<'a, Message> {
+        let line =
+            |s: String| -> Element<'a, Message> { text(s).size(18).color(tokens().muted).into() };
         let mut parts = Vec::new();
         let played = self.played_seconds(&g.id);
         if played > 0 {
-            parts.push(format!("{} played", duration(played)));
+            parts.push(line(format!("{} played", duration(played))));
         }
         if let Some(last) = self.last_played(&g.id).filter(|t| *t > 0) {
-            parts.push(format!("Last played {}", relative_day(last).to_lowercase()));
+            parts.push(line(format!(
+                "Last played {}",
+                relative_day(last).to_lowercase()
+            )));
         }
         if let Some((unlocked, total)) = self.achievement_counts(&g.id).filter(|(_, t)| *t > 0) {
-            parts.push(format!("{unlocked} / {total} achievements"));
+            let said = format!("{unlocked} / {total} achievements");
+            parts.push(if completed(unlocked, total) {
+                lit_badge(said, 16.0)
+            } else {
+                line(said)
+            });
         }
-        parts.push(
+        parts.push(line(
             if self.is_installed(&g.id) {
                 "Installed"
             } else {
                 "Not installed"
             }
             .into(),
-        );
-        parts.join("  ·  ")
+        ));
+        let mut meta = Row::new().spacing(10).align_y(Alignment::Center);
+        for (i, part) in parts.into_iter().enumerate() {
+            if i > 0 {
+                meta = meta.push(line("·".into()));
+            }
+            meta = meta.push(part);
+        }
+        meta.into()
     }
 
     /// The key art of `g`, edge to edge, fading into the page, with its title and `below`.
@@ -270,7 +289,7 @@ impl App {
         let front = container(
             column![
                 text(&g.title).size(title_size).font(bold()),
-                text(self.couch_meta(g)).size(18).color(tokens().muted),
+                self.couch_meta(g),
                 below,
             ]
             .spacing(14),
@@ -613,9 +632,14 @@ impl App {
             });
         let panel = container(
             column![
-                text(format!("Achievements  ·  {unlocked} / {}", list.len()))
-                    .size(24)
-                    .font(bold()),
+                row![
+                    text(format!("Achievements  ·  {unlocked} / {}", list.len()))
+                        .size(24)
+                        .font(bold()),
+                    completed(unlocked, list.len()).then(|| lit_badge("Completed".into(), 16.0)),
+                ]
+                .spacing(16)
+                .align_y(Alignment::Center),
                 Column::with_children(items).spacing(10),
             ]
             .spacing(18),

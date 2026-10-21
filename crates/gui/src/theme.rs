@@ -1009,6 +1009,51 @@ pub fn progress(_: &Theme) -> progress_bar::Style {
     }
 }
 
+/// The bar of a game whose achievements are all unlocked: the accent, brightening along it.
+pub fn progress_lit(_: &Theme) -> progress_bar::Style {
+    let t = tokens();
+    progress_bar::Style {
+        background: Background::Color(t.surface_high),
+        bar: Background::Gradient(iced::Gradient::Linear(
+            iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2))
+                .add_stop(0.0, t.accent.scale_alpha(0.5))
+                .add_stop(0.6, t.accent)
+                .add_stop(1.0, t.accent_hover),
+        )),
+        border: round(999.0),
+    }
+}
+
+/// A halo of the accent around what a game whose achievements are all unlocked shows.
+fn halo(t: &Tokens) -> Shadow {
+    Shadow {
+        color: t.accent.scale_alpha(0.45),
+        offset: iced::Vector::ZERO,
+        blur_radius: 12.0,
+    }
+}
+
+/// Around the lit bar: its halo.
+pub fn glow(_: &Theme) -> container::Style {
+    container::Style {
+        border: round(999.0),
+        shadow: halo(&tokens()),
+        ..Default::default()
+    }
+}
+
+/// Completed, said of a game whose achievements are all unlocked; its trophy's circle too.
+pub fn lit_badge(_: &Theme) -> container::Style {
+    let t = tokens();
+    container::Style {
+        background: Some(Background::Color(t.accent)),
+        border: round(999.0),
+        text_color: Some(t.on_accent),
+        shadow: halo(&t),
+        ..Default::default()
+    }
+}
+
 pub fn scroller(theme: &Theme, status: scrollable::Status) -> scrollable::Style {
     let mut style = scrollable::default(theme, status);
     for rail in [&mut style.vertical_rail, &mut style.horizontal_rail] {

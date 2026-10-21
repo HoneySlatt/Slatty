@@ -123,7 +123,6 @@ impl App {
                 .style(theme::placeholder)
                 .into(),
         };
-        let share = done as f32 / total as f32;
         let details = column![
             // Three lines at most: a longer title would push the progress out of the tile.
             container(text(&g.title).size(17).font(semibold()))
@@ -133,13 +132,10 @@ impl App {
             row![
                 text(format!("{done} / {total}")).size(16),
                 space().width(Length::Fill),
-                text(format!("{:.0}%", share * 100.0))
-                    .size(15)
-                    .color(tokens().muted),
-            ],
-            progress_bar(0.0..=1.0, share)
-                .girth(8)
-                .style(theme::progress),
+                achievement_share(done, total, 15.0),
+            ]
+            .align_y(Alignment::Center),
+            achievement_bar(done, total, 8.0),
         ]
         .spacing(10)
         .padding(Padding::new(16.0).left(6.0).bottom(30.0))
@@ -198,11 +194,6 @@ impl App {
             .into(),
             Some(Loadable::Ready(list)) => {
                 let done = list.iter().filter(|a| a.date_unlocked.is_some()).count();
-                let share = if list.is_empty() {
-                    0.0
-                } else {
-                    done as f32 / list.len() as f32
-                };
                 let summary = row![
                     cover,
                     column![
@@ -211,14 +202,11 @@ impl App {
                             text(format!("{done} / {} unlocked", list.len()))
                                 .size(16)
                                 .font(semibold()),
-                            text(format!("{:.0}%", share * 100.0))
-                                .size(15)
-                                .color(tokens().muted),
+                            achievement_share(done, list.len(), 15.0),
                         ]
-                        .spacing(16),
-                        progress_bar(0.0..=1.0, share)
-                            .girth(10)
-                            .style(theme::progress),
+                        .spacing(16)
+                        .align_y(Alignment::Center),
+                        achievement_bar(done, list.len(), 10.0),
                     ]
                     .spacing(10)
                     .width(Length::Fill),
@@ -413,4 +401,57 @@ pub fn unlock_all_button<'a>(game_id: &str, list: &[Achievement]) -> Element<'a,
         )
         .style(theme::tonal)
         .into()
+}
+
+/// Whether all of a game's achievements are unlocked: its progress is then lit with the accent.
+pub fn completed(done: usize, total: usize) -> bool {
+    total > 0 && done == total
+}
+
+/// A game's achievement progress as a bar, lit with the accent once all are unlocked.
+pub fn achievement_bar<'a>(done: usize, total: usize, girth: f32) -> Element<'a, Message> {
+    let share = if total == 0 {
+        0.0
+    } else {
+        done as f32 / total as f32
+    };
+    let bar = progress_bar(0.0..=1.0, share).girth(girth);
+    if completed(done, total) {
+        container(bar.style(theme::progress_lit))
+            .style(theme::glow)
+            .into()
+    } else {
+        bar.style(theme::progress).into()
+    }
+}
+
+/// The share of a game's achievements unlocked, or Completed once all are.
+pub fn achievement_share<'a>(done: usize, total: usize, size: f32) -> Element<'a, Message> {
+    if completed(done, total) {
+        return lit_badge("Completed".into(), size - 2.0);
+    }
+    let share = if total == 0 {
+        0.0
+    } else {
+        done as f32 / total as f32
+    };
+    text(format!("{:.0}%", share * 100.0))
+        .size(size)
+        .color(tokens().muted)
+        .into()
+}
+
+/// A label lit with the accent, after a check: said of a game whose achievements are all unlocked.
+pub fn lit_badge<'a>(label: String, size: f32) -> Element<'a, Message> {
+    container(
+        row![
+            icon(Icon::CircleCheck, size + 1.0, tokens().on_accent),
+            text(label).size(size).font(semibold()),
+        ]
+        .spacing(size * 0.4)
+        .align_y(Alignment::Center),
+    )
+    .padding([size * 0.15, size * 0.7])
+    .style(theme::lit_badge)
+    .into()
 }

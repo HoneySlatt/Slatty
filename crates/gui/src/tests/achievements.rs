@@ -19,6 +19,46 @@ fn game_page_summarises_achievements() {
     snapshot(&mut ui, "game-achievements");
 }
 
+/// A game whose achievements are all unlocked says Completed, lit with the accent, in place of
+/// 100%: on its card, in the drawer, on its tile and on its page of the Achievements tab.
+#[test]
+fn a_completed_game_says_so_wherever_its_achievements_show() {
+    let mut app = app_with_achievements();
+    if let Some(crate::Loadable::Ready(list)) = app.achievements.get_mut("5") {
+        for a in list {
+            a.date_unlocked = Some("2026-10-09T10:00:00+0000".into());
+        }
+    }
+    app.overview.insert(
+        "5".into(),
+        GameOverview {
+            achievements: Some((2, 2)),
+            ..Default::default()
+        },
+    );
+    let shown = |app: &App| {
+        let all = texts(&mut render(app));
+        let count = |s: &str| all.iter().filter(|t| *t == s).count();
+        (count("Completed"), count("100%"))
+    };
+    assert_eq!(shown(&app), (2, 0), "the card and the drawer");
+    snapshot(&mut render(&app), "achievements-completed-drawer");
+    app.panel = None;
+    let mut ui = render(&app);
+    assert!(ui.find("2 / 2").is_ok());
+    snapshot(&mut ui, "achievements-completed-card");
+    drop(ui);
+
+    app.selected = None;
+    app.page = Page::Achievements;
+    assert_eq!(shown(&app), (1, 0), "the tile");
+    snapshot(&mut render(&app), "achievements-completed-tab");
+    let _ = app.update(Message::OpenAchievements("5".into()));
+    settle(&mut app);
+    assert_eq!(shown(&app), (1, 0), "the game's page");
+    snapshot(&mut render(&app), "achievements-completed-game");
+}
+
 #[test]
 fn unlocking_only_asks_for_confirmation() {
     let mut app = app_with_achievements();

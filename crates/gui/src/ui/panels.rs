@@ -11,7 +11,7 @@ use slatty_core::installer::DlcChoice;
 use slatty_core::library::LibraryGame;
 use slatty_core::runner::Runner;
 
-use super::achievements::unlock_all_button;
+use super::achievements::{completed, lit_badge, unlock_all_button};
 use super::format::*;
 use super::{note, round_button};
 use crate::achievements::by_rarity;
@@ -107,11 +107,14 @@ impl App {
                     row![
                         text(format!("{unlocked} / {} unlocked", list.len()))
                             .size(16)
-                            .font(semibold())
-                            .width(Length::Fill),
+                            .font(semibold()),
+                        completed(unlocked, list.len())
+                            .then(|| lit_badge("Completed".into(), 13.0)),
+                        space().width(Length::Fill),
                         self.manual_changes(&g.id)
                             .then(|| unlock_all_button(&g.id, list)),
                     ]
+                    .spacing(12)
                     .align_y(Alignment::Center),
                 ]
                 .extend(self.pending_confirmation(&g.id))
