@@ -196,9 +196,9 @@ mod tests {
         (format!("http://{addr}/api/v2"), handle)
     }
 
-    const GAMES: &str = r#"{"success":true,"data":[{"id":5254,"name":"[FAKE] Hollow Knight",
+    const GAMES: &str = r#"{"success":true,"data":[{"id":1234,"name":"[FAKE] Knight",
         "release_date":1488326400,"types":["steam","gog"],"verified":true},
-        {"id":77,"name":"[FAKE] Hollow Knight: Silksong","types":[],"verified":true}]}"#;
+        {"id":77,"name":"[FAKE] Knight: The Sequel","types":[],"verified":true}]}"#;
 
     const GRIDS: &str = r#"{"success":true,"data":[{"id":1,"score":3,"style":"alternate",
         "width":600,"height":900,"nsfw":false,"humor":false,"mime":"image/png","language":"en",
@@ -210,17 +210,17 @@ mod tests {
     async fn a_game_is_searched_by_its_name_with_the_key_in_a_header() {
         let (api, request) = serve("200 OK", GAMES).await;
         let key = Secret::new("[FAKE]-key");
-        let games = search_at(&http::client().unwrap(), &api, &key, " Hollow Knight/2 ")
+        let games = search_at(&http::client().unwrap(), &api, &key, " Fake Knight/2 ")
             .await
             .unwrap();
         assert_eq!(games.len(), 2);
-        assert_eq!(games[0].id, 5254);
+        assert_eq!(games[0].id, 1234);
         assert_eq!(games[0].release_date, Some(1488326400));
         assert_eq!(games[1].release_date, None);
         let request = request.await.unwrap();
         let first = request.lines().next().unwrap();
         assert_eq!(
-            first, "GET /api/v2/search/autocomplete/Hollow%20Knight%2F2 HTTP/1.1",
+            first, "GET /api/v2/search/autocomplete/Fake%20Knight%2F2 HTTP/1.1",
             "the name is one part of the path, whatever it holds"
         );
         assert!(
@@ -237,7 +237,7 @@ mod tests {
             &http::client().unwrap(),
             &api,
             &Secret::new("k"),
-            5254,
+            1234,
             Kind::Cover,
         )
         .await
@@ -248,7 +248,7 @@ mod tests {
         let request = request.await.unwrap();
         let first = request.lines().next().unwrap();
         assert!(
-            first.starts_with("GET /api/v2/grids/game/5254?dimensions=600x900"),
+            first.starts_with("GET /api/v2/grids/game/1234?dimensions=600x900"),
             "{first}"
         );
         assert!(first.contains("nsfw=false") && first.contains("types=static"));

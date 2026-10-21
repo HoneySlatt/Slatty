@@ -953,20 +953,20 @@ mod tests {
             "Game 10",
             "game 2",
             "Game 1",
-            "The Witcher 3: Wild Hunt",
-            "The Witcher 2",
-            "Alan Wake",
+            "[FAKE] Saga 3: The Hunt",
+            "[FAKE] Saga 2",
+            "[FAKE] Alpha",
         ];
         titles.sort_by_key(|t| NaturalKey::of(t));
         assert_eq!(
             titles,
             [
-                "Alan Wake",
+                "[FAKE] Alpha",
+                "[FAKE] Saga 2",
+                "[FAKE] Saga 3: The Hunt",
                 "Game 1",
                 "game 2",
-                "Game 10",
-                "The Witcher 2",
-                "The Witcher 3: Wild Hunt"
+                "Game 10"
             ]
         );
     }

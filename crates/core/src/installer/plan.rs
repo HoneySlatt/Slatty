@@ -476,8 +476,8 @@ mod tests {
     fn folder_names_drop_what_file_systems_mind() {
         assert_eq!(super::folder_name("Some Game"), "Some Game");
         assert_eq!(
-            super::folder_name("The Witcher 3: Wild Hunt"),
-            "The Witcher 3 Wild Hunt"
+            super::folder_name("[FAKE] Saga 3: The Hunt"),
+            "[FAKE] Saga 3 The Hunt"
         );
         assert_eq!(super::folder_name("../AC/DC?"), "ACDC");
     }

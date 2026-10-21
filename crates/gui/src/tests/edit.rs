@@ -272,7 +272,7 @@ fn steamgriddb_art_is_searched_by_name_once_turned_on() {
     assert_eq!(picker.query, "[FAKE] Game 4");
     assert_eq!(picker.searched, "[FAKE] Game 4", "searched at once");
     assert!(render(&app).find("Searching SteamGridDB…").is_ok());
-    edit(&mut app, EditMsg::PickerQuery("Hollow Knight".into()));
+    edit(&mut app, EditMsg::PickerQuery("[FAKE] Knight".into()));
     edit(&mut app, EditMsg::Search);
     let game = |id, name: &str| Game {
         id,
@@ -288,18 +288,18 @@ fn steamgriddb_art_is_searched_by_name_once_turned_on() {
     edit(
         &mut app,
         EditMsg::Found(
-            "Hollow Knight".into(),
+            "[FAKE] Knight".into(),
             Ok(vec![
-                game(5254, "[FAKE] Hollow Knight"),
-                game(77, "[FAKE] Silksong"),
+                game(1234, "[FAKE] Knight"),
+                game(77, "[FAKE] Knight: The Sequel"),
             ]),
         ),
     );
     let picker = app.edit.as_ref().unwrap().picker.as_ref().unwrap();
-    assert_eq!(picker.game, Some(5254), "the closest game is shown first");
+    assert_eq!(picker.game, Some(1234), "the closest game is shown first");
     {
         let mut ui = render(&app);
-        assert!(ui.find("[FAKE] Hollow Knight (2017)").is_ok());
+        assert!(ui.find("[FAKE] Knight (2017)").is_ok());
         assert!(ui.find("Loading its pictures…").is_ok());
     }
     let offer = |n: u32| steamgriddb::Art {
@@ -310,7 +310,7 @@ fn steamgriddb_art_is_searched_by_name_once_turned_on() {
     };
     // Another game is chosen; the pictures of the first one, arriving late, are dropped.
     edit(&mut app, EditMsg::ChooseGame(77));
-    edit(&mut app, EditMsg::Offered(5254, Ok(vec![offer(1)])));
+    edit(&mut app, EditMsg::Offered(1234, Ok(vec![offer(1)])));
     assert!(matches!(
         app.edit.as_ref().unwrap().picker.as_ref().unwrap().choices,
         Some(crate::Loadable::Loading)
@@ -335,9 +335,12 @@ fn steamgriddb_art_is_searched_by_name_once_turned_on() {
     edit(&mut app, EditMsg::Browse(Art::Cover));
     edit(
         &mut app,
-        EditMsg::Found("[FAKE] Game 4".into(), Ok(vec![game(5254, "[FAKE] HK")])),
+        EditMsg::Found(
+            "[FAKE] Game 4".into(),
+            Ok(vec![game(1234, "[FAKE] Knight")]),
+        ),
     );
-    edit(&mut app, EditMsg::Offered(5254, Ok(vec![offer(1)])));
+    edit(&mut app, EditMsg::Offered(1234, Ok(vec![offer(1)])));
     edit(&mut app, EditMsg::Choose(0));
     let png = b"\x89PNG\r\n\x1a\n[FAKE]".to_vec();
     edit(&mut app, EditMsg::Fetched(Art::Cover, Ok(png.clone())));
@@ -381,8 +384,8 @@ fn a_steamgriddb_failure_is_said_in_the_picker() {
             .find("No game of that name on SteamGridDB.")
             .is_ok()
     );
-    edit(&mut app, EditMsg::ChooseGame(5254));
-    edit(&mut app, EditMsg::Offered(5254, Ok(Vec::new())));
+    edit(&mut app, EditMsg::ChooseGame(1234));
+    edit(&mut app, EditMsg::Offered(1234, Ok(Vec::new())));
     assert!(
         render(&app)
             .find("SteamGridDB has no background for this game.")
