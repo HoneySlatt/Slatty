@@ -12,7 +12,11 @@ repository, open **Security**, then **Report a vulnerability**
 public issue for them.
 
 Say what an attacker can do and under which conditions, how to reproduce it, and the version or
-commit you tested. Fixes go into the latest release.
+commit you tested.
+
+## Supported versions
+
+Only the latest release receives security fixes; until 1.0, older versions get none.
 
 ## Threat model in short
 
