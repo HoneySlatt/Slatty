@@ -68,6 +68,7 @@
           postInstall = ''
             install -Dm644 packaging/io.github.HoneySlatt.Slatty.desktop -t $out/share/applications
             install -Dm644 packaging/io.github.HoneySlatt.Slatty.metainfo.xml -t $out/share/metainfo
+            cp -r packaging/icons $out/share/
             # The font, the icons and RCAS are built into the binary: their notices go with it.
             install -Dm644 LICENSE NOTICE -t $out/share/licenses/slatty
             install -Dm644 crates/gui/assets/fonts/OFL.txt $out/share/licenses/slatty/Geist-OFL.txt

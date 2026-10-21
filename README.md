@@ -113,8 +113,8 @@ nix profile install github:HoneySlatt/Slatty
 ```
 
 The package brings umu-launcher, bubblewrap, Comet, `GalaxyCommunication.exe` (built from Comet's
-sources) and `steam-run-free`, and installs a desktop entry. It was only used on NixOS; Nix on
-another distribution was not tried yet.
+sources) and `steam-run-free`, and installs a desktop entry and its icon. It was only used on
+NixOS; Nix on another distribution was not tried yet.
 
 **From source**, for development:
 

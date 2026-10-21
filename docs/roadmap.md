@@ -76,7 +76,7 @@ There are no dates. What has been checked against real services, and what not ye
 
 - **Translations** of the interface, in English for now.
 - **Steam downloads** followed more exactly while the client downloads.
-- **Packaging** for other distributions, and an application icon.
+- **Packaging** for other distributions.
 - **More runners**: Wine without Proton for the games Slatty installs (it exists for
   imported games).
 - **Windows hosts**, some day: the core relies on Linux in many places today.

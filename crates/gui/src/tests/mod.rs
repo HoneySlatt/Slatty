@@ -298,6 +298,31 @@ fn the_window_is_named_after_the_desktop_entry() {
     assert!(metainfo.contains(&format!("<id>{}</id>", crate::APP_ID)));
 }
 
+/// The icon the desktop entry names is shipped, at the sizes the package installs.
+#[test]
+fn the_desktop_entry_icon_is_shipped() {
+    let packaging = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packaging");
+    let entry =
+        std::fs::read_to_string(packaging.join(format!("{}.desktop", crate::APP_ID))).unwrap();
+    assert!(
+        entry
+            .lines()
+            .any(|l| l == format!("Icon={}", crate::APP_ID))
+    );
+    for size in [256, 512] {
+        let icon = packaging.join(format!(
+            "icons/hicolor/{size}x{size}/apps/{}.png",
+            crate::APP_ID
+        ));
+        let decoded = image::open(&icon).unwrap();
+        assert_eq!(
+            (decoded.width(), decoded.height()),
+            (size, size),
+            "{icon:?}"
+        );
+    }
+}
+
 mod achievements;
 mod added;
 mod cloud;
