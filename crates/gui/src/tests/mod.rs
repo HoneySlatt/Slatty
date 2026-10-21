@@ -283,6 +283,21 @@ fn ready_to_install(app: &mut App, id: &str) {
     );
 }
 
+#[test]
+fn the_window_is_named_after_the_desktop_entry() {
+    let window = crate::window_settings(false);
+    assert_eq!(window.platform_specific.application_id, crate::APP_ID);
+    let packaging = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packaging");
+    assert!(
+        packaging
+            .join(format!("{}.desktop", crate::APP_ID))
+            .is_file()
+    );
+    let metainfo =
+        std::fs::read_to_string(packaging.join(format!("{}.metainfo.xml", crate::APP_ID))).unwrap();
+    assert!(metainfo.contains(&format!("<id>{}</id>", crate::APP_ID)));
+}
+
 mod achievements;
 mod added;
 mod cloud;

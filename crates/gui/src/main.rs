@@ -108,15 +108,28 @@ fn main() -> iced::Result {
         .subscription(App::subscription)
         .theme(App::theme)
         .scale_factor(App::scale_factor)
-        .window(iced::window::Settings {
-            size: Size::new(1440.0, 900.0),
-            fullscreen: couch::ask_at_start(),
-            min_size: Some(Size::new(800.0, 560.0)),
-            ..Default::default()
-        })
+        .window(window_settings(couch::ask_at_start()))
         .default_font(theme::font())
         .exit_on_close_request(false)
         .run()
+}
+
+/// The name of the desktop entry and of the AppStream data in `packaging/`.
+pub const APP_ID: &str = "io.github.HoneySlatt.Slatty";
+
+/// The window, named after the desktop entry so that the desktop shows the entry's name and icon
+/// for it.
+fn window_settings(fullscreen: bool) -> iced::window::Settings {
+    iced::window::Settings {
+        size: Size::new(1440.0, 900.0),
+        fullscreen,
+        min_size: Some(Size::new(800.0, 560.0)),
+        platform_specific: iced::window::settings::PlatformSpecific {
+            application_id: APP_ID.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 /// Narrowest and widest covers of the library grid.

@@ -88,7 +88,7 @@ The first public version.
   never deletes its files, but for those Slatty unpacked, and GOG is never told of it.
 - GOG games installed by another tool, imported from their folder or from Heroic.
 - A command line (`slatty`) and an interface (`slatty-gui`) on the same core; a Nix package with a
-  desktop entry.
+  desktop entry, whose name the window carries as its application id.
 
 ### Security and privacy
 
