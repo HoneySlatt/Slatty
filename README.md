@@ -185,7 +185,8 @@ Slatty stands on the work of others:
   save locations, Proton and Comet fit together.
 - [gogapidocs](https://gogapidocs.readthedocs.io) documents many GOG endpoints.
 - [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) runs Proton outside Steam.
-- [Lucide](https://lucide.dev) (ISC) provides the icons, in `crates/gui/assets/icons`.
+- [Lucide](https://lucide.dev) (ISC; some icons from Feather, MIT) provides the icons, in
+  `crates/gui/assets/icons`.
 - [Geist](https://vercel.com/font) (SIL Open Font License 1.1) is the interface font, built in from
   `crates/gui/assets/fonts`, where its licence is.
 - AMD's [FidelityFX Super Resolution 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR) (MIT)
@@ -198,6 +199,7 @@ Slatty stands on the work of others:
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE); [NOTICE](NOTICE) gives the licences of the works of
+Copyright © 2026 HoneySlatt, emblem included. GPL-3.0-or-later. See [LICENSE](LICENSE);
+[NOTICE](NOTICE) gives the licences of the works of
 others Slatty includes. The Nix package installs both, with the font's and the icons' licences,
 in `share/licenses/slatty`.

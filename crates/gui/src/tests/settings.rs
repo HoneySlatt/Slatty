@@ -230,6 +230,31 @@ fn the_side_list_of_settings_fits_the_smallest_window() {
     }
 }
 
+/// About gives what the GPL asks the interface to show: the copyright, the licence, that there is
+/// no warranty and where the source is, and the licences of what Slatty includes.
+#[test]
+fn about_gives_the_licences_and_the_source() {
+    let mut app = library_app();
+    app.page = Page::Settings;
+    let mut ui = render(&app);
+    for shown in [
+        format!(
+            "Slatty {} · Copyright © 2026 HoneySlatt",
+            env!("CARGO_PKG_VERSION")
+        ),
+        "Free software under the GNU General Public License, version 3 or later, with no \
+         warranty. Source code and licence: https://github.com/HoneySlatt/Slatty"
+            .into(),
+        "Includes the Geist font (SIL Open Font License 1.1), the Lucide icons (ISC; some from \
+         Feather, MIT) and the image sharpening of AMD FidelityFX FSR 1 (MIT)."
+            .into(),
+        "Achievements in game go through Comet and its GalaxyCommunication service (Apache-2.0)."
+            .into(),
+    ] {
+        assert!(ui.find(shown.as_str()).is_ok(), "{shown}");
+    }
+}
+
 /// On a very wide window, settings keep lines short enough to read.
 #[test]
 fn settings_keep_a_readable_width_on_a_wide_window() {

@@ -811,7 +811,8 @@ Keys you paste go to the system keyring and are never shown again; **Remove** de
 
 ### About
 
-The version, and the licences of Slatty and of what it includes.
+The version, the copyright, the address of the source code, and the licences of Slatty and of
+what it includes.
 
 ## Where data is stored
 

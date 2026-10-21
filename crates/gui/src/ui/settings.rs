@@ -79,11 +79,26 @@ impl App {
                 Section::Notifications => self.notification_rows(wide),
                 Section::Privacy => self.privacy_rows(wide),
                 Section::Advanced => self.advanced_rows(wide),
-                Section::About => vec![note(format!(
-                    "Slatty {} · GPL-3.0-or-later · icons by Lucide (ISC) · Geist font (OFL) \
-                     · image sharpening from AMD FidelityFX FSR 1 (MIT)",
-                    env!("CARGO_PKG_VERSION")
-                ))],
+                Section::About => vec![
+                    note(format!(
+                        "Slatty {} · Copyright © 2026 HoneySlatt",
+                        env!("CARGO_PKG_VERSION")
+                    )),
+                    note(
+                        "Free software under the GNU General Public License, version 3 or later, \
+                         with no warranty. Source code and licence: \
+                         https://github.com/HoneySlatt/Slatty",
+                    ),
+                    note(
+                        "Includes the Geist font (SIL Open Font License 1.1), the Lucide icons \
+                         (ISC; some from Feather, MIT) and the image sharpening of AMD \
+                         FidelityFX FSR 1 (MIT).",
+                    ),
+                    note(
+                        "Achievements in game go through Comet and its GalaxyCommunication \
+                         service (Apache-2.0).",
+                    ),
+                ],
             };
             container(
                 column![
