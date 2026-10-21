@@ -3,7 +3,9 @@
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org);
 until 1.0, a minor version may change commands and on-disk formats.
 
-## 0.1.0 (not released yet)
+## Unreleased
+
+## 0.1.0 (2026-10-21)
 
 The first public version.
 

@@ -10,8 +10,8 @@ or GOG's native Linux builds), keeps their cloud saves in sync and reports their
 GOG, all without the GOG Galaxy client and without a web view. Windows games run isolated from your
 files by default.
 
-> **Status: early development.** Slatty is used daily by its author but has no release
-> yet. Commands and on-disk formats may still change.
+> **Status: early development.** 0.1.0 is Slatty's first release. Until 1.0, commands and
+> on-disk formats may still change ([changelog](CHANGELOG.md)).
 >
 > **Not affiliated with GOG or Valve.** GOG publishes no API for launchers: Slatty uses the
 > services GOG Galaxy uses, understood by reverse engineering (see [credits](#credits)). They may
