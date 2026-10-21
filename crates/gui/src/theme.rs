@@ -1054,20 +1054,16 @@ pub fn lit_badge(_: &Theme) -> container::Style {
     }
 }
 
-/// The trophy's circle of a game whose achievements are all unlocked: the accent, deeper at its
-/// top, ringed and haloed.
-pub fn lit_circle(_: &Theme) -> container::Style {
+/// A soft light behind the trophy of a game whose achievements are all unlocked.
+pub fn trophy_glow(_: &Theme) -> container::Style {
     let t = tokens();
     container::Style {
-        background: Some(Background::Gradient(iced::Gradient::Linear(
-            iced::gradient::Linear::new(iced::Radians(3.0 * std::f32::consts::FRAC_PI_4))
-                .add_stop(0.0, t.accent.scale_alpha(0.35))
-                .add_stop(1.0, t.accent.scale_alpha(0.08)),
-        ))),
-        border: round(999.0).color(t.accent.scale_alpha(0.6)).width(1.0),
+        background: Some(Background::Color(t.accent.scale_alpha(0.3))),
+        border: round(999.0),
         shadow: Shadow {
-            color: t.accent.scale_alpha(0.25),
-            ..halo(&t)
+            color: t.accent.scale_alpha(0.6),
+            offset: iced::Vector::ZERO,
+            blur_radius: 18.0,
         },
         ..Default::default()
     }

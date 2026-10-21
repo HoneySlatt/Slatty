@@ -609,14 +609,24 @@ impl App {
                 l.len(),
             )
         );
-        let trophy = if lit {
-            container(icon(Icon::Trophy, 22.0, tokens().accent_hover))
-                .center(40)
-                .style(theme::lit_circle)
+        // Once all are unlocked, in the accent with a soft light behind it.
+        let trophy: Element<'_, Message> = if lit {
+            stack![
+                container(
+                    container(Space::new())
+                        .width(14)
+                        .height(14)
+                        .style(theme::trophy_glow)
+                )
+                .center(40),
+                container(icon(Icon::Trophy, 24.0, tokens().accent)).center(40),
+            ]
+            .into()
         } else {
             container(icon(Icon::Trophy, 22.0, tokens().text))
                 .center(40)
                 .style(theme::circle)
+                .into()
         };
         let body: Element<'_, Message> = match self.achievements.get(&g.id) {
             None | Some(Loadable::Loading) => text("Loading achievements…")
