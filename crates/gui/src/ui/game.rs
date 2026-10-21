@@ -610,9 +610,9 @@ impl App {
             )
         );
         let trophy = if lit {
-            container(icon(Icon::Trophy, 22.0, tokens().on_accent))
+            container(icon(Icon::Trophy, 22.0, tokens().accent_hover))
                 .center(40)
-                .style(theme::lit_badge)
+                .style(theme::lit_circle)
         } else {
             container(icon(Icon::Trophy, 22.0, tokens().text))
                 .center(40)

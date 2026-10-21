@@ -445,7 +445,7 @@ pub fn achievement_share<'a>(done: usize, total: usize, size: f32) -> Element<'a
 pub fn lit_badge<'a>(label: String, size: f32) -> Element<'a, Message> {
     container(
         row![
-            icon(Icon::CircleCheck, size + 1.0, tokens().on_accent),
+            icon(Icon::Check, size, tokens().accent_hover),
             text(label).size(size).font(semibold()),
         ]
         .spacing(size * 0.4)

@@ -1042,14 +1042,33 @@ pub fn glow(_: &Theme) -> container::Style {
     }
 }
 
-/// Completed, said of a game whose achievements are all unlocked; its trophy's circle too.
+/// Completed, said of a game whose achievements are all unlocked: the accent, tinted over the card
+/// and ringed.
 pub fn lit_badge(_: &Theme) -> container::Style {
     let t = tokens();
     container::Style {
-        background: Some(Background::Color(t.accent)),
-        border: round(999.0),
-        text_color: Some(t.on_accent),
-        shadow: halo(&t),
+        background: Some(Background::Color(t.accent.scale_alpha(0.14))),
+        border: round(999.0).color(t.accent.scale_alpha(0.5)).width(1.0),
+        text_color: Some(t.accent_hover),
+        ..Default::default()
+    }
+}
+
+/// The trophy's circle of a game whose achievements are all unlocked: the accent, deeper at its
+/// top, ringed and haloed.
+pub fn lit_circle(_: &Theme) -> container::Style {
+    let t = tokens();
+    container::Style {
+        background: Some(Background::Gradient(iced::Gradient::Linear(
+            iced::gradient::Linear::new(iced::Radians(3.0 * std::f32::consts::FRAC_PI_4))
+                .add_stop(0.0, t.accent.scale_alpha(0.35))
+                .add_stop(1.0, t.accent.scale_alpha(0.08)),
+        ))),
+        border: round(999.0).color(t.accent.scale_alpha(0.6)).width(1.0),
+        shadow: Shadow {
+            color: t.accent.scale_alpha(0.25),
+            ..halo(&t)
+        },
         ..Default::default()
     }
 }
