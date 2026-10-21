@@ -16,7 +16,10 @@
           inherit (pkgs.comet-gog) version src;
           sourceRoot = "source/dummy-service";
           buildPhase = "$CC -O2 -static communication.c -o GalaxyCommunication.exe";
-          installPhase = "install -Dm644 GalaxyCommunication.exe $out/share/slatty/GalaxyCommunication.exe";
+          installPhase = ''
+            install -Dm644 GalaxyCommunication.exe $out/share/slatty/GalaxyCommunication.exe
+            install -Dm644 ../LICENSE -t $out/share/licenses/galaxy-communication
+          '';
           # Comet's LICENSE is Apache-2.0 since 2025; nixpkgs's comet-gog still says GPL-3.0-or-later.
           meta.license = pkgs.lib.licenses.asl20;
         };
@@ -65,6 +68,10 @@
           postInstall = ''
             install -Dm644 packaging/io.github.HoneySlatt.Slatty.desktop -t $out/share/applications
             install -Dm644 packaging/io.github.HoneySlatt.Slatty.metainfo.xml -t $out/share/metainfo
+            # The font, the icons and RCAS are built into the binary: their notices go with it.
+            install -Dm644 LICENSE NOTICE -t $out/share/licenses/slatty
+            install -Dm644 crates/gui/assets/fonts/OFL.txt $out/share/licenses/slatty/Geist-OFL.txt
+            install -Dm644 crates/gui/assets/icons/LICENSE $out/share/licenses/slatty/Lucide-LICENSE
           '';
           # The libraries go into the interface's own search path rather than LD_LIBRARY_PATH,
           # which every game started from it would inherit.
@@ -79,7 +86,12 @@
           meta = {
             description = "Native Linux launcher for GOG games, Steam games and your own";
             homepage = "https://github.com/HoneySlatt/Slatty";
-            license = pkgs.lib.licenses.gpl3Plus;
+            license = with pkgs.lib.licenses; [
+              gpl3Plus
+              ofl
+              isc
+              mit
+            ];
             mainProgram = "slatty-gui";
             platforms = systems;
           };
