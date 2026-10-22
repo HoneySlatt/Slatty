@@ -209,11 +209,16 @@ impl App {
                 view.busy = true;
                 view.confirm_uninstall = false;
                 let id = game_id.clone();
-                // A game added by hand leaves the library; its files are the user's.
+                // A game added by hand or emulated leaves the library; its files are the user's.
                 let added = slatty_core::store::is_local(&game_id);
+                let emulated = slatty_core::store::is_emulated(&game_id);
                 return Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
+                            if emulated {
+                                return slatty_core::emulated::remove(&core.db, &core.dirs, &id)
+                                    .map(|()| Default::default());
+                            }
                             if added {
                                 return slatty_core::added::remove(
                                     &core.db,
@@ -243,9 +248,10 @@ impl App {
                 self.panel = None;
                 self.cloud.remove(&game_id);
                 self.maintenance.remove(&game_id);
-                let added = slatty_core::store::is_local(&game_id);
+                let added = slatty_core::store::from_no_store(&game_id);
                 if added {
                     // Gone from the library with what was made of it; back to the library.
+                    self.emulated.remove(&game_id);
                     self.customs.remove(&game_id);
                     self.playtime.remove(&game_id);
                     if self.selected.as_deref() == Some(game_id.as_str()) {
@@ -343,8 +349,10 @@ impl App {
                     |m| m,
                 );
             }
-            // A game added by hand has no versions, languages or DLC to choose from GOG.
-            MaintenanceMsg::LoadContent(game_id) if slatty_core::store::is_local(&game_id) => {}
+            // A game added by hand or emulated has no versions, languages or DLC to choose from
+            // GOG.
+            MaintenanceMsg::LoadContent(game_id) if slatty_core::store::from_no_store(&game_id) => {
+            }
             MaintenanceMsg::LoadContent(game_id) => {
                 let view = self.maintenance.entry(game_id.clone()).or_default();
                 view.busy = true;

@@ -33,7 +33,7 @@ impl App {
         let view = self.maintenance.get(&g.id);
         let busy = self.maintenance_busy(&g.id);
         let id = || g.id.clone();
-        if slatty_core::store::is_local(&g.id) {
+        if slatty_core::store::from_no_store(&g.id) {
             return self.manage_added(g, view.is_some_and(|v| v.confirm_uninstall), busy);
         }
         if !self.installs.contains_key(&g.id) {

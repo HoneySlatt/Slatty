@@ -278,6 +278,8 @@ pub(super) fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
         library: None,
         installs,
         records: Default::default(),
+        emulators: Default::default(),
+        emulated: Default::default(),
         launch_choices: Default::default(),
         controller_compatibility: Default::default(),
         interrupted: interrupted.iter().map(|id| id.to_string()).collect(),

@@ -79,7 +79,7 @@ impl App {
     /// Whether GOG may keep cloud saves of an installed game: it keeps them for the Windows builds
     /// of its own games alone.
     pub fn may_sync_cloud(&self, game_id: &str) -> bool {
-        !slatty_core::store::is_local(game_id)
+        !slatty_core::store::from_no_store(game_id)
             && self
                 .installs
                 .get(game_id)

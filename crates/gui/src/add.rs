@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use slatty_core::added::{self, NewGame};
+use slatty_core::emulated::{self, Emulator};
 use slatty_core::install::Install;
 
 use crate::settings::ProtonChoice;
@@ -33,6 +34,10 @@ pub struct AddDraft {
     /// The game the installer ran for, once it ended, and where it put it: the program is there.
     pub installed_by: Option<String>,
     pub installed_in: Option<PathBuf>,
+    /// Whether the game runs in an emulator, which one, and its file or folder.
+    pub emulated: bool,
+    pub emulator: Option<Emulator>,
+    pub game: String,
 }
 
 impl AddDraft {
@@ -83,6 +88,14 @@ pub enum AddMsg {
     /// The game added, and the GOG game its folder holds, if any.
     Saved(Result<(Install, Option<String>), String>),
     Cancel,
+    Emulated(bool),
+    Emulator(Emulator),
+    Game(String),
+    PickGame,
+    /// The file or folder chosen, and the emulators that start it.
+    PickedGame(Option<(PathBuf, Vec<Emulator>)>),
+    /// The emulated game added, with its emulator.
+    SavedEmulated(Result<(Install, Emulator), String>),
 }
 
 impl App {
@@ -236,6 +249,77 @@ impl App {
                     |path| Message::Add(AddMsg::PickedFolder(path)),
                 );
             }
+            AddMsg::PickGame => {
+                let folder = self
+                    .add_game
+                    .as_ref()
+                    .and_then(|d| d.emulator)
+                    .is_some_and(|e| e.games_are_folders());
+                return Task::perform(
+                    async move {
+                        let dialog = rfd::AsyncFileDialog::new();
+                        let path = match folder {
+                            true => {
+                                dialog
+                                    .set_title("Choose the game's folder")
+                                    .pick_folder()
+                                    .await
+                            }
+                            false => dialog.set_title("Choose the game's file").pick_file().await,
+                        }?
+                        .path()
+                        .to_path_buf();
+                        let at = path.clone();
+                        let emulators =
+                            tokio::task::spawn_blocking(move || emulated::emulators_for(&at))
+                                .await
+                                .ok()?;
+                        Some((path, emulators))
+                    },
+                    |picked| Message::Add(AddMsg::PickedGame(picked)),
+                );
+            }
+            AddMsg::Save if self.add_game.as_ref().is_some_and(|d| d.emulated) => {
+                let (Some(core), Some(d)) = (self.core.clone(), self.add_game.as_mut()) else {
+                    return Task::none();
+                };
+                let Some(emulator) = d.emulator else {
+                    return Task::none();
+                };
+                d.busy = true;
+                d.error = None;
+                let new = emulated::NewGame {
+                    // Read from the game, or its file's name, when left empty.
+                    title: Some(d.title.clone()),
+                    path: PathBuf::from(d.game.trim()),
+                    emulator,
+                };
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            emulated::add(&core.db, &core.dirs, new).map(|i| (i, emulator))
+                        })
+                        .await
+                        .map_err(err)?
+                        .map_err(err)
+                    },
+                    |r| Message::Add(AddMsg::SavedEmulated(r)),
+                );
+            }
+            AddMsg::SavedEmulated(Ok((install, emulator))) => {
+                self.add_game = None;
+                let id = install.game_id.clone();
+                self.emulated.insert(id.clone(), emulator);
+                self.installs.insert(id.clone(), install);
+                self.merge_steam();
+                return self.open_game(id, None);
+            }
+            AddMsg::Saved(Err(e)) | AddMsg::SavedEmulated(Err(e)) => {
+                if let Some(d) = &mut self.add_game {
+                    d.busy = false;
+                    d.error = Some(e);
+                }
+            }
             AddMsg::Save => {
                 let (Some(core), Some(d)) = (self.core.clone(), self.add_game.as_mut()) else {
                     return Task::none();
@@ -288,12 +372,6 @@ impl App {
                 }
                 return self.open_game(id, None);
             }
-            AddMsg::Saved(Err(e)) => {
-                if let Some(d) = &mut self.add_game {
-                    d.busy = false;
-                    d.error = Some(e);
-                }
-            }
             msg => {
                 let Some(d) = &mut self.add_game else {
                     return Task::none();
@@ -321,6 +399,18 @@ impl App {
                     // Once it ran, the game is in the prefix made for it.
                     AddMsg::WithInstaller(on) if d.installed_by.is_none() => {
                         d.with_installer = on;
+                    }
+                    // Once an installer ran, the game is the one it installed.
+                    AddMsg::Emulated(on) if d.installed_by.is_none() && !d.busy => {
+                        d.emulated = on;
+                    }
+                    AddMsg::Emulator(e) => d.emulator = Some(e),
+                    AddMsg::Game(v) => d.game = v,
+                    AddMsg::PickedGame(Some((path, emulators))) => {
+                        if !d.emulator.is_some_and(|e| emulators.contains(&e)) {
+                            d.emulator = emulators.first().copied().or(d.emulator);
+                        }
+                        d.game = path.display().to_string();
                     }
                     AddMsg::Installer(v) => d.installer = v,
                     AddMsg::Into(v) => d.into = v,

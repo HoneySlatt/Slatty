@@ -62,6 +62,8 @@ files by default.
 - Steam games, read from the Steam client's own files and played, installed and uninstalled
   through it. A game owned on both stores shows once. No GOG account needed for them.
 - Games from no store, added by the program that starts them, or from an installer or archive.
+- Games of other consoles, from your own files, run in DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4,
+  Kyty, Dolphin or Eden: a scan of their folders adds them.
 - GOG games installed by another tool, imported from their folder or from Heroic.
 - Proton builds (GE-Proton, Proton-CachyOS, UMU-Proton) downloaded from GitHub, checked, and kept
   up to date once you turn it on.

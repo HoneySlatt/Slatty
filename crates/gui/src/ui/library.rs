@@ -19,6 +19,17 @@ use crate::library::GridWindow;
 use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, semibold, tokens};
 use crate::{App, Filters, Interrupted, Message, Panel, Shelf, Sort};
+use slatty_core::emulated::Emulator;
+
+/// A choice of the system filter: every game, or the emulated games of one system.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct System(Option<Emulator>);
+
+impl std::fmt::Display for System {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.map_or("All systems", system_name))
+    }
+}
 
 /// Space between covers, across and down.
 const GRID_SPACING: f32 = 12.0;
@@ -243,6 +254,23 @@ impl App {
             check("GOG", f.gog, |f, v| Filters { gog: v, ..f }),
             check("Steam", f.steam, |f, v| Filters { steam: v, ..f }),
             check("Added", f.added, |f, v| Filters { added: v, ..f }),
+            (!self.emulated.is_empty() || f.emulated).then(|| check(
+                "Emulated",
+                f.emulated,
+                |f, v| Filters { emulated: v, ..f }
+            )),
+            (!self.emulated.is_empty() || f.system.is_some()).then(|| {
+                let systems: Vec<System> = std::iter::once(System(None))
+                    .chain(Emulator::ALL.map(|e| System(Some(e))))
+                    .collect();
+                pick_list(systems, Some(System(f.system)), move |s: System| {
+                    Message::SetFilters(Filters { system: s.0, ..f })
+                })
+                .style(theme::select)
+                .font(theme::font())
+                .text_size(14)
+                .padding([4, 10])
+            }),
             check("Windows", f.windows, |f, v| Filters { windows: v, ..f }),
             check("Linux", f.linux, |f, v| Filters { linux: v, ..f }),
             check("Has achievements", f.achievements, |f, v| Filters {

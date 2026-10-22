@@ -80,7 +80,7 @@ impl App {
         // On a narrow page (a small window, a drawer beside it) play time and the last session get
         // the room their values need, without their icons.
         let steam = self.steam_game(&g.id).is_some();
-        let added = slatty_core::store::is_local(&g.id);
+        let added = slatty_core::store::from_no_store(&g.id);
         let cards = container(responsive(move |size| {
             let narrow = size.width < NARROW_CARDS;
             let (stats, achievements) = if narrow { (11, 8) } else { (10, 9) };
@@ -706,29 +706,33 @@ impl App {
         .into()
     }
 
-    /// What a game added by hand is: the user's files, isolated or not, and nothing of GOG's.
+    /// What a game added by hand is: the user's files, isolated or not, and nothing of GOG's; or
+    /// the emulator an emulated game runs in.
     fn added_card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let isolated = self.installs.get(&g.id).is_some_and(|i| i.isolated);
+        let emulator = self.emulated.get(&g.id).copied();
         let card = responsive(move |size| {
+            let (glyph, what) = match emulator {
+                Some(_) => (Icon::Gamepad, "Emulated"),
+                None => (Icon::Folder, "Added by hand"),
+            };
+            let how = match emulator {
+                Some(e) => format!("Runs in {}", e.name()),
+                None if isolated => "Isolated from your files".into(),
+                None => "Not isolated from your files".into(),
+            };
             let content = row![]
                 .push(
                     (size.width >= 240.0)
-                        .then(|| container(icon(Icon::Folder, 22.0, tokens().text)).center(40)),
+                        .then(|| container(icon(glyph, 22.0, tokens().text)).center(40)),
                 )
                 .push(
                     column![
-                        text("Added by hand")
+                        text(what)
                             .size(15)
                             .font(semibold())
                             .wrapping(Wrapping::None),
-                        text(if isolated {
-                            "Isolated from your files"
-                        } else {
-                            "Not isolated from your files"
-                        })
-                        .size(14)
-                        .color(tokens().muted)
-                        .width(Length::Fill),
+                        text(how).size(14).color(tokens().muted).width(Length::Fill),
                     ]
                     .spacing(4)
                     .width(Length::Fill),
@@ -738,11 +742,18 @@ impl App {
             container(content).center_y(Length::Fill).into()
         });
         let why = container(
-            text(
-                "Its files are yours: removing it from the library leaves them, except those \
-                 Slatty unpacked. It has no cloud saves or achievements, and GOG is not \
-                 told of it: its play time stays on this computer.",
-            )
+            text(match emulator {
+                Some(_) => {
+                    "Its files are yours: removing it from the library leaves them. Its emulator \
+                     keeps its saves and settings. GOG is not told of it: its play time stays on \
+                     this computer."
+                }
+                None => {
+                    "Its files are yours: removing it from the library leaves them, except those \
+                     Slatty unpacked. It has no cloud saves or achievements, and GOG is not \
+                     told of it: its play time stays on this computer."
+                }
+            })
             .size(13),
         )
         .padding([4, 10])
@@ -855,7 +866,10 @@ impl App {
                     .style(theme::divider),
                 item(Icon::Settings, format!("Version {}", r.version)),
             ],
-            None => row![item(Icon::Settings, runner_label(install))],
+            None => match self.emulated.get(&g.id) {
+                Some(e) => row![item(Icon::Gamepad, system_name(*e).to_string())],
+                None => row![item(Icon::Settings, runner_label(install))],
+            },
         };
         content
             .push(twin.map(|twin| row![space().width(Length::Fill), twin]))

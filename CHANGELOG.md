@@ -5,6 +5,13 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 ## Unreleased
 
+### Added
+
+- Emulated games in the library: games of PlayStation 1 to 5, PSP, GameCube, Wii and Switch, from
+  your own files, run full screen in DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4, Kyty, Dolphin or
+  Eden. Settings → Emulators finds each emulator, takes the folders of its games and scans them;
+  **+** adds one game at a time. The library's filters have **Emulated** and a menu of systems.
+
 ### Changed
 
 - A game whose achievements are all unlocked says Completed in place of 100%, its progress lit

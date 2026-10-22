@@ -128,8 +128,8 @@ fn the_theme_file_can_be_created_from_settings() {
     core.dirs = Dirs::under(&core.dirs.config.join("theme-test"));
     let path = crate::theme::file(&core.dirs.config);
     let _ = std::fs::remove_file(&path);
-    // Tall enough to show Appearance below Installs and Runners.
-    app.window = Size::new(1440.0, 1900.0);
+    // Tall enough to show Appearance below Installs, Runners and Emulators.
+    app.window = Size::new(1440.0, 2400.0);
     {
         let mut ui = render_window(&app);
         ui.click("Create theme file").unwrap();

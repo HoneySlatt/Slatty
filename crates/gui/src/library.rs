@@ -10,6 +10,7 @@ use std::rc::Rc;
 use iced::Task;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use slatty_core::db::Db;
+use slatty_core::emulated::Emulator;
 use slatty_core::library::{self, LibraryCache, LibraryGame};
 use slatty_core::overview::{self, GameOverview};
 use slatty_core::settings::{self, TwinPlaytime};
@@ -95,10 +96,13 @@ pub struct Filters {
     pub gog: bool,
     pub steam: bool,
     pub added: bool,
+    pub emulated: bool,
     pub windows: bool,
     pub linux: bool,
     pub achievements: bool,
     pub cloud_saves: bool,
+    /// The system of the emulated games shown, which leaves out every other game.
+    pub system: Option<Emulator>,
 }
 
 impl Filters {
@@ -106,11 +110,12 @@ impl Filters {
         *self != Filters::default()
     }
 
-    fn flags(&mut self) -> [(&'static str, &mut bool); 7] {
+    fn flags(&mut self) -> [(&'static str, &mut bool); 8] {
         [
             ("gog", &mut self.gog),
             ("steam", &mut self.steam),
             ("added", &mut self.added),
+            ("emulated", &mut self.emulated),
             ("windows", &mut self.windows),
             ("linux", &mut self.linux),
             ("achievements", &mut self.achievements),
@@ -118,13 +123,16 @@ impl Filters {
         ]
     }
 
-    /// How they are kept in the settings: the names of those on, comma-separated.
+    /// How they are kept in the settings: the names of those on, comma-separated, and
+    /// `system:<emulator>`.
     fn key(mut self) -> String {
-        let on: Vec<&str> = self
+        let system = self.system.map(|e| format!("system:{}", e.key()));
+        let on: Vec<String> = self
             .flags()
             .into_iter()
             .filter(|(_, on)| **on)
-            .map(|(name, _)| name)
+            .map(|(name, _)| name.to_string())
+            .chain(system)
             .collect();
         on.join(",")
     }
@@ -134,6 +142,10 @@ impl Filters {
         for (name, on) in f.flags() {
             *on = key.split(',').any(|k| k == name);
         }
+        f.system = key
+            .split(',')
+            .find_map(|k| k.strip_prefix("system:"))
+            .and_then(|s| Emulator::ALL.into_iter().find(|e| e.key() == s));
         f
     }
 }
@@ -312,8 +324,8 @@ impl App {
         if store::steam_app(game_id).is_some() {
             return on_steam(game_id);
         }
-        // GOG is not told of a game added by hand: the sessions played here.
-        if store::is_local(game_id) {
+        // GOG is not told of a game added by hand or emulated: the sessions played here.
+        if store::from_no_store(game_id) {
             return self.playtime.get(game_id).map_or(0, |p| p.seconds);
         }
         let on_gog = self
@@ -625,16 +637,21 @@ impl App {
                 Shelf::Favorites => self.favorites.contains(&g.id),
             })
             .filter(|(_, g)| {
-                if !(f.gog || f.steam || f.added) {
+                if !(f.gog || f.steam || f.added || f.emulated) {
                     return true;
                 }
                 // A GOG game owned on Steam too shows once, as GOG's: either store keeps it.
                 match store::of(&g.id) {
                     Ok(Store::Gog) => f.gog || (f.steam && self.steam_twin(&g.id).is_some()),
                     Ok(Store::Steam) => f.steam,
-                    Ok(Store::Local | Store::Emulated) => f.added,
+                    Ok(Store::Local) => f.added,
+                    Ok(Store::Emulated) => f.emulated,
                     Err(_) => false,
                 }
+            })
+            .filter(|(_, g)| {
+                f.system
+                    .is_none_or(|e| g.os.iter().any(|o| o == e.system()))
             })
             .filter(|(_, g)| !f.windows || g.os.iter().any(|o| o == "windows"))
             .filter(|(_, g)| !f.linux || g.os.iter().any(|o| o == "linux"))

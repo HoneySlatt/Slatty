@@ -5,6 +5,7 @@ mod cloud;
 mod couch;
 mod downloads;
 mod edit;
+mod emulators;
 mod graphics;
 mod icons;
 mod install;
@@ -323,6 +324,10 @@ pub struct App {
     pub runners: runners::RunnersView,
     /// Steam's games beside GOG's (Settings → Steam).
     pub steam: steam::SteamView,
+    /// The emulators and where their games are looked for (Settings → Emulators).
+    pub emulators: emulators::EmulatorsView,
+    /// The emulator of each emulated game, by game id.
+    pub emulated: HashMap<String, slatty_core::emulated::Emulator>,
     /// GOG's sign-in asked for from Settings, while Steam's games or those added by hand show
     /// without GOG.
     pub login_open: bool,
@@ -472,6 +477,8 @@ impl Default for App {
             proton_choices: Vec::new(),
             runners: runners::RunnersView::default(),
             steam: steam::SteamView::default(),
+            emulators: emulators::EmulatorsView::default(),
+            emulated: HashMap::new(),
             login_open: false,
             updates: updates::AutoUpdates::default(),
             quit_confirm: None,
@@ -593,6 +600,7 @@ pub enum Message {
     Settings(SettingsMsg),
     Runners(runners::RunnersMsg),
     Steam(steam::SteamMsg),
+    Emulators(emulators::EmulatorsMsg),
     /// Shows GOG's sign-in, or goes back from it, while Steam's games or those added by hand show
     /// without GOG.
     ShowLogin(bool),
@@ -915,6 +923,8 @@ impl App {
                     .map(|i| (i.game_id.clone(), i))
                     .collect();
                 self.records = boot.records;
+                self.emulators = boot.emulators;
+                self.emulated = boot.emulated;
                 self.favorites = boot.favorites.into_iter().collect();
                 self.playtime = boot.playtime;
                 self.overview = boot.overview;
@@ -1189,6 +1199,7 @@ impl App {
             Message::Maintenance(msg) => return self.update_maintenance(msg),
             Message::Settings(msg) => return self.update_settings(msg),
             Message::Runners(msg) => return self.update_runners(msg),
+            Message::Emulators(msg) => return self.update_emulators(msg),
             Message::Steam(msg) => return self.update_steam(msg),
             Message::ShowLogin(open) => self.login_open = open,
             Message::Updates(msg) => return self.update_updates(msg),
@@ -1370,7 +1381,7 @@ impl App {
         }
         if let Some(p) = self.play.as_ref().filter(|p| p.running) {
             let title = self.title_of(&p.game_id);
-            work.push(if slatty_core::store::is_local(&p.game_id) {
+            work.push(if slatty_core::store::from_no_store(&p.game_id) {
                 format!(
                     "{title} is running. It keeps running, but this session will not count in its play time."
                 )

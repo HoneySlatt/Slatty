@@ -81,6 +81,7 @@ pub enum Section {
     Steam,
     Installs,
     Runners,
+    Emulators,
     Appearance,
     Notifications,
     Privacy,
@@ -89,12 +90,13 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Section; 10] = [
+    pub const ALL: [Section; 11] = [
         Section::Account,
         Section::Library,
         Section::Steam,
         Section::Installs,
         Section::Runners,
+        Section::Emulators,
         Section::Appearance,
         Section::Notifications,
         Section::Privacy,
@@ -107,6 +109,7 @@ impl Section {
             Section::Account => "Account",
             Section::Library => "Library",
             Section::Steam => "Steam",
+            Section::Emulators => "Emulators",
             Section::Installs => "Installs",
             Section::Runners => "Runners",
             Section::Appearance => "Appearance",
@@ -123,6 +126,7 @@ impl Section {
             Section::Account => "settings-account",
             Section::Library => "settings-library",
             Section::Steam => "settings-steam",
+            Section::Emulators => "settings-emulators",
             Section::Installs => "settings-installs",
             Section::Runners => "settings-runners",
             Section::Appearance => "settings-appearance",
@@ -630,13 +634,25 @@ impl App {
                 }
             }
             SettingsMsg::LocateGame(game_id) => {
+                // An emulated game is found by its file, or its folder for the systems whose
+                // games are folders.
+                let file = self
+                    .emulated
+                    .get(&game_id)
+                    .is_some_and(|e| !e.games_are_folders());
                 return Task::perform(
-                    async {
-                        rfd::AsyncFileDialog::new()
-                            .set_title("Choose the game's folder")
-                            .pick_folder()
-                            .await
-                            .map(|f| f.path().to_path_buf())
+                    async move {
+                        let dialog = rfd::AsyncFileDialog::new();
+                        match file {
+                            true => dialog.set_title("Choose the game's file").pick_file().await,
+                            false => {
+                                dialog
+                                    .set_title("Choose the game's folder")
+                                    .pick_folder()
+                                    .await
+                            }
+                        }
+                        .map(|f| f.path().to_path_buf())
                     },
                     move |path| Message::Settings(SettingsMsg::PickedLocation(game_id, path)),
                 );
@@ -647,6 +663,11 @@ impl App {
                 return Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
+                            if slatty_core::store::is_emulated(&id) {
+                                return slatty_core::emulated::locate(
+                                    &core.db, &core.dirs, &id, &folder,
+                                );
+                            }
                             slatty_core::added::locate(&core.db, &core.dirs, &id, &folder)
                         })
                         .await

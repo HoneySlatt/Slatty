@@ -25,6 +25,9 @@ pub struct Boot {
     pub library: Option<LibraryCache>,
     pub installs: Vec<Install>,
     pub records: HashMap<String, InstallSummary>,
+    pub emulators: crate::emulators::EmulatorsView,
+    /// The emulator of each emulated game, from Slatty's own records of them.
+    pub emulated: HashMap<String, slatty_core::emulated::Emulator>,
     pub launch_choices: HashMap<String, String>,
     pub controller_compatibility: HashSet<String>,
     pub interrupted: Vec<String>,
@@ -245,6 +248,12 @@ async fn boot() -> Result<Boot, String> {
         None => (None, HashMap::new()),
     };
     let installs = Install::list(&db).map_err(err)?;
+    let emulators = crate::emulators::EmulatorsView::read(&db).map_err(err)?;
+    let emulated = slatty_core::emulated::games(&dirs)
+        .map_err(err)?
+        .into_iter()
+        .map(|(id, game)| (id, game.emulator))
+        .collect();
     let launch_choices = installs
         .iter()
         .filter_map(|i| {
@@ -336,6 +345,8 @@ async fn boot() -> Result<Boot, String> {
         account,
         library,
         installs,
+        emulators,
+        emulated,
         launch_choices,
         controller_compatibility,
         records,

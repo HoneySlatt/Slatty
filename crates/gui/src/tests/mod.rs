@@ -329,6 +329,7 @@ mod cloud;
 mod couch;
 mod downloads;
 mod edit;
+mod emulated;
 mod game_page;
 mod install;
 mod library;

@@ -124,6 +124,11 @@ impl Emulator {
         }
     }
 
+    /// Whether its games are folders rather than files (a Kyty game may also be a ZArchive).
+    pub fn games_are_folders(self) -> bool {
+        matches!(self, Emulator::Rpcs3 | Emulator::ShadPs4 | Emulator::Kyty)
+    }
+
     /// What it starts of `dir` when that is a game's folder, relative to it: the folder itself
     /// when empty.
     fn folder_game(self, dir: &Path) -> Option<PathBuf> {

@@ -51,6 +51,7 @@ become the session supervisor (see [Game sessions](#game-sessions)).
 | `store` | Which store a game id belongs to: GOG's product id, `steam-<app id>`, `local-<number>` |
 | `steam` | Steam's games, read from the client's files: `local`, `appinfo`, `vdf`, `stats`, `running`, `library`, `client`, `web` (see [Steam games](#steam-games)) |
 | `added` | Games added by hand (see [Games added by hand](#games-added-by-hand)) |
+| `emulated` | Games run in an emulator (see [Emulated games](#emulated-games)) |
 
 **Installing and looking after games**
 
@@ -128,8 +129,8 @@ The interface follows Iced's state, message, update and view split:
 | `maintenance`, `updates` | Verify, repair, uninstall, content changes; automatic updates |
 | `play`, `cloud`, `achievements` | A game session, cloud saves, achievements |
 | `steam` | Steam's games beside GOG's |
-| `add`, `edit` | Adding a game by hand; editing a game's title and images |
-| `runners`, `settings` | Settings → Runners; the rest of Settings |
+| `add`, `edit` | Adding a game by hand or an emulated one; editing a game's title and images |
+| `runners`, `emulators`, `settings` | Settings → Runners; Settings → Emulators and its scan; the rest of Settings |
 | `couch`, `pad` | The couch mode: where its focus is, its moves, its lists (home rows, its library, its downloads); gamepads read through gilrs on a thread of their own, a held direction repeating, and its keys (see [Couch mode](#couch-mode)) |
 | `notify` | Cards in the window, desktop notifications |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress |
@@ -595,6 +596,27 @@ have GOG's setup, updates and checks run.
 
 `runner::launch_spec` starts the program as a GOG build's (Windows) or script (Linux; an ELF
 program isolated through `sh -c`, an AppImage told to unpack itself).
+
+### Emulated games
+
+`core/src/emulated.rs`: an install with the id `emu-<number>`, from a count of its own in the
+settings, never given twice. Its folder is the one holding its file, which other emulated games
+may share, or the game's own folder for PlayStation 3, 4 and 5 games; which emulator starts it and
+what it is given there are in `emulated/<id>.json`. It runs natively (`Runner::Native`), never
+isolated (`install::set_isolated` refuses), and has no install record; `store::from_no_store`
+tells it with the games added by hand wherever GOG must not be asked about a game.
+
+- `Emulator` names each emulator, its system (kept in `LibraryGame::os`, which the library's
+  system filter reads), the names of its program in `PATH`, the extensions it starts or how a
+  game's folder looks, and its arguments: full screen, quitting with the game.
+  `runner::game_launch_spec` starts it directly, without `steam-run` or umu: an emulator is a
+  program of the user's system.
+- `scan` walks the folders given, a few deep, links followed but each folder once, leaves out the
+  games listed and those removed (`settings::forgotten_emulated`), and the files an `.m3u` playlist
+  or a cue sheet names. Titles come from `PARAM.SFO` (PlayStation 3 and 4) or `param.json`
+  (PlayStation 5), else from the file's name without its trailing tags. The interface runs it at
+  the lowest priority (`fsutil::in_background`).
+- `remove` forgets the game and never touches its files.
 
 ### Proton builds
 

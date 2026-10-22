@@ -26,7 +26,7 @@ impl App {
         // In a short window the entries are set closer, so that all of them show, notice or not;
         // a scroll is left for anything taller still.
         let short = self.window.height < SHORT_WINDOW;
-        let (marker_height, padding, spacing) = if short { (22, 5, 2) } else { (28, 10, 6) };
+        let (marker_height, padding, spacing) = if short { (22, 4, 1) } else { (28, 10, 6) };
         let entries = Section::ALL.map(|s| {
             let active = self.settings_view.section == s;
             let color = if active {
@@ -73,6 +73,7 @@ impl App {
                 Section::Account => self.account_rows(wide),
                 Section::Library => self.library_rows(wide),
                 Section::Steam => self.steam_rows(wide),
+                Section::Emulators => self.emulators_rows(wide),
                 Section::Installs => self.installs_rows(wide),
                 Section::Runners => self.runners_rows(wide),
                 Section::Appearance => self.appearance_rows(wide),
@@ -607,6 +608,75 @@ fn switch<'a>(on: bool, msg: fn(bool) -> SettingsMsg, what: &'static str) -> Ele
 }
 
 impl App {
+    fn emulators_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
+        use crate::emulators::EmulatorsMsg;
+        let v = &self.emulators;
+        let msg = |m| Message::Emulators(m);
+        let small = |label, m: Option<Message>| {
+            button(text(label).size(14))
+                .padding([8, 16])
+                .on_press_maybe(m)
+                .style(theme::tonal)
+        };
+        let scan = small(
+            if v.scanning { "Scanning…" } else { "Scan" },
+            (!v.scanning && !v.folders.is_empty()).then(|| msg(EmulatorsMsg::Scan)),
+        );
+        let mut rows = vec![setting(
+            wide,
+            "Emulated games",
+            note(
+                "Scan looks through the folders chosen below and adds the games it finds to the \
+                 library. Each starts full screen in its system's emulator, which keeps its saves \
+                 and settings itself and is not isolated from your files. Slatty never \
+                 downloads emulators, BIOS, firmware, keys or games.",
+            ),
+            Some(scan.into()),
+        )];
+        for e in slatty_core::emulated::Emulator::ALL {
+            let program = match (v.programs.get(&e), v.chosen.contains(&e)) {
+                (Some(p), true) => format!("{} · Chosen: {}", system_name(e), p.display()),
+                (Some(p), false) => format!("{} · Found: {}", system_name(e), p.display()),
+                (None, _) => format!("{} · Not found: install it, or choose it.", system_name(e)),
+            };
+            let folders = v.folders.get(&e).into_iter().flatten().map(|f| {
+                row![
+                    text(f.display().to_string()).size(14).width(Length::Fill),
+                    small(
+                        "Remove",
+                        Some(msg(EmulatorsMsg::RemoveFolder(e, f.clone())))
+                    ),
+                ]
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .into()
+            });
+            // The program found in `PATH` again, once one was chosen.
+            let find = v.chosen.contains(&e).then(|| {
+                button(text("Use the one found instead").size(14))
+                    .padding(0)
+                    .on_press(msg(EmulatorsMsg::FindProgram(e)))
+                    .style(theme::link)
+            });
+            let buttons = row![
+                small("Program…", Some(msg(EmulatorsMsg::PickProgram(e)))),
+                small("Add folder…", Some(msg(EmulatorsMsg::AddFolder(e)))),
+            ]
+            .spacing(10);
+            rows.push(setting(
+                wide,
+                e.name(),
+                column![note(program)]
+                    .push(find)
+                    .extend(folders)
+                    .spacing(6)
+                    .into(),
+                Some(buttons.into()),
+            ));
+        }
+        rows
+    }
+
     fn steam_rows(&self, wide: bool) -> Vec<Element<'_, Message>> {
         use crate::steam::SteamMsg;
         let found = match &self.steam.found {
@@ -744,7 +814,7 @@ impl App {
             let added = self
                 .installs
                 .keys()
-                .any(|id| slatty_core::store::is_local(id));
+                .any(|id| slatty_core::store::from_no_store(id));
             let shown = match (self.steam.on, added) {
                 (true, true) => "your Steam games and the games added by hand",
                 (true, false) => "your Steam games",
@@ -1030,6 +1100,7 @@ fn section_icon(s: Section) -> Icon {
         Section::Account => Icon::User,
         Section::Library => Icon::LayoutGrid,
         Section::Steam => Icon::Globe,
+        Section::Emulators => Icon::Gamepad,
         Section::Installs => Icon::Download,
         Section::Runners => Icon::Package,
         Section::Appearance => Icon::Palette,

@@ -51,7 +51,7 @@ impl App {
         let added = self
             .installs
             .keys()
-            .any(|id| slatty_core::store::is_local(id));
+            .any(|id| slatty_core::store::from_no_store(id));
         let username = match (&self.account, &self.steam.found) {
             (Some(account), _) if !self.login_open => Some(account.username.as_str()),
             (None, Some(name)) if self.steam.on && !self.login_open => Some(name.as_str()),

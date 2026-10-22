@@ -17,6 +17,7 @@ guide follows the window, and gives the command where there is one.
 - [Offline installers](#offline-installers)
 - [Steam games](#steam-games)
 - [Games added by hand](#games-added-by-hand)
+- [Emulated games](#emulated-games)
 - [Games installed elsewhere](#games-installed-elsewhere)
 - [Proton builds](#proton-builds)
 - [Couch mode](#couch-mode)
@@ -606,6 +607,47 @@ installation path. Put the game in a folder of its own.
 
 The [command line](command-line.md#games-added-by-hand) has `slatty add` and `slatty remove`.
 
+## Emulated games
+
+Games of other consoles join the library too, from your own disc images, files or folders, each
+started full screen in its system's emulator:
+
+| System | Emulator | What it starts |
+|---|---|---|
+| PlayStation | DuckStation | `.cue`, `.chd`, `.pbp`, `.m3u`, `.iso`, `.img`, `.ecm` |
+| PlayStation 2 | PCSX2 | `.iso`, `.chd`, `.cso`, `.zso`, `.cue` |
+| PSP | PPSSPP | `.iso`, `.cso`, `.chd`, `.pbp` |
+| PlayStation 3 | RPCS3 | a game's folder (`PS3_GAME/USRDIR/EBOOT.BIN` or `USRDIR/EBOOT.BIN`) |
+| PlayStation 4 | shadPS4 | a game's folder (`eboot.bin` and `sce_sys/param.sfo`) |
+| PlayStation 5 | Kyty | a game's folder (`eboot.bin` and `sce_sys/param.json`), or a `.zar` |
+| GameCube / Wii | Dolphin | `.iso`, `.gcm`, `.rvz`, `.gcz`, `.wbfs`, `.ciso`, `.wia`, `.wad`, `.dol`, `.elf` |
+| Switch | Eden | `.nsp`, `.xci`, `.nro` |
+
+Slatty never downloads emulators, BIOS, firmware, keys or games: install the emulators yourself
+(Slatty finds them in `PATH`), and give them what they need in their own settings.
+
+In **Settings → Emulators**, each emulator says whether its program was found; **Program…**
+chooses another one. **Add folder…** gives the folders its games are in, and **Scan** looks
+through them (a few folders deep) and adds every game not in the library yet. The discs a
+playlist (`.m3u`) or a cue sheet names are parts of that game, not games of their own. A game
+of PlayStation 3, 4 or 5 is titled as it names itself; another one by its file's name, without
+the tags of disc sets ("(USA)", "[!]").
+
+One game at a time: **+** above the library, then **Run it in an emulator**, its **Emulator**,
+its **Game file** (or folder) and, if you want, its **Title**.
+
+An emulated game gets an id `emu-<number>`. Its page shows an **Emulated** card with its emulator;
+it has no cloud saves and no achievements, its emulator keeps its saves and settings, its play
+time stays on this computer, and GOG is never told of it. Emulators run as your own programs do:
+they are not isolated from your files.
+
+- **Locate…** in Game settings finds a game moved elsewhere, by its new file or folder.
+- **Remove from library** (Manage) takes it out. Its files are never touched, and a scan does not
+  add it again; adding it by hand does.
+
+The library's filters have **Emulated**, and a menu of the systems, once the library has emulated
+games.
+
 ## Games installed elsewhere
 
 A GOG game installed by another tool can be registered, so it can be launched and synced:
@@ -778,6 +820,13 @@ Settings lists its parts on the left; the list follows the page as it scrolls.
 | **Share with Steam and Heroic** | Off | Lists the downloaded builds in Steam and Heroic |
 | **Downloaded** | | The builds Slatty downloaded, with **Delete** |
 
+### Emulators
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Emulated games** | | **Scan** adds the games found in the emulators' folders (see [Emulated games](#emulated-games)) |
+| Each emulator | Found in `PATH` | Its program (**Program…**, or **Use the one found instead**) and the folders of its games (**Add folder…**, **Remove**) |
+
 ### Appearance
 
 | Setting | Default | What it does |
@@ -833,6 +882,7 @@ Folders follow the XDG variables (`XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG
 | `~/.local/share/slatty/manifests/<id>.json` | The files installed for each game |
 | `~/.local/share/slatty/support/<id>/`, `redist/` | GOG's setup files for each game, and the redistributables shared by games |
 | `~/.local/share/slatty/added/` | What each game added by hand starts, and the files unpacked for it |
+| `~/.local/share/slatty/emulated/` | The emulator of each emulated game, and what it is given |
 | `~/.local/share/slatty/custom/<id>/` | Covers and backgrounds you chose |
 | `~/.local/share/slatty/protons/` | Proton builds downloaded from GitHub |
 | `~/.local/share/slatty/umu-runtimes/` | The tool Linux games run through in umu's runtime |

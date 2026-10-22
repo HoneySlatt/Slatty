@@ -5,6 +5,21 @@ use slatty_core::cloud::plan::Warning;
 use slatty_core::installer::Progress;
 use slatty_core::play::{CloudSummary, PlayEvent};
 
+/// The system an emulator runs the games of.
+pub fn system_name(e: slatty_core::emulated::Emulator) -> &'static str {
+    use slatty_core::emulated::Emulator;
+    match e {
+        Emulator::DuckStation => "PlayStation",
+        Emulator::Pcsx2 => "PlayStation 2",
+        Emulator::Ppsspp => "PSP",
+        Emulator::Rpcs3 => "PlayStation 3",
+        Emulator::ShadPs4 => "PlayStation 4",
+        Emulator::Kyty => "PlayStation 5",
+        Emulator::Dolphin => "GameCube / Wii",
+        Emulator::Eden => "Switch",
+    }
+}
+
 pub fn fraction(p: Progress) -> f32 {
     if p.bytes_total == 0 {
         0.0

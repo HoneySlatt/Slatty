@@ -403,7 +403,7 @@ impl App {
                 .or_else(|| steam.get(g.id.as_str()).map(|t| t.to_string()))
                 .or_else(|| {
                     let added = self.installs.get(&g.id)?;
-                    slatty_core::store::is_local(&g.id).then(|| added.title.clone())
+                    slatty_core::store::from_no_store(&g.id).then(|| added.title.clone())
                 })
             {
                 g.title = title;
@@ -421,7 +421,7 @@ impl App {
             })
             .or_else(|| {
                 let added = self.installs.get(game_id)?;
-                slatty_core::store::is_local(game_id).then_some(&added.title)
+                slatty_core::store::from_no_store(game_id).then_some(&added.title)
             })
             .map_or("", String::as_str)
     }

@@ -39,7 +39,7 @@ impl App {
         let section = |ic, title, content| titled(ic, title, content, indent);
         let folder = text(install.path.display().to_string()).size(15);
         // A game added by hand may have been moved since: it is found again by its program.
-        let folder: Element<'a, Message> = if slatty_core::store::is_local(&g.id) {
+        let folder: Element<'a, Message> = if slatty_core::store::from_no_store(&g.id) {
             column![
                 folder,
                 row![
@@ -82,6 +82,23 @@ impl App {
                 .spacing(10)
                 .into(),
             ));
+        }
+        // An emulated game: its emulator, which is not isolated, and nothing of GOG's.
+        if let Some(&e) = self.emulated.get(&g.id) {
+            let program = match self.emulators.programs.get(&e) {
+                Some(p) => format!("Started as {}.", p.display()),
+                None => {
+                    "Not found: install it, or choose its program in Settings → Emulators.".into()
+                }
+            };
+            sections.push(section(
+                Icon::Gamepad,
+                "Emulator",
+                column![text(e.name()).size(15), note(program)]
+                    .spacing(10)
+                    .into(),
+            ));
+            return stacked(sections);
         }
         // A native build runs without Proton.
         let native = install.runner == Runner::Native;

@@ -62,6 +62,9 @@ There are no dates. What has been checked against real services, and what not ye
   a game owned on both stores; images and data the client lacks from Steam's servers once turned
   on. No GOG account needed for them.
 - Games from no store, added by their program, a Windows installer or a Linux installer or archive.
+- Emulated games of eight systems (DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4, Kyty, Dolphin,
+  Eden), found by a scan of their folders or added one by one. Not yet played for real in each
+  emulator.
 - GOG games installed by another tool, imported from their folder or from Heroic.
 
 **Privacy, security and packaging**
