@@ -37,6 +37,10 @@ pub struct LaunchSpec {
 
 /// Builds the game's launch command with its saved choice and controller compatibility setting.
 pub fn game_launch_spec(db: &crate::db::Db, dirs: &Dirs, install: &Install) -> Result<LaunchSpec> {
+    // Its emulator, a program of the user's system: no wrapper, no Proton.
+    if crate::store::is_emulated(&install.game_id) {
+        return crate::emulated::launch_spec(db, dirs, install);
+    }
     let choice = crate::settings::launch_choice(db, &install.game_id)?;
     let mut spec = launch_spec(dirs, install, choice.as_deref())?;
     if install.platform == Platform::Windows

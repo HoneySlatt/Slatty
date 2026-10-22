@@ -146,7 +146,7 @@ pub async fn play(
     let _busy = crate::lock::game(dirs, &req.game_id)?;
     let user_id = Account::active(db)?.map(|a| a.user_id);
     let mut install = Install::get(db, &req.game_id)?.ok_or_else(|| {
-        Error::NotFound(if crate::store::is_local(&req.game_id) {
+        Error::NotFound(if crate::store::from_no_store(&req.game_id) {
             format!("{} is not in the library", req.game_id)
         } else {
             format!("{} is not imported", req.game_id)
@@ -165,9 +165,9 @@ pub async fn play(
     // Checked now, before the prefix and the setup, so a game that cannot start says so first.
     runner::game_launch_spec(db, dirs, &install)?;
     // GOG keeps no cloud saves for Linux builds, and they lack the Galaxy SDK that Comet talks to.
-    // A game added by hand is not GOG's at all: GOG is not asked anything about it.
+    // A game added by hand or emulated is not GOG's at all: GOG is not asked anything about it.
     let native = install.platform == Platform::Linux;
-    let added = crate::store::is_local(&install.game_id);
+    let added = crate::store::from_no_store(&install.game_id);
     let cloud = req.cloud && !native && !added;
     // Comet acts for the account and listens on this computer while it runs: only for a game that
     // can talk to it, and only if allowed in Settings.

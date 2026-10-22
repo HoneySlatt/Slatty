@@ -1,6 +1,8 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::db::Db;
+use crate::emulated::Emulator;
 use crate::error::Result;
 use crate::install::Platform;
 
@@ -36,6 +38,9 @@ const TWIN_PLAYTIME: &str = "twin_playtime";
 const REMEMBER_FILTERS: &str = "remember_filters";
 const LIBRARY_FILTERS: &str = "library_filters";
 const CONTROLLER_COMPATIBILITY: &str = "controller_compatibility";
+const EMULATOR_PROGRAM: &str = "emulator_program";
+const ROM_FOLDERS: &str = "rom_folders";
+const FORGOTTEN_EMULATED: &str = "forgotten_emulated";
 
 /// Folder that receives installed games (`~/Games/GOG` until chosen).
 pub fn library_root(db: &Db) -> Result<PathBuf> {
@@ -334,6 +339,53 @@ pub fn set_controller_compatibility(db: &Db, game_id: &str, on: bool) -> Result<
         &format!("{CONTROLLER_COMPATIBILITY}:{game_id}"),
         on.then_some("on"),
     )
+}
+
+/// The program chosen for an emulator, rather than the one found in `PATH`.
+pub fn emulator_program(db: &Db, emulator: Emulator) -> Result<Option<PathBuf>> {
+    Ok(db
+        .setting(&format!("{EMULATOR_PROGRAM}:{}", emulator.key()))?
+        .map(PathBuf::from))
+}
+
+pub fn set_emulator_program(db: &Db, emulator: Emulator, program: Option<&Path>) -> Result<()> {
+    db.set_setting(
+        &format!("{EMULATOR_PROGRAM}:{}", emulator.key()),
+        program.map(|p| p.to_string_lossy()).as_deref(),
+    )
+}
+
+/// The folders where an emulator's games are looked for; none until chosen.
+pub fn rom_folders(db: &Db, emulator: Emulator) -> Result<Vec<PathBuf>> {
+    path_list(db, &format!("{ROM_FOLDERS}:{}", emulator.key()))
+}
+
+pub fn set_rom_folders(db: &Db, emulator: Emulator, folders: &[PathBuf]) -> Result<()> {
+    set_path_list(db, &format!("{ROM_FOLDERS}:{}", emulator.key()), folders)
+}
+
+/// What emulated games the user removed were given, which scans then leave out.
+pub fn forgotten_emulated(db: &Db) -> Result<HashSet<PathBuf>> {
+    Ok(path_list(db, FORGOTTEN_EMULATED)?.into_iter().collect())
+}
+
+pub fn set_forgotten_emulated(db: &Db, paths: &HashSet<PathBuf>) -> Result<()> {
+    let mut paths: Vec<PathBuf> = paths.iter().cloned().collect();
+    paths.sort();
+    set_path_list(db, FORGOTTEN_EMULATED, &paths)
+}
+
+/// A list of paths, kept as JSON: a path may hold any character a separator would be.
+fn path_list(db: &Db, key: &str) -> Result<Vec<PathBuf>> {
+    Ok(match db.setting(key)? {
+        Some(v) => serde_json::from_str(&v).map_err(|e| crate::Error::parse("paths", e))?,
+        None => Vec::new(),
+    })
+}
+
+fn set_path_list(db: &Db, key: &str, paths: &[PathBuf]) -> Result<()> {
+    let json = serde_json::to_string(paths).map_err(|e| crate::Error::parse("paths", e))?;
+    db.set_setting(key, (!paths.is_empty()).then_some(json.as_str()))
 }
 
 /// Game ids waiting in the download queue, in order.

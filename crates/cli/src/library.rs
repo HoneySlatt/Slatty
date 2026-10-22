@@ -51,6 +51,7 @@ pub async fn run(ctx: &Ctx, cmd: LibraryCommand) -> Result<()> {
             };
             let steam = crate::steam::games(ctx)?;
             let added = slatty_core::added::library(&ctx.db)?;
+            let emulated = slatty_core::emulated::library(&ctx.db, &ctx.dirs)?;
             match Account::active(&ctx.db)? {
                 Some(info) => match library::load_cache(&ctx.dirs, &info.user_id)? {
                     Some(cache) => {
@@ -59,8 +60,8 @@ pub async fn run(ctx: &Ctx, cmd: LibraryCommand) -> Result<()> {
                     }
                     None => println!("No cached library yet. Run `slatty library sync`."),
                 },
-                // Steam's games and those added by hand need no GOG account.
-                None if steam.is_some() || !added.is_empty() => {}
+                // Steam's games, those added by hand and emulated ones need no GOG account.
+                None if steam.is_some() || !added.is_empty() || !emulated.is_empty() => {}
                 None => return Err(slatty_core::Error::NotLoggedIn.into()),
             }
             if let Some(steam) = steam {
@@ -70,6 +71,10 @@ pub async fn run(ctx: &Ctx, cmd: LibraryCommand) -> Result<()> {
             if !added.is_empty() {
                 print(&added);
                 println!("(games added by hand)");
+            }
+            if !emulated.is_empty() {
+                print(&emulated);
+                println!("(emulated games)");
             }
         }
     }

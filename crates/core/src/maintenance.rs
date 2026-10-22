@@ -32,7 +32,7 @@ fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, 
     let install = Install::get(db, game_id)?
         .ok_or_else(|| Error::NotFound(format!("{game_id} is not installed")))?;
     let record = InstallRecord::load(dirs, game_id)?.ok_or_else(|| {
-        Error::Refused(if crate::store::is_local(game_id) {
+        Error::Refused(if crate::store::from_no_store(game_id) {
             format!(
                 "{} was added by hand: `slatty remove {game_id}` takes it out of the library",
                 install.title
@@ -220,8 +220,13 @@ pub fn uninstall(
 /// Stops managing a game, leaving its folder and prefix as they are. What Slatty kept of
 /// it (its install record, GOG's support files, an unfinished update) goes too: a game imported
 /// later under its id is not taken for the one it installed. A game added by hand goes with
-/// `added::remove` instead.
+/// `added::remove` instead, and an emulated one with `emulated::remove`.
 pub fn forget(db: &Db, dirs: &Dirs, game_id: &str) -> Result<Install> {
+    if crate::store::is_emulated(game_id) {
+        return Err(Error::Refused(format!(
+            "{game_id} is emulated: `slatty remove {game_id}` takes it out of the library"
+        )));
+    }
     let _busy = crate::lock::game(dirs, game_id)?;
     let install = Install::get(db, game_id)?
         .ok_or_else(|| Error::NotFound(format!("{game_id} is not installed")))?;

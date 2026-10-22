@@ -162,6 +162,10 @@ Manual changes show on your public GOG profile. See [Achievements](user-guide.md
 | `slatty remove <id>` | Takes the game out of the library. Its files stay, except those Slatty unpacked |
 | `slatty remove <id> --delete-prefix` | Also deletes the prefix Slatty made for it, its saves backed up first |
 
+Emulated games (`emu-<number>`) are added in the application, under Settings → Emulators.
+`slatty library list` lists them, `slatty launch <id>` starts them, and `slatty remove <id>` takes
+them out of the library without touching their files; a scan does not add them again.
+
 ## Proton builds
 
 | Command | What it does |

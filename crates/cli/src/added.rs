@@ -163,6 +163,14 @@ pub fn remove(ctx: &Ctx, args: RemoveArgs) -> Result<()> {
         );
         return Ok(());
     };
+    if slatty_core::store::is_emulated(&args.game_id) {
+        slatty_core::emulated::remove(&ctx.db, &ctx.dirs, &args.game_id)?;
+        println!(
+            "{} is no longer in the library. Its files are untouched.",
+            shown(&title)
+        );
+        return Ok(());
+    }
     let report = added::remove(&ctx.db, &ctx.dirs, &args.game_id, args.delete_prefix)?;
     println!("{} is no longer in the library.", shown(&title));
     if report.removed_files > 0 {

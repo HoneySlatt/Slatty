@@ -632,7 +632,7 @@ impl App {
                 match store::of(&g.id) {
                     Ok(Store::Gog) => f.gog || (f.steam && self.steam_twin(&g.id).is_some()),
                     Ok(Store::Steam) => f.steam,
-                    Ok(Store::Local) => f.added,
+                    Ok(Store::Local | Store::Emulated) => f.added,
                     Err(_) => false,
                 }
             })

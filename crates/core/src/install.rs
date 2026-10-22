@@ -128,6 +128,12 @@ pub fn set_isolated(db: &Db, game_id: &str, isolated: bool) -> Result<Install> {
             install.title
         )));
     }
+    if isolated && crate::store::is_emulated(game_id) {
+        return Err(Error::Refused(format!(
+            "{} runs in an emulator, which Slatty does not isolate",
+            install.title
+        )));
+    }
     install.isolated = isolated;
     install.save(db)?;
     Ok(install)
