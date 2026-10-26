@@ -325,7 +325,7 @@ pub fn cached_covers(dirs: &Dirs, user_id: &str) -> HashMap<String, PathBuf> {
 /// An image already in the cache. One an earlier version kept without its format in its name
 /// (`<id>.img` for a cover, the bare hash for an image) is renamed after it, or dropped when it is
 /// not an image.
-fn cached_file(folder: &Path, name: &str) -> Option<PathBuf> {
+pub(crate) fn cached_file(folder: &Path, name: &str) -> Option<PathBuf> {
     if let Some(path) = IMAGE_EXTENSIONS
         .iter()
         .map(|ext| folder.join(format!("{name}.{ext}")))

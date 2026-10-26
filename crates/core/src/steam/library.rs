@@ -262,6 +262,13 @@ pub async fn image(http: &Client, dirs: &Dirs, url: &str) -> Result<PathBuf> {
     .await
 }
 
+/// The file of an image of Steam's image servers already in Slatty's cache; none until `image`
+/// downloaded it.
+pub fn downloaded_image(dirs: &Dirs, url: &str) -> Option<PathBuf> {
+    let name = crate::fsutil::sha256_hex(url.as_bytes());
+    crate::library::cached_file(&dirs.cache.join("steam"), &name)
+}
+
 /// The file the client cached for `asset` (`library_capsule`, `library_hero`, `library_logo`), as
 /// `library_assets_full` names it: English first, else any language.
 fn cached_asset(folder: &Path, common: &Vdf, asset: &str) -> Option<PathBuf> {

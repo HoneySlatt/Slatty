@@ -45,7 +45,11 @@ enum Command {
     /// except those Slatty unpacked
     Remove(added::RemoveArgs),
     /// List installed games and interrupted installs
-    Installs,
+    Installs {
+        /// Print, as JSON for other programs, the games the library's Installed shelf shows
+        #[arg(long)]
+        json: bool,
+    },
     /// Show the command that would launch a game
     LaunchSpec { game_id: String },
     /// Remove a game from Slatty's records; files, prefix and saves are left untouched
@@ -129,7 +133,10 @@ async fn run() -> Result<()> {
         Command::Remove(args) => added::remove(&ctx, args),
         Command::Install(args) => install::run(&ctx, args).await,
         Command::Installers(args) => installers::run(&ctx, args).await,
-        Command::Installs => games::list(&ctx).and_then(|()| install::list_jobs(&ctx)),
+        Command::Installs { json: true } => games::list_json(&ctx),
+        Command::Installs { json: false } => {
+            games::list(&ctx).and_then(|()| install::list_jobs(&ctx))
+        }
         Command::LaunchSpec { game_id } => games::print_spec(&ctx, &game_id),
         Command::Forget { game_id } => games::forget(&ctx, &game_id),
         Command::Isolation(args) => games::isolation(&ctx, args),

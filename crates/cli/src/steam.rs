@@ -22,7 +22,7 @@ pub fn run(ctx: &Ctx, cmd: SteamCommand) -> Result<()> {
 }
 
 /// The Steam installation in the home folder, if any.
-fn find() -> Option<Steam> {
+pub fn find() -> Option<Steam> {
     local::find(&PathBuf::from(std::env::var_os("HOME")?))
 }
 

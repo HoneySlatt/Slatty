@@ -11,6 +11,8 @@ until 1.0, a minor version may change commands and on-disk formats.
   your own files, run full screen in DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4, Kyty, Dolphin or
   Eden. Settings → Emulators finds each emulator, takes the folders of its games and scans them;
   **+** adds one game at a time. The library's filters have **Emulated** and a menu of systems.
+- `slatty installs --json` lists, for other programs (a game menu of your desktop), the games the
+  Installed shelf shows, with their titles, the files of their covers and how to start them.
 
 ### Changed
 

@@ -1,9 +1,14 @@
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 use clap::{Args, ValueEnum};
+use serde::Serialize;
+use slatty_core::account::Account;
 use slatty_core::install::{self, Install};
+use slatty_core::library::{self, LibraryGame};
 use slatty_core::runner::{self, Runner};
+use slatty_core::{settings, steam, store};
 
 use crate::{Ctx, shown};
 
@@ -86,6 +91,123 @@ pub fn list(ctx: &Ctx) -> Result<()> {
             i.path.display()
         );
     }
+    Ok(())
+}
+
+/// A game of the library's Installed shelf, for other programs.
+#[derive(Serialize)]
+struct Installed {
+    id: String,
+    title: String,
+    /// The cover the library shows, once it is in a local file.
+    cover: Option<PathBuf>,
+    /// The Steam app to start through Steam, for a game only Steam installed; any other starts
+    /// with `slatty launch <id>`.
+    steam_app: Option<u32>,
+}
+
+/// Prints as JSON the games the library's Installed shelf shows, with the titles and covers given
+/// there, hidden ones left out. Reads local files only: a cover not downloaded yet is none.
+pub fn list_json(ctx: &Ctx) -> Result<()> {
+    let customs = slatty_core::custom::all(&ctx.db)?;
+    let installs: HashSet<String> = Install::list(&ctx.db)?
+        .into_iter()
+        .map(|i| i.game_id)
+        .collect();
+    let (gog, mut covers) = match Account::active(&ctx.db)? {
+        Some(info) => (
+            library::load_cache(&ctx.dirs, &info.user_id)?
+                .map(|c| c.games)
+                .unwrap_or_default(),
+            library::cached_covers(&ctx.dirs, &info.user_id),
+        ),
+        None => (Vec::new(), HashMap::new()),
+    };
+    let steam = settings::steam_games(&ctx.db)?
+        .then(crate::steam::find)
+        .flatten();
+    let steam_library = match &steam {
+        Some(s) => steam::library::read(s, settings::steam_images(&ctx.db)?),
+        None => None,
+    };
+    let steam_games = steam_library.as_ref().map_or(&[][..], |l| &l.games);
+    if let Some(l) = &steam_library {
+        covers.extend(l.covers.clone());
+        for g in steam_games {
+            if let Some(path) = g
+                .cover
+                .as_deref()
+                .and_then(|url| steam::library::downloaded_image(&ctx.dirs, url))
+            {
+                covers.insert(g.id.clone(), path);
+            }
+        }
+    }
+    // Steam's whole once installed, updates included; a first install still downloads.
+    let ready: HashSet<u32> = steam
+        .iter()
+        .flat_map(steam::local::installed)
+        .filter(|i| i.ready)
+        .map(|i| i.app_id)
+        .collect();
+    let on_steam = |id: &str| store::steam_app(id).filter(|app| ready.contains(app));
+    // A game owned on both shows once, as GOG's, matched with GOG's own titles.
+    let twins = steam::library::twins(
+        gog.iter()
+            .map(|g| (g.id.as_str(), g.title.as_str(), g.steam.as_deref())),
+        steam_games,
+    );
+    let twinned: HashSet<&String> = twins.values().collect();
+
+    let mut shown: Vec<(&LibraryGame, Option<u32>)> = Vec::new();
+    for g in &gog {
+        let steam_app = twins.get(&g.id).and_then(|id| on_steam(id));
+        if installs.contains(&g.id) {
+            shown.push((g, None));
+        } else if steam_app.is_some() {
+            shown.push((g, steam_app));
+        }
+    }
+    for g in steam_games.iter().filter(|g| !twinned.contains(&g.id)) {
+        if let Some(app) = on_steam(&g.id) {
+            shown.push((g, Some(app)));
+        }
+    }
+    let added = slatty_core::added::library(&ctx.db)?;
+    let emulated = slatty_core::emulated::library(&ctx.db, &ctx.dirs)?;
+    shown.extend(added.iter().chain(&emulated).map(|g| (g, None)));
+
+    let mut games: Vec<(String, Installed)> = shown
+        .into_iter()
+        .filter_map(|(g, steam_app)| {
+            let custom = customs.get(&g.id);
+            if custom.is_some_and(|c| c.hidden) {
+                return None;
+            }
+            let title = custom
+                .and_then(|c| c.title.clone())
+                .unwrap_or_else(|| g.title.clone());
+            let sort = custom
+                .and_then(|c| c.sort_title.clone())
+                .unwrap_or_else(|| title.clone())
+                .to_lowercase();
+            let cover = custom
+                .and_then(|c| c.cover.clone())
+                .or_else(|| covers.get(&g.id).cloned());
+            Some((
+                sort,
+                Installed {
+                    id: g.id.clone(),
+                    title,
+                    cover,
+                    steam_app,
+                },
+            ))
+        })
+        .collect();
+    games.sort_by(|a, b| a.0.cmp(&b.0));
+    let games: Vec<Installed> = games.into_iter().map(|(_, g)| g).collect();
+    println!("{}", serde_json::to_string_pretty(&games)?);
     Ok(())
 }
 

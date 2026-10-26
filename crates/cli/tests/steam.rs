@@ -115,3 +115,76 @@ fn steam_games_are_listed_once_turned_on() {
     );
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// `slatty installs --json` lists what the Installed shelf shows: Steam's installed games, to start
+/// through Steam, and the others with the title and cover given in the library, hidden ones left
+/// out.
+#[test]
+fn installed_games_are_printed_as_json() {
+    let root = std::env::temp_dir().join(format!("slatty-cli-installed-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let steam = root.join("home/.local/share/Steam");
+    let write = |path: &Path, data: &[u8]| {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, data).unwrap();
+    };
+    write(
+        &steam.join("config/loginusers.vdf"),
+        br#""users" { "76561198000000002" { "PersonaName" "[FAKE] Player" "Timestamp" "200" } }"#,
+    );
+    write(
+        &steam.join("userdata/39734274/config/librarycache/440.json"),
+        b"[]",
+    );
+    write(
+        &steam.join("appcache/appinfo.vdf"),
+        &appinfo(440, "[FAKE] Fortress"),
+    );
+    let steam_cover = steam.join("appcache/librarycache/440/library_600x900.jpg");
+    write(&steam_cover, b"[FAKE] cover");
+    write(
+        &steam.join("steamapps/appmanifest_440.acf"),
+        br#""AppState" { "appid" "440" "name" "[FAKE] Fortress" "installdir" "Fortress" "StateFlags" "4" }"#,
+    );
+    for title in ["[FAKE] Added", "[FAKE] Hidden"] {
+        let program = root.join("games").join(title).join("run.sh");
+        write(&program, b"#!/bin/sh\n");
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        stdout(&slatty(
+            &root,
+            &["add", program.to_str().unwrap(), "--title", title],
+        ));
+    }
+
+    let db = slatty_core::db::Db::open(&root.join("data/slatty/state.db")).unwrap();
+    slatty_core::settings::set_steam_games(&db, true).unwrap();
+    let mut dirs = slatty_core::paths::Dirs::under(&root);
+    dirs.data = root.join("data/slatty");
+    let changes = |title: &str, hidden| slatty_core::custom::Changes {
+        title: title.into(),
+        sort_title: String::new(),
+        hidden,
+        cover: slatty_core::custom::ImageChange::Keep,
+        background: slatty_core::custom::ImageChange::Keep,
+    };
+    slatty_core::custom::save(&db, &dirs, "local-1", changes("[FAKE] Renamed", false)).unwrap();
+    slatty_core::custom::save(&db, &dirs, "local-2", changes("", true)).unwrap();
+    drop(db);
+
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout(&slatty(&root, &["installs", "--json"]))).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!([
+            {
+                "id": "steam-440",
+                "title": "[FAKE] Fortress",
+                "cover": steam_cover,
+                "steam_app": 440
+            },
+            { "id": "local-1", "title": "[FAKE] Renamed", "cover": null, "steam_app": null }
+        ])
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
