@@ -115,6 +115,22 @@ fn base_url(manifest_url: &str) -> String {
         .to_string()
 }
 
+/// The folders of a build's manifest addresses, the one that answered first, each once: a chunk
+/// one does not serve is asked of the next.
+fn cdn_bases(manifest_urls: &[String], answered: Option<&str>) -> Result<Vec<String>> {
+    let mut bases: Vec<String> = Vec::new();
+    for url in answered
+        .into_iter()
+        .chain(manifest_urls.iter().map(String::as_str))
+    {
+        let base = base_url(&https(url)?);
+        if !bases.contains(&base) {
+            bases.push(base);
+        }
+    }
+    Ok(bases)
+}
+
 /// What installing a game takes.
 pub struct EpicPlan {
     pub game_id: String,
@@ -132,7 +148,8 @@ pub struct EpicPlan {
     pub additional_args: String,
     /// The folder its cloud saves are kept from (`CloudSaveFolder`), when Epic keeps any.
     pub cloud_folder: Option<String>,
-    pub base_url: String,
+    /// Where its chunks are, in the order they are asked (`cdn_bases`).
+    pub bases: Vec<String>,
     pub download_size: u64,
     pub disk_size: u64,
 }
@@ -207,7 +224,7 @@ pub async fn plan(http: &Client, tokens: &Tokens, game: &EpicGame) -> Result<Epi
         title: game.title.clone(),
         download_size: files.download_size(&manifest),
         disk_size: files.disk_size(),
-        base_url: base_url(&manifest_url),
+        bases: cdn_bases(&build.manifest_urls, Some(&manifest_url))?,
         build,
         raw_manifest,
         manifest,
@@ -260,14 +277,13 @@ async fn download_manifest(http: &Client, build: &BuildInfo) -> Result<(Vec<u8>,
             .get(&url)
             .header(reqwest::header::USER_AGENT, super::USER_AGENT);
         match http::bytes(req, "downloading the Epic manifest").await {
-            Ok(raw) => {
-                if crate::fsutil::hex(&super::sha1(&raw)) != build.hash {
-                    return Err(Error::Refused(
-                        "the Epic manifest does not match its checksum".into(),
-                    ));
-                }
-                return Ok((raw, url));
+            // A damaged copy at one address: the next may have it whole.
+            Ok(raw) if crate::fsutil::hex(&super::sha1(&raw)) != build.hash => {
+                last = Some(Error::Refused(
+                    "the Epic manifest does not match its checksum".into(),
+                ));
             }
+            Ok(raw) => return Ok((raw, url)),
             Err(e) => last = Some(e),
         }
     }
@@ -409,7 +425,7 @@ pub async fn install(
     let plan = plan(http, tokens, &req.game).await?;
     let source = EpicCdn {
         http: http.clone(),
-        base: https(&plan.base_url)?,
+        bases: plan.bases.clone(),
     };
     install_planned(db, dirs, &source, plan, job, root, req, emit, cancel).await
 }
@@ -556,7 +572,7 @@ pub async fn check(
         ));
     }
     // Never asked when only verifying, which downloads nothing.
-    let mut base = String::new();
+    let mut bases = Vec::new();
     if repair {
         let tokens = super::auth::fresh(http, db, dirs).await?;
         let source = Epic {
@@ -570,11 +586,11 @@ pub async fn check(
             &kept.app_name,
         )
         .await?;
-        base = https(&base_url(&build.manifest_urls[0]))?;
+        bases = cdn_bases(&build.manifest_urls, None)?;
     }
     let source = EpicCdn {
         http: http.clone(),
-        base,
+        bases,
     };
     check_files(dirs, &install, &kept, &source, repair, progress, cancel).await
 }
@@ -651,7 +667,7 @@ pub async fn update(
     let plan = plan(http, &tokens, &game).await?;
     let source = EpicCdn {
         http: http.clone(),
-        base: https(&plan.base_url)?,
+        bases: plan.bases.clone(),
     };
     update_planned(
         db, dirs, &source, &install, &record, &game, plan, progress, cancel,
@@ -851,7 +867,7 @@ mod tests {
             ownership_token: false,
             additional_args: String::new(),
             cloud_folder: None,
-            base_url: String::new(),
+            bases: Vec::new(),
         };
         (plan, cdn)
     }
@@ -1334,6 +1350,16 @@ mod tests {
         );
         assert!(https("file:///etc/passwd").is_err());
         assert!(build_info(&serde_json::json!({"elements": []})).is_err());
+        // Chunks are asked of the address that answered first, then of the others, each once.
+        let answered = "https://cdn2.example/Builds/Org/x/default/abc.manifest";
+        assert_eq!(
+            cdn_bases(&build.manifest_urls, Some(answered)).unwrap(),
+            [
+                "https://cdn2.example/Builds/Org/x/default",
+                "https://cdn.example/Builds/Org/x/default"
+            ]
+        );
+        assert_eq!(cdn_bases(&build.manifest_urls, None).unwrap().len(), 2);
     }
 
     #[test]

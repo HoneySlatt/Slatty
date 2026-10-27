@@ -33,20 +33,28 @@ pub trait ChunkSource: Send + Sync {
     fn chunk(&self, path: &str) -> impl Future<Output = Result<Vec<u8>>> + Send;
 }
 
-/// Epic's CDN, at the base address of a build. Chunks are asked for without the account's token.
+/// Epic's CDN, at the base addresses of a build: each chunk is asked of the next when one fails.
+/// Chunks are asked for without the account's token.
 pub struct EpicCdn {
     pub http: Client,
-    pub base: String,
+    pub bases: Vec<String>,
 }
 
 impl ChunkSource for EpicCdn {
     async fn chunk(&self, path: &str) -> Result<Vec<u8>> {
-        let req = self
-            .http
-            .get(format!("{}/{path}", self.base))
-            .header(reqwest::header::USER_AGENT, super::USER_AGENT);
         let limit = super::manifest::MAX_CHUNK as u64 + 4096;
-        http::bytes_up_to(req, "downloading an Epic chunk", limit).await
+        let mut last = None;
+        for base in &self.bases {
+            let req = self
+                .http
+                .get(format!("{base}/{path}"))
+                .header(reqwest::header::USER_AGENT, super::USER_AGENT);
+            match http::bytes_up_to(req, "downloading an Epic chunk", limit).await {
+                Ok(chunk) => return Ok(chunk),
+                Err(e) => last = Some(e),
+            }
+        }
+        Err(last.unwrap_or_else(|| Error::NotFound("no address to download Epic's chunks".into())))
     }
 }
 
