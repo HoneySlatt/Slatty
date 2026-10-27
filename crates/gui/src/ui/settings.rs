@@ -780,9 +780,9 @@ impl App {
                 "Epic Games",
                 column![
                     note(
-                        "Shows your Epic games in the library; installing and playing them from \
-                         Slatty comes later. Sign in in your browser, then paste here the short \
-                         page of text Epic shows: a single-use code, never give it to anyone.",
+                        "Shows your Epic games in the library, to install and play them from \
+                         Slatty. Sign in in your browser, then paste here the short page of text \
+                         Epic shows: a single-use code, never give it to anyone.",
                     ),
                     button(text("Open the Epic sign-in page").size(14))
                         .padding(0)

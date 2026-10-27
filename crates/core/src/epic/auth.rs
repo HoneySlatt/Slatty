@@ -239,7 +239,11 @@ pub async fn fresh(http: &Client, db: &Db, dirs: &Dirs) -> Result<Tokens> {
     if !tokens.is_expired() {
         return Ok(tokens);
     }
-    let fresh = refresh(http, &tokens).await?;
+    let mut fresh = refresh(http, &tokens).await?;
+    // An answer without the account's name keeps the one known.
+    if fresh.display_name.is_empty() {
+        fresh.display_name = tokens.display_name.clone();
+    }
     if fresh.account_id != account_id {
         return Err(Error::parse(
             "refreshing the Epic session",

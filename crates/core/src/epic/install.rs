@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::auth::Tokens;
 use super::download::{BuildFiles, ChunkSource, Download, EpicCdn};
-use super::library::{Epic, EpicGame, Source};
+use super::library::{Epic, EpicGame, Source, id_part};
 use super::manifest::{self, Manifest};
 use crate::db::Db;
 use crate::error::{Error, Result};
@@ -228,22 +228,14 @@ async fn newest_build(
 ) -> Result<BuildInfo> {
     let url = format!(
         "{ASSETS_HOST}/launcher/api/public/assets/v2/platform/Windows/namespace/{}/catalogItem/{}/app/{}/label/Live",
-        path_part(namespace)?,
-        path_part(catalog_item_id)?,
+        id_part(namespace)?,
+        id_part(catalog_item_id)?,
         app_name
     );
     let answer: serde_json::Value = super::library::session_checked(
         http::json(source.get(&url), "asking Epic for the game's build").await,
     )?;
     build_info(&answer)
-}
-
-/// A namespace or catalog id going into an address: Epic's are letters and digits.
-fn path_part(s: &str) -> Result<&str> {
-    if s.is_empty() || !s.bytes().all(|b| b.is_ascii_alphanumeric()) {
-        return Err(Error::Refused(format!("unexpected Epic id `{s}`")));
-    }
-    Ok(s)
 }
 
 /// A folder name of a single part, never `..` nor hidden.
@@ -1240,7 +1232,7 @@ mod tests {
         for bad in ["", "..", ".hidden", "a/b", "/abs"] {
             assert!(check_folder(bad).is_err(), "{bad:?}");
         }
-        assert!(path_part("abc123").is_ok());
-        assert!(path_part("../x").is_err() && path_part("").is_err());
+        assert!(id_part("abc123").is_ok());
+        assert!(id_part("../x").is_err() && id_part("").is_err());
     }
 }

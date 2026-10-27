@@ -157,7 +157,10 @@ impl Source for Epic<'_> {
         namespace: String,
         catalog_item_id: String,
     ) -> Result<Option<CatalogItem>> {
-        let url = format!("{CATALOG_HOST}/catalog/api/shared/namespace/{namespace}/bulk/items");
+        let url = format!(
+            "{CATALOG_HOST}/catalog/api/shared/namespace/{}/bulk/items",
+            id_part(&namespace)?
+        );
         let req = self.get(&url).query(&[
             ("id", catalog_item_id.as_str()),
             ("includeDLCDetails", "true"),
@@ -169,6 +172,15 @@ impl Source for Epic<'_> {
             session_checked(http::json(req, "reading Epic's catalog").await)?;
         Ok(items.remove(&catalog_item_id))
     }
+}
+
+/// A namespace or catalog id going into an address, with the account's token: Epic's are letters
+/// and digits.
+pub(crate) fn id_part(s: &str) -> Result<&str> {
+    if s.is_empty() || !s.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return Err(Error::Refused(format!("unexpected Epic id `{s}`")));
+    }
+    Ok(s)
 }
 
 /// A token Epic no longer accepts is a session to sign in to again.
@@ -234,9 +246,18 @@ pub async fn fetch(
                 if let Some(game) = known {
                     return Ok(Some((id, Some(game))));
                 }
-                let item = source
+                let item = match source
                     .catalog_item(r.namespace.clone(), r.catalog_item_id.clone())
-                    .await?;
+                    .await
+                {
+                    Ok(item) => item,
+                    Err(e @ Error::EpicSessionRejected) => return Err(e),
+                    // One the catalog refuses is left out this time, not the whole library.
+                    Err(e) => {
+                        tracing::warn!("an Epic catalog item was not described: {e}");
+                        None
+                    }
+                };
                 Ok::<_, Error>(item.map(|item| (id, game(app, r, item))))
             }
         }))
@@ -411,6 +432,15 @@ mod tests {
 
         async fn catalog_item(&self, _: String, id: String) -> Result<Option<CatalogItem>> {
             self.asked.lock().unwrap().push(id.clone());
+            if id.starts_with("rejected-") {
+                return Err(Error::EpicSessionRejected);
+            }
+            if id.starts_with("refused-") {
+                return Err(Error::Http {
+                    context: "[FAKE] catalog",
+                    status: 403,
+                });
+            }
             Ok(self.catalog.get(&id).cloned())
         }
     }
@@ -514,6 +544,41 @@ mod tests {
 
     /// The catalog is asked only about items the cache neither described nor left out: an item it
     /// had no description of is not shown, and asked about again.
+    /// An item the catalog refuses to describe is left out this time, as one it does not know,
+    /// rather than the whole library; a session Epic rejects stops the read.
+    #[tokio::test]
+    async fn one_item_refused_by_the_catalog_leaves_the_others() {
+        let mut source = fake();
+        source.pages[1]
+            .records
+            .push(record(Some("Refused"), "n8", "refused-c8"));
+        let (games, _) = fetch(&source, &[], &[]).await.unwrap();
+        let apps: Vec<&str> = games.iter().map(|g| g.app_name.as_str()).collect();
+        assert!(
+            apps.contains(&"Alpha") && apps.contains(&"Beta"),
+            "{apps:?}"
+        );
+        assert!(!apps.contains(&"Refused"));
+
+        source.pages[1]
+            .records
+            .push(record(Some("Rejected"), "n9", "rejected-c9"));
+        assert!(matches!(
+            fetch(&source, &[], &[]).await,
+            Err(Error::EpicSessionRejected)
+        ));
+    }
+
+    /// A namespace goes into the catalog's address: anything but letters and digits is refused
+    /// before it is sent.
+    #[test]
+    fn a_namespace_naming_another_path_is_refused() {
+        assert!(id_part("abcdef0123456789").is_ok());
+        for bad in ["", "a/../b", "a?x=1", "a#b", "a b"] {
+            assert!(id_part(bad).is_err(), "{bad:?}");
+        }
+    }
+
     #[tokio::test]
     async fn items_already_described_are_not_asked_about_again() {
         let source = fake();

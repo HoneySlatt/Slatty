@@ -41,8 +41,10 @@ As legendary does (`LegendaryCore.get_non_asset_library_items`), the library lea
 Engine's marketplace (namespace `ue`), private sandboxes (`sandboxType` `PRIVATE`, games in
 development), records without an `appName`, the broken app name `1`, add-ons (a catalog item with
 `mainGameItem`) and mods (category `mods`). The catalog is asked only about items the cache neither
-describes nor left out, eight at a time. A game's id is `epic-<appName>`; an app name that is not
-letters, digits, `_` or `-` (64 at most) is left out, since it names files.
+describes nor left out, eight at a time; one it refuses to describe is left out of that read and
+asked about again the next time, and a namespace other than letters and digits is never sent. A
+game's id is `epic-<appName>`; an app name that is not letters, digits, `_` or `-` (64 at most) is
+left out, since it names files.
 
 ## Windows builds
 

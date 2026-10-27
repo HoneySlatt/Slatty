@@ -248,7 +248,7 @@ async fn install_epic(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     .await;
     match installed {
         Ok(_) => {
-            println!("Installed. Playing Epic games from Slatty comes in a later version.");
+            println!("Installed. `slatty launch {}` plays it.", args.game_id);
             Ok(())
         }
         Err(slatty_core::Error::Cancelled) => {
