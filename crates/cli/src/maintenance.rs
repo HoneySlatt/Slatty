@@ -178,19 +178,42 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
         println!("Automatic updates are {}", if on { "on" } else { "off" });
         return Ok(());
     }
-    let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
-    let tokens = account.tokens(&ctx.http).await?.clone();
+    // An Epic game's builds are asked of Epic, without any GOG account.
+    let epic = |id: &str| slatty_core::store::epic_app(id).is_some();
     let Some(game_id) = args.game_id else {
+        let gog = gog_tokens(ctx).await;
         for install in slatty_core::install::Install::list(&ctx.db)? {
-            match maintenance::check_update(
-                &ctx.db,
-                &ctx.dirs,
-                &ctx.http,
-                &tokens,
-                &install.game_id,
-            )
-            .await
-            {
+            let check = if epic(&install.game_id) {
+                slatty_core::epic::install::check_update(
+                    &ctx.db,
+                    &ctx.dirs,
+                    &ctx.http,
+                    &install.game_id,
+                )
+                .await
+            } else {
+                match &gog {
+                    Ok(tokens) => {
+                        maintenance::check_update(
+                            &ctx.db,
+                            &ctx.dirs,
+                            &ctx.http,
+                            tokens,
+                            &install.game_id,
+                        )
+                        .await
+                    }
+                    Err(e) => {
+                        println!(
+                            "{:>12}  {:<40} error: {e}",
+                            install.game_id,
+                            shown(&install.title)
+                        );
+                        continue;
+                    }
+                }
+            };
+            match check {
                 Ok(Some(u)) => println!(
                     "{:>12}  {:<40} {} -> {}{}",
                     install.game_id,
@@ -224,8 +247,21 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
         }
         return Ok(());
     };
+    let tokens = match epic(&game_id) {
+        true => None,
+        false => Some(gog_tokens(ctx).await?),
+    };
     if args.check {
-        match maintenance::check_update(&ctx.db, &ctx.dirs, &ctx.http, &tokens, &game_id).await? {
+        let check = match &tokens {
+            Some(tokens) => {
+                maintenance::check_update(&ctx.db, &ctx.dirs, &ctx.http, tokens, &game_id).await?
+            }
+            None => {
+                slatty_core::epic::install::check_update(&ctx.db, &ctx.dirs, &ctx.http, &game_id)
+                    .await?
+            }
+        };
+        match check {
             Some(u) => println!(
                 "Update available: {} -> {}",
                 u.installed_version, u.available_version
@@ -234,12 +270,18 @@ pub async fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
         }
         return Ok(());
     }
-    apply_change(ctx, &tokens, &game_id, Change::Update).await
+    apply_change(ctx, tokens.as_ref(), &game_id, Change::Update).await
 }
 
+async fn gog_tokens(ctx: &Ctx) -> Result<slatty_core::auth::Tokens> {
+    let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
+    Ok(account.tokens(&ctx.http).await?.clone())
+}
+
+/// Applies `change` to a GOG game with `tokens`; without them, updates an Epic game.
 async fn apply_change(
     ctx: &Ctx,
-    tokens: &slatty_core::auth::Tokens,
+    tokens: Option<&slatty_core::auth::Tokens>,
     game_id: &str,
     change: Change,
 ) -> Result<()> {
@@ -260,11 +302,21 @@ async fn apply_change(
             println!("  files {}/{}", p.files_done, p.files_total);
         }
     };
-    match maintenance::reconfigure(
-        &ctx.db, &ctx.dirs, &ctx.http, tokens, game_id, change, &progress, cancel,
-    )
-    .await
-    {
+    let result = match tokens {
+        Some(tokens) => {
+            maintenance::reconfigure(
+                &ctx.db, &ctx.dirs, &ctx.http, tokens, game_id, change, &progress, cancel,
+            )
+            .await
+        }
+        None => {
+            slatty_core::epic::install::update(
+                &ctx.db, &ctx.dirs, &ctx.http, game_id, &progress, cancel,
+            )
+            .await
+        }
+    };
+    match result {
         Ok(r) => {
             if r.resumed {
                 println!(
@@ -318,7 +370,13 @@ pub async fn content(ctx: &Ctx, args: ContentArgs) -> Result<()> {
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
     if let Some(language) = args.language {
-        return apply_change(ctx, &tokens, &args.game_id, Change::Language(language)).await;
+        return apply_change(
+            ctx,
+            Some(&tokens),
+            &args.game_id,
+            Change::Language(language),
+        )
+        .await;
     }
     if !args.add_dlc.is_empty() || !args.remove_dlc.is_empty() {
         let record = slatty_core::installer::InstallRecord::load(&ctx.dirs, &args.game_id)?
@@ -333,7 +391,7 @@ pub async fn content(ctx: &Ctx, args: ContentArgs) -> Result<()> {
                 dlcs.push(d);
             }
         }
-        return apply_change(ctx, &tokens, &args.game_id, Change::Dlcs(dlcs)).await;
+        return apply_change(ctx, Some(&tokens), &args.game_id, Change::Dlcs(dlcs)).await;
     }
     let plan =
         maintenance::content_options(&ctx.db, &ctx.dirs, &ctx.http, &tokens, &args.game_id).await?;

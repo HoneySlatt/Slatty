@@ -154,6 +154,23 @@ impl<S: ChunkSource> Download<'_, S> {
         Ok(bad.into_iter().map(|i| set.files[i].0.clone()).collect())
     }
 
+    /// Brings the files of a game in place to `set`: checks them all, then calls `begin` and writes
+    /// those missing or different. Nothing changes before `begin`; refused when the disk cannot
+    /// hold them. The files written.
+    pub async fn update_installed(
+        &self,
+        set: &BuildFiles,
+        dir: &Path,
+        begin: impl FnOnce() -> Result<()>,
+    ) -> Result<Vec<PathBuf>> {
+        self.check_space(set, dir)?;
+        let bad = self.bad_files(set, dir, false).await?;
+        begin()?;
+        self.write(set, &bad, dir).await?;
+        fsutil::sync_filesystem(dir)?;
+        Ok(bad.into_iter().map(|i| set.files[i].0.clone()).collect())
+    }
+
     fn check_space(&self, set: &BuildFiles, dir: &Path) -> Result<()> {
         let present: u64 = set
             .files

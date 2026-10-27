@@ -140,10 +140,10 @@ fn an_epic_game_installs_through_the_install_drawer() {
     ));
 }
 
-/// An installed Epic game is verified, repaired and uninstalled from Manage; neither updated yet
-/// nor offered GOG's offline installers.
+/// An installed Epic game is verified, repaired, updated and uninstalled from Manage; it is not
+/// offered GOG's offline installers.
 #[test]
-fn an_installed_epic_game_is_verified_and_uninstalled_from_manage() {
+fn an_installed_epic_game_is_verified_updated_and_uninstalled_from_manage() {
     use crate::maintenance::MaintenanceMsg;
     let mut app = epic_app();
     app.installs.insert("epic-Alpha".into(), epic_install());
@@ -151,13 +151,38 @@ fn an_installed_epic_game_is_verified_and_uninstalled_from_manage() {
     let mut ui = render(&app);
     assert!(ui.find("Uninstall…").is_ok());
     assert!(ui.find("Repair").is_ok());
-    assert!(ui.find("Check for update").is_err());
     assert!(ui.find("Download installers…").is_err());
     ui.click("Verify files").unwrap();
-    assert!(ui.into_messages().any(|m| matches!(
+    ui.click("Check for update").unwrap();
+    let messages: Vec<Message> = ui.into_messages().collect();
+    assert!(messages.iter().any(|m| matches!(
         m,
         Message::Maintenance(MaintenanceMsg::Check(id, false)) if id == "epic-Alpha"
     )));
+    assert!(messages.iter().any(|m| matches!(
+        m,
+        Message::Maintenance(MaintenanceMsg::CheckUpdate(id)) if id == "epic-Alpha"
+    )));
+}
+
+/// Signed in to Epic alone, an Epic game's update found is applied by itself.
+#[test]
+fn an_epic_games_update_is_applied_without_a_gog_account() {
+    use crate::updates::UpdatesMsg;
+    let mut app = epic_app();
+    app.account = None;
+    app.updates.on = true;
+    app.installs.insert("epic-Alpha".into(), epic_install());
+    let _ = app.update(Message::Updates(UpdatesMsg::Checked(vec![(
+        "epic-Alpha".into(),
+        Ok(Some(slatty_core::maintenance::UpdateCheck {
+            installed_version: "1.0-[FAKE]".into(),
+            available_version: "2.0-[FAKE]".into(),
+            available_build: "epic:2.0-[FAKE]".into(),
+        })),
+    )])));
+    assert_eq!(app.updates.current.as_deref(), Some("epic-Alpha"));
+    assert!(app.maintenance["epic-Alpha"].busy);
 }
 
 fn epic_install() -> slatty_core::install::Install {

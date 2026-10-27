@@ -424,8 +424,8 @@ of use. A game that keeps its own record can unlock a cleared achievement again 
 ### Updates
 
 With **Update games automatically** on (Settings → Installs, on until turned off), the window
-checks the games Slatty installed at start, at sign-in and every six hours, and updates
-those on their newest build one after the other, never while a game runs, an install or offline
+checks the games Slatty installed at start, at sign-in (to GOG or Epic) and every six hours, and
+updates those on their newest build one after the other, never while a game runs, an install or offline
 installers download, or saves sync. They wait in the Updates part of the Downloads tab; while a game updates, its page
 shows **Updating** instead of Play. With **Pause downloads while playing** on, an update being
 applied when a game starts pauses, and goes on once the game closes (at the next start if
@@ -576,8 +576,12 @@ Epic password; the session goes to the system keyring.
   build are chosen there; the newest Windows build Epic offers is installed, every file of it
   (language packs included), each checked against Epic's checksum. It waits in the Downloads tab,
   pauses and resumes as a GOG game does. **Manage** verifies its files against Epic's checksums,
-  repairs them and uninstalls it; updating it comes later. From the command line: `slatty install epic-<app name>` (see
+  repairs them and uninstalls it. From the command line: `slatty install epic-<app name>` (see
   [command-line.md](command-line.md#installing-games)).
+- **Updated like a GOG game**, to the newest build Epic offers, by itself with **Update games
+  automatically** or from Manage: only the files that changed are downloaded, those the new build
+  no longer has are deleted. Epic offers no older build to go back to. Its updates are looked for
+  while you are signed in to Epic, even signed out of GOG.
 - **Played like a GOG game**, through Proton, isolated when it is set so. Just before it starts,
   Slatty asks Epic for a sign-in code for it, good once and for five minutes, and gives it to the
   game with your account's name and id, as Epic's launcher does; a game that asks for an ownership

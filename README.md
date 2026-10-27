@@ -62,9 +62,8 @@ files by default.
 - Steam games, read from the Steam client's own files and played, installed and uninstalled
   through it. A game owned on both stores shows once. No GOG account needed for them.
 - Epic Games Store games, after signing in to Epic: shown in the library with their covers,
-  installed, played through Proton signed in to your Epic account, verified, repaired and
-  uninstalled. Updates and
-  Epic's cloud saves come later.
+  installed, played through Proton signed in to your Epic account, updated, verified, repaired
+  and uninstalled. Epic's cloud saves come later.
 - Games from no store, added by the program that starts them, or from an installer or archive.
 - Games of other consoles, from your own files, run in DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4,
   Kyty, Dolphin or Eden: a scan of their folders adds them.

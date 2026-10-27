@@ -57,15 +57,16 @@ impl App {
                 }
             }
             UpdatesMsg::Check => {
-                if !self.updates.on || self.updates.checking || self.account.is_none() {
+                if !self.updates.on || self.updates.checking || !self.signed_in_somewhere() {
                     return Task::none();
                 }
                 self.updates.checking = true;
+                let (gog, epic) = (self.account.is_some(), self.epic.account.is_some());
                 return self.account_task(Task::perform(
                     async move {
-                        let tokens = match tokens(&core).await {
-                            Ok(t) => t,
-                            Err(_) => return Vec::new(),
+                        let tokens = match gog {
+                            true => tokens(&core).await.ok(),
+                            false => None,
                         };
                         let ids = maintenance::auto_update_candidates(&core.db, &core.dirs)
                             .unwrap_or_default();
@@ -76,12 +77,24 @@ impl App {
                             {
                                 continue;
                             }
-                            let check = maintenance::check_update(
-                                &core.db, &core.dirs, &core.http, &tokens, &id,
-                            )
-                            .await
-                            .map_err(err);
-                            found.push((id, check));
+                            // Each store's games while signed in to it.
+                            let check = if slatty_core::store::epic_app(&id).is_some() {
+                                if !epic {
+                                    continue;
+                                }
+                                slatty_core::epic::install::check_update(
+                                    &core.db, &core.dirs, &core.http, &id,
+                                )
+                                .await
+                            } else if let Some(tokens) = &tokens {
+                                maintenance::check_update(
+                                    &core.db, &core.dirs, &core.http, tokens, &id,
+                                )
+                                .await
+                            } else {
+                                continue;
+                            };
+                            found.push((id, check.map_err(err)));
                         }
                         found
                     },
@@ -154,7 +167,7 @@ impl App {
             || self.auto_resume.is_some()
             || self.maintenance.values().any(|m| m.busy)
             || self.cloud.values().any(|c| c.busy);
-        if busy || self.account.is_none() {
+        if busy || !self.signed_in_somewhere() {
             return Task::none();
         }
         // Begun already, the game cannot start until it is finished: it goes on even if
@@ -193,6 +206,11 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Signed in to GOG or to Epic, whose games' updates are looked for.
+    fn signed_in_somewhere(&self) -> bool {
+        self.account.is_some() || self.epic.account.is_some()
     }
 
     /// An update ended, applied or not: the next one may start. Said by a notification, as any

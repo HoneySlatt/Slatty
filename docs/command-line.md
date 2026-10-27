@@ -132,7 +132,7 @@ Manual changes show on your public GOG profile. See [Achievements](user-guide.md
 
 | Command | What it does |
 |---|---|
-| `slatty update` | Checks every game Slatty installed |
+| `slatty update` | Checks every game Slatty installed. An Epic game's (`epic-<app name>`) are asked of Epic, without any GOG account |
 | `slatty update <id> --check` | Only says whether an update is available |
 | `slatty update <id>` | Applies it, or finishes an interrupted one |
 | `slatty update --automatic on\|off` | Automatic updates in the interface (on until turned off) |

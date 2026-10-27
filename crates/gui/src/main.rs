@@ -778,7 +778,9 @@ impl App {
         } else {
             Subscription::none()
         };
-        let update_checks = if self.updates.on && self.account.is_some() {
+        let update_checks = if self.updates.on
+            && (self.account.is_some() || self.epic.account.is_some())
+        {
             iced::time::every(updates::EVERY).map(|_| Message::Updates(updates::UpdatesMsg::Check))
         } else {
             Subscription::none()
@@ -981,7 +983,6 @@ impl App {
                 }
                 let avatar = self.fetch_avatar();
                 let resume = self.resume_interrupted();
-                let check = self.update_updates(updates::UpdatesMsg::Check);
                 // Read once the library shows: game folders and Steam libraries can sit on a
                 // network drive that takes seconds to wake up.
                 let ids = self.installs.keys().cloned().collect();
@@ -1008,6 +1009,8 @@ impl App {
                     }
                     _ => Task::done(Message::Epic(epic::EpicMsg::Refresh)),
                 };
+                // Once both accounts are known: each store's games are checked while signed in.
+                let check = self.update_updates(updates::UpdatesMsg::Check);
                 // Whether the keys are in the keyring, asked once the library shows: a locked
                 // keyring holds a read until its prompt is answered. Unanswered, as before, they
                 // stay unknown.

@@ -86,6 +86,13 @@ from the CDN the build service names now, as legendary's `install --repair` does
 (`LegendaryCore.prepare_download`: the old manifest, the newest build's base addresses); it assumes
 Epic still serves the chunks of the build installed.
 
+**Updates** ask the build service for the newest build (label `Live`, the only one Epic offers)
+and compare its `buildVersion` with the one installed. Updating reads the new manifest, checks
+every file in place against it, then writes those missing or different from its chunks and deletes
+the files of the old build it no longer lists; legendary instead compares the two manifests
+(`ManifestComparison`) and leaves unchanged files unread. The catalog is read again too, for the
+launch's ownership token and arguments.
+
 ## Launch
 
 | Use | Request | Source | Status |

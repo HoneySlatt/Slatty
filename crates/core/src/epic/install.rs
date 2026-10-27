@@ -3,7 +3,7 @@
 //! run through umu and Proton. The manifest and what launching needs are kept beside its install
 //! record.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use reqwest::Client;
@@ -21,6 +21,7 @@ use crate::installer::{
     self, DOWNLOADING, FAILED, InstallEvent, InstallJob, InstallRecord, RecordedFile, STAGED_MARK,
     partial_dir,
 };
+use crate::maintenance::{UpdateCheck, UpdateReport};
 use crate::paths::Dirs;
 use crate::runner::Runner;
 use crate::{fsutil, http, store};
@@ -137,6 +138,28 @@ pub struct EpicPlan {
 impl EpicPlan {
     pub fn build_id(&self) -> String {
         format!("epic:{}", self.build.build_version)
+    }
+
+    /// The install record of this build, installed in `target`.
+    fn record(&self, target: &Path) -> InstallRecord {
+        InstallRecord {
+            build_id: self.build_id(),
+            version: self.build.build_version.clone(),
+            language: String::new(),
+            path: Some(target.to_path_buf()),
+            dlcs: Vec::new(),
+            setup_build: None,
+            setup_failures: 0,
+            files: self
+                .files
+                .files
+                .iter()
+                .map(|(p, f)| RecordedFile {
+                    path: p.to_string_lossy().into_owned(),
+                    size: f.size(),
+                })
+                .collect(),
+        }
     }
 }
 
@@ -278,6 +301,22 @@ pub struct EpicInstall {
 }
 
 impl EpicInstall {
+    /// What is kept of `game` installed from `plan`.
+    fn of(game: &EpicGame, plan: &EpicPlan) -> EpicInstall {
+        EpicInstall {
+            app_name: game.app_name.clone(),
+            namespace: game.namespace.clone(),
+            catalog_item_id: game.catalog_item_id.clone(),
+            build_version: plan.build.build_version.clone(),
+            launch_exe: plan.manifest.launch_exe.clone(),
+            launch_command: plan.manifest.launch_command.clone(),
+            additional_args: plan.additional_args.clone(),
+            ownership_token: plan.ownership_token,
+            deployment_id: plan.build.deployment_id.clone(),
+            secrets: plan.build.secrets.clone(),
+        }
+    }
+
     fn folder(dirs: &Dirs) -> PathBuf {
         dirs.data.join("epic")
     }
@@ -457,38 +496,8 @@ async fn install_planned<S: ChunkSource>(
     }
     .await;
     let registered = result.and_then(|()| {
-        EpicInstall {
-            app_name: req.game.app_name.clone(),
-            namespace: req.game.namespace.clone(),
-            catalog_item_id: req.game.catalog_item_id.clone(),
-            build_version: plan.build.build_version.clone(),
-            launch_exe: plan.manifest.launch_exe.clone(),
-            launch_command: plan.manifest.launch_command.clone(),
-            additional_args: plan.additional_args.clone(),
-            ownership_token: plan.ownership_token,
-            deployment_id: plan.build.deployment_id.clone(),
-            secrets: plan.build.secrets.clone(),
-        }
-        .save(dirs, &plan.raw_manifest)?;
-        InstallRecord {
-            build_id: build_id.clone(),
-            version: plan.build.build_version.clone(),
-            language: String::new(),
-            path: Some(target.clone()),
-            dlcs: Vec::new(),
-            setup_build: None,
-            setup_failures: 0,
-            files: plan
-                .files
-                .files
-                .iter()
-                .map(|(p, f)| RecordedFile {
-                    path: p.to_string_lossy().into_owned(),
-                    size: f.size(),
-                })
-                .collect(),
-        }
-        .save(dirs, &game_id)?;
+        EpicInstall::of(&req.game, &plan).save(dirs, &plan.raw_manifest)?;
+        plan.record(&target).save(dirs, &game_id)?;
         let runner = Runner::Umu {
             proton: req.proton.clone(),
             prefix: dirs.data.join("prefixes").join(&game_id),
@@ -543,7 +552,13 @@ pub async fn check(
     cancel: CancellationToken,
 ) -> Result<installer::Checked> {
     let _busy = crate::lock::game(dirs, game_id)?;
-    let (install, kept) = installed(db, dirs, game_id)?;
+    let (install, _, kept) = installed(db, dirs, game_id)?;
+    // The manifest kept is still the old build's: repairing would bring its files back.
+    if crate::maintenance::update_pending(db, game_id)?.is_some() {
+        return Err(Error::Refused(
+            "an update is unfinished; run the update again first".into(),
+        ));
+    }
     // Never asked when only verifying, which downloads nothing.
     let mut base = String::new();
     if repair {
@@ -568,9 +583,9 @@ pub async fn check(
     check_files(dirs, &install, &kept, &source, repair, progress, cancel).await
 }
 
-/// An Epic game installed by Slatty, its folder there, and what was kept of it.
-fn installed(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, EpicInstall)> {
-    let (install, _) = crate::maintenance::installed_by_slatty(db, dirs, game_id)?;
+/// An Epic game installed by Slatty, its folder there, its install record and what was kept of it.
+fn installed(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, InstallRecord, EpicInstall)> {
+    let (install, record) = crate::maintenance::installed_by_slatty(db, dirs, game_id)?;
     crate::maintenance::folder_present(&install)?;
     let kept = EpicInstall::load(dirs, game_id)?.ok_or_else(|| {
         Error::NotFound(format!(
@@ -578,7 +593,159 @@ fn installed(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, EpicInstal
             install.title
         ))
     })?;
-    Ok((install, kept))
+    Ok((install, record, kept))
+}
+
+/// The newest build Epic offers for an installed game, when it is not the one installed.
+pub async fn check_update(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    game_id: &str,
+) -> Result<Option<UpdateCheck>> {
+    let (_, record) = crate::maintenance::installed_by_slatty(db, dirs, game_id)?;
+    let kept = EpicInstall::load(dirs, game_id)?
+        .ok_or_else(|| Error::NotFound(format!("the manifest of {game_id} was not kept")))?;
+    let tokens = super::auth::fresh(http, db, dirs).await?;
+    let source = Epic {
+        http,
+        token: &tokens.access_token,
+    };
+    let build = newest_build(
+        &source,
+        &kept.namespace,
+        &kept.catalog_item_id,
+        &kept.app_name,
+    )
+    .await?;
+    Ok(
+        (build.build_version != kept.build_version).then(|| UpdateCheck {
+            installed_version: record.version,
+            available_build: format!("epic:{}", build.build_version),
+            available_version: build.build_version,
+        }),
+    )
+}
+
+/// Brings an installed Epic game to the newest build Epic offers: the files missing or different
+/// are downloaded, those Slatty installed that the build no longer has are deleted, and nothing
+/// else in the folder is touched. Noted as an update just before the first file changes: one cut
+/// off from then on is finished, on Epic's newest build, before the game can start.
+pub async fn update(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    game_id: &str,
+    progress: &(dyn Fn(installer::Progress) + Send + Sync),
+    cancel: CancellationToken,
+) -> Result<UpdateReport> {
+    let _busy = crate::lock::game(dirs, game_id)?;
+    let (install, record, kept) = installed(db, dirs, game_id)?;
+    let tokens = super::auth::fresh(http, db, dirs).await?;
+    let game = EpicGame {
+        app_name: kept.app_name.clone(),
+        namespace: kept.namespace.clone(),
+        catalog_item_id: kept.catalog_item_id.clone(),
+        title: install.title.clone(),
+        cover: None,
+        background: None,
+        logo: None,
+        os: Vec::new(),
+    };
+    let plan = plan(http, &tokens, &game).await?;
+    let source = EpicCdn {
+        http: http.clone(),
+        base: https(&plan.base_url)?,
+    };
+    update_planned(
+        db, dirs, &source, &install, &record, &game, plan, progress, cancel,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn update_planned<S: ChunkSource>(
+    db: &Db,
+    dirs: &Dirs,
+    source: &S,
+    install: &Install,
+    record: &InstallRecord,
+    game: &EpicGame,
+    plan: EpicPlan,
+    progress: &(dyn Fn(installer::Progress) + Send + Sync),
+    cancel: CancellationToken,
+) -> Result<UpdateReport> {
+    let game_id = &install.game_id;
+    let pending = InstallJob::load(db, game_id)?.filter(InstallJob::is_update);
+    if pending.is_none() && plan.build_id() == record.build_id {
+        return Err(Error::Refused(format!(
+            "{} is already up to date",
+            install.title
+        )));
+    }
+    let job = InstallJob {
+        game_id: game_id.clone(),
+        build_id: plan.build_id(),
+        language: String::new(),
+        root: install
+            .path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default(),
+        directory: install
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        state: crate::maintenance::UPDATING.into(),
+        dlcs: Vec::new(),
+        proton: None,
+    };
+    // Windows sees differently cased paths as one file.
+    let kept: HashSet<String> = plan
+        .files
+        .files
+        .iter()
+        .map(|(p, _)| p.to_string_lossy().to_lowercase())
+        .collect();
+    let mut removed = Vec::new();
+    let applied = Download {
+        source,
+        manifest: &plan.manifest,
+        secrets: &plan.build.secrets,
+        cancel,
+        progress,
+        free_space: &installer::free_space,
+    }
+    .update_installed(&plan.files, &install.path, || {
+        job.save(db)?;
+        removed = crate::maintenance::remove_obsolete(record, &install.path, |rel| {
+            kept.contains(&rel.to_string_lossy().to_lowercase())
+        })?;
+        Ok(())
+    })
+    .await;
+    let downloaded = match applied {
+        Err(Error::Cancelled) => {
+            if let Some(mut job) = InstallJob::load(db, game_id)? {
+                job.state = crate::maintenance::UPDATE_PAUSED.into();
+                job.save(db)?;
+            }
+            return Err(Error::Cancelled);
+        }
+        other => other?,
+    };
+    EpicInstall::of(game, &plan).save(dirs, &plan.raw_manifest)?;
+    plan.record(&install.path).save(dirs, game_id)?;
+    InstallJob::delete(db, game_id)?;
+    Ok(UpdateReport {
+        from_version: record.version.clone(),
+        to_version: plan.build.build_version.clone(),
+        downloaded,
+        removed,
+        resumed: pending.is_some(),
+        ..Default::default()
+    })
 }
 
 async fn check_files<S: ChunkSource>(
@@ -627,7 +794,14 @@ mod tests {
             ("Data/a.pak", content(2, 2500)),
             ("Data/b.pak", content(3, 1000)),
         ];
-        let (manifest, cdn) = build(&files, chunk);
+        let (plan, cdn) = plan_of(&files, chunk, "1.0-[FAKE]");
+        (plan, cdn, files)
+    }
+
+    /// A build of version `version` made of `files`, and the CDN serving its chunks.
+    fn plan_of(files: &[(&str, Vec<u8>)], chunk: usize, version: &str) -> (EpicPlan, FakeCdn) {
+        let (mut manifest, cdn) = build(files, chunk);
+        manifest.build_version = version.into();
         let set = BuildFiles::of(&manifest).unwrap();
         let plan = EpicPlan {
             game_id: "epic-Fake".into(),
@@ -649,7 +823,7 @@ mod tests {
             additional_args: String::new(),
             base_url: String::new(),
         };
-        (plan, cdn, files)
+        (plan, cdn)
     }
 
     fn request(root: &Path) -> EpicInstallRequest {
@@ -787,6 +961,178 @@ mod tests {
                 .all(|p| !asked.contains(&manifest.chunks[&p.guid].path(18)))
         );
         assert!(check(false).await.unwrap().bad.is_empty());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Installs the first build of `fake_plan` in a folder of its own.
+    async fn installed_v1(root: &Path, db: &Db, dirs: &Dirs) -> Install {
+        let (plan, cdn, _) = fake_plan(500);
+        let req = request(root);
+        install_planned(
+            db,
+            dirs,
+            &cdn,
+            plan,
+            None,
+            req.root.clone(),
+            req,
+            |_| {},
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap()
+    }
+
+    /// The second build: Game.exe the same, a.pak changed, b.pak gone, c.pak new.
+    fn v2() -> Vec<(&'static str, Vec<u8>)> {
+        vec![
+            ("Game.exe", content(1, 3000)),
+            ("Data/a.pak", content(9, 2500)),
+            ("Data/c.pak", content(4, 500)),
+        ]
+    }
+
+    async fn update_to(
+        db: &Db,
+        dirs: &Dirs,
+        cdn: &FakeCdn,
+        plan: EpicPlan,
+        cancel: CancellationToken,
+    ) -> Result<UpdateReport> {
+        let install = Install::get(db, "epic-Fake").unwrap().unwrap();
+        let record = InstallRecord::load(dirs, "epic-Fake").unwrap().unwrap();
+        let game = request(Path::new("/unused")).game;
+        update_planned(
+            db,
+            dirs,
+            cdn,
+            &install,
+            &record,
+            &game,
+            plan,
+            &|_| {},
+            cancel,
+        )
+        .await
+    }
+
+    /// An update writes the files that changed and the new ones, downloading only their chunks;
+    /// deletes those the build no longer has but leaves the player's own; and keeps the new
+    /// build's manifest. Up to date, it is refused.
+    #[tokio::test]
+    async fn an_epic_update_changes_only_what_changed() {
+        let root = root("update");
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        let install = installed_v1(&root, &db, &dirs).await;
+        std::fs::write(install.path.join("Data/mine.sav"), b"[FAKE] save").unwrap();
+        let files = v2();
+        let (plan, cdn) = plan_of(&files, 500, "2.0-[FAKE]");
+
+        let report = update_to(&db, &dirs, &cdn, plan, CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(
+            report.downloaded,
+            [PathBuf::from("Data/a.pak"), PathBuf::from("Data/c.pak")]
+        );
+        assert_eq!(report.removed, [PathBuf::from("Data/b.pak")]);
+        assert_eq!(
+            (report.from_version.as_str(), report.to_version.as_str()),
+            ("1.0-[FAKE]", "2.0-[FAKE]")
+        );
+        assert!(!report.resumed);
+        assert_eq!(cdn.asked.lock().unwrap().len(), 6, "a.pak's 5, c.pak's 1");
+        for (name, data) in &files {
+            assert_eq!(&std::fs::read(install.path.join(name)).unwrap(), data);
+        }
+        assert!(!install.path.join("Data/b.pak").exists());
+        assert!(install.path.join("Data/mine.sav").exists(), "not Slatty's");
+        let record = InstallRecord::load(&dirs, "epic-Fake").unwrap().unwrap();
+        assert_eq!(record.build_id, "epic:2.0-[FAKE]");
+        assert_eq!(record.files.len(), 3);
+        let kept = EpicInstall::load(&dirs, "epic-Fake").unwrap().unwrap();
+        assert_eq!(kept.build_version, "2.0-[FAKE]");
+        assert_eq!(kept.manifest(&dirs).unwrap().build_version, "2.0-[FAKE]");
+        assert!(InstallJob::load(&db, "epic-Fake").unwrap().is_none());
+
+        let (plan, cdn) = plan_of(&files, 500, "2.0-[FAKE]");
+        let e = update_to(&db, &dirs, &cdn, plan, CancellationToken::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(e, Error::Refused(_)), "{e}");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Paused before any file changed, the game stays as it was. Cut off once files changed, the
+    /// update must be finished before the game starts, Verify refuses meanwhile (the manifest kept
+    /// is the old build's), and asked again it finishes.
+    #[tokio::test]
+    async fn an_interrupted_epic_update_is_finished_first() {
+        let root = root("update-cut");
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        installed_v1(&root, &db, &dirs).await;
+        let files = v2();
+
+        let (plan, cdn) = plan_of(&files, 500, "2.0-[FAKE]");
+        let cancelled = CancellationToken::new();
+        cancelled.cancel();
+        let e = update_to(&db, &dirs, &cdn, plan, cancelled)
+            .await
+            .unwrap_err();
+        assert!(matches!(e, Error::Cancelled));
+        assert_eq!(
+            crate::maintenance::update_pending(&db, "epic-Fake").unwrap(),
+            None,
+            "still playable"
+        );
+
+        let (plan, cdn) = plan_of(&files, 500, "2.0-[FAKE]");
+        // c.pak, written after a.pak, cannot be downloaded.
+        let c = plan
+            .manifest
+            .files
+            .iter()
+            .find(|f| f.name == "Data/c.pak")
+            .unwrap();
+        let broken = plan.manifest.chunks[&c.parts[0].guid].path(18);
+        cdn.broken.lock().unwrap().insert(broken);
+        assert!(
+            update_to(&db, &dirs, &cdn, plan, CancellationToken::new())
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            crate::maintenance::update_pending(&db, "epic-Fake")
+                .unwrap()
+                .as_deref(),
+            Some("epic:2.0-[FAKE]")
+        );
+        let e = check(
+            &db,
+            &dirs,
+            &Client::new(),
+            "epic-Fake",
+            true,
+            &|_| {},
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(e, Error::Refused(_)), "{e}");
+
+        cdn.broken.lock().unwrap().clear();
+        let (plan, _) = plan_of(&files, 500, "2.0-[FAKE]");
+        let report = update_to(&db, &dirs, &cdn, plan, CancellationToken::new())
+            .await
+            .unwrap();
+        assert!(report.resumed);
+        assert_eq!(report.downloaded, [PathBuf::from("Data/c.pak")]);
+        assert_eq!(
+            crate::maintenance::update_pending(&db, "epic-Fake").unwrap(),
+            None
+        );
         std::fs::remove_dir_all(&root).unwrap();
     }
 

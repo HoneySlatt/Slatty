@@ -401,10 +401,8 @@ pub fn auto_update_candidates(db: &Db, dirs: &Dirs) -> Result<Vec<String>> {
     }
     let mut ids = Vec::new();
     for install in Install::list(db)? {
-        // A record that cannot be read leaves that game out; its update would fail anyway. An
-        // Epic game's new builds are not looked for yet.
+        // A record that cannot be read leaves that game out; its update would fail anyway.
         if matches!(InstallRecord::load(dirs, &install.game_id), Ok(Some(_)))
-            && crate::store::epic_app(&install.game_id).is_none()
             && !crate::settings::held_back(db, &install.game_id)?
         {
             ids.push(install.game_id);
@@ -770,7 +768,7 @@ fn once(begin: &(dyn Fn() -> Result<()> + Sync)) -> impl Fn() -> Result<()> + Sy
 
 /// Deletes the files slatty installed before that the game no longer has, and the folders they
 /// leave empty.
-fn remove_obsolete(
+pub(crate) fn remove_obsolete(
     old: &InstallRecord,
     dir: &Path,
     kept: impl Fn(&Path) -> bool,
@@ -1184,7 +1182,7 @@ mod tests {
         .save(&env.db)
         .unwrap();
         std::fs::write(InstallRecord::file(&env.dirs, "3"), b"{").unwrap();
-        // GOG is never asked about an Epic game.
+        // An Epic game's are looked for at Epic (`epic::install::check_update`).
         Install {
             game_id: "epic-Fake".into(),
             ..Install::get(&env.db, "1").unwrap().unwrap()
@@ -1196,12 +1194,13 @@ mod tests {
             .unwrap()
             .save(&env.dirs, "epic-Fake")
             .unwrap();
-        assert_eq!(auto_update_candidates(&env.db, &env.dirs).unwrap(), ["1"]);
+        let mut ids = auto_update_candidates(&env.db, &env.dirs).unwrap();
+        ids.sort();
+        assert_eq!(ids, ["1", "epic-Fake"]);
         crate::settings::set_held_back(&env.db, "1", true).unwrap();
-        assert!(
-            auto_update_candidates(&env.db, &env.dirs)
-                .unwrap()
-                .is_empty()
+        assert_eq!(
+            auto_update_candidates(&env.db, &env.dirs).unwrap(),
+            ["epic-Fake"]
         );
         crate::settings::set_held_back(&env.db, "1", false).unwrap();
         crate::settings::set_auto_update(&env.db, false).unwrap();

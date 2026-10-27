@@ -91,7 +91,9 @@ impl App {
                     };
                 }
                 self.epic.name = Some(name);
-                return self.update_epic(EpicMsg::Refresh);
+                // Its installed games' updates are looked for, as at sign-in to GOG.
+                let updates = self.update_updates(crate::updates::UpdatesMsg::Check);
+                return Task::batch([self.update_epic(EpicMsg::Refresh), updates]);
             }
             EpicMsg::SignedIn(Err(e)) => {
                 self.epic.signing_in = false;

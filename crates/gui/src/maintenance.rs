@@ -288,21 +288,31 @@ impl App {
                 let id = game_id.clone();
                 return Task::perform(
                     async move {
-                        let tokens = tokens(&core).await?;
                         if slatty_core::maintenance::update_pending(&core.db, &id)
                             .map_err(err)?
                             .is_some()
                         {
                             return Ok(Some("an unfinished update".to_string()));
                         }
-                        slatty_core::maintenance::check_update(
-                            &core.db, &core.dirs, &core.http, &tokens, &id,
-                        )
-                        .await
-                        .map(|u| {
-                            u.map(|u| format!("{} → {}", u.installed_version, u.available_version))
-                        })
-                        .map_err(err)
+                        let check = if slatty_core::store::epic_app(&id).is_some() {
+                            slatty_core::epic::install::check_update(
+                                &core.db, &core.dirs, &core.http, &id,
+                            )
+                            .await
+                        } else {
+                            let tokens = tokens(&core).await?;
+                            slatty_core::maintenance::check_update(
+                                &core.db, &core.dirs, &core.http, &tokens, &id,
+                            )
+                            .await
+                        };
+                        check
+                            .map(|u| {
+                                u.map(|u| {
+                                    format!("{} → {}", u.installed_version, u.available_version)
+                                })
+                            })
+                            .map_err(err)
                     },
                     move |r| Message::Maintenance(MaintenanceMsg::UpdateChecked(game_id, r)),
                 );
@@ -340,6 +350,21 @@ impl App {
                     progress_stream(
                         async move |throttle| {
                             let result = async {
+                                // Epic offers its newest build alone: updating is all that is
+                                // asked of it.
+                                if slatty_core::store::epic_app(&game_id).is_some() {
+                                    return slatty_core::epic::install::update(
+                                        &core.db,
+                                        &core.dirs,
+                                        &core.http,
+                                        &game_id,
+                                        &|p| throttle.report(p),
+                                        cancel,
+                                    )
+                                    .await
+                                    .map(|r| update_summary(&r))
+                                    .map_err(paused_or);
+                                }
                                 let tokens = tokens(&core).await.map_err(Some)?;
                                 slatty_core::maintenance::reconfigure(
                                     &core.db,

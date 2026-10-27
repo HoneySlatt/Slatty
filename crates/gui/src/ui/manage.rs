@@ -79,12 +79,10 @@ impl App {
         }
         let updates =
             column![updates, note("Only the files that changed are downloaded.")].spacing(10);
-        let mut sections = vec![titled(Icon::FileCheck, "Files", files.into(), 0.0)];
-        sections.push(if epic {
-            note("Updating Epic games comes in a later version.")
-        } else {
-            titled(Icon::RefreshCw, "Updates", updates.into(), 0.0)
-        });
+        let mut sections = vec![
+            titled(Icon::FileCheck, "Files", files.into(), 0.0),
+            titled(Icon::RefreshCw, "Updates", updates.into(), 0.0),
+        ];
         // What the last action found, and the progress of the running one.
         if let Some(v) = view.filter(|v| !v.lines.is_empty() || v.progress.is_some()) {
             sections.push(
