@@ -13,8 +13,32 @@ use serde_json::{Value, json};
 
 use crate::achievements::Achievement;
 use crate::error::{Error, Result};
-use crate::http;
+use crate::paths::Dirs;
 use crate::secret::Secret;
+use crate::{fsutil, http};
+
+/// Unlocked and total achievements of the account's games as last read, by game id; none for a
+/// game without any.
+pub type Counts = HashMap<String, Option<(usize, usize)>>;
+
+fn counts_file(dirs: &Dirs, account_id: &str) -> Result<std::path::PathBuf> {
+    Ok(super::library::cache_folder(dirs, account_id)?.join("achievements.json"))
+}
+
+/// The counts kept for the account; none before any was read.
+pub fn load_counts(dirs: &Dirs, account_id: &str) -> Result<Counts> {
+    let path = counts_file(dirs, account_id)?;
+    match std::fs::read(&path) {
+        Ok(raw) => serde_json::from_slice(&raw).map_err(|e| Error::parse("Epic's achievements", e)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Counts::new()),
+        Err(e) => Err(Error::io(format!("read {}", path.display()), e)),
+    }
+}
+
+pub fn save_counts(dirs: &Dirs, account_id: &str, counts: &Counts) -> Result<()> {
+    let json = serde_json::to_vec(counts).map_err(|e| Error::parse("Epic's achievements", e))?;
+    fsutil::write_atomic(&counts_file(dirs, account_id)?, &json)
+}
 
 /// Where the launcher's store sends its queries; the second answers when the first does not.
 const ENDPOINTS: [&str; 2] = [

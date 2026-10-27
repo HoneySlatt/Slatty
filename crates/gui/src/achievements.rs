@@ -41,11 +41,35 @@ impl App {
                 .flatten();
             return crate::steam::load_achievements(game_id, self.steam.images, account, web);
         }
-        // A game added by hand or emulated has none, and GOG is not told of it, nor of an Epic
-        // game, whose achievements are not read yet.
-        if slatty_core::store::from_no_store(&game_id)
-            || slatty_core::store::epic_app(&game_id).is_some()
-        {
+        // An Epic game's are Epic's, read while signed in to it, without any GOG account.
+        if slatty_core::store::epic_app(&game_id).is_some() {
+            let (Some(core), Some(game)) = (self.core.clone(), self.epic_game(&game_id)) else {
+                return Task::none();
+            };
+            if self.epic.account.is_none() {
+                return Task::none();
+            }
+            self.achievements.insert(game_id.clone(), Loadable::Loading);
+            return Task::perform(
+                async move {
+                    use slatty_core::epic::{achievements, auth, launch};
+                    let tokens = auth::fresh(&core.http, &core.db, &core.dirs)
+                        .await
+                        .map_err(err)?;
+                    let graphql = achievements::EpicGraphql {
+                        http: &core.http,
+                        token: &tokens.access_token,
+                    };
+                    let locale = launch::system_locale();
+                    achievements::fetch(&graphql, &tokens.account_id, &game.namespace, &locale)
+                        .await
+                        .map_err(err)
+                },
+                move |r| Message::Achievements(game_id, r),
+            );
+        }
+        // A game added by hand or emulated has none, and GOG is not told of it.
+        if slatty_core::store::from_no_store(&game_id) {
             return Task::none();
         }
         let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
@@ -177,8 +201,17 @@ impl App {
     }
 
     /// Keeps the cached overview in step with a freshly read achievement list; a Steam game's
-    /// counts are kept apart from GOG's.
+    /// counts, and an Epic game's, are kept apart from GOG's.
     pub fn achievements_loaded(&mut self, game_id: &str, list: &[Achievement]) {
+        if slatty_core::store::epic_app(game_id).is_some() {
+            let counts = overview::counts(list);
+            let kept = self.epic.achievements.get_or_insert_default();
+            if kept.get(game_id) != Some(&counts) {
+                kept.insert(game_id.to_string(), counts);
+                self.save_epic_counts();
+            }
+            return;
+        }
         if self.steam_game(game_id).is_some() {
             match overview::counts(list) {
                 Some(counts) => self.steam.achievements.insert(game_id.to_string(), counts),

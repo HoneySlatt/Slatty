@@ -1173,7 +1173,12 @@ impl App {
             Message::Image(url, None) => {
                 self.images_requested.remove(&url);
             }
-            Message::ScanOverview => return self.scan_overview(true),
+            Message::ScanOverview => {
+                return Task::batch([
+                    self.scan_overview(true),
+                    self.update_epic(epic::EpicMsg::Recount),
+                ]);
+            }
             Message::OverviewFetched(id, result) => self.overview_fetched(id, result),
             Message::OverviewDone => self.overview_done(),
             Message::PlaytimesFetched(times) => self.playtimes_fetched(times),

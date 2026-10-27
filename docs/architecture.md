@@ -624,7 +624,11 @@ Epic's newest build as `maintenance::reconfigure` does a GOG game's: an `updatin
 before the first file changes, the files Slatty installed that the build no longer has deleted
 (`maintenance::remove_obsolete`), those that differ written. The front ends call these for an Epic
 id in place of `maintenance::check`, `check_update` and `reconfigure`, which need a GOG session;
-automatic updates check each store's games while signed in to it.
+automatic updates check each store's games while signed in to it. Their achievements come from
+`epic::achievements`: a game's page loads them in `App::load_achievements`; the Achievements tab
+counts them from `EpicView::achievements`, read from the account's cache once its library shows,
+then from Epic for the games missing (`EpicMsg::Counted`), four at a time, and kept apart from
+GOG's overview.
 
 Their cloud saves go through the same sync (`cloud::sync`): `epic::cloud::EpicCloud` lists the
 files of the newest snapshot with their SHA-1, reads a file back from its chunks, and keeps the

@@ -590,6 +590,10 @@ Epic password; the session goes to the system keyring.
   leaves the older ones there (see [cloud-saves.md](cloud-saves.md#epic-games)). A game whose saves
   Epic's catalog names no folder for has none here; many recent games keep theirs through Epic's
   online services themselves, once signed in.
+- **Achievements as Epic records them**: the game unlocks them itself, through Epic's online
+  services, once signed in for the launch. Its page shows them, and the Achievements tab counts
+  them: read from Epic for the games not counted yet once the library is read, and for all on
+  **Refresh**; kept in `~/.cache/slatty/epic/`. They cannot be unlocked or cleared by hand.
 - **Played like a GOG game**, through Proton, isolated when it is set so. Just before it starts,
   Slatty asks Epic for a sign-in code for it, good once and for five minutes, and gives it to the
   game with your account's name and id, as Epic's launcher does; a game that asks for an ownership

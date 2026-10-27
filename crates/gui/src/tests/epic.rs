@@ -271,6 +271,75 @@ fn an_epic_games_cloud_saves_are_checked_with_epic() {
     assert!(!app.cloud.contains_key("epic-Alpha"), "signed out of Epic");
 }
 
+/// An Epic game's page reads its achievements from Epic, signed in to Epic alone; they show in
+/// its Achievements card, count apart from GOG's, and are never changed by hand.
+#[test]
+fn an_epic_games_achievements_show_on_its_page() {
+    let mut app = epic_app();
+    app.account = None;
+    app.manual_achievements = true;
+    let _ = app.update(Message::Select("epic-Alpha".into()));
+    let _ = app.update(Message::LoadAchievements("epic-Alpha".into()));
+    assert!(matches!(
+        app.achievements.get("epic-Alpha"),
+        Some(crate::Loadable::Loading)
+    ));
+    let list = vec![
+        fake_achievement("first", true),
+        fake_achievement("second", false),
+    ];
+    let _ = app.update(Message::Achievements("epic-Alpha".into(), Ok(list)));
+    assert_eq!(app.achievement_counts("epic-Alpha"), Some((1, 2)));
+    assert!(!app.overview.contains_key("epic-Alpha"), "not GOG's");
+    assert!(!app.manual_changes("epic-Alpha"));
+    assert!(render(&app).find("1 / 2").is_ok());
+}
+
+/// The Achievements tab counts Epic's games: those kept in the cache at once, the others then
+/// read from Epic, never another account's; Refresh asks Epic again, signed in to it alone.
+#[test]
+fn epic_games_are_counted_in_the_achievements_tab() {
+    use crate::epic::EpicMsg;
+    let mut app = epic_app();
+    app.account = None;
+    let kept =
+        slatty_core::epic::achievements::Counts::from([("epic-Alpha".to_string(), Some((3, 10)))]);
+    let _ = app.update(Message::Epic(EpicMsg::CountsRead(ACCOUNT.into(), kept)));
+    assert_eq!(app.achievement_counts("epic-Alpha"), Some((3, 10)));
+    assert!(app.epic.counting, "Beta read from Epic");
+    let _ = app.update(Message::Epic(EpicMsg::Counted(
+        "fedcba9876543210fedcba9876543210".into(),
+        "epic-Beta".into(),
+        Ok(Some((9, 9))),
+    )));
+    assert_eq!(
+        app.achievement_counts("epic-Beta"),
+        None,
+        "another account's"
+    );
+    let _ = app.update(Message::Epic(EpicMsg::Counted(
+        ACCOUNT.into(),
+        "epic-Beta".into(),
+        Ok(Some((1, 4))),
+    )));
+    let _ = app.update(Message::Epic(EpicMsg::CountingDone(ACCOUNT.into())));
+    assert!(!app.epic.counting);
+
+    // Epic's games alone: GOG's would be told as not read from GOG.
+    app.library.retain(|g| g.id.starts_with("epic-"));
+    app.lists.clear();
+    app.page = Page::Achievements;
+    let mut ui = render(&app);
+    assert!(ui.find("4 / 14 unlocked · 2 games · 0 completed").is_ok());
+    ui.click("Refresh").unwrap();
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::ScanOverview))
+    );
+    let _ = app.update(Message::ScanOverview);
+    assert!(app.epic.counting, "every game read again");
+}
+
 /// An installed Epic game's settings, from its page: its Proton, controller and isolation, and
 /// nothing of GOG's, which is not asked for its languages and DLC.
 #[test]

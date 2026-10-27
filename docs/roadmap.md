@@ -70,7 +70,7 @@ There are no dates. What has been checked against real services, and what not ye
   Windows build installed from the window or the command line, each file checked against Epic's
   checksum, played through Proton signed in to the account, its Proton build and isolation changed
   in Game settings, verified, repaired, updated and uninstalled, its cloud saves synced by Slatty's
-  rules, a snapshot sent to Epic and read back.
+  rules, a snapshot sent to Epic and read back; its achievements shown as Epic records them.
 
 **Privacy, security and packaging**
 - Switches for every third party, off until turned on; private data folders; no write through a
@@ -79,7 +79,6 @@ There are no dates. What has been checked against real services, and what not ye
 
 ## Planned
 
-- **Epic's achievements**, for the games that do not report their own.
 - **Translations** of the interface, in English for now.
 - **Steam downloads** followed more exactly while the client downloads.
 - **Packaging** for other distributions.

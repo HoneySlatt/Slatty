@@ -719,18 +719,30 @@ impl App {
         here.max(self.steam_twin(game_id).and_then(on_steam))
     }
 
-    /// Unlocked and total achievements of a game: GOG's, or Steam's for a Steam game.
+    /// Unlocked and total achievements of a game: GOG's, Steam's for a Steam game, Epic's for an
+    /// Epic game.
     pub fn achievement_counts(&self, game_id: &str) -> Option<(usize, usize)> {
         if store::steam_app(game_id).is_some() {
             return self.steam.achievements.get(game_id).copied();
         }
+        if store::epic_app(game_id).is_some() {
+            return self
+                .epic
+                .achievements
+                .as_ref()?
+                .get(game_id)
+                .copied()
+                .flatten();
+        }
         self.overview.get(game_id)?.achievements
     }
 
-    /// Whether a game's achievements can be unlocked or cleared by hand: once turned on, and never
-    /// a Steam game's.
+    /// Whether a game's achievements can be unlocked or cleared by hand: once turned on, and only
+    /// GOG's (an Epic game unlocks its own, Steam keeps a Steam game's).
     pub fn manual_changes(&self, game_id: &str) -> bool {
-        self.manual_achievements && store::steam_app(game_id).is_none()
+        self.manual_achievements
+            && store::steam_app(game_id).is_none()
+            && store::epic_app(game_id).is_none()
     }
 
     /// Puts in what Steam's manifests now say of these games (none: removed), and tells of the

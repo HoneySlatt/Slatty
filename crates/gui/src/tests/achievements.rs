@@ -192,7 +192,7 @@ fn an_empty_achievements_tab_says_why() {
     app.overview_busy = false;
     let mut ui = render(&app);
     assert!(
-        ui.find("No game with achievements found. Refresh to ask GOG again.")
+        ui.find("No game with achievements found. Refresh to ask again.")
             .is_ok()
     );
     snapshot(&mut ui, "achievements-empty");

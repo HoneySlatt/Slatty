@@ -312,7 +312,7 @@ pub fn library_game(game: &EpicGame) -> LibraryGame {
 }
 
 /// The account's folder in the cache: its library, its covers.
-fn cache_folder(dirs: &Dirs, account_id: &str) -> Result<PathBuf> {
+pub(crate) fn cache_folder(dirs: &Dirs, account_id: &str) -> Result<PathBuf> {
     super::auth::check_account_id(account_id)?;
     Ok(dirs.cache.join("epic").join(account_id))
 }

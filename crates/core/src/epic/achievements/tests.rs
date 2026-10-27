@@ -99,6 +99,23 @@ async fn a_game_without_achievements_has_none() {
     assert_eq!(*fake.asked.lock().unwrap(), [DEFINITIONS]);
 }
 
+/// The counts kept for an account are read back as written; none before any was kept.
+#[test]
+fn counts_are_kept_per_account() {
+    let root = std::env::temp_dir().join(format!("slatty-epic-counts-{}", std::process::id()));
+    let dirs = Dirs::under(&root);
+    let account = "0123456789abcdef0123456789abcdef";
+    assert!(load_counts(&dirs, account).unwrap().is_empty());
+    let counts = Counts::from([
+        ("epic-FakeA".to_string(), Some((3, 10))),
+        ("epic-FakeB".to_string(), None),
+    ]);
+    save_counts(&dirs, account, &counts).unwrap();
+    assert_eq!(load_counts(&dirs, account).unwrap(), counts);
+    assert!(load_counts(&dirs, "../escape").is_err());
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
 /// A query Epic refuses says why: its messages make the error.
 #[test]
 fn epics_reasons_for_refusing_a_query_are_kept() {

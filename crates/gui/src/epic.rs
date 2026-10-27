@@ -1,7 +1,7 @@
 //! Epic Games Store games in the library, beside GOG's: the account signed in from Settings →
-//! Account, its library read from Epic's services at start and on demand, kept in a cache. They
-//! install through the same drawer and queue as GOG's (`install`); they cannot be played from
-//! Slatty yet.
+//! Account, its library read from Epic's services at start and on demand, kept in a cache, with
+//! how many achievements of each game the account unlocked. They install through the same drawer
+//! and queue as GOG's (`install`) and play as GOG's do.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -27,6 +27,11 @@ pub struct EpicView {
     pub input: String,
     pub signing_in: bool,
     pub reading: bool,
+    /// Unlocked and total achievements of its games, from the cache then from Epic; none until
+    /// the cache was read.
+    pub achievements: Option<slatty_core::epic::achievements::Counts>,
+    /// Their achievements are being read from Epic.
+    pub counting: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +49,13 @@ pub enum EpicMsg {
     Read(String, Result<EpicLibrary, String>),
     /// A cover in the cache.
     Cover(String, Option<PathBuf>),
+    /// The achievement counts kept for the account of that id.
+    CountsRead(String, slatty_core::epic::achievements::Counts),
+    /// Reads every game's achievements again from Epic (Refresh in the Achievements tab).
+    Recount,
+    /// A game's counts read from Epic for that account.
+    Counted(String, String, Result<Option<(usize, usize)>, String>),
+    CountingDone(String),
 }
 
 impl App {
@@ -159,8 +171,124 @@ impl App {
                 return self.scale_covers(Some(vec![id]));
             }
             EpicMsg::Cover(..) => {}
+            EpicMsg::CountsRead(account, _) | EpicMsg::CountingDone(account)
+                if self.epic.account.as_ref() != Some(&account) => {}
+            EpicMsg::CountsRead(_, kept) => {
+                // Read from Epic meanwhile: newer than the cache.
+                let mut counts = kept;
+                counts.extend(self.epic.achievements.take().unwrap_or_default());
+                self.epic.achievements = Some(counts);
+                return self.count_epic_achievements(false);
+            }
+            EpicMsg::Recount => return self.count_epic_achievements(true),
+            EpicMsg::Counted(account, id, Ok(counts))
+                if self.epic.account.as_ref() == Some(&account) =>
+            {
+                self.epic
+                    .achievements
+                    .get_or_insert_default()
+                    .insert(id, counts);
+            }
+            // Left to read again at the next start or Refresh.
+            EpicMsg::Counted(..) => {}
+            EpicMsg::CountingDone(_) => {
+                self.epic.counting = false;
+                self.save_epic_counts();
+            }
         }
         Task::none()
+    }
+
+    /// Reads from Epic the achievement counts of its games not known yet, or, with `all`, of
+    /// every one, four at a time.
+    fn count_epic_achievements(&mut self, all: bool) -> Task<Message> {
+        let (Some(core), Some(account), Some(known)) = (
+            self.core.clone(),
+            self.epic.account.clone(),
+            self.epic.achievements.as_ref(),
+        ) else {
+            return Task::none();
+        };
+        let games: Vec<(String, String)> = self
+            .epic
+            .games
+            .iter()
+            .map(|g| (store::epic_id(&g.app_name), g.namespace.clone()))
+            .filter(|(id, _)| all || !known.contains_key(id))
+            .collect();
+        if games.is_empty() || std::mem::replace(&mut self.epic.counting, true) {
+            return Task::none();
+        }
+        let done = account.clone();
+        Task::run(
+            iced::stream::channel(16, async move |mut output| {
+                use iced::futures::{SinkExt, StreamExt};
+                use slatty_core::epic::achievements::{EpicGraphql, fetch};
+                if let Ok(tokens) = auth::fresh(&core.http, &core.db, &core.dirs).await {
+                    let graphql = EpicGraphql {
+                        http: &core.http,
+                        token: &tokens.access_token,
+                    };
+                    let locale = slatty_core::epic::launch::system_locale();
+                    let (graphql, tokens, locale) = (&graphql, &tokens, &locale);
+                    let mut counted = iced::futures::stream::iter(games)
+                        .map(|(id, namespace)| async move {
+                            let list = fetch(graphql, &tokens.account_id, &namespace, locale).await;
+                            (
+                                id,
+                                list.map(|l| slatty_core::overview::counts(&l)).map_err(err),
+                            )
+                        })
+                        .buffer_unordered(4);
+                    while let Some((id, counts)) = counted.next().await {
+                        let read = EpicMsg::Counted(account.clone(), id, counts);
+                        let _ = output.send(Message::Epic(read)).await;
+                    }
+                }
+                let _ = output
+                    .send(Message::Epic(EpicMsg::CountingDone(done)))
+                    .await;
+            }),
+            |m| m,
+        )
+    }
+
+    /// Keeps the counts read in the account's cache.
+    pub fn save_epic_counts(&mut self) {
+        let (Some(core), Some(account), Some(counts)) = (
+            &self.core,
+            &self.epic.account,
+            self.epic.achievements.as_ref(),
+        ) else {
+            return;
+        };
+        if let Err(e) = slatty_core::epic::achievements::save_counts(&core.dirs, account, counts) {
+            self.notify_error(e.to_string());
+        }
+    }
+
+    /// The counts kept for the account, read once off the interface thread; those not known
+    /// are then read from Epic.
+    fn epic_counts(&mut self) -> Task<Message> {
+        let (Some(core), Some(account)) = (self.core.clone(), self.epic.account.clone()) else {
+            return Task::none();
+        };
+        if self.epic.achievements.is_some() {
+            return self.count_epic_achievements(false);
+        }
+        Task::perform(
+            async move {
+                let read = account.clone();
+                let kept = tokio::task::spawn_blocking(move || {
+                    slatty_core::epic::achievements::load_counts(&core.dirs, &read)
+                        .unwrap_or_default()
+                })
+                .await
+                .unwrap_or_default();
+                (account, kept)
+            },
+            |(account, kept)| Message::Epic(EpicMsg::CountsRead(account, kept)),
+        )
     }
 
     /// Shows the library read, from the cache or from Epic, and the covers it names.
@@ -176,7 +304,7 @@ impl App {
             .collect();
         self.epic.covers.retain(|id, _| ids.contains(id));
         self.merge_steam();
-        self.epic_covers()
+        Task::batch([self.epic_covers(), self.epic_counts()])
     }
 
     /// The covers not shown yet: from the cache, else downloaded from Epic's image servers.

@@ -33,7 +33,13 @@ impl App {
         let perfect = games.iter().filter(|g| g.1 == g.2).count();
         let scanning = self
             .overview_status()
+            .or_else(|| {
+                self.epic
+                    .counting
+                    .then(|| "Reading Epic's achievements…".to_string())
+            })
             .unwrap_or_else(|| format!("{} games", games.len()));
+        let signed_in = self.account.is_some() || self.epic.account.is_some();
         let header = row![
             column![
                 text("Achievements").size(32).font(bold()),
@@ -55,7 +61,8 @@ impl App {
             )
             .padding([10, 16])
             .on_press_maybe(
-                (!self.overview_busy && self.account.is_some()).then_some(Message::ScanOverview),
+                (!self.overview_busy && !self.epic.counting && signed_in)
+                    .then_some(Message::ScanOverview),
             )
             .style(theme::tonal),
         ]
@@ -63,10 +70,12 @@ impl App {
         if games.is_empty() {
             let why = if self.overview_busy {
                 "Reading achievements from GOG…"
-            } else if self.account.is_none() {
+            } else if self.epic.counting {
+                "Reading achievements from Epic…"
+            } else if !signed_in {
                 "No game with achievements found."
             } else {
-                "No game with achievements found. Refresh to ask GOG again."
+                "No game with achievements found. Refresh to ask again."
             };
             return column![header, text(why).color(tokens().muted)]
                 .spacing(20)
