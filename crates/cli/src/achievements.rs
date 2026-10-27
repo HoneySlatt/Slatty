@@ -28,6 +28,9 @@ pub struct AchievementsArgs {
 }
 
 pub async fn run(ctx: &Ctx, args: AchievementsArgs) -> Result<()> {
+    if slatty_core::store::epic_app(&args.game_id).is_some() {
+        return epic(ctx, &args).await;
+    }
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
     let install = Install::get(&ctx.db, &args.game_id)?;
@@ -118,6 +121,35 @@ pub async fn run(ctx: &Ctx, args: AchievementsArgs) -> Result<()> {
     if failed > 0 {
         bail!("{failed} change(s) failed");
     }
+    Ok(())
+}
+
+/// An Epic game's achievements, as Epic keeps them: only the game unlocks them.
+async fn epic(ctx: &Ctx, args: &AchievementsArgs) -> Result<()> {
+    use slatty_core::epic;
+    if args.unlock_all || !args.unlock.is_empty() || !args.clear.is_empty() {
+        bail!("an Epic game's achievements are unlocked by the game alone");
+    }
+    let account = slatty_core::settings::epic_account(&ctx.db)?
+        .ok_or_else(|| anyhow::anyhow!("not signed in to Epic Games: run `slatty epic login`"))?;
+    let app = slatty_core::store::epic_app(&args.game_id).expect("checked by the caller");
+    let game = epic::library::load_cache(&ctx.dirs, &account)?
+        .and_then(|l| l.games.into_iter().find(|g| g.app_name == app))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "{} is not in your Epic library as last read: run `slatty epic list`",
+                args.game_id
+            )
+        })?;
+    let tokens = epic::auth::fresh(&ctx.http, &ctx.db, &ctx.dirs).await?;
+    let graphql = epic::achievements::EpicGraphql {
+        http: &ctx.http,
+        token: &tokens.access_token,
+    };
+    let locale = epic::launch::system_locale();
+    let list =
+        epic::achievements::fetch(&graphql, &tokens.account_id, &game.namespace, &locale).await?;
+    print_list(&game.title, &list);
     Ok(())
 }
 

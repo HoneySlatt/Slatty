@@ -14,7 +14,7 @@ Requests to Epic send the Epic Games Launcher's `User-Agent`, as legendary does,
 services answer Slatty as they answer the launcher whose client it signs in with.
 
 Slatty signs in, reads the account's library, installs, updates, verifies and plays a game's
-Windows build, and syncs its cloud saves. Achievements are planned (see [roadmap.md](roadmap.md)).
+Windows build, syncs its cloud saves, and reads its achievements.
 
 ## Authentication
 
@@ -140,3 +140,17 @@ app name followed by the account id, whose build version is the time in UTC
 decides whether to upload or download from the files' modification dates; Slatty decides by
 content and history (see [cloud-saves.md](cloud-saves.md#epic-games)). Encrypted snapshots are
 not known to exist.
+
+## Achievements
+
+| Use | Request | Source | Status |
+|---|---|---|---|
+| A game's achievements | `POST https://launcher.store.epicgames.com/graphql` (else `https://store.epicgames.com/graphql`), with the token and `User-Agent: EpicGamesLauncher/14.0.8-22004686+++Portal+Release-Live`: `Achievement.productAchievementsRecordBySandbox(sandboxId: <namespace>, locale)`: each `achievement`'s `name`, `hidden`, locked and unlocked display names, descriptions and icon links, `rarity.percent` | woctezuma's notes on Epic's GraphQL API (gist `8ca464a276b15d7dfad475fd6b6cbee9`), trophyhunter (`lib/epic/game-achievements.ts`) | Verified |
+| The account's progress | The same address: `PlayerAchievement.playerAchievementGameRecordsBySandbox(epicAccountId, sandboxId)`: `records[].playerAchievements[].playerAchievement` with `achievementName`, `unlocked`, `unlockDate` (RFC 3339) | The same | Verified |
+
+The user agent Epic's other services are sent (`UELauncher/…`) is answered there with a redirect to
+a captcha; `graphql.epicgames.com`, which older notes name, answers 404. A query Epic refuses
+answers 400 with its reasons in `errors`, which Slatty reports. A game's sandbox id is its
+namespace. Games unlock their achievements themselves, through Epic's online services, once
+signed in for the launch: Slatty only reads them.
+

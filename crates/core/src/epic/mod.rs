@@ -3,6 +3,7 @@
 //! (derrod/legendary, GPL-3.0: `legendary/api/egs.py`, `legendary/core.py`, `legendary/models`,
 //! `legendary/downloader`), see docs/epic-integration.md.
 
+pub mod achievements;
 pub mod auth;
 pub mod chunk;
 pub mod cloud;

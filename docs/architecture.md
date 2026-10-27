@@ -50,7 +50,7 @@ become the session supervisor (see [Game sessions](#game-sessions)).
 | `steamgriddb` | SteamGridDB search, grids and heroes, once turned on |
 | `store` | Which store a game id belongs to: GOG's product id, `steam-<app id>`, `epic-<app name>`, `local-<number>`, `emu-<number>` |
 | `steam` | Steam's games, read from the client's files: `local`, `appinfo`, `vdf`, `stats`, `running`, `library`, `client`, `web` (see [Steam games](#steam-games)) |
-| `epic` | The Epic Games Store: `auth` (sign-in, tokens refreshed under a lock), `library` (the account's games and their covers, cached), `manifest` and `chunk` (Epic's build formats), `download` (writing a build from its chunks), `install` (a game's newest build, installed and registered), `launch` (its program, and its sign-in for a launch), `cloud` (its cloud saves: Epic's snapshots as a `cloud::transport::CloudTransport`) (see [Epic games](#epic-games)) |
+| `epic` | The Epic Games Store: `auth` (sign-in, tokens refreshed under a lock), `library` (the account's games and their covers, cached), `manifest` and `chunk` (Epic's build formats), `download` (writing a build from its chunks), `install` (a game's newest build, installed and registered), `launch` (its program, and its sign-in for a launch), `cloud` (its cloud saves: Epic's snapshots as a `cloud::transport::CloudTransport`), `achievements` (a game's achievements and the account's progress, from Epic's GraphQL API, behind the `Graphql` trait) (see [Epic games](#epic-games)) |
 | `added` | Games added by hand (see [Games added by hand](#games-added-by-hand)) |
 | `emulated` | Games run in an emulator (see [Emulated games](#emulated-games)) |
 

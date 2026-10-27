@@ -120,7 +120,7 @@ one there at another size is never replaced.
 
 | Command | What it does |
 |---|---|
-| `slatty achievements <id>` | Lists a game's achievements as GOG records them, with how common each one is |
+| `slatty achievements <id>` | Lists a game's achievements as GOG records them, with how common each one is. For an Epic game (`epic-<app name>`), as Epic records them, signed in to Epic; only the game unlocks them, so `--unlock` and `--clear` are refused |
 | `--unlock <name>…` | Unlocks these, without playing (key, id or exact name) |
 | `--unlock-all` | Unlocks every locked one |
 | `--clear <name>…` | Locks these again |

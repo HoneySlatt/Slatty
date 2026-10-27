@@ -91,9 +91,6 @@ pub async fn sign_in(http: &Client, db: &Db, dirs: &Dirs, install: &Install) -> 
     } else {
         None
     };
-    let lang = std::env::var_os("LC_ALL")
-        .filter(|v| !v.is_empty())
-        .or_else(|| std::env::var_os("LANG"));
     Ok(SignIn {
         args: launcher_args(
             &epic,
@@ -101,7 +98,7 @@ pub async fn sign_in(http: &Client, db: &Db, dirs: &Dirs, install: &Install) -> 
             &tokens.display_name,
             exchange.code.expose(),
             ownership_token.is_some(),
-            &locale(lang.as_deref()),
+            &system_locale(),
         ),
         ownership_token,
     })
@@ -170,8 +167,15 @@ fn launcher_args(
     args
 }
 
-/// The language a game is told to use: the system's, as Epic names it (`fr` for `fr_FR.UTF-8`),
-/// else English.
+/// The system's language, as Epic names it (`fr` for `fr_FR.UTF-8`), else English: a game is told
+/// to use it, and Epic's texts are asked in it.
+pub fn system_locale() -> String {
+    let lang = std::env::var_os("LC_ALL")
+        .filter(|v| !v.is_empty())
+        .or_else(|| std::env::var_os("LANG"));
+    locale(lang.as_deref())
+}
+
 fn locale(lang: Option<&OsStr>) -> String {
     let lang = lang.and_then(OsStr::to_str).unwrap_or_default();
     let code = lang.split(['_', '.', '@']).next().unwrap_or_default();
