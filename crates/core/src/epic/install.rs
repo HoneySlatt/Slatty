@@ -704,6 +704,28 @@ async fn update_planned<S: ChunkSource>(
         .iter()
         .map(|(p, _)| p.to_string_lossy().to_lowercase())
         .collect();
+    // The files this build does not change are taken on their size, as legendary compares the two
+    // manifests: an update reads what changed, not the whole game. Not when finishing one cut
+    // off, whose writes the manifest kept knows nothing of.
+    let old = match &pending {
+        None => EpicInstall::load(dirs, game_id)?.and_then(|k| k.manifest(dirs).ok()),
+        Some(_) => None,
+    };
+    let path_key = |name: &str| name.replace('\\', "/").to_lowercase();
+    let before: HashMap<String, [u8; 20]> = old
+        .iter()
+        .flat_map(|m| &m.files)
+        .filter(|f| f.symlink_target.is_empty())
+        .map(|f| (path_key(&f.name), f.sha1))
+        .collect();
+    let unchanged: HashSet<usize> = plan
+        .files
+        .files
+        .iter()
+        .enumerate()
+        .filter(|(_, (rel, f))| before.get(&path_key(&rel.to_string_lossy())) == Some(&f.sha1))
+        .map(|(i, _)| i)
+        .collect();
     let mut removed = Vec::new();
     let applied = Download {
         source,
@@ -713,8 +735,19 @@ async fn update_planned<S: ChunkSource>(
         progress,
         free_space: &installer::free_space,
     }
-    .update_installed(&plan.files, &install.path, || {
+    .update_installed(&plan.files, &install.path, &unchanged, || {
         job.save(db)?;
+        // Both builds' files recorded before any is written: cut off, then finished on a newer
+        // build, the files of this one are still Slatty's to delete.
+        let mut both = record.clone();
+        let known: HashSet<String> = both.files.iter().map(|f| f.path.clone()).collect();
+        both.files.extend(
+            plan.record(&install.path)
+                .files
+                .into_iter()
+                .filter(|f| !known.contains(&f.path)),
+        );
+        both.save(dirs, game_id)?;
         removed = crate::maintenance::remove_obsolete(record, &install.path, |rel| {
             kept.contains(&rel.to_string_lossy().to_lowercase())
         })?;
@@ -1058,6 +1091,83 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(e, Error::Refused(_)), "{e}");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A file both builds have alike is taken on its size, not read again (Verify reads it): an
+    /// update reads what changed. Finishing one cut off reads them all, since the manifest kept
+    /// knows nothing of what it wrote.
+    #[tokio::test]
+    async fn an_update_reads_only_the_files_it_changes() {
+        let root = root("update-reads");
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        let install = installed_v1(&root, &db, &dirs).await;
+        // Damaged, its size unchanged: an update does not see it.
+        let exe = install.path.join("Game.exe");
+        std::fs::write(&exe, content(7, 3000)).unwrap();
+        let (plan, cdn) = plan_of(&v2(), 500, "2.0-[FAKE]");
+        let report = update_to(&db, &dirs, &cdn, plan, CancellationToken::new())
+            .await
+            .unwrap();
+        assert!(!report.downloaded.contains(&PathBuf::from("Game.exe")));
+        assert_eq!(std::fs::read(&exe).unwrap(), content(7, 3000));
+
+        // Cut off: finished reading every file, the damaged one written again.
+        let mut files = v2();
+        files[2].1 = content(5, 500);
+        let (plan, cdn) = plan_of(&files, 500, "3.0-[FAKE]");
+        let c = plan
+            .manifest
+            .files
+            .iter()
+            .find(|f| f.name == "Data/c.pak")
+            .unwrap();
+        let broken = plan.manifest.chunks[&c.parts[0].guid].path(18);
+        cdn.broken.lock().unwrap().insert(broken);
+        assert!(
+            update_to(&db, &dirs, &cdn, plan, CancellationToken::new())
+                .await
+                .is_err()
+        );
+        cdn.broken.lock().unwrap().clear();
+        let (plan, _) = plan_of(&files, 500, "3.0-[FAKE]");
+        update_to(&db, &dirs, &cdn, plan, CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&exe).unwrap(), content(1, 3000));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Cut off, an update has recorded both builds' files before writing any: finished on a newer
+    /// build, or uninstalled meanwhile, the files it wrote are still Slatty's to delete.
+    #[tokio::test]
+    async fn an_update_cut_off_records_both_builds() {
+        let root = root("update-records");
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        installed_v1(&root, &db, &dirs).await;
+        let (plan, cdn) = plan_of(&v2(), 500, "2.0-[FAKE]");
+        let c = plan
+            .manifest
+            .files
+            .iter()
+            .find(|f| f.name == "Data/c.pak")
+            .unwrap();
+        cdn.broken
+            .lock()
+            .unwrap()
+            .insert(plan.manifest.chunks[&c.parts[0].guid].path(18));
+        assert!(
+            update_to(&db, &dirs, &cdn, plan, CancellationToken::new())
+                .await
+                .is_err()
+        );
+        let record = InstallRecord::load(&dirs, "epic-Fake").unwrap().unwrap();
+        let paths: Vec<&str> = record.files.iter().map(|f| f.path.as_str()).collect();
+        for path in ["Game.exe", "Data/a.pak", "Data/b.pak", "Data/c.pak"] {
+            assert!(paths.contains(&path), "{path}: {paths:?}");
+        }
         std::fs::remove_dir_all(&root).unwrap();
     }
 

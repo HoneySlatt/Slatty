@@ -174,9 +174,10 @@ impl<S: ChunkSource> Download<'_, S> {
         &self,
         set: &BuildFiles,
         dir: &Path,
+        unchanged: &HashSet<usize>,
         begin: impl FnOnce() -> Result<()>,
     ) -> Result<Vec<PathBuf>> {
-        let bad = self.bad_files(set, dir, false).await?;
+        let bad = self.bad_files_but(set, dir, false, unchanged).await?;
         self.check_rewrite_space(set, &bad, dir)?;
         begin()?;
         self.write(set, &bad, dir).await?;
@@ -233,21 +234,40 @@ impl<S: ChunkSource> Download<'_, S> {
     /// `resumed`, `dir` is a partial folder: a file synced there is taken on its size. Progress
     /// counts the files found right, where writing the others then goes on from.
     async fn bad_files(&self, set: &BuildFiles, dir: &Path, resumed: bool) -> Result<Vec<usize>> {
-        let files: Vec<(PathBuf, [u8; 20], u64)> = set
+        self.bad_files_but(set, dir, resumed, &HashSet::new()).await
+    }
+
+    /// `bad_files`, the files at `unchanged` taken on their size alone.
+    async fn bad_files_but(
+        &self,
+        set: &BuildFiles,
+        dir: &Path,
+        resumed: bool,
+        unchanged: &HashSet<usize>,
+    ) -> Result<Vec<usize>> {
+        let files: Vec<(PathBuf, [u8; 20], u64, bool)> = set
             .files
             .iter()
-            .map(|(rel, f)| (dir.join(rel), f.sha1, f.size()))
+            .enumerate()
+            .map(|(i, (rel, f))| (dir.join(rel), f.sha1, f.size(), unchanged.contains(&i)))
             .collect();
         let cancel = self.cancel.clone();
         let (good_tx, mut good_rx) = tokio::sync::mpsc::unbounded_channel();
         let checking = tokio::spawn(fsutil::in_background(move || {
             let mut bad = Vec::new();
-            for (i, (path, sha1, size)) in files.iter().enumerate() {
+            for (i, (path, sha1, size, unchanged)) in files.iter().enumerate() {
                 if cancel.is_cancelled() {
                     return Err(Error::Cancelled);
                 }
-                let good = (resumed && crate::installer::synced(path, *size))
-                    || verify_file(path, sha1, *size, &cancel)?;
+                let sized = || {
+                    std::fs::symlink_metadata(path).is_ok_and(|m| m.is_file() && m.len() == *size)
+                };
+                let good = if *unchanged {
+                    sized()
+                } else {
+                    (resumed && crate::installer::synced(path, *size))
+                        || verify_file(path, sha1, *size, &cancel)?
+                };
                 if good {
                     let _ = good_tx.send(*size);
                 } else {
@@ -824,7 +844,7 @@ pub(crate) mod tests {
         let full = |_: &Path| Ok(100);
         let dl = download(&newer, &cdn, &secrets, &full, CancellationToken::new());
         let e = dl
-            .update_installed(&set, &game, || Ok(()))
+            .update_installed(&set, &game, &HashSet::new(), || Ok(()))
             .await
             .unwrap_err();
         assert!(matches!(e, Error::Refused(_)), "{e}");

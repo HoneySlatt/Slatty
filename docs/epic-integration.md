@@ -89,11 +89,14 @@ from the CDN the build service names now, as legendary's `install --repair` does
 Epic still serves the chunks of the build installed.
 
 **Updates** ask the build service for the newest build (label `Live`, the only one Epic offers)
-and compare its `buildVersion` with the one installed. Updating reads the new manifest, checks
-every file in place against it, then writes those missing or different from its chunks and deletes
-the files of the old build it no longer lists; legendary instead compares the two manifests
-(`ManifestComparison`) and leaves unchanged files unread. The catalog is read again too, for the
-launch's ownership token and arguments.
+and compare its `buildVersion` with the one installed. Updating reads the new manifest and
+compares it with the one kept, as legendary does (`ManifestComparison`): a file both list with the
+same SHA-1 is taken on its size, the others are checked in place; then those missing or different
+are written from their chunks, and the files of the old build it no longer lists are deleted.
+Both builds' files are recorded before the first is written, so an update cut off and finished
+on a newer build leaves none behind. Finishing one cut off checks every file, since the manifest
+kept knows nothing of what it wrote. The catalog is read again too, for the launch's ownership
+token and arguments.
 
 ## Launch
 
