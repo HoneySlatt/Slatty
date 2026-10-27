@@ -80,6 +80,12 @@ last listed. Install tags (optional parts such as language packs) are not chosen
 installed. Encrypted chunks and manifests were checked against data Slatty encrypted itself, not
 against Epic's.
 
+**Verify** reads the manifest kept at install and checks each file's size and SHA-1, asking Epic
+nothing. **Repair** writes the files found wrong again from that same manifest's chunks, downloaded
+from the CDN the build service names now, as legendary's `install --repair` does
+(`LegendaryCore.prepare_download`: the old manifest, the newest build's base addresses); it assumes
+Epic still serves the chunks of the build installed.
+
 ## Launch
 
 | Use | Request | Source | Status |

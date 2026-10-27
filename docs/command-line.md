@@ -139,7 +139,7 @@ Manual changes show on your public GOG profile. See [Achievements](user-guide.md
 | `slatty content <id>` | The installed language and DLC, and those offered |
 | `slatty content <id> --language <code>` | Switches language |
 | `slatty content <id> --add-dlc <id>…` / `--remove-dlc <id>…` | Adds or removes DLC |
-| `slatty verify <id>` | Checks every file against the installed build |
+| `slatty verify <id>` | Checks every file against the installed build. An Epic game's is checked against the manifest kept at install, without any account |
 | `slatty verify <id> --repair` | Downloads again the files that are missing or damaged |
 | `slatty uninstall <id>` | Deletes the files Slatty installed, and nothing else. Asks first (`--yes` does not) |
 | `slatty uninstall <id> --delete-prefix` | Also deletes the Wine prefix, its saves backed up first |

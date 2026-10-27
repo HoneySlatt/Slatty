@@ -617,7 +617,10 @@ games in the library beside Steam's. They install through the same drawer, queue
 as GOG's: `install::plan` and `install_stream` call `epic::install` for an Epic id, given the game
 as the library describes it (`App::epic_game`), and play as GOG's do; their Game settings leave out
 what is GOG's (version, language, DLC: `MaintenanceMsg::LoadContent` asks nothing), their Manage
-drawer offers only Uninstall, and their play time is the time played here.
+drawer offers Verify, Repair and Uninstall, and their play time is the time played here.
+`epic::install::check` verifies against the manifest kept, asking Epic nothing, and repairs from
+the CDN the build service names now; the front ends call it for an Epic id in place of
+`maintenance::check`, which needs a GOG session.
 
 ### Games added by hand
 

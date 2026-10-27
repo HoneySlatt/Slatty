@@ -148,16 +148,13 @@ pub async fn plan(http: &Client, tokens: &Tokens, game: &EpicGame) -> Result<Epi
         http,
         token: &tokens.access_token,
     };
-    let url = format!(
-        "{ASSETS_HOST}/launcher/api/public/assets/v2/platform/Windows/namespace/{}/catalogItem/{}/app/{}/label/Live",
-        path_part(&game.namespace)?,
-        path_part(&game.catalog_item_id)?,
-        game.app_name
-    );
-    let answer: serde_json::Value = super::library::session_checked(
-        http::json(source.get(&url), "asking Epic for the game's build").await,
-    )?;
-    let build = build_info(&answer)?;
+    let build = newest_build(
+        &source,
+        &game.namespace,
+        &game.catalog_item_id,
+        &game.app_name,
+    )
+    .await?;
     let item = source
         .catalog_item(game.namespace.clone(), game.catalog_item_id.clone())
         .await?;
@@ -193,6 +190,25 @@ pub async fn plan(http: &Client, tokens: &Tokens, game: &EpicGame) -> Result<Epi
         ownership_token,
         additional_args,
     })
+}
+
+/// What Epic's launcher service says of a game's newest Windows build.
+async fn newest_build(
+    source: &Epic<'_>,
+    namespace: &str,
+    catalog_item_id: &str,
+    app_name: &str,
+) -> Result<BuildInfo> {
+    let url = format!(
+        "{ASSETS_HOST}/launcher/api/public/assets/v2/platform/Windows/namespace/{}/catalogItem/{}/app/{}/label/Live",
+        path_part(namespace)?,
+        path_part(catalog_item_id)?,
+        app_name
+    );
+    let answer: serde_json::Value = super::library::session_checked(
+        http::json(source.get(&url), "asking Epic for the game's build").await,
+    )?;
+    build_info(&answer)
 }
 
 /// A namespace or catalog id going into an address: Epic's are letters and digits.
@@ -514,6 +530,84 @@ async fn install_planned<S: ChunkSource>(
     Ok(install)
 }
 
+/// Verifies an installed Epic game against the manifest of the build it was installed from; with
+/// `repair`, bad or missing files are downloaded again from the CDN Epic names now, as legendary's
+/// `--repair` does. Verifying alone asks Epic nothing. Returns the files that were not right.
+pub async fn check(
+    db: &Db,
+    dirs: &Dirs,
+    http: &Client,
+    game_id: &str,
+    repair: bool,
+    progress: &(dyn Fn(installer::Progress) + Send + Sync),
+    cancel: CancellationToken,
+) -> Result<installer::Checked> {
+    let _busy = crate::lock::game(dirs, game_id)?;
+    let (install, kept) = installed(db, dirs, game_id)?;
+    // Never asked when only verifying, which downloads nothing.
+    let mut base = String::new();
+    if repair {
+        let tokens = super::auth::fresh(http, db, dirs).await?;
+        let source = Epic {
+            http,
+            token: &tokens.access_token,
+        };
+        let build = newest_build(
+            &source,
+            &kept.namespace,
+            &kept.catalog_item_id,
+            &kept.app_name,
+        )
+        .await?;
+        base = https(&base_url(&build.manifest_urls[0]))?;
+    }
+    let source = EpicCdn {
+        http: http.clone(),
+        base,
+    };
+    check_files(dirs, &install, &kept, &source, repair, progress, cancel).await
+}
+
+/// An Epic game installed by Slatty, its folder there, and what was kept of it.
+fn installed(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, EpicInstall)> {
+    let (install, _) = crate::maintenance::installed_by_slatty(db, dirs, game_id)?;
+    crate::maintenance::folder_present(&install)?;
+    let kept = EpicInstall::load(dirs, game_id)?.ok_or_else(|| {
+        Error::NotFound(format!(
+            "the manifest of {} was not kept: install it again",
+            install.title
+        ))
+    })?;
+    Ok((install, kept))
+}
+
+async fn check_files<S: ChunkSource>(
+    dirs: &Dirs,
+    install: &Install,
+    kept: &EpicInstall,
+    source: &S,
+    repair: bool,
+    progress: &(dyn Fn(installer::Progress) + Send + Sync),
+    cancel: CancellationToken,
+) -> Result<installer::Checked> {
+    let manifest = kept.manifest(dirs)?;
+    let files = BuildFiles::of(&manifest)?;
+    let bad = Download {
+        source,
+        manifest: &manifest,
+        secrets: &kept.secrets,
+        cancel,
+        progress,
+        free_space: &installer::free_space,
+    }
+    .check_installed(&files, &install.path, repair)
+    .await?;
+    Ok(installer::Checked {
+        bad,
+        reused_bytes: 0,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -619,6 +713,80 @@ mod tests {
         crate::maintenance::uninstall(&db, &dirs, "epic-Fake", false).unwrap();
         assert!(!target.join("Game.exe").exists());
         assert!(EpicInstall::load(&dirs, "epic-Fake").unwrap().is_none());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Verify finds the files damaged or missing from the manifest kept at install, downloading
+    /// nothing, its progress counting the files found right; Repair downloads the chunks of those
+    /// files alone.
+    #[tokio::test]
+    async fn an_epic_game_is_verified_and_repaired_from_its_kept_manifest() {
+        let root = root("check");
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        // Chunks of 500 bytes: no file shares one.
+        let (plan, cdn, files) = fake_plan(500);
+        let req = request(&root);
+        let install = install_planned(
+            &db,
+            &dirs,
+            &cdn,
+            plan,
+            None,
+            req.root.clone(),
+            req,
+            |_| {},
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let kept = EpicInstall::load(&dirs, "epic-Fake").unwrap().unwrap();
+        std::fs::write(install.path.join("Data/a.pak"), b"[FAKE] damaged").unwrap();
+        std::fs::remove_file(install.path.join("Game.exe")).unwrap();
+        cdn.asked.lock().unwrap().clear();
+        let seen = std::sync::Mutex::new(Vec::new());
+        let progress = |p: installer::Progress| seen.lock().unwrap().push(p);
+        let check = |repair| {
+            check_files(
+                &dirs,
+                &install,
+                &kept,
+                &cdn,
+                repair,
+                &progress,
+                CancellationToken::new(),
+            )
+        };
+
+        let checked = check(false).await.unwrap();
+        assert_eq!(
+            checked.bad,
+            [PathBuf::from("Data/a.pak"), PathBuf::from("Game.exe")]
+        );
+        assert!(cdn.asked.lock().unwrap().is_empty(), "nothing downloaded");
+        let last = *seen.lock().unwrap().last().unwrap();
+        assert_eq!((last.files_done, last.bytes_done), (1, 1000), "b.pak");
+        assert_eq!((last.files_total, last.bytes_total), (3, 6500));
+
+        check(true).await.unwrap();
+        for (name, data) in &files {
+            assert_eq!(&std::fs::read(install.path.join(name)).unwrap(), data);
+        }
+        let manifest = kept.manifest(&dirs).unwrap();
+        let intact = manifest
+            .files
+            .iter()
+            .find(|f| f.name == "Data/b.pak")
+            .unwrap();
+        let asked = cdn.asked.lock().unwrap().clone();
+        assert_eq!(asked.len(), 11, "the chunks of Game.exe and a.pak");
+        assert!(
+            intact
+                .parts
+                .iter()
+                .all(|p| !asked.contains(&manifest.chunks[&p.guid].path(18)))
+        );
+        assert!(check(false).await.unwrap().bad.is_empty());
         std::fs::remove_dir_all(&root).unwrap();
     }
 

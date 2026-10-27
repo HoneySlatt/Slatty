@@ -39,17 +39,7 @@ impl App {
         if !self.installs.contains_key(&g.id) {
             return self.offline_section(g);
         }
-        // Neither verified nor updated from Epic yet.
-        if slatty_core::store::epic_app(&g.id).is_some() {
-            let mut sections = vec![note(
-                "Verifying, repairing and updating Epic games come in a later version.",
-            )];
-            if let Some(v) = view.filter(|v| !v.lines.is_empty()) {
-                sections.extend(v.lines.iter().map(|l| note(l.as_str())));
-            }
-            sections.push(self.uninstall_section(g));
-            return stacked(sections);
-        }
+        let epic = slatty_core::store::epic_app(&g.id).is_some();
         let on = |msg| (!busy).then(|| Message::Maintenance(msg));
         let files = column![
             row![
@@ -65,10 +55,13 @@ impl App {
                 ),
             ]
             .spacing(10),
-            note(
+            note(if epic {
+                "Verify checks every file against Epic's checksums; Repair downloads again the \
+                 missing or damaged ones."
+            } else {
                 "Verify checks every file against GOG's checksums; Repair downloads again the \
                  missing or damaged ones."
-            ),
+            }),
         ]
         .spacing(10);
         let mut updates = row![action(
@@ -86,10 +79,12 @@ impl App {
         }
         let updates =
             column![updates, note("Only the files that changed are downloaded.")].spacing(10);
-        let mut sections = vec![
-            titled(Icon::FileCheck, "Files", files.into(), 0.0),
-            titled(Icon::RefreshCw, "Updates", updates.into(), 0.0),
-        ];
+        let mut sections = vec![titled(Icon::FileCheck, "Files", files.into(), 0.0)];
+        sections.push(if epic {
+            note("Updating Epic games comes in a later version.")
+        } else {
+            titled(Icon::RefreshCw, "Updates", updates.into(), 0.0)
+        });
         // What the last action found, and the progress of the running one.
         if let Some(v) = view.filter(|v| !v.lines.is_empty() || v.progress.is_some()) {
             sections.push(
@@ -100,7 +95,10 @@ impl App {
                     .into(),
             );
         }
-        sections.push(self.offline_section(g));
+        // GOG's offline installers.
+        if !epic {
+            sections.push(self.offline_section(g));
+        }
         sections.push(self.uninstall_section(g));
         stacked(sections)
     }

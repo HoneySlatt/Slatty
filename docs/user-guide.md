@@ -575,8 +575,8 @@ Epic password; the session goes to the system keyring.
 - **Installed like a GOG game.** **Install** opens the same drawer: the folder and the Proton
   build are chosen there; the newest Windows build Epic offers is installed, every file of it
   (language packs included), each checked against Epic's checksum. It waits in the Downloads tab,
-  pauses and resumes as a GOG game does. **Manage** uninstalls it; verifying, repairing and
-  updating it come later. From the command line: `slatty install epic-<app name>` (see
+  pauses and resumes as a GOG game does. **Manage** verifies its files against Epic's checksums,
+  repairs them and uninstalls it; updating it comes later. From the command line: `slatty install epic-<app name>` (see
   [command-line.md](command-line.md#installing-games)).
 - **Played like a GOG game**, through Proton, isolated when it is set so. Just before it starts,
   Slatty asks Epic for a sign-in code for it, good once and for five minutes, and gives it to the

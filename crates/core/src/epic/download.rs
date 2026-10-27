@@ -183,7 +183,8 @@ impl<S: ChunkSource> Download<'_, S> {
     }
 
     /// The files of `set` not already in `dir` as they should be, by their place in `set`. With
-    /// `resumed`, `dir` is a partial folder: a file synced there is taken on its size.
+    /// `resumed`, `dir` is a partial folder: a file synced there is taken on its size. Progress
+    /// counts the files found right, where writing the others then goes on from.
     async fn bad_files(&self, set: &BuildFiles, dir: &Path, resumed: bool) -> Result<Vec<usize>> {
         let files: Vec<(PathBuf, [u8; 20], u64)> = set
             .files
@@ -191,7 +192,8 @@ impl<S: ChunkSource> Download<'_, S> {
             .map(|(rel, f)| (dir.join(rel), f.sha1, f.size()))
             .collect();
         let cancel = self.cancel.clone();
-        let checked = fsutil::in_background(move || {
+        let (good_tx, mut good_rx) = tokio::sync::mpsc::unbounded_channel();
+        let checking = tokio::spawn(fsutil::in_background(move || {
             let mut bad = Vec::new();
             for (i, (path, sha1, size)) in files.iter().enumerate() {
                 if cancel.is_cancelled() {
@@ -199,14 +201,27 @@ impl<S: ChunkSource> Download<'_, S> {
                 }
                 let good = (resumed && crate::installer::synced(path, *size))
                     || verify_file(path, sha1, *size)?;
-                if !good {
+                if good {
+                    let _ = good_tx.send(*size);
+                } else {
                     bad.push(i);
                 }
             }
             Ok(bad)
-        })
-        .await?;
-        Ok(checked)
+        }));
+        let mut done = Progress {
+            files_total: set.files.len(),
+            bytes_total: set.disk_size(),
+            ..Default::default()
+        };
+        (self.progress)(done);
+        // Ends once the check has, which drops its sender.
+        while let Some(size) = good_rx.recv().await {
+            done.files_done += 1;
+            done.bytes_done += size;
+            (self.progress)(done);
+        }
+        checking.await.expect("file check panicked")
     }
 
     /// Writes the files of `set` at the places `which` gives, in order.

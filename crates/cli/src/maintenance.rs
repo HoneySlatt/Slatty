@@ -71,8 +71,6 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
 }
 
 pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
-    let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
-    let tokens = account.tokens(&ctx.http).await?.clone();
     let cancel = CancellationToken::new();
     let on_ctrl_c = cancel.clone();
     tokio::spawn(async move {
@@ -90,17 +88,33 @@ pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
             println!("  files {}/{}", p.files_done, p.files_total);
         }
     };
-    let checked = maintenance::check(
-        &ctx.db,
-        &ctx.dirs,
-        &ctx.http,
-        &tokens,
-        &args.game_id,
-        args.repair,
-        &progress,
-        cancel,
-    )
-    .await?;
+    // An Epic game needs no GOG account.
+    let checked = if slatty_core::store::epic_app(&args.game_id).is_some() {
+        slatty_core::epic::install::check(
+            &ctx.db,
+            &ctx.dirs,
+            &ctx.http,
+            &args.game_id,
+            args.repair,
+            &progress,
+            cancel,
+        )
+        .await?
+    } else {
+        let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
+        let tokens = account.tokens(&ctx.http).await?.clone();
+        maintenance::check(
+            &ctx.db,
+            &ctx.dirs,
+            &ctx.http,
+            &tokens,
+            &args.game_id,
+            args.repair,
+            &progress,
+            cancel,
+        )
+        .await?
+    };
     let bad = checked.bad;
     if bad.is_empty() {
         println!("All files are intact.");

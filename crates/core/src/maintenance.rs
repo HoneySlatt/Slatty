@@ -28,7 +28,11 @@ pub struct UninstallReport {
     pub game_backup: Option<PathBuf>,
 }
 
-fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, InstallRecord)> {
+pub(crate) fn installed_by_slatty(
+    db: &Db,
+    dirs: &Dirs,
+    game_id: &str,
+) -> Result<(Install, InstallRecord)> {
     let install = Install::get(db, game_id)?
         .ok_or_else(|| Error::NotFound(format!("{game_id} is not installed")))?;
     let record = InstallRecord::load(dirs, game_id)?.ok_or_else(|| {
@@ -61,7 +65,7 @@ fn installed_by_slatty(db: &Db, dirs: &Dirs, game_id: &str) -> Result<(Install, 
 
 /// Refuses a game whose folder is gone, or empty: on a network share not mounted or a drive
 /// unplugged, the whole game would be downloaded again onto the mount point left behind.
-fn folder_present(install: &Install) -> Result<()> {
+pub(crate) fn folder_present(install: &Install) -> Result<()> {
     let empty = |dir: &Path| std::fs::read_dir(dir).is_ok_and(|mut d| d.next().is_none());
     if install.path.is_dir() && !empty(&install.path) {
         return Ok(());

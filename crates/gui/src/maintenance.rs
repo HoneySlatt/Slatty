@@ -126,6 +126,20 @@ impl App {
                     progress_stream(
                         async move |throttle| {
                             let result = async {
+                                if slatty_core::store::epic_app(&game_id).is_some() {
+                                    return slatty_core::epic::install::check(
+                                        &core.db,
+                                        &core.dirs,
+                                        &core.http,
+                                        &game_id,
+                                        repair,
+                                        &|p| throttle.report(p),
+                                        cancel,
+                                    )
+                                    .await
+                                    .map(|c| c.bad)
+                                    .map_err(paused_or);
+                                }
                                 let tokens = tokens(&core).await.map_err(Some)?;
                                 slatty_core::maintenance::check(
                                     &core.db,
