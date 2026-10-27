@@ -41,6 +41,8 @@ impl Vdf {
 
 /// The keys of a file, as a section.
 pub fn parse(text: &str) -> Result<Vdf> {
+    // A byte order mark, which an editor may begin a file with, would join the first key.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let mut tokens = Tokens {
         chars: text.chars().peekable(),
         entries_left: MAX_ENTRIES,
@@ -194,6 +196,15 @@ mod tests {
         assert_eq!(second.text("path"), Some("D:\\Games\\Steam"));
         assert_eq!(second.text("label"), Some("a \"quoted\" name"));
         assert_eq!(folders.text("oslist"), Some("windows"));
+    }
+
+    /// A file saved by an editor that begins it with a byte order mark is read as the client
+    /// writes it.
+    #[test]
+    fn a_byte_order_mark_is_left_out() {
+        let vdf = parse("\u{feff}\"users\" { \"7656\" { \"AccountName\" \"[FAKE]\" } }").unwrap();
+        let user = vdf.get("users").and_then(|u| u.get("7656"));
+        assert_eq!(user.and_then(|u| u.text("AccountName")), Some("[FAKE]"));
     }
 
     #[test]
