@@ -2,7 +2,7 @@ use std::io::{BufRead, Write};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::Args;
 use slatty_core::account::Account;
 use slatty_core::installer::Progress;
@@ -318,10 +318,13 @@ async fn apply_change(
     };
     match result {
         Ok(r) => {
-            if r.resumed {
+            // An Epic game's goes to the newest build whatever it started with.
+            if r.resumed && tokens.is_some() {
                 println!(
                     "An unfinished change was completed first; run the command again for the new one."
                 );
+            } else if r.resumed {
+                println!("An unfinished update was completed.");
             }
             println!("Now at {} (was {}).", r.to_version, r.from_version);
             println!(
@@ -367,6 +370,11 @@ pub struct ContentArgs {
 }
 
 pub async fn content(ctx: &Ctx, args: ContentArgs) -> Result<()> {
+    if slatty_core::store::epic_app(&args.game_id).is_some() {
+        bail!(
+            "Epic installs every file of its newest build: there is no language or DLC to choose"
+        );
+    }
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
     if let Some(language) = args.language {

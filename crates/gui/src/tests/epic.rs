@@ -328,6 +328,22 @@ fn epic_covers_come_from_the_cache_first() {
     assert!(app.epic.requested.is_empty());
 }
 
+/// Signed in to Epic alone, an Epic game's update cut off is finished at start, as it must be
+/// before the game can be played; a GOG game's waits for GOG's account.
+#[test]
+fn an_epic_update_cut_off_resumes_signed_in_to_epic_alone() {
+    let mut app = epic_app();
+    app.account = None;
+    app.installs.insert("epic-Alpha".into(), epic_install());
+    app.interrupted = vec![
+        ("epic-Alpha".into(), crate::Interrupted::Update),
+        ("3".into(), crate::Interrupted::Update),
+    ];
+    let _ = app.resume_interrupted();
+    assert!(app.maintenance.get("epic-Alpha").is_some_and(|m| m.busy));
+    assert!(!app.maintenance.get("3").is_some_and(|m| m.busy));
+}
+
 /// Achievements read for an account no longer signed in are left out, and signing out forgets
 /// those read.
 #[test]

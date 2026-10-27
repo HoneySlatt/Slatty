@@ -969,19 +969,25 @@ impl App {
     /// Resumes what a closed window, a crash or a power loss cut off: every unfinished update and
     /// the first download, else the queue. Work paused on request waits for Resume or Finish update.
     pub fn resume_interrupted(&mut self) -> Task<Message> {
-        if self.account.is_none() {
-            return Task::none();
-        }
+        let signed_in = |id: &str| match slatty_core::store::epic_app(id) {
+            Some(_) => self.epic.account.is_some(),
+            None => self.account.is_some(),
+        };
+        // An Epic game's update finishes signed in to Epic alone: until then it cannot be played.
         let updates: Vec<String> = self
             .interrupted
             .iter()
-            .filter(|(_, kind)| *kind == crate::Interrupted::Update)
+            .filter(|(id, kind)| *kind == crate::Interrupted::Update && signed_in(id))
             .map(|(id, _)| id.clone())
             .collect();
         let mut tasks: Vec<Task<Message>> = updates
             .into_iter()
             .map(|id| self.update_maintenance(MaintenanceMsg::Apply(id, Change::Update)))
             .collect();
+        // The queue, of either store, waits for GOG's account, as it always did.
+        if self.account.is_none() {
+            return Task::batch(tasks);
+        }
         tasks.push(self.start_next());
         // The installs still waiting are planned, for their size.
         for game_id in self.queue.clone() {

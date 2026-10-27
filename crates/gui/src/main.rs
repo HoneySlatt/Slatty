@@ -982,7 +982,6 @@ impl App {
                     self.notify_error(format!("Theme file not used: {e}"));
                 }
                 let avatar = self.fetch_avatar();
-                let resume = self.resume_interrupted();
                 // Read once the library shows: game folders and Steam libraries can sit on a
                 // network drive that takes seconds to wake up.
                 let ids = self.installs.keys().cloned().collect();
@@ -1009,7 +1008,9 @@ impl App {
                     }
                     _ => Task::done(Message::Epic(epic::EpicMsg::Refresh)),
                 };
-                // Once both accounts are known: each store's games are checked while signed in.
+                // Once both accounts are known: each store's games are checked, and their work
+                // cut off resumed, while signed in.
+                let resume = self.resume_interrupted();
                 let check = self.update_updates(updates::UpdatesMsg::Check);
                 // Whether the keys are in the keyring, asked once the library shows: a locked
                 // keyring holds a read until its prompt is answered. Unanswered, as before, they
