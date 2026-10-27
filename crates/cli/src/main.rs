@@ -113,13 +113,19 @@ async fn run() -> Result<()> {
     let dirs = Dirs::from_system()?;
     dirs.keep_private()?;
     if let Command::Doctor = cli.command {
-        for c in slatty_core::doctor::run(&dirs) {
+        let checks = slatty_core::doctor::run(&dirs);
+        for c in &checks {
             println!(
                 "[{}] {:<16} {}",
                 if c.ok { " ok " } else { "FAIL" },
                 c.name,
                 c.detail
             );
+        }
+        // A script or a package's check sees a piece missing without reading the lines.
+        let failed = checks.iter().filter(|c| !c.ok).count();
+        if failed > 0 {
+            anyhow::bail!("{failed} of {} checks failed", checks.len());
         }
         return Ok(());
     }

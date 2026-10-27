@@ -210,7 +210,7 @@ them out of the library without touching their files; a scan does not add them a
 
 `slatty doctor` checks what Slatty needs: umu-launcher, bubblewrap (and whether it can
 start a sandbox inside another, as isolated games need), Comet and its port, the Galaxy service
-file, the keyring and the runtime folder.
+file, the keyring and the runtime folder. It fails when one of them does.
 
 `SLATTY_LOG=warn` (or `debug`) before any command prints warnings on the terminal:
 

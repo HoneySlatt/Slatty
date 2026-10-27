@@ -12,6 +12,9 @@ until 1.0, a minor version may change commands and on-disk formats.
   at every sync after.
 - `slatty launch` fails, rather than end as a success, when cloud saves needing attention keep
   the game from starting.
+- `slatty doctor` fails when one of its checks does.
+- A second Ctrl+C quits at once while files are downloaded or checked (install, update, verify,
+  installers, Proton builds); it was ignored.
 
 ## 0.2.0 (2026-10-27)
 
