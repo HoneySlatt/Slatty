@@ -58,6 +58,9 @@ pub struct ScaledCovers {
     couch_pending: HashSet<(PathBuf, u32)>,
     /// The width covers are made at, once the window's scale is known.
     width: Option<u32>,
+    /// Per icon and side in pixels: its copy, or `None` when it is no icon or cannot be read.
+    pub icons: HashMap<(PathBuf, u32), Option<image::Handle>>,
+    pub icons_pending: HashSet<(PathBuf, u32)>,
 }
 
 impl App {
@@ -307,6 +310,54 @@ impl App {
         };
     }
 
+    /// Makes the copies of `icons` (file, side in pixels, whether it must be square), off the
+    /// interface thread at the lowest priority, in one message.
+    pub fn scale_icons(&mut self, icons: Vec<(PathBuf, u32, bool)>) -> Task<Message> {
+        let Some(core) = self.core.clone() else {
+            return Task::none();
+        };
+        let icons: Vec<(PathBuf, u32, bool)> = icons
+            .into_iter()
+            .filter(|(from, side, _)| self.scaled.icons_pending.insert((from.clone(), *side)))
+            .collect();
+        if icons.is_empty() {
+            return Task::none();
+        }
+        let user_cache = self
+            .account
+            .as_ref()
+            .map(|a| core.dirs.account_cache(&a.user_id));
+        let shared = core.dirs.cache.clone();
+        self.with_account(Task::perform(
+            slatty_core::fsutil::in_background(move || {
+                icons
+                    .into_iter()
+                    .map(|(from, side, square)| {
+                        // A GOG icon's copy stays with the account's cache, as its covers'.
+                        let cache = match &user_cache {
+                            Some(c) if from.starts_with(c) => c,
+                            _ => &shared,
+                        };
+                        let dir = cache.join("icons").join(side.to_string());
+                        let copy = icon_copy(&from, side, &dir, square);
+                        (from, side, copy)
+                    })
+                    .collect()
+            }),
+            Message::IconsScaled,
+        ))
+    }
+
+    pub fn icons_scaled(&mut self, made: Vec<(PathBuf, u32, Option<PathBuf>)>) {
+        for (from, side, copy) in made {
+            let key = (from, side);
+            self.scaled.icons_pending.remove(&key);
+            self.scaled
+                .icons
+                .insert(key, copy.map(image::Handle::from_path));
+        }
+    }
+
     pub fn art_scaled(&mut self, from: PathBuf, width: u32, copy: Option<PathBuf>) {
         let key = (from, width);
         self.scaled.art_pending.remove(&key);
@@ -519,6 +570,11 @@ pub fn scaled_copy(source: &Path, width: u32, dir: &Path, enlarge: bool) -> Opti
             .ok()?
             .resize(width, u32::MAX, ::image::imageops::FilterType::Lanczos3);
     let small = if enlarged { rcas(&small) } else { small };
+    write_copy(&small, dir, name)
+}
+
+/// Writes `small` into `dir` as `<name>.png` when it has transparency, else `<name>.jpg`.
+fn write_copy(small: &::image::DynamicImage, dir: &Path, name: &str) -> Option<PathBuf> {
     let mut out = Vec::new();
     let (written, ext) = if small.color().has_alpha() {
         let png = small.write_to(
@@ -542,6 +598,48 @@ pub fn scaled_copy(source: &Path, width: u32, dir: &Path, enlarge: bool) -> Opti
         return None;
     }
     Some(made)
+}
+
+/// How much longer one side of a store's icon may be than the other: GOG's database names covers
+/// and key art as some games' icons.
+const ICON_SQUARE: f32 = 1.25;
+
+/// The copy of the icon `source`, made to fit `side` pixels square in `dir` unless an earlier one is
+/// there; `None` when it cannot be read or, with `square`, is no icon. Made whatever its size, as
+/// its file may not be in the format its name says (Steam's client names PNG icons `.jpg`, which
+/// Iced would not read).
+pub fn icon_copy(source: &Path, side: u32, dir: &Path, square: bool) -> Option<PathBuf> {
+    let meta = std::fs::metadata(source).ok()?;
+    let id = format!(
+        "icon\n{side}\n{}\n{}\n{:?}",
+        source.display(),
+        meta.len(),
+        meta.modified().ok()
+    );
+    let name = &slatty_core::fsutil::sha256_hex(id.as_bytes())[..32];
+    for ext in ["jpg", "png"] {
+        let made = dir.join(format!("{name}.{ext}"));
+        if std::fs::metadata(&made).is_ok_and(|m| m.is_file() && m.len() > 0) {
+            return Some(made);
+        }
+    }
+    let reader = || {
+        ::image::ImageReader::open(source)
+            .ok()?
+            .with_guessed_format()
+            .ok()
+    };
+    let (width, height) = reader()?.into_dimensions().ok()?;
+    let longer = width.max(height) as f32 / width.min(height).max(1) as f32;
+    if square && longer > ICON_SQUARE {
+        return None;
+    }
+    let small =
+        reader()?
+            .decode()
+            .ok()?
+            .resize(side, side, ::image::imageops::FilterType::Lanczos3);
+    write_copy(&small, dir, name)
 }
 
 /// The most the key art copies take: about 1 to 2 MB each at 3840 pixels, more than a thousand

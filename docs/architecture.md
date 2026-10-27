@@ -124,8 +124,8 @@ The interface follows Iced's state, message, update and view split:
 | `graphics` | The graphics backends the window starts with |
 | `login` | Sign-in, sign-out, avatar; work tied to the account signed in (`account_task`) |
 | `library` | Library sync, covers and images, shelves, sort and filters, kept lists and sort keys |
-| `sidebar` | The list of every game beside the library: open or closed and its width (kept in the settings, the width dragged through a subscription to the pointer while its edge is held), its search, its rows in view, and the icons of those alone asked for after every message |
-| `scaled` | Covers and key art drawn from copies made at the size they are shown |
+| `sidebar` | The list of every game beside the library: open or closed and its width (kept in the settings, the width dragged through a subscription to the pointer while its edge is held), its search, its rows in view, and the icons of those alone asked for after every message: the one chosen in Edit game, else the store's, else a GOG game's Steam twin's, each one that cannot be read or is not about square giving way to the next |
+| `scaled` | Covers, key art and icons drawn from copies made at the size they are shown |
 | `install`, `downloads` | The Install drawer, the download, the queue |
 | `offline` | Offline installers: their drawer's choices, their download through the queue (entries `installers:<id>`) |
 | `maintenance`, `updates` | Verify, repair, uninstall, content changes; automatic updates |

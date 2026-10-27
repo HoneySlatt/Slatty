@@ -91,6 +91,35 @@ fn library_app() -> App {
     app
 }
 
+/// A transparent PNG `width` by `height`, whatever the name of the file it goes in.
+fn png(width: u32, height: u32) -> Vec<u8> {
+    let mut out = Vec::new();
+    ::image::RgbaImage::new(width, height)
+        .write_to(
+            &mut std::io::Cursor::new(&mut out),
+            ::image::ImageFormat::Png,
+        )
+        .unwrap();
+    out
+}
+
+/// Makes the copies of the icons the app waits for, as `App::scale_icons` does off the interface
+/// thread, and hands them to it.
+fn make_icons(app: &mut App) {
+    let dir = app.core.as_ref().unwrap().dirs.cache.join("icons");
+    let made = app
+        .scaled
+        .icons_pending
+        .iter()
+        .map(|(from, side)| {
+            let dir = dir.join(side.to_string());
+            let copy = crate::scaled::icon_copy(from, *side, &dir, true);
+            (from.clone(), *side, copy)
+        })
+        .collect();
+    let _ = app.update(Message::IconsScaled(made));
+}
+
 /// A library long enough to scroll, its cover grid scrolled down with the wheel; and how far.
 fn scrolled_library() -> (App, f32) {
     use iced::mouse::{Event as Mouse, ScrollDelta};

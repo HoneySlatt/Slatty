@@ -9,12 +9,11 @@ use slatty_core::library::LibraryGame;
 
 use super::widgets::grid_rows;
 use crate::icons::{Icon, icon};
-use crate::sidebar::{ROW, SidebarMsg};
+use crate::sidebar::{ICON, ROW, SidebarMsg};
 use crate::theme::{self, tokens};
 use crate::{App, Message};
 
-/// Size of a game's icon in the list, and width of its edge that can be grabbed.
-const ICON: f32 = 20.0;
+/// Width of the list's edge that can be grabbed.
 const EDGE: f32 = 6.0;
 
 impl App {
@@ -94,7 +93,7 @@ impl App {
     /// A game's icon, when it has one, and its name, dimmed when not installed, as Steam's list
     /// shows them; a click opens its page.
     fn sidebar_row<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let shown_icon: Element<'_, Message> = match self.icon(g) {
+        let shown_icon: Element<'_, Message> = match self.icon_at(g, ICON, true) {
             Some(handle) => image(handle).width(ICON).height(ICON).into(),
             None => Space::new().width(ICON).height(ICON).into(),
         };

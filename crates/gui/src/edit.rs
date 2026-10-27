@@ -59,6 +59,8 @@ pub const MENU_WIDTH: f32 = 190.0;
 /// The scrolling part of the edit form, brought down to the SteamGridDB search as it opens.
 pub const FORM: &str = "edit-form";
 const MENU_HEIGHT: f32 = 52.0;
+/// Side of the icon in the form: small and square, as the list of games shows it.
+pub const ICON_PICTURE: f32 = 96.0;
 
 #[derive(Debug, Clone)]
 pub enum EditMsg {
@@ -123,12 +125,13 @@ impl App {
                     picker: None,
                     game_id: game_id.clone(),
                 });
-                // The store's pictures shown in the form, once in the cache.
+                // The store's background shown in the form, once in the cache; its icon is asked
+                // for with the list's (`wanted_icons`).
                 let shown = self
                     .library
                     .iter()
                     .find(|g| g.id == game_id)
-                    .map(|g| g.background.iter().chain(&g.icon).cloned().collect())
+                    .map(|g| g.background.iter().cloned().collect())
                     .unwrap_or_default();
                 return self.request_images(shown);
             }
@@ -452,14 +455,6 @@ impl App {
                 .as_ref()
                 .and_then(|u| self.images.get(u))
                 .cloned(),
-        }
-    }
-
-    /// The icon of the list of games: the user's, else its store's once in the cache.
-    pub fn icon(&self, g: &LibraryGame) -> Option<image::Handle> {
-        match self.customs.get(&g.id).and_then(|c| c.icon.as_ref()) {
-            Some(path) => Some(image::Handle::from_path(path)),
-            None => g.icon.as_ref().and_then(|u| self.images.get(u)).cloned(),
         }
     }
 

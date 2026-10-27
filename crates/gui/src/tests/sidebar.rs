@@ -4,7 +4,61 @@ use crate::sidebar::SidebarMsg;
 fn open_app() -> App {
     let mut app = library_app();
     app.sidebar.open = true;
+    app.scaled.scale = Some(2.0);
     app
+}
+
+/// An icon shows through a copy made at the size drawn: a PNG Steam's client names `.jpg` shows;
+/// an "icon" GOG's database gives that is a cover or key art does not, and a GOG game's Steam twin
+/// shows its own in its place.
+#[test]
+fn icons_show_whatever_their_format_and_only_when_square() {
+    use iced::widget::image::Handle;
+    let mut app = open_app();
+    let dir = root().join("sidebar-icons");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = |name: &str, (w, h): (u32, u32)| {
+        let path = dir.join(name);
+        std::fs::write(&path, png(w, h)).unwrap();
+        path
+    };
+    let steam = file(&format!("{:040x}.jpg", 1), (32, 32));
+    let key_art = file("key-art.png", (192, 62));
+    let twin = file(&format!("{:040x}.jpg", 2), (64, 64));
+    let cover = file("cover.png", (60, 90));
+    app.library[0].icon = Some(steam.display().to_string());
+    for (game, url, path) in [(1, "key-art", &key_art), (2, "cover", &cover)] {
+        let url = format!("https://images.gog.example/{url}.png");
+        app.library[game].icon = Some(url.clone());
+        app.images.insert(url, Handle::from_path(path));
+    }
+    app.steam
+        .twin_icons
+        .insert("2".into(), twin.display().to_string());
+    let _ = app.update(Message::Sidebar(SidebarMsg::Search(String::new())));
+    make_icons(&mut app);
+    make_icons(&mut app);
+
+    let shown = |id: &str| {
+        let g = app.library.iter().find(|g| g.id == id).unwrap();
+        match app.icon_at(g, crate::sidebar::ICON, true) {
+            Some(Handle::Path(_, copy)) => Some(::image::image_dimensions(copy).unwrap()),
+            _ => None,
+        }
+    };
+    assert_eq!(
+        shown("1"),
+        Some((40, 40)),
+        "Steam's PNG named .jpg, made 40 pixels square"
+    );
+    assert_eq!(
+        shown("2"),
+        Some((40, 40)),
+        "its Steam twin's, in place of key art"
+    );
+    assert_eq!(app.scaled.icons.get(&(key_art, 40)), Some(&None));
+    assert_eq!(shown("3"), None, "a cover is no icon");
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 fn titles_listed(app: &App) -> Vec<String> {

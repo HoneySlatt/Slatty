@@ -62,6 +62,8 @@ pub struct SteamView {
     pub installed: HashMap<String, Installed>,
     /// The Steam game each GOG game of the library also is, by GOG id: it shows as GOG's alone.
     pub twins: HashMap<String, String>,
+    /// The Steam icon of each of those GOG games, by GOG id: shown where GOG's is none.
+    pub twin_icons: HashMap<String, String>,
     /// When what Steam downloads last changed: its manifests are read until it stays the same.
     pub download_moved: Option<Instant>,
     /// When each download Steam made was told done.
@@ -537,6 +539,7 @@ impl App {
                 .insert(id.clone(), iced::widget::image::Handle::from_path(cover));
         }
         self.steam.twins.clear();
+        self.steam.twin_icons.clear();
         if self.steam.on {
             // A game owned on both shows once, as GOG's: matched with GOG's own titles, not the
             // ones the user gave.
@@ -558,6 +561,18 @@ impl App {
                 self.covers
                     .insert(id.clone(), iced::widget::image::Handle::from_path(cover));
             }
+            let icons: HashMap<&str, &String> = self
+                .steam
+                .games
+                .iter()
+                .filter_map(|g| Some((g.id.as_str(), g.icon.as_ref()?)))
+                .collect();
+            self.steam.twin_icons = twins
+                .iter()
+                .filter_map(|(gog, steam)| {
+                    Some((gog.clone(), (*icons.get(steam.as_str())?).clone()))
+                })
+                .collect();
             self.steam.twins = twins;
         }
         self.apply_customs();

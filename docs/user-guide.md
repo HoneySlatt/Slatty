@@ -99,9 +99,10 @@ Your games, as covers. Above the grid:
 - **+** adds a game from no store (see [Games added by hand](#games-added-by-hand)).
 
 **The list of games**, on the library's left as in Steam's, names every game but the hidden ones,
-A to Z, with its icon when it has one: the one chosen in Edit game, else GOG's square icon or Steam's
-(the one the client keeps, else from Steam's image servers with **Images from Steam** on); none
-otherwise. Games not installed are dimmed. Its search is its own, apart from the library's;
+A to Z, with its icon when it has one: the one chosen in Edit game, else GOG's or Steam's (the one
+the client keeps, else from Steam's image servers with **Images from Steam** on), else, for a game
+owned on both, Steam's; none otherwise. Images GOG gives as icons that are not square (covers, key
+art) are left out. Games not installed are dimmed. Its search is its own, apart from the library's;
 a click opens the game's page. The button beside the search closes it, and the one at the left of
 the library's toolbar opens it again. Drag its right edge to widen or narrow it. It comes back as you
 left it, open or closed and as wide.
@@ -958,7 +959,7 @@ Folders follow the XDG variables (`XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG
 | `~/.cache/slatty/steam/`, `steamgriddb/` | Images from Steam's servers and SteamGridDB's thumbnails. Safe to delete |
 | `~/.cache/slatty/epic/<account id>/` | Your Epic library and its covers. Safe to delete |
 | `~/.local/share/slatty/epic/` | For each Epic game installed, its build's manifest and what launching it needs |
-| `…/scaled/<width>/`, `…/art/<width>/` in those caches | The covers and key art made at the size they are drawn; key art copies take at most 2 GiB. Safe to delete |
+| `…/scaled/<width>/`, `…/art/<width>/`, `…/icons/<side>/` in those caches | The covers, key art and icons made at the size they are drawn; key art copies take at most 2 GiB. Safe to delete |
 | `~/.local/state/slatty/logs/` | Logs of each game, prefix creation, setup, Galaxy service and Comet: the last run of each and the two before (`.1`, `.2`). A game's logs go when it is uninstalled |
 | `~/.local/state/slatty/locks/` | Locks that keep two operations off the same game |
 

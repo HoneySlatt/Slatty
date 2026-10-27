@@ -117,24 +117,28 @@ fn an_icon_chosen_in_edit_game_shows_in_the_list_of_games() {
     let mut app = library_app();
     app.steamgriddb = true;
     let edit = |app: &mut App, m: EditMsg| drop(app.update(Message::Edit(m)));
+    app.sidebar.open = true;
+    app.scaled.scale = Some(1.0);
     let game = |app: &App| app.library.iter().find(|g| g.id == "4").unwrap().clone();
-    assert!(app.icon(&game(&app)).is_none(), "none of its own");
+    let icon = |app: &App| app.icon_at(&game(app), crate::sidebar::ICON, true);
+    assert!(icon(&app).is_none(), "none of its own");
 
     edit(&mut app, EditMsg::Open("4".into()));
     assert!(render(&app).find("Icon").is_ok());
     edit(&mut app, EditMsg::Browse(Art::Icon));
-    let png = b"\x89PNG\r\n\x1a\n[FAKE] icon".to_vec();
+    let png = png(48, 48);
     edit(&mut app, EditMsg::Fetched(Art::Icon, Ok(png.clone())));
     edit(&mut app, EditMsg::Save);
     let saved = app.customs["4"].icon.clone().unwrap();
     assert_eq!(std::fs::read(&saved).unwrap(), png);
-    assert!(app.icon(&game(&app)).is_some(), "shown in the list");
+    make_icons(&mut app);
+    assert!(icon(&app).is_some(), "shown in the list");
 
     edit(&mut app, EditMsg::Open("4".into()));
     edit(&mut app, EditMsg::Reset);
     edit(&mut app, EditMsg::Save);
     assert!(!app.customs.contains_key("4"));
-    assert!(app.icon(&game(&app)).is_none());
+    assert!(icon(&app).is_none());
     assert!(!saved.exists());
 }
 

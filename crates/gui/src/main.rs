@@ -579,6 +579,8 @@ pub enum Message {
     ArtScaled(PathBuf, u32, Option<PathBuf>),
     /// The couch mode's covers enlarged at this width: per game, the cover and its copy, if any.
     CouchCoversScaled(u32, Vec<(String, PathBuf, Option<PathBuf>)>),
+    /// Icons made for the list of games: per icon, its file, its side and its copy, if any.
+    IconsScaled(Vec<(PathBuf, u32, Option<PathBuf>)>),
     /// The covers found in the account's cache at start, by game id.
     CachedCovers(HashMap<String, PathBuf>),
     /// How these installed games can be started, read from their folders; then the game whose
@@ -686,6 +688,7 @@ impl Message {
                 | Message::Rescaled(_)
                 | Message::ArtScaled(..)
                 | Message::CouchCoversScaled(..)
+                | Message::IconsScaled(_)
                 | Message::Steam(steam::SteamMsg::Cover(..))
                 | Message::Epic(epic::EpicMsg::Cover(..) | epic::EpicMsg::CachedCovers(..))
                 | Message::CachedCovers(_)
@@ -850,7 +853,7 @@ impl App {
         // Lists made again may have moved the games the couch mode's focus was on.
         self.refocus_couch();
         // Whatever ended (a game, an install, an update) may let a waiting update start.
-        let task = Task::batch([task, self.next_update(), self.sidebar_icons()]);
+        let task = Task::batch([task, self.next_update(), self.wanted_icons()]);
         // The gamepad's reader sends nothing while the player is elsewhere.
         pad::set_away(self.couch.is_some() && self.away());
         let now = self.location();
@@ -1166,6 +1169,7 @@ impl App {
             Message::Rescaled(scale) => return self.rescaled(scale),
             Message::ArtScaled(from, width, copy) => self.art_scaled(from, width, copy),
             Message::CouchCoversScaled(width, made) => self.couch_covers_scaled(width, made),
+            Message::IconsScaled(made) => self.icons_scaled(made),
             Message::LaunchOptions(read, play) => {
                 self.launch_options.extend(read);
                 if let Some(game_id) = play {
@@ -1194,6 +1198,7 @@ impl App {
             }
             Message::Image(url, None) => {
                 self.images_requested.remove(&url);
+                self.sidebar.failed.insert(url);
             }
             Message::ScanOverview => {
                 return Task::batch([

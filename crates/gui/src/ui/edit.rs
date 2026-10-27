@@ -11,7 +11,9 @@ use slatty_core::custom::ImageChange;
 
 use super::note;
 use super::panels::DRAWER_WIDTH;
-use crate::edit::{Art, ArtPicker, ContextMenu, EditDraft, EditMsg, FORM, MENU_WIDTH};
+use crate::edit::{
+    Art, ArtPicker, ContextMenu, EditDraft, EditMsg, FORM, ICON_PICTURE, MENU_WIDTH,
+};
 use crate::icons::{Icon, icon};
 use crate::theme::{self, bold, tokens};
 use crate::{App, Loadable, Message};
@@ -226,23 +228,19 @@ impl App {
             (ImageChange::Downloaded(_), _) => d.previews.get(&art).cloned(),
             (ImageChange::Keep, Art::Cover) => self.cover(&game.id),
             (ImageChange::Keep, Art::Background) => self.background(game),
-            (ImageChange::Keep, Art::Icon) => self.icon(game),
+            (ImageChange::Keep, Art::Icon) => self.icon_at(game, ICON_PICTURE, true),
             (ImageChange::Reset, Art::Cover) => self.covers.get(&game.id).cloned(),
             (ImageChange::Reset, Art::Background) => game
                 .background
                 .as_ref()
                 .and_then(|u| self.images.get(u))
                 .cloned(),
-            (ImageChange::Reset, Art::Icon) => {
-                game.icon.as_ref().and_then(|u| self.images.get(u)).cloned()
-            }
+            (ImageChange::Reset, Art::Icon) => self.icon_at(game, ICON_PICTURE, false),
         }
     }
 }
 
 const PICTURE_HEIGHT: f32 = 200.0;
-/// Side of the icon in the form: small and square, as the list of games shows it.
-const ICON_PICTURE: f32 = 96.0;
 /// Width of the background in the drawer: the drawer less its padding and the room of its scrollbar.
 const DRAWER_PICTURE: f32 = DRAWER_WIDTH - 48.0 - 14.0;
 
