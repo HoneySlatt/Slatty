@@ -676,6 +676,14 @@ impl App {
         store::steam_app(game_id)
     }
 
+    /// Whether Steam was asked to play a game it does not run yet.
+    pub fn steam_starting(&self, game_id: &str) -> bool {
+        self.steam
+            .starting
+            .as_ref()
+            .is_some_and(|(id, _)| id == game_id)
+    }
+
     /// Whether a game is installed, by Slatty or by Steam.
     pub fn is_installed(&self, game_id: &str) -> bool {
         // Steam's whole once installed, updates included; a first install still downloads.

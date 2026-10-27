@@ -18,6 +18,7 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 - Playing, installing, verifying or uninstalling a Steam game starts the Steam client in the tray
   when it is not running, rather than with its library window.
+- A Steam game shows **Starting…** on its page, and a clock on its cover, from Play until it runs.
 - A game whose achievements are all unlocked says Completed in place of 100%, its progress lit
   with the theme's accent: on its page, in the Achievements tab and in the couch mode.
 - Game settings no longer says controller compatibility was checked with UMU-Proton only: it was

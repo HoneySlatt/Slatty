@@ -520,8 +520,9 @@ sign-in page.
 - **Run by the Steam client.** **Play**, **Install**, **Verify files in Steam** and **Uninstall in
   Steam** hand the game to the Steam client, which must be installed and signed in and does the
   work in its own window. A client not running yet starts in the tray, without its library window
-  (Steam installed natively; Steam's Flatpak opens as the desktop starts it). While a Steam game
-  runs, its page shows **Running**.
+  (Steam installed natively; Steam's Flatpak opens as the desktop starts it). Until the game
+  runs, its page shows **Starting…** and its cover a clock (pressing it asks Steam again); while it
+  runs, **Running**.
 - **Downloads.** What the Steam client downloads shows on the game's page and in the Downloads tab
   under **In Steam**, and a notification says when it is done. Steam's own window pauses or cancels
   them.

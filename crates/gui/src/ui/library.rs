@@ -326,6 +326,7 @@ impl App {
             let (ic, action) = match installed.map(|i| i.ready) {
                 _ if self.steam.running.contains(&g.id) => (Icon::Play, None),
                 _ if downloading => (Icon::Download, None),
+                Some(true) if self.steam_starting(&g.id) => (Icon::Clock, Some(Action::Play)),
                 Some(true) => (Icon::Play, Some(Action::Play)),
                 Some(false) => (Icon::Download, None),
                 None => (Icon::Download, Some(Action::Install)),

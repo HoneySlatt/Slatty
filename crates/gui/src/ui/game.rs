@@ -295,6 +295,9 @@ impl App {
                     None,
                     false,
                 ),
+                Some(installed) if installed.ready && self.steam_starting(&g.id) => {
+                    big(Icon::Play, "Starting…".into(), ask(Action::Play), false)
+                }
                 Some(installed) if installed.ready => {
                     big(Icon::Play, "Play".into(), ask(Action::Play), false)
                 }
@@ -890,6 +893,9 @@ impl App {
                 self.steam_status(twin, i.update.as_ref().expect("just checked")),
                 None,
             ),
+            Some(i) if i.ready && self.steam_starting(twin) => {
+                ("Starting in Steam…".to_string(), Some(Action::Play))
+            }
             Some(i) if i.ready => ("Play the Steam version".to_string(), Some(Action::Play)),
             Some(_) => ("Queued in Steam".to_string(), None),
             None => (

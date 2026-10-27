@@ -332,6 +332,34 @@ fn a_steam_game_shows_as_running_while_steam_runs_it() {
     assert!(render(&app).find("Play").is_ok());
 }
 
+/// Between Play and the game running, Steam may start, or update it, in the tray: the page says
+/// it is starting, and Play can be asked again should Steam have dropped it.
+#[test]
+fn a_steam_game_shows_as_starting_until_it_runs() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let _ = app.update(Message::Steam(SteamMsg::Installed(vec![installed(
+        440, 1, true, None,
+    )])));
+    let _ = app.update(Message::Select("steam-440".into()));
+    let _ = app.update(Message::Steam(SteamMsg::Ask(
+        "steam-440".into(),
+        Action::Play,
+    )));
+    let mut ui = render(&app);
+    assert!(ui.find("Play").is_err());
+    assert!(ui.click("Starting…").is_ok());
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::Steam(SteamMsg::Ask(_, Action::Play)))),
+        "asked again"
+    );
+
+    let _ = app.update(Message::Steam(SteamMsg::Running([440].into())));
+    assert!(render(&app).find("Running").is_ok());
+}
+
 /// Downloads pause while a Steam game runs too (Settings → Installs), and go on once it ends.
 #[test]
 fn a_steam_game_pauses_the_download_running_until_it_ends() {
