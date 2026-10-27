@@ -128,6 +128,40 @@
             export PATH="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/target/debug:$PATH"
           '';
         };
+
+        # Builds Slatty for Windows (docs/windows-port.md): Rust's x86_64-pc-windows-gnu target
+        # with MinGW-w64, into target/windows; `cargo test` runs the test programs through Wine,
+        # in a Wine prefix of its own under target/windows.
+        windows =
+          let
+            cross = pkgs.pkgsCross.mingwW64;
+            cc = "${cross.stdenv.cc}/bin/x86_64-w64-mingw32";
+            # aws-lc's entropy source includes sched.h, which MinGW keeps with its POSIX threads.
+            pthreads = cross.windows.pthreads;
+          in
+          pkgs.mkShell {
+            packages = [
+              cross.buildPackages.cargo
+              cross.buildPackages.rustc
+              cross.stdenv.cc
+              pkgs.clippy
+              pkgs.rustfmt
+              pkgs.wineWow64Packages.stable
+            ];
+            CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
+            CARGO_TARGET_DIR = "target/windows";
+            CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "${cc}-cc";
+            CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = "wine";
+            CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${pthreads}/lib";
+            CC_x86_64_pc_windows_gnu = "${cc}-cc";
+            CXX_x86_64_pc_windows_gnu = "${cc}-c++";
+            AR_x86_64_pc_windows_gnu = "${cc}-ar";
+            CFLAGS_x86_64_pc_windows_gnu = "-I${pthreads}/include";
+            WINEDEBUG = "-all";
+            shellHook = ''
+              export WINEPREFIX="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/target/windows/wine"
+            '';
+          };
       });
     };
 }

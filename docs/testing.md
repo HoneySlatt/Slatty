@@ -46,6 +46,18 @@ This writes PNG snapshots of the tested screens. Tests take 10 October 2026 for 
 the time zone, and their throwaway folder shows as `/tmp/slatty-test`, so two runs give identical
 snapshots: a difference before and after a change comes from the change.
 
+### The Windows build
+
+The port to Windows ([windows-port.md](windows-port.md)) is built from Linux in a shell of its
+own, into `target/windows`; its tests run through Wine, in a Wine prefix under `target/windows`:
+
+```sh
+nix develop .#windows -c cargo check --workspace
+nix develop .#windows -c cargo test -p slatty-core
+```
+
+Wine is not Windows: a test passing there checks the code, not Windows' behaviour.
+
 ## Benchmarks
 
 These are ignored by default; run them in release.

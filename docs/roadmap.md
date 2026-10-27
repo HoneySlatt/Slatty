@@ -84,7 +84,8 @@ There are no dates. What has been checked against real services, and what not ye
 - **Packaging** for other distributions.
 - **More runners**: Wine without Proton for the games Slatty installs (it exists for
   imported games).
-- **Windows hosts**, some day: the core relies on Linux in many places today.
+- **Windows hosts**, being worked on: the plan and where it stands are in
+  [windows-port.md](windows-port.md).
 
 ## Out of scope
 
