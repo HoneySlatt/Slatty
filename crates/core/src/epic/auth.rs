@@ -200,6 +200,13 @@ pub async fn sign_out(db: &Db, dirs: &Dirs) -> Result<Option<String>> {
     };
     check_account_id(&account_id)?;
     let _lock = lock::acquire(&auth_lock(dirs, &account_id), Duration::from_secs(30)).await?;
+    // Another account signed in while the lock was waited for (`sign_in` took this one's session
+    // out of the keyring): it stays signed in.
+    if settings::epic_account(db)?.as_deref() != Some(account_id.as_str()) {
+        return Err(Error::Refused(
+            "another Epic account was signed in meanwhile; it stays signed in".into(),
+        ));
+    }
     let id = account_id.clone();
     tokio::task::spawn_blocking(move || credentials::delete_epic(&id))
         .await
@@ -360,6 +367,34 @@ mod tests {
             Some(account)
         );
         drop(refreshing);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A sign-out waiting for the lock while another account signs in leaves that one signed in:
+    /// its session is not orphaned in the keyring. Nothing reaches the keyring here.
+    #[tokio::test]
+    async fn signing_out_keeps_an_account_signed_in_meanwhile() {
+        let root = std::env::temp_dir().join(format!("slatty-epic-other-{}", std::process::id()));
+        let dirs = Dirs::under(&root);
+        let db = std::sync::Arc::new(Db::in_memory().unwrap());
+        let (first, other) = (
+            "0123456789abcdef0123456789abcdef",
+            "fedcba9876543210fedcba9876543210",
+        );
+        settings::set_epic_account(&db, Some(first)).unwrap();
+        let refreshing = lock::acquire(&auth_lock(&dirs, first), Duration::from_secs(1))
+            .await
+            .unwrap();
+        let out = {
+            let (db, dirs) = (db.clone(), dirs.clone());
+            tokio::spawn(async move { sign_out(&db, &dirs).await })
+        };
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        settings::set_epic_account(&db, Some(other)).unwrap();
+        drop(refreshing);
+        let result = out.await.unwrap();
+        assert!(matches!(result, Err(Error::Refused(_))), "{result:?}");
+        assert_eq!(settings::epic_account(&db).unwrap().as_deref(), Some(other));
         let _ = std::fs::remove_dir_all(&root);
     }
 }
