@@ -373,7 +373,8 @@ Isolation keeps a game out of your files; it is not a wall against a program wri
 
 ## Cloud saves
 
-Saves sync by themselves before and after each game session. The game page's Cloud saves card
+Saves sync by themselves before and after each game session, with GOG's cloud, or Epic's for an
+Epic game. The game page's Cloud saves card
 opens a drawer with what a sync would do, **Check** and **Sync now**.
 
 ```sh
@@ -582,6 +583,12 @@ Epic password; the session goes to the system keyring.
   automatically** or from Manage: only the files that changed are downloaded, those the new build
   no longer has are deleted. Epic offers no older build to go back to. Its updates are looked for
   while you are signed in to Epic, even signed out of GOG.
+- **Cloud saves synced with Epic's**, by the same rules as GOG's, before and after each session and
+  from its Cloud saves card, while you are signed in to Epic: the folder Epic names for the game, in
+  its prefix. Epic keeps snapshots of the whole folder; a sync that changes it sends a new one and
+  leaves the older ones there (see [cloud-saves.md](cloud-saves.md#epic-games)). A game whose saves
+  Epic's catalog names no folder for has none here; many recent games keep theirs through Epic's
+  online services themselves, once signed in.
 - **Played like a GOG game**, through Proton, isolated when it is set so. Just before it starts,
   Slatty asks Epic for a sign-in code for it, good once and for five minutes, and gives it to the
   game with your account's name and id, as Epic's launcher does; a game that asks for an ownership

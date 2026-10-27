@@ -172,9 +172,10 @@ pub async fn play(
     // A game added by hand or emulated is not GOG's at all: GOG is not asked anything about it.
     let native = install.platform == Platform::Linux;
     let added = crate::store::from_no_store(&install.game_id);
-    // Nor is it asked about an Epic game, whose saves and achievements are Epic's.
+    // Nor is it asked about an Epic game, whose saves (synced with Epic's cloud) and achievements
+    // are Epic's.
     let epic = crate::store::epic_app(&install.game_id).is_some();
-    let cloud = req.cloud && !native && !added && !epic;
+    let cloud = req.cloud && !native && !added;
     // Comet acts for the account and listens on this computer while it runs: only for a game that
     // can talk to it, and only if allowed in Settings.
     let use_comet = req.comet
@@ -282,7 +283,11 @@ pub async fn play(
                 return Ok(());
             }
             Ok(None) => emit(PlayEvent::CloudSkipped(
-                "GOG has no cloud saves for this game".into(),
+                match epic {
+                    true => "Epic keeps no cloud saves for this game",
+                    false => "GOG has no cloud saves for this game",
+                }
+                .into(),
             )),
             Err(e) => emit(PlayEvent::CloudSkipped(e.to_string())),
         }
@@ -516,9 +521,12 @@ async fn cloud_sync(
     install: &Install,
     user_id: Option<&str>,
 ) -> Result<Option<CloudSummary>> {
-    let tokens = tokens(db, dirs, http, user_id).await?;
-    let outcomes =
-        cloud::sync_held(db, dirs, http, &tokens, install, SyncOptions::default()).await?;
+    let outcomes = if crate::store::epic_app(&install.game_id).is_some() {
+        crate::epic::cloud::sync_held(db, dirs, http, install, SyncOptions::default()).await?
+    } else {
+        let tokens = tokens(db, dirs, http, user_id).await?;
+        cloud::sync_held(db, dirs, http, &tokens, install, SyncOptions::default()).await?
+    };
     Ok(outcomes.map(|o| CloudSummary::from_outcomes(&o)))
 }
 

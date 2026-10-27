@@ -566,8 +566,9 @@ impl App {
             Some(InstallView::Failed(e)) => return line(e.clone()),
             _ => {}
         }
+        use slatty_core::store::Store;
         if self.installs.contains_key(&g.id)
-            && slatty_core::store::of(&g.id).is_ok_and(|s| s == slatty_core::store::Store::Gog)
+            && slatty_core::store::of(&g.id).is_ok_and(|s| matches!(s, Store::Gog | Store::Epic))
         {
             let (_, _, status) = self.cloud_status(g);
             return line(format!("Cloud saves: {status}"));

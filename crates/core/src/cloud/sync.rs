@@ -22,6 +22,9 @@ pub struct SyncTarget<'a> {
     pub game_id: &'a str,
     pub location: &'a str,
     pub root: &'a Path,
+    /// The files of the folder that are saves, by relative path, when not all are (Epic's lists
+    /// of files to include and exclude); the others are left alone on both sides.
+    pub keep: Option<&'a (dyn Fn(&str) -> bool + Sync)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,8 +118,12 @@ pub async fn sync<T: CloudTransport>(
         }
     };
 
-    let local = scan::scan(target.root)?;
-    let (remote, skipped_remote) = remote_map(cloud.list().await?, target.location);
+    let mut local = scan::scan(target.root)?;
+    let (mut remote, skipped_remote) = remote_map(cloud.list().await?, target.location);
+    if let Some(keep) = target.keep {
+        local.files.retain(|_, f| keep(&f.rel));
+        remote.retain(|_, r| keep(&r.rel));
+    }
     // The local file of a name left out in the cloud is left alone too: neither uploaded over
     // one of the pair, nor deleted as if the cloud had deleted it.
     let left_out: std::collections::BTreeSet<String> =
@@ -394,6 +401,7 @@ impl<T: CloudTransport> Run<'_, T> {
         }
         let (fresh, _) = remote_map(self.cloud.list().await?, self.target.location);
         let mut uploaded = Vec::new();
+        let mut deleted = Vec::new();
         for (key, op) in std::mem::take(&mut self.deferred) {
             let planned = self.remote.get(&key).map(|r| &r.hash);
             if fresh.get(&key).map(|r| &r.hash) != planned {
@@ -408,11 +416,29 @@ impl<T: CloudTransport> Run<'_, T> {
                     .upload(&key)
                     .await
                     .map(|sha| uploaded.push((key.clone(), sha))),
-                Deferred::DeleteRemote { chosen } => self.delete_remote(&key, chosen).await,
+                Deferred::DeleteRemote { chosen } => self
+                    .delete_remote(&key, chosen)
+                    .await
+                    .map(|sent| deleted.extend(sent.then(|| key.clone()))),
             };
             if let Err(e) = result {
                 self.report.errors.push((self.display(&key), e.to_string()));
             }
+        }
+        if let Err(e) = self.cloud.commit().await {
+            for (key, _) in &uploaded {
+                let error = format!("upload not sent: {e}");
+                self.report.errors.push((self.display(key), error));
+            }
+            for key in &deleted {
+                let error = format!("deletion not sent: {e}");
+                self.report.errors.push((self.display(key), error));
+            }
+            return Ok(());
+        }
+        for key in deleted {
+            delete_base(self.target, &key)?;
+            self.report.deleted_remote.push(self.display(&key));
         }
         if uploaded.is_empty() {
             return Ok(());
@@ -469,18 +495,17 @@ impl<T: CloudTransport> Run<'_, T> {
         Ok(sha)
     }
 
-    async fn delete_remote(&mut self, key: &str, chosen: bool) -> Result<()> {
+    /// Whether the deletion was asked of the cloud; its history goes once the cloud took it.
+    async fn delete_remote(&mut self, key: &str, chosen: bool) -> Result<bool> {
         let allowed = self.opts.allow_deletions || chosen;
         if !allowed || self.report.plan.remote_deletions_blocked() {
             self.report.pending_deletions.push(self.display(key));
-            return Ok(());
+            return Ok(false);
         }
         self.unchanged_local(key)?;
         self.keep_remote_copy(key).await?;
         self.cloud.delete(&self.remote[key].name).await?;
-        delete_base(self.target, key)?;
-        self.report.deleted_remote.push(self.display(key));
-        Ok(())
+        Ok(true)
     }
 }
 

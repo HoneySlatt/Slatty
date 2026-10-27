@@ -74,12 +74,18 @@ pub async fn run(ctx: &Ctx, cmd: CloudCommand) -> Result<()> {
 
 /// Returns whether every location ended without conflict, refusal or error.
 pub async fn sync_game(ctx: &Ctx, install: &Install, opts: SyncOptions) -> Result<bool> {
-    let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
-    let tokens = account.tokens(&ctx.http).await?.clone();
-    let Some(outcomes) =
-        cloud::sync_game(&ctx.db, &ctx.dirs, &ctx.http, &tokens, install, opts).await?
-    else {
-        println!("GOG has no cloud saves for {}.", shown(&install.title));
+    let (store, outcomes) = if slatty_core::store::epic_app(&install.game_id).is_some() {
+        let synced =
+            slatty_core::epic::cloud::sync_game(&ctx.db, &ctx.dirs, &ctx.http, install, opts);
+        ("Epic", synced.await?)
+    } else {
+        let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
+        let tokens = account.tokens(&ctx.http).await?.clone();
+        let synced = cloud::sync_game(&ctx.db, &ctx.dirs, &ctx.http, &tokens, install, opts);
+        ("GOG", synced.await?)
+    };
+    let Some(outcomes) = outcomes else {
+        println!("{store} has no cloud saves for {}.", shown(&install.title));
         return Ok(true);
     };
     for o in &outcomes {
@@ -168,64 +174,83 @@ fn write_report(out: &mut impl Write, r: &SyncReport, dry_run: bool) -> std::io:
 
 async fn diff(ctx: &Ctx, game_id: &str, filter: Option<&str>) -> Result<()> {
     let install = crate::games::get(ctx, game_id)?;
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    let copies = |location: &str| {
+        ctx.dirs
+            .data
+            .join("diagnostics")
+            .join(game_id)
+            .join(&stamp)
+            .join(location)
+    };
+    if slatty_core::store::epic_app(game_id).is_some() {
+        use slatty_core::epic::cloud::{LOCATION, open};
+        let Some(saves) = open(&ctx.db, &ctx.dirs, &ctx.http, &install).await? else {
+            println!("Epic has no cloud saves for {}.", shown(&install.title));
+            return Ok(());
+        };
+        let root = saves.root?;
+        println!("[{LOCATION}] {}", shown(root.display()));
+        let copies = copies(LOCATION);
+        let files = cloud::inspect::compare(&saves.cloud, LOCATION, &root, &copies, filter).await?;
+        print_comparisons(&files);
+        return Ok(());
+    }
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
     let Some(game_cloud) = cloud::open(&ctx.http, &tokens, &install).await? else {
         println!("GOG has no cloud saves for {}.", shown(&install.title));
         return Ok(());
     };
-    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
     for (location, root) in &game_cloud.locations {
         let Ok(root) = root else { continue };
-        let copies = ctx
-            .dirs
-            .data
-            .join("diagnostics")
-            .join(game_id)
-            .join(&stamp)
-            .join(&location.name);
+        let copies = copies(&location.name);
         println!("[{}] {}", shown(&location.name), shown(root.display()));
         let files =
             cloud::inspect::compare(&game_cloud.transport, &location.name, root, &copies, filter)
                 .await?;
-        for f in &files {
-            println!(
-                "  {}{}",
-                shown(&f.path),
-                if f.identical() { "  (identical)" } else { "" }
-            );
-            match &f.local {
-                Some(l) => println!(
-                    "    local : {} bytes, modified {}, sha256 {}",
-                    l.size,
-                    l.modified
-                        .map(|m| crate::local_time(m.timestamp()))
-                        .unwrap_or_default(),
-                    &l.sha256[..16]
-                ),
-                None => println!("    local : absent"),
-            }
-            match &f.remote {
-                Some(r) => {
-                    println!(
-                        "    cloud : {} bytes, modified {}, sha256 {}, listed hash {}",
-                        r.size,
-                        shown(r.last_modified.as_deref().unwrap_or("?")),
-                        &r.sha256[..16],
-                        shown(&r.listed_hash)
-                    );
-                    if r.gzip_magic {
-                        println!(
-                            "    WARNING: the cloud copy still looks gzip-compressed (transport decoding issue)"
-                        );
-                    }
-                    println!("    cloud copy saved to {}", shown(r.copy.display()));
-                }
-                None => println!("    cloud : absent"),
-            }
-        }
+        print_comparisons(&files);
     }
     Ok(())
+}
+
+fn print_comparisons(files: &[cloud::inspect::FileComparison]) {
+    for f in files {
+        println!(
+            "  {}{}",
+            shown(&f.path),
+            if f.identical() { "  (identical)" } else { "" }
+        );
+        match &f.local {
+            Some(l) => println!(
+                "    local : {} bytes, modified {}, sha256 {}",
+                l.size,
+                l.modified
+                    .map(|m| crate::local_time(m.timestamp()))
+                    .unwrap_or_default(),
+                &l.sha256[..16]
+            ),
+            None => println!("    local : absent"),
+        }
+        match &f.remote {
+            Some(r) => {
+                println!(
+                    "    cloud : {} bytes, modified {}, sha256 {}, listed hash {}",
+                    r.size,
+                    shown(r.last_modified.as_deref().unwrap_or("?")),
+                    &r.sha256[..16],
+                    shown(&r.listed_hash)
+                );
+                if r.gzip_magic {
+                    println!(
+                        "    WARNING: the cloud copy still looks gzip-compressed (transport decoding issue)"
+                    );
+                }
+                println!("    cloud copy saved to {}", shown(r.copy.display()));
+            }
+            None => println!("    cloud : absent"),
+        }
+    }
 }
 
 #[cfg(test)]

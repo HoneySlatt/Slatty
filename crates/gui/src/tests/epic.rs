@@ -226,17 +226,13 @@ fn settings_sign_in_to_epic_and_out() {
     assert!(ui.find("Sign out").is_ok());
 }
 
-/// An installed Epic game is played as a GOG one; GOG keeps neither its saves nor its play time,
-/// which comes from the sessions played here.
+/// An installed Epic game is played as a GOG one; GOG does not keep its play time, which comes
+/// from the sessions played here.
 #[test]
 fn an_installed_epic_game_is_played() {
     let mut app = epic_app();
     app.installs.insert("epic-Alpha".into(), epic_install());
     assert!(app.is_installed("epic-Alpha"));
-    assert!(
-        !app.may_sync_cloud("epic-Alpha"),
-        "GOG keeps no saves of it"
-    );
     app.playtime.insert(
         "epic-Alpha".into(),
         slatty_core::session::Playtime {
@@ -252,6 +248,27 @@ fn an_installed_epic_game_is_played() {
         ui.into_messages()
             .any(|m| matches!(m, Message::Play(id) if id == "epic-Alpha"))
     );
+}
+
+/// An Epic game's cloud saves are Epic's: its page has their card, and they are checked while
+/// signed in to Epic, without GOG.
+#[test]
+fn an_epic_games_cloud_saves_are_checked_with_epic() {
+    use crate::cloud::CloudRequest;
+    let mut app = epic_app();
+    app.installs.insert("epic-Alpha".into(), epic_install());
+    assert!(app.may_sync_cloud("epic-Alpha"));
+    let _ = app.update(Message::Select("epic-Alpha".into()));
+    assert!(render(&app).find("Cloud saves").is_ok());
+
+    app.account = None;
+    let _ = app.request_cloud("epic-Alpha".into(), CloudRequest::Check);
+    assert!(app.cloud["epic-Alpha"].busy, "checked with Epic's account");
+
+    app.cloud.clear();
+    app.epic.account = None;
+    let _ = app.request_cloud("epic-Alpha".into(), CloudRequest::Check);
+    assert!(!app.cloud.contains_key("epic-Alpha"), "signed out of Epic");
 }
 
 /// An installed Epic game's settings, from its page: its Proton, controller and isolation, and

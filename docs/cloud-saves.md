@@ -1,6 +1,7 @@
 # Cloud saves
 
-Slatty synchronises save folders with GOG's cloud storage. Losing a save is the worst thing
+Slatty synchronises save folders with GOG's cloud storage, and an Epic game's with Epic's (see
+[Epic games](#epic-games)). Losing a save is the worst thing
 a launcher can do, so the design favours refusing over guessing. This page describes the rules and
 their known limits.
 
@@ -113,6 +114,32 @@ not there.
 3. **If the end of the session is uncertain** (the launcher lost track of the game), nothing is
    uploaded. The next launch reports the interrupted session.
 
+## Epic games
+
+Epic keeps whole snapshots of a game's save folder rather than files: each is a manifest named
+after the time it was made (`manifests/2026.10.27-10.00.00.manifest`) and the chunks it lists,
+in the format of Epic's builds. The rules above still decide, file by file:
+
+- **The folder** is the one Epic's catalog names (`CloudSaveFolder`), resolved in the prefix as
+  GOG's are: `{AppData}` is `AppData/Local`, `{UserDir}` `Documents`, `{UserSavedGames}`
+  `Saved Games`, `{InstallDir}` the game folder, `{EpicID}` your Epic account id. Another
+  variable refuses the location. Only the files Epic's lists of files to include and exclude
+  keep (`CloudIncludeList`, `CloudExcludeList`, matched as legendary matches them, regardless of
+  case) are saves: the others are left alone on both sides.
+- **The cloud's files** are those of the newest snapshot, the one stored last; their hash is the
+  SHA-1 the snapshot lists for each. History, conflicts, deletions and backups work as above, for
+  your Epic account.
+- **What a sync uploads or deletes is sent as one new snapshot,** made from the newest one listed
+  just before: the files not changed are read back from it, the uploads replace theirs, the
+  deletions are left out. Its chunks are stored first and its manifest last, so a snapshot never
+  names a chunk not stored yet; it is named after every one stored. Older snapshots are never
+  deleted: the copies before a change stay in Epic's cloud as well as in the backups.
+- **The last files are never deleted there**: Epic keeps no empty snapshot, and that deletion is
+  reported instead.
+
+legendary, which Heroic uses, decides from the files' dates instead; the two read and write the
+same snapshots.
+
 ## Known limits
 
 - **Overwrite window.** GOG's storage API is not known to support conditional uploads. A change
@@ -127,3 +154,7 @@ not there.
   whether GOG requires those headers is not verified. Downloads were verified to arrive
   decompressed.
 - **Memory.** A save is held whole in memory while it transfers.
+- **Epic: not tried against Epic yet.** The snapshots follow legendary's code (chunks of 1 MiB
+  padded with zeros, manifests of version 18, the folder's template kept as `CloudSaveFolder`),
+  but whether Epic's own launcher reads the ones Slatty makes is not verified. Each sync that
+  changes the cloud sends every save of the folder again, read back from the newest snapshot.

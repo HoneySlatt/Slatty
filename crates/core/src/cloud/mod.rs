@@ -82,6 +82,18 @@ pub async fn sync_game(
     sync_held(db, dirs, http, tokens, install, opts).await
 }
 
+/// Refuses a sync that writes before the game's first launch, which creates its prefix.
+pub(crate) fn launched_once(install: &Install, opts: SyncOptions) -> Result<()> {
+    if !opts.dry_run && !crate::runner::prefix_ready(install) {
+        return Err(Error::Refused(format!(
+            "{} has not been launched yet: its cloud saves are downloaded when it first starts, \
+             once Proton has created its Wine prefix",
+            install.title
+        )));
+    }
+    Ok(())
+}
+
 /// `sync_game` for the play flow, which already holds the game's lock.
 pub(crate) async fn sync_held(
     db: &Db,
@@ -91,13 +103,7 @@ pub(crate) async fn sync_held(
     install: &Install,
     opts: SyncOptions,
 ) -> Result<Option<Vec<LocationOutcome>>> {
-    if !opts.dry_run && !crate::runner::prefix_ready(install) {
-        return Err(Error::Refused(format!(
-            "{} has not been launched yet: its cloud saves are downloaded when it first starts, \
-             once Proton has created its Wine prefix",
-            install.title
-        )));
-    }
+    launched_once(install, opts)?;
     let Some(game_cloud) = open(http, tokens, install).await? else {
         return Ok(None);
     };
@@ -116,6 +122,7 @@ pub(crate) async fn sync_held(
                     game_id: &install.game_id,
                     location: &location.name,
                     root,
+                    keep: None,
                 };
                 sync::sync(&game_cloud.transport, &target, opts).await
             }

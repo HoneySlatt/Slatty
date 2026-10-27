@@ -76,11 +76,10 @@ pub enum CloudRequest {
 }
 
 impl App {
-    /// Whether GOG may keep cloud saves of an installed game: it keeps them for the Windows builds
-    /// of its own games alone.
+    /// Whether its store may keep cloud saves of an installed game: GOG and Epic keep them for the
+    /// Windows builds of their own games alone.
     pub fn may_sync_cloud(&self, game_id: &str) -> bool {
         !slatty_core::store::from_no_store(game_id)
-            && slatty_core::store::epic_app(game_id).is_none()
             && self
                 .installs
                 .get(game_id)
@@ -93,7 +92,13 @@ impl App {
         if !self.may_sync_cloud(&game_id) {
             return Task::none();
         }
-        let Some(user_id) = self.account.as_ref().map(|a| a.user_id.clone()) else {
+        // Synced for the store's account: Epic's for an Epic game.
+        let epic = slatty_core::store::epic_app(&game_id).is_some();
+        let user_id = match epic {
+            true => self.epic.account.clone(),
+            false => self.account.as_ref().map(|a| a.user_id.clone()),
+        };
+        let Some(user_id) = user_id else {
             return Task::none();
         };
         let (Some(core), Some(install)) = (self.core.clone(), self.installs.get(&game_id).cloned())
@@ -109,10 +114,14 @@ impl App {
             return Task::none();
         }
         self.cloud.entry(game_id.clone()).or_default().busy = true;
-        self.account_task(Task::perform(
-            cloud_task(core, user_id, install, request),
-            move |r| Message::CloudDone(game_id.clone(), request, r),
-        ))
+        let task = Task::perform(cloud_task(core, user_id, install, request), move |r| {
+            Message::CloudDone(game_id.clone(), request, r)
+        });
+        // Dropped once signed out of GOG; signing out of Epic leaves the game, and its sync.
+        match epic {
+            true => task,
+            false => self.account_task(task),
+        }
     }
 
     /// A sync is followed by a check, so the drawer shows where things stand afterwards.
@@ -170,15 +179,23 @@ async fn cloud_task(
             ..Default::default()
         },
     };
-    let tokens = tokens_for(&core, &user_id).await?;
     let launched = slatty_core::runner::prefix_ready(&install);
-    let Some(outcomes) =
-        cloud::sync_game(&core.db, &core.dirs, &core.http, &tokens, &install, opts)
-            .await
-            .map_err(err)?
-    else {
+    let epic = slatty_core::store::epic_app(&install.game_id).is_some();
+    let outcomes = if epic {
+        slatty_core::epic::cloud::sync_game(&core.db, &core.dirs, &core.http, &install, opts).await
+    } else {
+        let tokens = tokens_for(&core, &user_id).await?;
+        cloud::sync_game(&core.db, &core.dirs, &core.http, &tokens, &install, opts).await
+    };
+    let Some(outcomes) = outcomes.map_err(err)? else {
         return Ok(CloudResult {
-            lines: vec!["GOG has no cloud saves for this game.".into()],
+            lines: vec![
+                match epic {
+                    true => "Epic keeps no cloud saves for this game.",
+                    false => "GOG has no cloud saves for this game.",
+                }
+                .into(),
+            ],
             locations: Vec::new(),
             conflicts: false,
             status: CloudStatus::NoCloud,

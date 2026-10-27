@@ -85,7 +85,7 @@ impl App {
         let cards = container(responsive(move |size| {
             let narrow = size.width < NARROW_CARDS;
             let (stats, achievements) = if narrow { (11, 8) } else { (10, 9) };
-            // Neither cloud saves nor achievements: what it is in their place.
+            // Its cloud saves are Epic's; in place of achievements, what it is.
             if epic {
                 return row![
                     container(self.stats(g, narrow))
@@ -94,8 +94,11 @@ impl App {
                         .width(Length::FillPortion(stats))
                         .height(CARD_HEIGHT)
                         .style(theme::block),
+                    container(self.cloud_card(g))
+                        .width(Length::FillPortion(7))
+                        .height(CARD_HEIGHT),
                     container(epic_card())
-                        .width(Length::FillPortion(7 + achievements))
+                        .width(Length::FillPortion(achievements))
                         .height(CARD_HEIGHT),
                 ]
                 .spacing(14)
@@ -1059,7 +1062,7 @@ fn epic_card<'a>() -> Element<'a, Message> {
                         .size(15)
                         .font(semibold())
                         .wrapping(Wrapping::None),
-                    text("Installing and playing it from Slatty comes later")
+                    text("Played signed in to your Epic account")
                         .size(14)
                         .color(tokens().muted)
                         .width(Length::Fill),

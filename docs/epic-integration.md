@@ -13,8 +13,8 @@ lists them and whether each was checked against Epic.
 Requests to Epic send the Epic Games Launcher's `User-Agent`, as legendary does, so that Epic's
 services answer Slatty as they answer the launcher whose client it signs in with.
 
-Slatty signs in, reads the account's library, installs a game's Windows build and plays it.
-Updates and cloud saves are planned (see [roadmap.md](roadmap.md)).
+Slatty signs in, reads the account's library, installs, updates, verifies and plays a game's
+Windows build, and syncs its cloud saves. Achievements are planned (see [roadmap.md](roadmap.md)).
 
 ## Authentication
 
@@ -119,3 +119,24 @@ legendary's offline launch does, which a game that can run offline accepts.
 
 umu's database lists Epic games under the store `egs`, by app name: Proton's fixes are found for
 them as for GOG's (checked in UMU-Proton 10.0-4's copy of the database: 108 Epic games).
+
+## Cloud saves
+
+| Use | Request | Source | Status |
+|---|---|---|---|
+| The game's stored files | `GET https://datastorage-public-service-liveegs.live.use1a.on.epicgames.com/api/v1/access/egstore/savesync/{account_id}/{app_name}/`, with the token: `files`, by key, each with `readLink`, `lastModified` | legendary (`EPCAPI.get_user_cloud_saves`), GameNative's model of the answer | Implemented, unverified |
+| Where to upload | `POST` to the same address, with the token, `{"files": [names]}`: the same names, each with a `writeLink` | legendary (`EPCAPI.create_game_cloud_saves`, `upload_save`) | Implemented, unverified |
+| A file read or written | `GET` a `readLink`, `PUT` the bytes to a `writeLink`, without the token | legendary (`unauth_session`) | Implemented, unverified |
+| The save folder and its files | The catalog's `CloudSaveFolder`, `CloudIncludeList`, `CloudExcludeList` | legendary (`get_save_path`, `_filename_matches`) | Implemented |
+
+A snapshot is written as legendary's `SaveGameHelper.package_savegame` writes one: the files by
+path regardless of case, cut into chunks of 1 MiB, each padded with zeros to 1 MiB before its
+rolling hash (`rolling_hash.py`, the CRC-64/XZ table) and SHA-1 are taken, compressed, under a
+chunk header of version 3 with a random guid, stored at `ChunksV4/{group}/{hash}_{guid}.chunk`
+(the group is the guid's CRC-32 modulo 100); then a manifest of version 18 whose app name is the
+app name followed by the account id, whose build version is the time in UTC
+(`%Y.%m.%d-%H.%M.%S`), and whose custom field `CloudSaveFolder` keeps the folder's template, at
+`manifests/{build version}.manifest`. legendary takes the newest snapshot by `lastModified`, and
+decides whether to upload or download from the files' modification dates; Slatty decides by
+content and history (see [cloud-saves.md](cloud-saves.md#epic-games)). Encrypted snapshots are
+not known to exist.

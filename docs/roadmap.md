@@ -69,7 +69,8 @@ There are no dates. What has been checked against real services, and what not ye
 - Epic Games Store: signing in and the account's games in the library, with their covers; a game's
   Windows build installed from the window or the command line, each file checked against Epic's
   checksum, played through Proton signed in to the account, its Proton build and isolation changed
-  in Game settings, verified, repaired, updated and uninstalled. Playing one has not been tried with a real game yet.
+  in Game settings, verified, repaired, updated and uninstalled, its cloud saves synced by Slatty's
+  rules. Playing one and its cloud saves have not been tried with a real game yet.
 
 **Privacy, security and packaging**
 - Switches for every third party, off until turned on; private data folders; no write through a
@@ -78,7 +79,7 @@ There are no dates. What has been checked against real services, and what not ye
 
 ## Planned
 
-- **Epic's cloud saves and achievements**.
+- **Epic's achievements**, for the games that do not report their own.
 - **Translations** of the interface, in English for now.
 - **Steam downloads** followed more exactly while the client downloads.
 - **Packaging** for other distributions.

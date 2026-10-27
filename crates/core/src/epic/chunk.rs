@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use super::manifest::{ChunkInfo, guid_hex};
+use super::manifest::{ChunkInfo, Guid, guid_hex};
 use crate::error::{Error, Result};
 
 const MAGIC: u32 = 0xB1FE_3AA2;
@@ -67,6 +67,75 @@ pub fn unpack(raw: &[u8], info: &ChunkInfo, secrets: &HashMap<String, String>) -
     Ok(data[..size].to_vec())
 }
 
+/// The data a chunk of a cloud save holds once unpacked: every one is padded to it.
+pub(crate) const SAVE_CHUNK: usize = 1 << 20;
+
+/// A chunk of a cloud save as legendary packs one (`SaveGameHelper.finalize_chunk`,
+/// `Chunk.write`): `data` padded with zeros to `SAVE_CHUNK`, its rolling hash and SHA-1 taken over
+/// that, compressed, under a header of version 3. Its description, its SHA-1 and its bytes.
+pub(crate) fn pack_save(guid: Guid, data: &[u8]) -> (ChunkInfo, [u8; 20], Vec<u8>) {
+    use std::io::Write;
+    let mut padded = data.to_vec();
+    padded.resize(SAVE_CHUNK, 0);
+    let sha = super::sha1(&padded);
+    let hash = rolling_hash(&padded);
+    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    z.write_all(&padded).expect("writes to memory");
+    let body = z.finish().expect("writes to memory");
+    let mut out = Vec::with_capacity(66 + body.len());
+    out.extend(MAGIC.to_le_bytes());
+    out.extend(3u32.to_le_bytes());
+    out.extend(66u32.to_le_bytes());
+    out.extend((body.len() as u32).to_le_bytes());
+    guid.iter().for_each(|g| out.extend(g.to_le_bytes()));
+    out.extend(hash.to_le_bytes());
+    out.push(COMPRESSED);
+    out.extend(sha);
+    // Both hashes given.
+    out.push(3);
+    out.extend((SAVE_CHUNK as u32).to_le_bytes());
+    out.extend(body);
+    let info = ChunkInfo {
+        guid,
+        hash,
+        group: group(&guid),
+        window_size: SAVE_CHUNK as u32,
+        file_size: out.len() as u64,
+        secret: None,
+    };
+    (info, sha, out)
+}
+
+/// The folder number of a chunk's address (`ChunkInfo.group_num`): the CRC-32 of its guid, as
+/// little-endian words, modulo 100.
+fn group(guid: &Guid) -> u8 {
+    let mut crc = flate2::Crc::new();
+    guid.iter().for_each(|g| crc.update(&g.to_le_bytes()));
+    (crc.sum() % 100) as u8
+}
+
+/// Epic's rolling hash of a chunk (`legendary/utils/rolling_hash.py`).
+pub(crate) fn rolling_hash(data: &[u8]) -> u64 {
+    const POLY: u64 = 0xC96C_5795_D787_0F42;
+    const TABLE: [u64; 256] = {
+        let mut table = [0u64; 256];
+        let mut i = 0;
+        while i < 256 {
+            let mut v = i as u64;
+            let mut bit = 0;
+            while bit < 8 {
+                v = if v & 1 == 1 { (v >> 1) ^ POLY } else { v >> 1 };
+                bit += 1;
+            }
+            table[i] = v;
+            i += 1;
+        }
+        table
+    };
+    data.iter()
+        .fold(0u64, |h, &b| h.rotate_left(1) ^ TABLE[b as usize])
+}
+
 /// A chunk as Epic writes one (header version 3, or 4 when `secret` is given), for tests.
 #[cfg(test)]
 pub(crate) fn pack(info: &ChunkInfo, data: &[u8], secret: Option<(&str, [u32; 4])>) -> Vec<u8> {
@@ -107,6 +176,30 @@ pub(crate) fn pack(info: &ChunkInfo, data: &[u8], secret: Option<(&str, [u32; 4]
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A cloud save's chunk reads back as its data padded to 1 MiB, its hashes taken over that.
+    #[test]
+    fn a_save_chunk_reads_back_padded() {
+        let (info, sha, raw) = pack_save([1, 2, 3, 4], b"[FAKE] save");
+        let data = unpack(&raw, &info, &HashMap::new()).unwrap();
+        assert_eq!(data.len(), SAVE_CHUNK);
+        assert!(data.starts_with(b"[FAKE] save") && data[11..].iter().all(|b| *b == 0));
+        assert_eq!(sha, super::super::sha1(&data));
+        assert_eq!(info.hash, rolling_hash(&data));
+        assert!(info.group < 100);
+    }
+
+    /// Its table is CRC-64/XZ's (the same polynomial, reflected), whose entries are known.
+    #[test]
+    fn the_rolling_hash_is_epics() {
+        assert_eq!(rolling_hash(b""), 0);
+        assert_eq!(rolling_hash(&[0x80]), 0xC96C_5795_D787_0F42);
+        assert_eq!(rolling_hash(&[0x01]), 0xB32E_4CBE_03A7_5F6F);
+        assert_eq!(
+            rolling_hash(&[0x01, 0x00]),
+            0xB32E_4CBE_03A7_5F6F_u64.rotate_left(1)
+        );
+    }
 
     fn info() -> ChunkInfo {
         ChunkInfo {

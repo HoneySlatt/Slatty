@@ -49,6 +49,7 @@ impl Env {
             game_id: "g",
             location: "saves",
             root,
+            keep: None,
         };
         sync(&self.cloud, &target, opts).await.unwrap()
     }
@@ -307,6 +308,7 @@ async fn offline_sync_fails_without_touching_anything() {
         game_id: "g",
         location: "saves",
         root: &env.root(),
+        keep: None,
     };
     assert!(
         sync(&env.cloud, &target, SyncOptions::default())
@@ -425,6 +427,7 @@ async fn ignored_marker_entries_are_not_downloaded() {
             game_id: "g",
             location: "saves",
             root: &env.root(),
+            keep: None,
         },
         SyncOptions::default(),
     )
@@ -619,6 +622,7 @@ async fn concurrent_sync_of_the_same_game_is_refused() {
         game_id: "g",
         location: "saves",
         root: &env.root(),
+        keep: None,
     };
     assert!(matches!(
         sync(&env.cloud, &target, SyncOptions::default()).await,
@@ -671,6 +675,7 @@ async fn history_is_not_trusted_after_another_account_synced_the_folder() {
         game_id: "g",
         location: "saves",
         root: &root,
+        keep: None,
     };
     env.write("a.sav", "A1");
     sync(&env.cloud, &target("a"), SyncOptions::default())
@@ -787,6 +792,7 @@ async fn a_check_in_progress_does_not_refuse_a_sync() {
         game_id: "g",
         location: "saves",
         root: &root,
+        keep: None,
     };
     let check = sync(
         &cloud,
@@ -860,6 +866,7 @@ async fn an_unconfirmed_upload_is_not_a_conflict_next_time() {
         game_id: "g",
         location: "saves",
         root: &root,
+        keep: None,
     };
     let r = sync(&flaky, &target, SyncOptions::default()).await.unwrap();
     assert_eq!(r.errors.len(), 1, "{:?}", r.errors);

@@ -110,7 +110,7 @@ one there at another size is never replaced.
 
 | Command | What it does |
 |---|---|
-| `slatty cloud status <id>` | Where the saves are, and what a sync would do. Changes nothing |
+| `slatty cloud status <id>` | Where the saves are, and what a sync would do. Changes nothing. An Epic game's (`epic-<app name>`) sync with Epic's cloud, signed in to Epic |
 | `slatty cloud sync <id>` | Syncs now |
 | `slatty cloud sync <id> --prefer local\|remote` | Settles every conflict of this sync in favour of one side; the other side's copy is kept in the backups |
 | `slatty cloud sync <id> --allow-deletions` | Also passes on files deleted on one side (never when a folder looks empty or moved) |

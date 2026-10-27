@@ -5,6 +5,7 @@
 
 pub mod auth;
 pub mod chunk;
+pub mod cloud;
 pub mod download;
 pub mod install;
 pub mod launch;

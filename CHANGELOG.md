@@ -17,7 +17,9 @@ until 1.0, a minor version may change commands and on-disk formats.
   file checked against Epic's checksum, play through Proton signed in to your Epic account, take
   their Proton build, controller compatibility and isolation from Game settings, are updated by
   themselves like GOG's, and are verified, repaired and uninstalled from Manage (or
-  `slatty verify epic-<app name> [--repair]`, `slatty update epic-<app name>`). `slatty epic list` lists them.
+  `slatty verify epic-<app name> [--repair]`, `slatty update epic-<app name>`). Their cloud saves
+  sync with Epic's, by the same rules as GOG's (`slatty cloud sync epic-<app name>`).
+  `slatty epic list` lists them.
 - `slatty installs --json` lists, for other programs (a game menu of your desktop), the games the
   Installed shelf shows, with their titles, the files of their covers and how to start them.
 

@@ -522,8 +522,7 @@ fn check(chunks: &HashMap<Guid, ChunkInfo>, files: &[FileEntry]) -> Result<()> {
     Ok(())
 }
 
-/// Writes manifests as Epic does, for tests (`Manifest.write`).
-#[cfg(test)]
+/// Writes manifests as Epic does (`Manifest.write`): those of cloud saves, and builds for tests.
 pub(crate) mod write {
     use super::*;
 
@@ -551,8 +550,18 @@ pub(crate) mod write {
         out.extend(guid_bytes(g));
     }
 
-    /// A compressed binary manifest of `feature_level` (below 22: no encryption fields).
+    #[cfg(test)]
     pub(crate) fn manifest(m: &Manifest, chunk_shas: &HashMap<Guid, [u8; 20]>) -> Vec<u8> {
+        manifest_with(m, chunk_shas, &[])
+    }
+
+    /// A compressed binary manifest of `feature_level` (below 22: no encryption fields), with
+    /// these custom fields.
+    pub(crate) fn manifest_with(
+        m: &Manifest,
+        chunk_shas: &HashMap<Guid, [u8; 20]>,
+        custom: &[(&str, &str)],
+    ) -> Vec<u8> {
         let mut body = Vec::new();
         let mut meta = vec![0u8];
         meta.extend(m.feature_level.to_le_bytes());
@@ -619,7 +628,9 @@ pub(crate) mod write {
         section(&mut body, fml);
         section(&mut body, {
             let mut cf = vec![0u8];
-            cf.extend(0u32.to_le_bytes());
+            cf.extend((custom.len() as u32).to_le_bytes());
+            custom.iter().for_each(|(k, _)| string(&mut cf, k));
+            custom.iter().for_each(|(_, v)| string(&mut cf, v));
             cf
         });
 
@@ -628,8 +639,8 @@ pub(crate) mod write {
             use std::io::Write;
             let mut z =
                 flate2::write::ZlibEncoder::new(&mut compressed, flate2::Compression::fast());
-            z.write_all(&body).unwrap();
-            z.finish().unwrap();
+            z.write_all(&body).expect("writes to memory");
+            z.finish().expect("writes to memory");
         }
         let mut out = Vec::new();
         out.extend(MAGIC.to_le_bytes());

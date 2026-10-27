@@ -34,6 +34,11 @@ pub trait CloudTransport: Send + Sync {
         modified: DateTime<Utc>,
     ) -> impl Future<Output = Result<()>> + Send;
     fn delete(&self, name: &str) -> impl Future<Output = Result<()>> + Send;
+    /// Sends the uploads and deletions asked for since the last listing, for a cloud that takes
+    /// them together (Epic's keeps whole snapshots); GOG's takes each as it is asked.
+    fn commit(&self) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
+    }
 }
 
 /// Same identification gogdl uses for cloud storage; whether GOG requires it is unverified.
