@@ -70,7 +70,7 @@ There are no dates. What has been checked against real services, and what not ye
   Windows build installed from the window or the command line, each file checked against Epic's
   checksum, played through Proton signed in to the account, its Proton build and isolation changed
   in Game settings, verified, repaired, updated and uninstalled, its cloud saves synced by Slatty's
-  rules. Its cloud saves have not been tried with a real game yet.
+  rules, a snapshot sent to Epic and read back.
 
 **Privacy, security and packaging**
 - Switches for every third party, off until turned on; private data folders; no write through a

@@ -156,7 +156,8 @@ same snapshots.
   whether GOG requires those headers is not verified. Downloads were verified to arrive
   decompressed.
 - **Memory.** A save is held whole in memory while it transfers.
-- **Epic: not tried against Epic yet.** The snapshots follow legendary's code (chunks of 1 MiB
-  padded with zeros, manifests of version 18, the folder's template kept as `CloudSaveFolder`),
-  but whether Epic's own launcher reads the ones Slatty makes is not verified. Each sync that
+- **Epic: read by Slatty, not yet by Epic's launcher.** The snapshots follow legendary's code
+  (chunks of 1 MiB padded with zeros, manifests of version 18, the folder's template kept as
+  `CloudSaveFolder`). One sent to Epic was read back identical (see
+  [compatibility.md](compatibility.md)); whether Epic's own launcher reads them is not verified. Each sync that
   changes the cloud sends every save of the folder again, read back from the newest snapshot.
