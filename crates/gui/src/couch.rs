@@ -472,7 +472,7 @@ impl App {
 
     fn library_nav(&mut self, nav: Nav) -> Task<Message> {
         let games = self.couch_games();
-        let (columns, rows) = (self.couch_columns(), self.couch_rows());
+        let (columns, rows, _) = self.couch_grid();
         let Some(couch) = &mut self.couch else {
             return Task::none();
         };
@@ -976,7 +976,7 @@ impl App {
     /// its game, and keeps its place where its game left the shelf.
     fn refocus_library(&mut self) {
         let games = self.couch_games();
-        let (columns, rows) = (self.couch_columns(), self.couch_rows());
+        let (columns, rows, _) = self.couch_grid();
         let library = &self.library;
         let Some(couch) = &mut self.couch else {
             return;
@@ -1217,11 +1217,9 @@ impl App {
     /// focus shows, whatever changed since the last move (the window grew, the shelf has fewer
     /// games).
     pub(crate) fn library_top(&self, couch: &Couch, focused: Option<usize>) -> usize {
-        let row = focused.unwrap_or(0) / self.couch_columns();
-        couch
-            .top
-            .min(row)
-            .max((row + 1).saturating_sub(self.couch_rows()))
+        let (across, down, _) = self.couch_grid();
+        let row = focused.unwrap_or(0) / across;
+        couch.top.min(row).max((row + 1).saturating_sub(down))
     }
 
     /// The games whose covers the page shown draws, as places in `library`.
@@ -1254,8 +1252,9 @@ impl App {
                 let focused = (couch.on_shelves.is_none() && !games.is_empty())
                     .then(|| couch.card.min(games.len() - 1));
                 let top = self.library_top(couch, focused);
+                let (across, down, _) = self.couch_grid();
                 let first = (top * across).min(games.len());
-                let last = ((top + self.couch_rows()) * across).min(games.len());
+                let last = ((top + down) * across).min(games.len());
                 games[first..last].to_vec()
             }
             Tab::Downloads => Vec::new(),
@@ -1274,11 +1273,20 @@ impl App {
         (((self.window.width - 2.0 * MARGIN + GAP) / (wanted + GAP)).floor() as usize).max(1)
     }
 
-    /// Rows of covers the library shows at once.
-    pub fn couch_rows(&self) -> usize {
-        let row = self.couch_card() * 4.0 / 3.0 + GAP;
+    /// The library's grid: covers across, rows shown at once, and a cover's width. Covers as wide
+    /// as Home's fill the width; where more than half of a row more would fit under them, they are
+    /// made smaller so that it fits whole, and more go across.
+    pub fn couch_grid(&self) -> (usize, usize, f32) {
+        let (columns, card) = (self.couch_columns(), self.couch_card());
         let room = self.window.height - TOP_BAR - HINTS - SHELVES - self.notice_room();
-        (((room + GAP) / row).floor() as usize).max(1)
+        let fits = (room + GAP) / (card * 4.0 / 3.0 + GAP);
+        let rows = fits.round().max(1.0);
+        if rows <= fits {
+            return (columns, rows as usize, card);
+        }
+        let card = (room - (rows - 1.0) * GAP) / rows * 3.0 / 4.0;
+        let across = (self.window.width - 2.0 * MARGIN + GAP) / (card + GAP);
+        ((across.floor() as usize).max(1), rows as usize, card)
     }
 
     /// The room a notice takes above the pages while it shows.

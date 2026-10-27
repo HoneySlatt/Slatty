@@ -122,13 +122,43 @@ fn y_marks_a_favorite_where_the_focus_is() {
     );
 }
 
+/// The library's rows fill the height: where more than half of a row more would fit under covers
+/// as wide as Home's, they are made smaller so that it fits whole, and more go across, rather than
+/// leave an empty band under the grid (two rows, then 200 pixels, at 1920×1080).
+#[test]
+fn the_library_grid_fills_the_screens_height() {
+    use crate::couch::{GAP, HINTS, MARGIN, SHELVES, TOP_BAR};
+    let mut app = couch_app();
+    for (width, height) in [(1920.0, 1080.0), (1280.0, 800.0), (1280.0, 720.0)] {
+        app.window = Size::new(width, height);
+        let (across, down, card) = app.couch_grid();
+        let room = height - TOP_BAR - HINTS - SHELVES;
+        let used = down as f32 * (card * 4.0 / 3.0 + GAP) - GAP;
+        assert!(used <= room, "{width}×{height}: rows fit whole");
+        assert!(
+            room - used < (card * 4.0 / 3.0 + GAP) / 2.0,
+            "{width}×{height}: {down} rows leave {} pixels",
+            room - used
+        );
+        assert!(across as f32 * (card + GAP) - GAP <= width - 2.0 * MARGIN);
+        assert!(card <= app.couch_card(), "never larger than Home's");
+    }
+    app.window = Size::new(1920.0, 1080.0);
+    assert_eq!(app.couch_grid().1, 3);
+    app.library
+        .extend((15..=30).map(|i| fake_game(&i.to_string(), &format!("Game {i}"))));
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    assert_eq!(app.couch_in_view().len(), 24, "three rows of eight");
+    let mut ui = render_window(&app);
+    snapshot(&mut ui, "couch-library-1080");
+}
+
 #[test]
 fn the_library_grid_moves_by_rows_and_keeps_the_focus_in_view() {
     let mut app = couch_app();
     nav(&mut app, Nav::NextTab);
     assert_eq!(couch(&app).tab, Tab::Library);
-    let across = app.couch_columns();
-    let down = app.couch_rows();
+    let (across, down, _) = app.couch_grid();
     assert!(across > 1 && down >= 1);
     nav(&mut app, Nav::Right);
     assert_eq!(couch(&app).card, 1);
@@ -409,7 +439,8 @@ fn rows_fit_whole_under_a_notice() {
     let (hero, rows, row) = app.home_layout();
     let used = hero + rows as f32 * row + (rows - 1) as f32 * GAP;
     assert!(used <= 800.0 - TOP_BAR - HINTS - 8.0 - NOTICE, "Home");
-    let (rows, row) = (app.couch_rows(), app.couch_card() * 4.0 / 3.0 + GAP);
+    let (_, rows, card) = app.couch_grid();
+    let row = card * 4.0 / 3.0 + GAP;
     assert!(
         rows as f32 * row - GAP <= 800.0 - TOP_BAR - HINTS - SHELVES - NOTICE,
         "Library"
@@ -1284,11 +1315,15 @@ fn the_library_starts_on_its_first_cover_whatever_fills_the_shelf() {
 #[test]
 fn the_library_asks_for_the_covers_around_its_focus_found_again() {
     let mut app = couch_app();
+    // Three rows of eight at 3840×2160.
+    app.library
+        .extend((16..=30).map(|i| fake_game(&i.to_string(), &format!("Game {i}"))));
+    app.lists.clear();
     app.card_width = 225.0;
     let _ = app.update(Message::Rescaled(1.0));
     let _ = app.update(Message::WindowResized(Size::new(3840.0, 2160.0)));
     let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
-    let across = app.couch_columns();
+    let (across, ..) = app.couch_grid();
     nav(&mut app, Nav::Down);
     for _ in 1..across {
         nav(&mut app, Nav::Right);
@@ -1317,7 +1352,7 @@ fn the_library_asks_for_the_covers_around_its_focus_found_again() {
 fn the_library_focus_found_again_keeps_its_row_in_view() {
     let mut app = couch_app();
     let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
-    let across = app.couch_columns();
+    let (across, ..) = app.couch_grid();
     for _ in 1..across {
         nav(&mut app, Nav::Right);
     }
@@ -1338,7 +1373,7 @@ fn the_library_focus_found_again_keeps_its_row_in_view() {
 fn a_new_shelf_or_search_starts_from_the_first_cover() {
     let mut app = couch_app();
     let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
-    let across = app.couch_columns();
+    let (across, ..) = app.couch_grid();
     nav(&mut app, Nav::Down);
     assert_eq!(couch(&app).card, across);
     let _ = app.update(Message::Couch(CouchMsg::Shelf(Shelf::Favorites)));

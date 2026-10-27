@@ -438,7 +438,7 @@ impl App {
                 "No game matches the search."
             })
         } else {
-            let (across, down, card) = (self.couch_columns(), self.couch_rows(), self.couch_card());
+            let (across, down, card) = self.couch_grid();
             let top = self.library_top(couch, focused);
             // The rows that fit whole: Iced would squash one more to the room left.
             let rows = (top..top + down)
@@ -453,7 +453,12 @@ impl App {
         };
         column![
             container(header).height(SHELVES).center_y(SHELVES),
-            container(grid).height(Length::Fill).clip(true),
+            // Covers made smaller to fill the height may leave room across: on both sides.
+            container(grid)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Alignment::Center)
+                .clip(true),
         ]
         .padding([0.0, MARGIN])
         .into()

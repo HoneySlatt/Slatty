@@ -45,6 +45,8 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 - In a Steam Deck's Game Mode, Slatty is no longer drawn about twice too large: it uses the
   screen's pixels, as in the Desktop Mode.
+- The couch mode's library fills the screen's height: at 1920×1080 it shows three rows of slightly
+  smaller covers rather than two above an empty band.
 
 ## 0.1.0 (2026-10-21)
 
