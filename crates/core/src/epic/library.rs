@@ -20,7 +20,7 @@ use crate::store;
 const LIBRARY_URL: &str =
     "https://library-service.live.use1a.on.epicgames.com/library/api/public/items";
 const CATALOG_HOST: &str = "https://catalog-public-service-prod06.ol.epicgames.com";
-/// Pages of the library read at most: a cursor that never ends stops there.
+/// Pages of the library read at most: a cursor that goes on past them is an error.
 const MAX_PAGES: usize = 200;
 /// Catalog requests at once.
 const AT_ONCE: usize = 8;
@@ -209,6 +209,12 @@ pub async fn fetch(
         if cursor.is_none() {
             break;
         }
+    }
+    if cursor.is_some() {
+        return Err(Error::parse(
+            "reading the Epic library",
+            "Epic gave more pages than any library has",
+        ));
     }
     let mut seen = std::collections::HashSet::new();
     let owned: Vec<(String, Record)> = records
@@ -546,6 +552,21 @@ mod tests {
     /// had no description of is not shown, and asked about again.
     /// An item the catalog refuses to describe is left out this time, as one it does not know,
     /// rather than the whole library; a session Epic rejects stops the read.
+    /// A cursor that never ends is an error: the pages read so far, kept as the library, would hide
+    /// the account's other games until the next read.
+    #[tokio::test]
+    async fn a_library_whose_pages_never_end_is_refused() {
+        let mut source = fake();
+        source.pages = vec![LibraryPage {
+            records: vec![record(Some("FakeLoop"), "fakens", "fakeitem")],
+            metadata: PageMetadata {
+                next_cursor: Some("0".into()),
+            },
+        }];
+        let read = fetch(&source, &[], &[]).await;
+        assert!(matches!(read, Err(Error::Parse { .. })), "{read:?}");
+    }
+
     #[tokio::test]
     async fn one_item_refused_by_the_catalog_leaves_the_others() {
         let mut source = fake();
