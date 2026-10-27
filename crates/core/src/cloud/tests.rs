@@ -1033,9 +1033,16 @@ async fn inspection_is_read_only_and_flags_compressed_downloads() {
     env.put_remote("same.sav", "x");
     env.cloud.put("saves/diff.sav", b"\x1f\x8bstill gzip");
     let copies = env.tmp.join("copies");
-    let files = super::inspect::compare(&env.cloud, "saves", &env.root(), &copies, None)
-        .await
-        .unwrap();
+    env.write("left.log", "not a save");
+    env.put_remote("left.log", "not a save either");
+    // Epic's include/exclude list: what the sync leaves alone is not compared.
+    let keep = |rel: &str| !rel.ends_with(".log");
+    let files =
+        super::inspect::compare(&env.cloud, "saves", &env.root(), &copies, None, Some(&keep))
+            .await
+            .unwrap();
+    assert!(files.iter().all(|f| f.path != "left.log"));
+    assert!(!copies.join("left.log").exists());
     let same = files.iter().find(|f| f.path == "same.sav").unwrap();
     let diff = files.iter().find(|f| f.path == "diff.sav").unwrap();
     assert!(same.identical() && !diff.identical());

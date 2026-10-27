@@ -41,17 +41,23 @@ impl FileComparison {
     }
 }
 
-/// Read-only: downloads cloud copies into `copies`, never touches the save folder.
+/// Read-only: downloads cloud copies into `copies`, never touches the save folder. `keep` names
+/// the files that are saves, as for the sync (`SyncTarget::keep`).
 pub async fn compare<T: CloudTransport>(
     cloud: &T,
     location: &str,
     root: &std::path::Path,
     copies: &std::path::Path,
     filter: Option<&str>,
+    keep: Option<&(dyn Fn(&str) -> bool + Sync)>,
 ) -> Result<Vec<FileComparison>> {
-    let local = scan::scan(root)?;
+    let mut local = scan::scan(root)?;
     // What the sync leaves out is not compared either (`SyncReport::skipped_remote`).
-    let (remote, _) = remote_map(cloud.list().await?, location);
+    let (mut remote, _) = remote_map(cloud.list().await?, location);
+    if let Some(keep) = keep {
+        local.files.retain(|_, f| keep(&f.rel));
+        remote.retain(|_, r| keep(&r.rel));
+    }
     let filter = filter.map(str::to_lowercase);
     let keys: BTreeSet<&String> = local.files.keys().chain(remote.keys()).collect();
     let mut out = Vec::new();

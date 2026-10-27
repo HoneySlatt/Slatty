@@ -192,7 +192,10 @@ async fn diff(ctx: &Ctx, game_id: &str, filter: Option<&str>) -> Result<()> {
         let root = saves.root?;
         println!("[{LOCATION}] {}", shown(root.display()));
         let copies = copies(LOCATION);
-        let files = cloud::inspect::compare(&saves.cloud, LOCATION, &root, &copies, filter).await?;
+        let keep = |rel: &str| saves.filter.keeps(rel);
+        let files =
+            cloud::inspect::compare(&saves.cloud, LOCATION, &root, &copies, filter, Some(&keep))
+                .await?;
         print_comparisons(&files);
         return Ok(());
     }
@@ -206,9 +209,15 @@ async fn diff(ctx: &Ctx, game_id: &str, filter: Option<&str>) -> Result<()> {
         let Ok(root) = root else { continue };
         let copies = copies(&location.name);
         println!("[{}] {}", shown(&location.name), shown(root.display()));
-        let files =
-            cloud::inspect::compare(&game_cloud.transport, &location.name, root, &copies, filter)
-                .await?;
+        let files = cloud::inspect::compare(
+            &game_cloud.transport,
+            &location.name,
+            root,
+            &copies,
+            filter,
+            None,
+        )
+        .await?;
         print_comparisons(&files);
     }
     Ok(())
