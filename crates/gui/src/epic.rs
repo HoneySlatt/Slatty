@@ -47,7 +47,8 @@ pub enum EpicMsg {
     /// The account signed in: its id and its name.
     SignedIn(Result<(String, String), String>),
     SignOut,
-    SignedOut(Result<(), String>),
+    /// The account signed out, if one was.
+    SignedOut(Result<Option<String>, String>),
     /// Reads the library again from Epic.
     Refresh,
     /// The library read for the account of that id.
@@ -129,20 +130,20 @@ impl App {
                 let Some(core) = self.core.clone() else {
                     return Task::none();
                 };
-                self.epic = EpicView::default();
-                self.forget_epic_achievements();
-                self.merge_steam();
                 return Task::perform(
-                    async move {
-                        auth::sign_out(&core.db, &core.dirs)
-                            .await
-                            .map(drop)
-                            .map_err(err)
-                    },
+                    async move { auth::sign_out(&core.db, &core.dirs).await.map_err(err) },
                     |r| Message::Epic(EpicMsg::SignedOut(r)),
                 );
             }
-            EpicMsg::SignedOut(Ok(())) => {}
+            // Its games go once it is signed out: a sign-out refused (the keyring locked, another
+            // account signed in meanwhile) leaves it as it is.
+            EpicMsg::SignedOut(Ok(out)) => {
+                if out.is_none() || out == self.epic.account {
+                    self.epic = EpicView::default();
+                    self.forget_epic_achievements();
+                    self.merge_steam();
+                }
+            }
             EpicMsg::SignedOut(Err(e)) => self.notify_error(e),
             EpicMsg::Refresh => {
                 let (Some(core), Some(account)) = (self.core.clone(), self.epic.account.clone())

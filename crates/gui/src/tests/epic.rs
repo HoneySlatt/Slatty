@@ -68,7 +68,19 @@ fn epic_games_show_while_signed_in() {
         .collect();
     assert_eq!(shown, ["epic-Alpha", "epic-Beta"]);
 
+    // Shown until signed out: a sign-out that fails leaves the account as it is.
     let _ = app.update(Message::Epic(EpicMsg::SignOut));
+    assert_eq!(epic_ids(&app), ["epic-Alpha", "epic-Beta"]);
+    let _ = app.update(Message::Epic(EpicMsg::SignedOut(Err(
+        "[FAKE] keyring locked".into(),
+    ))));
+    assert_eq!(app.epic.account.as_deref(), Some(ACCOUNT));
+    assert_eq!(epic_ids(&app), ["epic-Alpha", "epic-Beta"]);
+    // Another account's sign-out leaves this one.
+    let other = "fedcba9876543210fedcba9876543210";
+    let _ = app.update(Message::Epic(EpicMsg::SignedOut(Ok(Some(other.into())))));
+    assert_eq!(app.epic.account.as_deref(), Some(ACCOUNT));
+    let _ = app.update(Message::Epic(EpicMsg::SignedOut(Ok(Some(ACCOUNT.into())))));
     assert!(epic_ids(&app).is_empty());
     assert_eq!(app.epic.account, None);
 }
@@ -366,7 +378,7 @@ fn epic_achievements_are_the_signed_in_accounts() {
         list(),
     )));
     assert_eq!(app.achievement_counts("epic-Alpha"), Some((1, 1)));
-    let _ = app.update(Message::Epic(EpicMsg::SignOut));
+    let _ = app.update(Message::Epic(EpicMsg::SignedOut(Ok(Some(ACCOUNT.into())))));
     assert!(!app.achievements.contains_key("epic-Alpha"));
     assert_eq!(app.achievement_counts("epic-Alpha"), None);
 }
