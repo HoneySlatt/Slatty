@@ -99,8 +99,8 @@ Your games, as covers. Above the grid:
 - **+** adds a game from no store (see [Games added by hand](#games-added-by-hand)).
 
 **The list of games**, on the library's left as in Steam's, names every game but the hidden ones,
-A to Z, with its icon when it has one: GOG's square icon, or the one the Steam client keeps;
-none otherwise. Games not installed are dimmed. Its search is its own, apart from the library's;
+A to Z, with its icon when it has one: the one chosen in Edit game, else GOG's square icon or the
+one the Steam client keeps; none otherwise. Games not installed are dimmed. Its search is its own, apart from the library's;
 a click opens the game's page. The button beside the search closes it, and the one at the left of
 the library's toolbar opens it again; it comes back as you left it.
 
@@ -147,10 +147,11 @@ Right-click a cover, or a game page's key art, and choose **Edit game**. You can
 
 - the **Title**, and the **Sorting title** used when sorting by name ("Final Fantasy 7" for
   "Final Fantasy VII");
-- the **Cover** and the **Background** (the key art of the game page): click a picture to pick an
-  image file (PNG, JPEG, WebP, GIF or BMP), copied into Slatty's data so the original can
-  go. With SteamGridDB turned on (Settings → Advanced), **From SteamGridDB** searches its
-  community's covers and backgrounds by name;
+- the **Cover**, the **Background** (the key art of the game page) and the **Icon** (shown in the
+  list of games beside the library): click a picture to pick an image file (PNG, JPEG, WebP, GIF
+  or BMP), copied into Slatty's data so the original can go. With SteamGridDB turned on
+  (Settings → Advanced), **From SteamGridDB** searches its community's covers, backgrounds and
+  icons by name;
 - **Hide game**: out of every shelf and search, listed only under Hidden games, where the same
   switch brings it back.
 

@@ -1439,6 +1439,7 @@ mod tests {
                 hidden: false,
                 cover: crate::custom::ImageChange::Keep,
                 background: crate::custom::ImageChange::Keep,
+                icon: crate::custom::ImageChange::Keep,
             },
         )
         .unwrap();

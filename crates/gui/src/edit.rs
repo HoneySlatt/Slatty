@@ -17,6 +17,7 @@ use crate::{App, Loadable, Message, err};
 pub enum Art {
     Cover,
     Background,
+    Icon,
 }
 
 /// The edit dialog's state, applied only on Save.
@@ -27,6 +28,7 @@ pub struct EditDraft {
     pub hidden: bool,
     pub cover: ImageChange,
     pub background: ImageChange,
+    pub icon: ImageChange,
     /// Pictures downloaded from SteamGridDB, ready to show: made once, not at every frame.
     pub previews: std::collections::HashMap<Art, image::Handle>,
     /// What SteamGridDB offers for one of the pictures, once asked.
@@ -116,16 +118,19 @@ impl App {
                     hidden: custom.hidden,
                     cover: ImageChange::Keep,
                     background: ImageChange::Keep,
+                    icon: ImageChange::Keep,
                     previews: Default::default(),
                     picker: None,
                     game_id: game_id.clone(),
                 });
-                let background = self
+                // The store's pictures shown in the form, once in the cache.
+                let shown = self
                     .library
                     .iter()
                     .find(|g| g.id == game_id)
-                    .and_then(|g| g.background.clone());
-                return self.request_images(background.into_iter().collect());
+                    .map(|g| g.background.iter().chain(&g.icon).cloned().collect())
+                    .unwrap_or_default();
+                return self.request_images(shown);
             }
             EditMsg::Title(v) => {
                 if let Some(d) = &mut self.edit {
@@ -149,6 +154,7 @@ impl App {
                             .set_title(match art {
                                 Art::Cover => "Choose a cover",
                                 Art::Background => "Choose a background",
+                                Art::Icon => "Choose an icon",
                             })
                             .add_filter("Images", &["png", "jpg", "jpeg", "webp", "gif", "bmp"])
                             .pick_file()
@@ -242,6 +248,7 @@ impl App {
                 let kind = match p.art {
                     Art::Cover => steamgriddb::Kind::Cover,
                     Art::Background => steamgriddb::Kind::Background,
+                    Art::Icon => steamgriddb::Kind::Icon,
                 };
                 return Task::perform(
                     async move {
@@ -329,6 +336,7 @@ impl App {
                     d.hidden = false;
                     d.cover = ImageChange::Reset;
                     d.background = ImageChange::Reset;
+                    d.icon = ImageChange::Reset;
                     d.picker = None;
                 }
             }
@@ -366,6 +374,7 @@ impl App {
             hidden: d.hidden,
             cover: d.cover.clone(),
             background: d.background.clone(),
+            icon: d.icon.clone(),
         };
         match custom::save(&core.db, &core.dirs, &d.game_id, changes) {
             Ok(saved) => {
@@ -446,6 +455,14 @@ impl App {
         }
     }
 
+    /// The icon of the list of games: the user's, else its store's once in the cache.
+    pub fn icon(&self, g: &LibraryGame) -> Option<image::Handle> {
+        match self.customs.get(&g.id).and_then(|c| c.icon.as_ref()) {
+            Some(path) => Some(image::Handle::from_path(path)),
+            None => g.icon.as_ref().and_then(|u| self.images.get(u)).cloned(),
+        }
+    }
+
     /// What the library is sorted by when sorting by name.
     pub fn sort_name(&self, g: &LibraryGame) -> std::rc::Rc<crate::library::NaturalKey> {
         self.sort_keys.of(self
@@ -461,6 +478,7 @@ impl EditDraft {
         match art {
             Art::Cover => &mut self.cover,
             Art::Background => &mut self.background,
+            Art::Icon => &mut self.icon,
         }
     }
 }

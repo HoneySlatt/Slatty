@@ -73,11 +73,10 @@ impl App {
     /// A game's icon, when it has one, and its name, dimmed when not installed, as Steam's list
     /// shows them; a click opens its page.
     fn sidebar_row<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
-        let shown_icon: Element<'_, Message> =
-            match g.icon.as_ref().and_then(|i| self.images.get(i)) {
-                Some(handle) => image(handle.clone()).width(ICON).height(ICON).into(),
-                None => Space::new().width(ICON).height(ICON).into(),
-            };
+        let shown_icon: Element<'_, Message> = match self.icon(g) {
+            Some(handle) => image(handle).width(ICON).height(ICON).into(),
+            None => Space::new().width(ICON).height(ICON).into(),
+        };
         let color = match self.is_installed(&g.id) {
             true => tokens().text,
             false => tokens().muted,

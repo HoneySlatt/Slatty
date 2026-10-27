@@ -167,6 +167,7 @@ fn installed_games_are_printed_as_json() {
         hidden,
         cover: slatty_core::custom::ImageChange::Keep,
         background: slatty_core::custom::ImageChange::Keep,
+        icon: slatty_core::custom::ImageChange::Keep,
     };
     slatty_core::custom::save(&db, &dirs, "local-1", changes("[FAKE] Renamed", false)).unwrap();
     slatty_core::custom::save(&db, &dirs, "local-2", changes("", true)).unwrap();

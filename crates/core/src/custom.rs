@@ -20,6 +20,8 @@ pub struct Custom {
     pub sort_title: Option<String>,
     pub cover: Option<PathBuf>,
     pub background: Option<PathBuf>,
+    /// The icon of the list of games beside the library.
+    pub icon: Option<PathBuf>,
     /// Left out of the library's shelves, shown only with the hidden games.
     pub hidden: bool,
 }
@@ -32,6 +34,7 @@ pub struct Changes {
     pub hidden: bool,
     pub cover: ImageChange,
     pub background: ImageChange,
+    pub icon: ImageChange,
 }
 
 /// What saving does to one of the game's images.
@@ -49,8 +52,9 @@ pub enum ImageChange {
 /// Every game the user customised.
 pub fn all(db: &Db) -> Result<HashMap<String, Custom>> {
     let conn = db.conn();
-    let mut stmt = conn
-        .prepare("SELECT game_id, title, sort_title, cover, background, hidden FROM game_custom")?;
+    let mut stmt = conn.prepare(
+        "SELECT game_id, title, sort_title, cover, background, hidden, icon FROM game_custom",
+    )?;
     let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, read(r, 1)?)))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
@@ -59,7 +63,7 @@ fn get(db: &Db, game_id: &str) -> Result<Custom> {
     Ok(db
         .conn()
         .query_row(
-            "SELECT title, sort_title, cover, background, hidden FROM game_custom
+            "SELECT title, sort_title, cover, background, hidden, icon FROM game_custom
              WHERE game_id = ?1",
             [game_id],
             |r| read(r, 0),
@@ -76,6 +80,7 @@ fn read(r: &rusqlite::Row<'_>, first: usize) -> rusqlite::Result<Custom> {
         cover: r.get::<_, Option<String>>(first + 2)?.map(PathBuf::from),
         background: r.get::<_, Option<String>>(first + 3)?.map(PathBuf::from),
         hidden: r.get(first + 4)?,
+        icon: r.get::<_, Option<String>>(first + 5)?.map(PathBuf::from),
     })
 }
 
@@ -109,11 +114,16 @@ pub fn save(db: &Db, dirs: &Dirs, game_id: &str, changes: Changes) -> Result<Cus
         changes.background,
     )
     .inspect_err(|_| remove_replaced(&folder, cover.as_deref(), old.cover.as_deref()))?;
+    let icon = apply(&folder, "icon", old.icon.as_deref(), changes.icon).inspect_err(|_| {
+        remove_replaced(&folder, cover.as_deref(), old.cover.as_deref());
+        remove_replaced(&folder, background.as_deref(), old.background.as_deref());
+    })?;
     let custom = Custom {
         title: text(&changes.title),
         sort_title: text(&changes.sort_title),
         cover,
         background,
+        icon,
         hidden: changes.hidden,
     };
     let saved = if custom == Custom::default() {
@@ -122,18 +132,20 @@ pub fn save(db: &Db, dirs: &Dirs, game_id: &str, changes: Changes) -> Result<Cus
     } else {
         let path = |p: &Option<PathBuf>| p.as_ref().map(|p| p.to_string_lossy().into_owned());
         db.conn().execute(
-            "INSERT INTO game_custom (game_id, title, sort_title, cover, background, hidden)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "INSERT INTO game_custom (game_id, title, sort_title, cover, background, hidden, icon)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(game_id) DO UPDATE SET title = excluded.title,
                 sort_title = excluded.sort_title, cover = excluded.cover,
-                background = excluded.background, hidden = excluded.hidden",
+                background = excluded.background, hidden = excluded.hidden,
+                icon = excluded.icon",
             params![
                 game_id,
                 custom.title,
                 custom.sort_title,
                 path(&custom.cover),
                 path(&custom.background),
-                custom.hidden
+                custom.hidden,
+                path(&custom.icon)
             ],
         )
     };
@@ -144,6 +156,7 @@ pub fn save(db: &Db, dirs: &Dirs, game_id: &str, changes: Changes) -> Result<Cus
             custom.background.as_deref(),
             old.background.as_deref(),
         );
+        remove_replaced(&folder, custom.icon.as_deref(), old.icon.as_deref());
         return Err(e.into());
     }
     // The database owns the new copies now; failures above never remove its previous images.
@@ -153,6 +166,7 @@ pub fn save(db: &Db, dirs: &Dirs, game_id: &str, changes: Changes) -> Result<Cus
         old.background.as_deref(),
         custom.background.as_deref(),
     );
+    remove_replaced(&folder, old.icon.as_deref(), custom.icon.as_deref());
     if custom == Custom::default() {
         let _ = std::fs::remove_dir(&folder);
     }
@@ -285,6 +299,7 @@ mod tests {
             hidden: false,
             cover: change,
             background: ImageChange::Keep,
+            icon: ImageChange::Keep,
         }
     }
 
@@ -305,6 +320,37 @@ mod tests {
         std::fs::remove_file(source).unwrap();
         assert_eq!(std::fs::read(&cover).unwrap(), PNG, "a copy, not a link");
         assert_eq!(all(&env.db).unwrap()["42"], custom);
+    }
+
+    /// An icon chosen is kept as a copy like the cover, read back with it, and goes once reset.
+    #[test]
+    fn an_icon_chosen_is_kept_and_reset() {
+        let env = Env::new("icon");
+        let custom = save(
+            &env.db,
+            &env.dirs,
+            "42",
+            Changes {
+                icon: ImageChange::Downloaded(PNG.to_vec()),
+                ..cover(ImageChange::Keep)
+            },
+        )
+        .unwrap();
+        let icon = custom.icon.clone().unwrap();
+        assert!(icon.starts_with(env.dirs.data.join("custom/42")));
+        assert_eq!(all(&env.db).unwrap()["42"].icon.as_ref(), Some(&icon));
+        let reset = save(
+            &env.db,
+            &env.dirs,
+            "42",
+            Changes {
+                icon: ImageChange::Reset,
+                ..cover(ImageChange::Keep)
+            },
+        )
+        .unwrap();
+        assert_eq!(reset, Custom::default());
+        assert!(!icon.exists(), "its copy deleted");
     }
 
     #[test]

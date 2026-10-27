@@ -21,6 +21,7 @@ struct Form<'a> {
     fields: Element<'a, Message>,
     cover: Element<'a, Message>,
     background: Element<'a, Message>,
+    icon: Element<'a, Message>,
     /// What SteamGridDB offers for one of the pictures, once asked.
     picker: Option<Element<'a, Message>>,
     actions: Element<'a, Message>,
@@ -58,11 +59,14 @@ impl App {
         const AROUND: f32 = 48.0 + 52.0 + 80.0 + 52.0 + 40.0;
         let body = container(
             scrollable(
-                column![form.fields, row![form.cover, form.background].spacing(24)]
-                    .push(form.picker)
-                    .push(note("Click a picture to choose a file."))
-                    .spacing(20)
-                    .padding(Padding::ZERO.right(14)),
+                column![
+                    form.fields,
+                    row![form.cover, form.background, form.icon].spacing(24)
+                ]
+                .push(form.picker)
+                .push(note("Click a picture to choose a file."))
+                .spacing(20)
+                .padding(Padding::ZERO.right(14)),
             )
             .id(FORM)
             .style(theme::scroller),
@@ -101,7 +105,7 @@ impl App {
             (DRAWER_PICTURE, DRAWER_PICTURE * 9.0 / 16.0),
         );
         let body = scrollable(
-            column![form.fields, form.cover, form.background]
+            column![form.fields, form.cover, form.background, form.icon]
                 .push(form.picker)
                 .push(note("Click a picture to choose a file."))
                 .spacing(20)
@@ -203,6 +207,7 @@ impl App {
             fields: fields.into(),
             cover: picture(Art::Cover, "Cover", cover),
             background: picture(Art::Background, "Background", background),
+            icon: picture(Art::Icon, "Icon", (ICON_PICTURE, ICON_PICTURE)),
             picker: d.picker.as_ref().map(|p| self.art_picker(p)),
             actions: actions.into(),
         }
@@ -214,23 +219,30 @@ impl App {
         let change = match art {
             Art::Cover => &d.cover,
             Art::Background => &d.background,
+            Art::Icon => &d.icon,
         };
         match (change, art) {
             (ImageChange::Set(path), _) => Some(image::Handle::from_path(path)),
             (ImageChange::Downloaded(_), _) => d.previews.get(&art).cloned(),
             (ImageChange::Keep, Art::Cover) => self.cover(&game.id),
             (ImageChange::Keep, Art::Background) => self.background(game),
+            (ImageChange::Keep, Art::Icon) => self.icon(game),
             (ImageChange::Reset, Art::Cover) => self.covers.get(&game.id).cloned(),
             (ImageChange::Reset, Art::Background) => game
                 .background
                 .as_ref()
                 .and_then(|u| self.images.get(u))
                 .cloned(),
+            (ImageChange::Reset, Art::Icon) => {
+                game.icon.as_ref().and_then(|u| self.images.get(u)).cloned()
+            }
         }
     }
 }
 
 const PICTURE_HEIGHT: f32 = 200.0;
+/// Side of the icon in the form: small and square, as the list of games shows it.
+const ICON_PICTURE: f32 = 96.0;
 /// Width of the background in the drawer: the drawer less its padding and the room of its scrollbar.
 const DRAWER_PICTURE: f32 = DRAWER_WIDTH - 48.0 - 14.0;
 
@@ -284,6 +296,11 @@ impl App {
                 "Background from SteamGridDB",
                 "SteamGridDB has no background for this game.",
                 (248.0, 80.0),
+            ),
+            Art::Icon => (
+                "Icon from SteamGridDB",
+                "SteamGridDB has no icon for this game.",
+                (64.0, 64.0),
             ),
         };
         let close = button(icon(Icon::X, 16.0, tokens().text))

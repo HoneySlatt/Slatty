@@ -115,6 +115,10 @@ CREATE TABLE offline_jobs (
     r#"
 ALTER TABLE offline_jobs ADD COLUMN checked TEXT NOT NULL DEFAULT '';
 "#,
+    // The icon the user chose for a game, shown in the list of games beside the library.
+    r#"
+ALTER TABLE game_custom ADD COLUMN icon TEXT;
+"#,
 ];
 
 pub struct Db {
@@ -286,7 +290,7 @@ mod tests {
     /// date and keeps that data.
     #[test]
     fn a_database_of_every_earlier_version_is_brought_up_to_date() {
-        let rows: [&[&str]; 11] = [
+        let rows: [&[&str]; 12] = [
             &[
                 "INSERT INTO settings VALUES ('k', 'v')",
                 "INSERT INTO accounts VALUES ('u', '[FAKE] user', 1)",
@@ -308,6 +312,7 @@ mod tests {
             &[],
             &["INSERT INTO offline_jobs (game_id, os, language, dlcs, folder, state, updated_at)
                VALUES ('3', 'windows', 'en', '', '/i', 'paused', 1)"],
+            &[],
         ];
         // Each earlier version is made whole, every migration of it run: `zip` would stop short.
         assert_eq!(rows.len(), MIGRATIONS.len() - 1);
@@ -354,6 +359,15 @@ mod tests {
                 i64::from(old >= 11),
                 "from version {old}"
             );
+            // A game's chosen icon, none until chosen.
+            let icons: i64 = conn
+                .query_row(
+                    "SELECT count(*) FROM game_custom WHERE icon IS NULL",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(icons, count("game_custom"), "from version {old}");
         }
     }
 

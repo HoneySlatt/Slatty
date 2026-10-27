@@ -29,6 +29,8 @@ pub enum Kind {
     Cover,
     /// Wide, for the key art of the game page: SteamGridDB's heroes.
     Background,
+    /// Small and square, for the list of games beside the library: SteamGridDB's icons.
+    Icon,
 }
 
 /// A game as SteamGridDB knows it.
@@ -81,14 +83,16 @@ pub async fn art(http: &Client, key: &Secret, game: u64, kind: Kind) -> Result<V
 }
 
 async fn art_at(http: &Client, api: &str, key: &Secret, game: u64, kind: Kind) -> Result<Vec<Art>> {
-    let (images, dimensions) = match kind {
-        Kind::Cover => ("grids", "600x900,342x482,660x930"),
-        Kind::Background => ("heroes", "1920x620,3840x1240,1600x650"),
+    let (images, filter) = match kind {
+        Kind::Cover => ("grids", ("dimensions", "600x900,342x482,660x930")),
+        Kind::Background => ("heroes", ("dimensions", "1920x620,3840x1240,1600x650")),
+        // Icons come as PNG or Windows' .ico, which the interface cannot show.
+        Kind::Icon => ("icons", ("mimes", "image/png")),
     };
     let req = http
         .get(format!("{api}/{images}/game/{game}"))
         .query(&[
-            ("dimensions", dimensions),
+            filter,
             ("types", "static"),
             ("nsfw", "false"),
             ("humor", "false"),
@@ -252,6 +256,27 @@ mod tests {
             "{first}"
         );
         assert!(first.contains("nsfw=false") && first.contains("types=static"));
+    }
+
+    /// Icons are SteamGridDB's icons, PNG alone (its .ico files cannot be shown).
+    #[tokio::test]
+    async fn icons_are_png_icons_of_the_chosen_game() {
+        let (api, request) = serve("200 OK", GRIDS).await;
+        art_at(
+            &http::client().unwrap(),
+            &api,
+            &Secret::new("k"),
+            1234,
+            Kind::Icon,
+        )
+        .await
+        .unwrap();
+        let request = request.await.unwrap();
+        let first = request.lines().next().unwrap();
+        assert!(
+            first.starts_with("GET /api/v2/icons/game/1234?mimes=image%2Fpng"),
+            "{first}"
+        );
     }
 
     /// Previews are shown as soon as they are listed: one SteamGridDB's answer places elsewhere, or

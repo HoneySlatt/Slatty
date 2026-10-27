@@ -109,6 +109,35 @@ fn a_cover_can_be_replaced_by_an_image_file_only() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+/// A game with no icon of its own gets one chosen from SteamGridDB in Edit game: kept, shown in
+/// the list of games beside the library, and gone again once reset.
+#[test]
+fn an_icon_chosen_in_edit_game_shows_in_the_list_of_games() {
+    use crate::edit::{Art, EditMsg};
+    let mut app = library_app();
+    app.steamgriddb = true;
+    let edit = |app: &mut App, m: EditMsg| drop(app.update(Message::Edit(m)));
+    let game = |app: &App| app.library.iter().find(|g| g.id == "4").unwrap().clone();
+    assert!(app.icon(&game(&app)).is_none(), "none of its own");
+
+    edit(&mut app, EditMsg::Open("4".into()));
+    assert!(render(&app).find("Icon").is_ok());
+    edit(&mut app, EditMsg::Browse(Art::Icon));
+    let png = b"\x89PNG\r\n\x1a\n[FAKE] icon".to_vec();
+    edit(&mut app, EditMsg::Fetched(Art::Icon, Ok(png.clone())));
+    edit(&mut app, EditMsg::Save);
+    let saved = app.customs["4"].icon.clone().unwrap();
+    assert_eq!(std::fs::read(&saved).unwrap(), png);
+    assert!(app.icon(&game(&app)).is_some(), "shown in the list");
+
+    edit(&mut app, EditMsg::Open("4".into()));
+    edit(&mut app, EditMsg::Reset);
+    edit(&mut app, EditMsg::Save);
+    assert!(!app.customs.contains_key("4"));
+    assert!(app.icon(&game(&app)).is_none());
+    assert!(!saved.exists());
+}
+
 #[test]
 fn right_clicking_a_cover_opens_a_menu_with_edit_game() {
     use crate::edit::EditMsg;
