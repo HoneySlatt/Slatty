@@ -332,6 +332,17 @@ fn a_steam_game_shows_as_running_while_steam_runs_it() {
     assert!(render(&app).find("Play").is_ok());
 }
 
+/// What Steam runs, read as Steam's games were turned off, changes nothing: they are not shown.
+#[test]
+fn games_running_read_after_steam_is_turned_off_are_dropped() {
+    let mut app = library_app();
+    app.steam.on = true;
+    let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
+    let _ = app.update(Message::Steam(SteamMsg::Switch(false)));
+    let _ = app.update(Message::Steam(SteamMsg::Running([440].into())));
+    assert!(app.steam.running.is_empty());
+}
+
 /// Between Play and the game running, Steam may start, or update it, in the tray: the page says
 /// it is starting, and Play can be asked again should Steam have dropped it.
 #[test]

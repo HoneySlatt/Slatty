@@ -375,6 +375,8 @@ impl App {
             }
             SteamMsg::Look if self.steam.on => return look(),
             SteamMsg::Look => {}
+            // Read as Steam's games were turned off: they are not shown.
+            SteamMsg::Running(_) if !self.steam.on => {}
             SteamMsg::Running(apps) => {
                 let now: BTreeSet<String> = apps.into_iter().map(store::steam_id).collect();
                 let ended: Vec<String> = self.steam.running.difference(&now).cloned().collect();
