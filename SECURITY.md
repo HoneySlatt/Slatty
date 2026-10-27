@@ -51,7 +51,8 @@ account), and a game you run without isolation (it runs as you).
   `slatty` / `gog:<user id>`. Without a keyring, Slatty refuses to store it rather
   than write a file. The one exception is Comet's handoff file, below, deleted within seconds. Your
   SteamGridDB and Steam Web API keys, once given, are kept in the keyring too, and never shown
-  again.
+  again. Once you sign in to Epic Games, its session is kept there too, entry
+  `slatty` / `epic:<account id>`.
 - **Tokens stay out of logs, error messages and process arguments.** Some GOG endpoints take
   tokens in the address, so network errors are reported without it.
 - **Your token goes to GOG only.** It is sent to `https://` addresses on `gog.com` alone, whatever
@@ -110,6 +111,8 @@ No telemetry, no crash reports, no usage statistics.
 | GitHub: `api.github.com`, `github.com`, and the release servers it names | Which project's releases are asked for, without any account | When you list or download Proton builds; at start, at most once a day, for the builds games follow as `<project>-latest` | Proton downloads, Settings → Runners (off); Keep up to date (off) |
 | SteamGridDB: `www.steamgriddb.com` and its image servers | The name you search, and your SteamGridDB API key in a header | When you search in Edit game | SteamGridDB, Settings → Advanced (off) |
 | Valve, `api.steampowered.com` (Steam's Web API) | Your Steam Web API key and Steam id, in the address as the API takes them; the app ids whose achievements are asked for (how common they are is asked without the key) | As Steam's games load, and when a Steam game's achievements show while the client keeps none | Steam Web API, Settings → Steam (off) |
+| Epic Games: `www.epicgames.com` (sign-in, in your browser), `account-public-service-prod03.ol.epicgames.com`, `library-service.live.use1a.on.epicgames.com`, `catalog-public-service-prod06.ol.epicgames.com` | Sign-in and your library: the items you own, then the catalog's description of each new one, with your Epic token | When you sign in, at start and on **Read again** | Signing in to Epic Games, Settings → Account (signed out) |
+| Epic's image servers, as the catalog names them (such as `cdn1.epicgames.com`) | The covers asked for, without any account | When an Epic game's cover is not in the cache yet | Signing in to Epic Games (signed out) |
 | Valve, `shared.steamstatic.com` (Steam's image servers) | The app ids of the images asked for, without any account | When a Steam game's cover, background or logo is missing from the client's image cache, and for achievement icons; an image is kept once downloaded | Images from Steam, Settings → Steam (off) |
 
 **The programs it starts contact:**
@@ -121,7 +124,9 @@ No telemetry, no crash reports, no usage statistics.
 | GOG, through Comet: `auth.gog.com`; `gameplay.gog.com` (achievements, statistics, leaderboards, with your system's language); `notifications-pusher.gog.com` (a live connection signed in with your token, subscribed to your friends, presence, chat, library and notification topics); `cfg.gog.com` and the servers it names (Galaxy's "peer" component, downloaded into Comet's folder) | Whether GOG then shows you online, or playing, to your friends has not been checked | While a game that ships Galaxy's SDK runs | Achievements in game, Settings → Privacy (off) |
 
 Every request names Slatty and its version in its `User-Agent`, except those to GOG's
-cloud storage, which send Galaxy's, as heroic-gogdl does. Desktop notifications (Settings →
+cloud storage, which send Galaxy's, as heroic-gogdl does, and those to Epic's services, which send
+the Epic Games Launcher's, as legendary does. Your Epic token goes only to the Epic addresses
+above, never to an address an answer names; GOG is never told of an Epic game. Desktop notifications (Settings →
 Notifications, on) go to your desktop's notification service, not to the network, but they can
 show game titles and achievement names on a lock screen.
 

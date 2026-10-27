@@ -297,6 +297,8 @@ pub(super) fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
         steam_games: false,
         steam_images: false,
         steam_web_api: false,
+        epic_account: None,
+        epic_library: None,
         proton: None,
         proton_downloads: false,
         downloaded_protons: Vec::new(),

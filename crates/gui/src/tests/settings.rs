@@ -88,8 +88,10 @@ fn default_installation_path_is_browsed_or_typed_without_a_save_button() {
     app.page = Page::Settings;
     let db = app.core.clone().unwrap().db;
     let saved = || slatty_core::settings::library_root(&db).unwrap();
+    // Tall enough to show Installs below Account, Library and Steam.
+    app.window = Size::new(1440.0, 1400.0);
     {
-        let mut ui = render(&app);
+        let mut ui = render_window(&app);
         assert!(ui.find("Save").is_err());
         ui.click("Browse").unwrap();
         assert!(

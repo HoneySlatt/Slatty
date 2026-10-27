@@ -9,6 +9,7 @@ pub mod custom;
 pub mod db;
 pub mod doctor;
 pub mod emulated;
+pub mod epic;
 pub mod error;
 pub mod fsutil;
 pub mod galaxy;

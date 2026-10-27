@@ -56,6 +56,9 @@ impl App {
             (Some(account), _) if !self.login_open => Some(account.username.as_str()),
             (None, Some(name)) if self.steam.on && !self.login_open => Some(name.as_str()),
             (None, None) if self.steam.on && !self.login_open => Some("Steam"),
+            (None, _) if self.epic.account.is_some() && !self.login_open => {
+                Some(self.epic.name.as_deref().unwrap_or("Epic Games"))
+            }
             (None, _) if added && !self.login_open => Some(""),
             _ => None,
         };

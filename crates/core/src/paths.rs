@@ -93,6 +93,9 @@ pub fn check_owned_id(game_id: &str) -> Result<()> {
         Store::Steam => Err(Error::Refused(format!(
             "{game_id} is Steam's: Steam installs and removes it"
         ))),
+        Store::Epic => Err(Error::Refused(format!(
+            "{game_id} is an Epic game, which Slatty cannot install yet"
+        ))),
     }
 }
 

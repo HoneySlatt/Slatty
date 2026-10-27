@@ -66,6 +66,7 @@ There are no dates. What has been checked against real services, and what not ye
   Eden), found by a scan of their folders or added one by one. Not yet played for real in each
   emulator.
 - GOG games installed by another tool, imported from their folder or from Heroic.
+- Epic Games Store: signing in and the account's games in the library, with their covers.
 
 **Privacy, security and packaging**
 - Switches for every third party, off until turned on; private data folders; no write through a
@@ -74,6 +75,9 @@ There are no dates. What has been checked against real services, and what not ye
 
 ## Planned
 
+- **Epic games installed and played** natively: Windows builds from Epic's CDN (its manifests and
+  chunks), run through umu and Proton like GOG's, isolated, with the launch arguments Epic's games
+  expect; then Epic's cloud saves.
 - **Translations** of the interface, in English for now.
 - **Steam downloads** followed more exactly while the client downloads.
 - **Packaging** for other distributions.

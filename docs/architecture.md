@@ -36,7 +36,7 @@ become the session supervisor (see [Game sessions](#game-sessions)).
 |---|---|
 | `auth` | Sign-in address, code exchange, token refresh, game-scoped tokens |
 | `account` | The active account; refresh under a lock shared by every process; avatar |
-| `credentials` | The system keyring (Secret Service): GOG tokens, SteamGridDB and Steam Web API keys |
+| `credentials` | The system keyring (Secret Service): GOG and Epic tokens, SteamGridDB and Steam Web API keys |
 | `secret` | `Secret`, whose `Debug` hides its value |
 | `http` | The shared client; reads retried on transient failures; errors stripped of their address; `gog_only` for addresses a GOG answer names |
 
@@ -48,8 +48,9 @@ become the session supervisor (see [Game sessions](#game-sessions)).
 | `overview` | Per game: achievement counts, cloud save support and play time, cached per account |
 | `custom` | Titles, sorting titles, covers, backgrounds and hidden games the user chose, apart from GOG's data |
 | `steamgriddb` | SteamGridDB search, grids and heroes, once turned on |
-| `store` | Which store a game id belongs to: GOG's product id, `steam-<app id>`, `local-<number>` |
+| `store` | Which store a game id belongs to: GOG's product id, `steam-<app id>`, `epic-<app name>`, `local-<number>`, `emu-<number>` |
 | `steam` | Steam's games, read from the client's files: `local`, `appinfo`, `vdf`, `stats`, `running`, `library`, `client`, `web` (see [Steam games](#steam-games)) |
+| `epic` | The Epic Games Store: `auth` (sign-in, tokens refreshed under a lock), `library` (the account's games and their covers, cached) (see [Epic games](#epic-games)) |
 | `added` | Games added by hand (see [Games added by hand](#games-added-by-hand)) |
 | `emulated` | Games run in an emulator (see [Emulated games](#emulated-games)) |
 
@@ -129,6 +130,7 @@ The interface follows Iced's state, message, update and view split:
 | `maintenance`, `updates` | Verify, repair, uninstall, content changes; automatic updates |
 | `play`, `cloud`, `achievements` | A game session, cloud saves, achievements |
 | `steam` | Steam's games beside GOG's |
+| `epic` | Epic's games beside GOG's: signing in from Settings → Account, the library read at start |
 | `add`, `edit` | Adding a game by hand or an emulated one; editing a game's title and images |
 | `runners`, `emulators`, `settings` | Settings → Runners; Settings → Emulators and its scan; the rest of Settings |
 | `couch`, `pad` | The couch mode: where its focus is, its moves, its lists (home rows, its library, its downloads); gamepads read through gilrs on a thread of their own, a held direction repeating, and its keys (see [Couch mode](#couch-mode)) |
@@ -567,6 +569,26 @@ comes back to the front. After Play, and while a game runs, the client's games a
 two seconds. What the client downloads comes from each game's manifest and from what Steam wrote so
 far in `steamapps/downloading/<app id>`, every five seconds while something moves, every thirty
 while the window is in front, not at all while it is behind.
+
+### Epic games
+
+`core/src/epic` signs in to Epic Games with the Epic Games Launcher's public OAuth client and reads
+the account's library, as legendary does (see [epic-integration.md](epic-integration.md)):
+
+- `auth` builds the sign-in address, reads the code from the page Epic ends on, exchanges it for
+  tokens and refreshes them. The tokens go to the keyring (`credentials::save_epic`), the account
+  id to the settings (`settings::epic_account`); `fresh` refreshes them under a lock shared by
+  every process, since a refresh token is used up by the first answer;
+- `library` lists the items the account owns, pages of Epic's library service, and asks the
+  catalog about the new ones (`Source`, with a fake in its tests): their title, images and whether
+  they are add-ons, left out with mods, Unreal Engine's marketplace and private sandboxes. The
+  library and its covers are cached in `~/.cache/slatty/epic/<account id>/`, with the catalog
+  items left out, so that the catalog is asked only about new items.
+
+Epic games are `epic-<app name>`: `paths::check_game_id` refuses them, so GOG is never asked about
+one, and `paths::check_owned_id` too, until Slatty installs them. In the interface
+(`gui/src/epic.rs`) the cached library shows at start (`boot.rs` reads it) and is read again from
+Epic meanwhile; `merge_steam` puts its games in the library beside Steam's.
 
 ### Games added by hand
 

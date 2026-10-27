@@ -52,6 +52,14 @@ and hands it requests.
 | 2026-10-11 | Library and Play through the Steam client | OK | 207 games of the account: the library with the covers the client cached, and a game started through the client (`steam://rungameid`), checked by the user |
 | 2026-10-11 | Steam's files: play time, achievements | OK (read only) | Play time and last session of 178 of the account's games read from `localconfig.vdf` (133 kB, in 3 ms); achievements of 183 games read from the client's stats files, 10,962 of them, their counts matching the client's library cache for every game it counted |
 | 2026-10-11 | In the interface: images, games owned on both, a game running, achievements | OK | Checked by the user: Images from Steam filled in the missing covers; games owned on both stores shown once; a game started through the client shown as Running, and its play time updated once it ended; Steam's achievements shown in the Achievements tab |
+## Epic Games
+
+Checked with the user's own Epic Games account.
+
+| Date | Feature | Result | Notes |
+|---|---|---|---|
+| 2026-10-27 | Sign-in, library and covers | OK | Checked by the user: signed in through the browser and the pasted page; the account's games listed with their covers, without add-ons. Session refresh not met yet |
+
 ## Runners
 
 | Date | Runner | Result | Notes |
@@ -128,6 +136,10 @@ and details were not recorded.
 - A redistributable that asks for a restart (exit code 3010).
 - Whether a session with Comet shows the account online, or playing, to GOG friends.
 - An offline installer whose checksum XML GOG does not keep (an address answering 404).
+
+**Epic Games**
+
+- The session refreshed once its access token expired.
 
 **Systems**
 

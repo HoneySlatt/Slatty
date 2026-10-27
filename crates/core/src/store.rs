@@ -1,7 +1,7 @@
 //! Which store a game comes from, read from its id. GOG's product ids are kept as they are, so ids
 //! saved before Steam support still name the same game; Steam games are `steam-<app id>`, and
-//! games added by hand, from no store, `local-<number>`, and games run in an emulator,
-//! `emu-<number>`.
+//! games added by hand, from no store, `local-<number>`, games run in an emulator,
+//! `emu-<number>`, and Epic Games Store games `epic-<app name>`.
 //! `paths::check_game_id` accepts GOG's alone and guards every request to GOG, so GOG never
 //! learns of another store's game. `paths::check_owned_id` accepts all but Steam's:
 //! what installs, records or deletes a game's files uses it, so nothing Slatty writes or
@@ -18,15 +18,17 @@ pub enum Store {
     Local,
     /// Run in an emulator, from a disc image, a file or a folder the user has.
     Emulated,
+    Epic,
 }
 
 const STEAM_PREFIX: &str = "steam-";
 const LOCAL_PREFIX: &str = "local-";
 const EMULATED_PREFIX: &str = "emu-";
+const EPIC_PREFIX: &str = "epic-";
 
 /// The store of a game id, once the id is known to be safe in a file name: letters and digits for
 /// GOG, `steam-` and digits for Steam, `local-` and digits for a game added by hand, `emu-` and
-/// digits for an emulated one.
+/// digits for an emulated one, `epic-` and an app name (`epic_app_name`) for Epic's.
 pub fn of(game_id: &str) -> Result<Store> {
     let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
     let store = if let Some(app) = game_id.strip_prefix(STEAM_PREFIX) {
@@ -35,6 +37,8 @@ pub fn of(game_id: &str) -> Result<Store> {
         digits(n).then_some(Store::Local)
     } else if let Some(n) = game_id.strip_prefix(EMULATED_PREFIX) {
         digits(n).then_some(Store::Emulated)
+    } else if let Some(app) = game_id.strip_prefix(EPIC_PREFIX) {
+        is_epic_app_name(app).then_some(Store::Epic)
     } else {
         crate::paths::check_game_id(game_id)
             .is_ok()
@@ -78,6 +82,27 @@ pub fn steam_app(game_id: &str) -> Option<u32> {
     game_id.strip_prefix(STEAM_PREFIX)?.parse().ok()
 }
 
+/// The id of an Epic Games Store app.
+pub fn epic_id(app_name: &str) -> String {
+    format!("{EPIC_PREFIX}{app_name}")
+}
+
+/// The Epic app name of a game id, for an Epic game.
+pub fn epic_app(game_id: &str) -> Option<&str> {
+    game_id
+        .strip_prefix(EPIC_PREFIX)
+        .filter(|app| is_epic_app_name(app))
+}
+
+/// Whether an app name Epic gives can name files and go into an address: Epic's are letters and
+/// digits (`Fortnite`, or 32 hexadecimal digits); `_` and `-` are let through too.
+pub fn is_epic_app_name(app: &str) -> bool {
+    (1..=64).contains(&app.len())
+        && app
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,6 +114,10 @@ mod tests {
         assert_eq!(steam_id(440), "steam-440");
         assert_eq!(steam_app("steam-440"), Some(440));
         assert_eq!(steam_app("1456487183"), None);
+        assert_eq!(of("epic-Fortnite").unwrap(), Store::Epic);
+        assert_eq!(epic_id("Fortnite"), "epic-Fortnite");
+        assert_eq!(epic_app("epic-Fortnite"), Some("Fortnite"));
+        assert_eq!(epic_app("steam-440"), None);
     }
 
     #[test]
@@ -113,6 +142,11 @@ mod tests {
             "emu-",
             "emu-../1",
             "emu-1a",
+            "epic-",
+            "epic-../1",
+            "epic-a/b",
+            "epic-a.b",
+            "epic-a b",
         ] {
             assert!(of(id).is_err(), "{id:?}");
         }
@@ -144,10 +178,15 @@ mod tests {
         assert!(check_owned_id("local-7").is_ok());
         assert!(check_owned_id("emu-3").is_ok());
         assert!(check_owned_id("steam-440").is_err());
+        assert!(
+            check_owned_id("epic-Fortnite").is_err(),
+            "not installed by Slatty yet"
+        );
         assert!(check_owned_id("local-../1").is_err());
         assert!(check_game_id("1456487183").is_ok());
         assert!(check_game_id("steam-440").is_err());
         assert!(check_game_id("local-7").is_err(), "never sent to GOG");
         assert!(check_game_id("emu-3").is_err(), "never sent to GOG");
+        assert!(check_game_id("epic-Fortnite").is_err(), "never sent to GOG");
     }
 }

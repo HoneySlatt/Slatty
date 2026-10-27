@@ -309,8 +309,9 @@ impl App {
             note(
                 "No telemetry: Slatty talks to GOG, to the download servers GOG names, \
                  to umu's database when allowed above, to GitHub once Proton downloads are \
-                 turned on in Runners, to SteamGridDB once turned on in Advanced, and to Steam's \
-                 image servers and Web API once turned on in Steam. umu, which runs Windows games, \
+                 turned on in Runners, to SteamGridDB once turned on in Advanced, to Steam's \
+                 image servers and Web API once turned on in Steam, and to Epic's services and \
+                 image servers once signed in to Epic Games. umu, which runs Windows games, \
                  asks Valve (repo.steampowered.com) whether its runtime is current. SECURITY.md \
                  lists everything that leaves your computer.",
             ),
@@ -767,6 +768,81 @@ impl App {
         rows
     }
 
+    /// The Epic Games account: signing in, or the account, its games and signing out.
+    fn epic_row(&self, wide: bool) -> Element<'_, Message> {
+        use crate::epic::EpicMsg;
+        let msg = |m| Message::Epic(m);
+        if self.epic.account.is_none() {
+            let busy = self.epic.signing_in;
+            let typed = !self.epic.input.trim().is_empty();
+            return setting(
+                wide,
+                "Epic Games",
+                column![
+                    note(
+                        "Shows your Epic games in the library; installing and playing them from \
+                         Slatty comes later. Sign in in your browser, then paste here the short \
+                         page of text Epic shows: a single-use code, never give it to anyone.",
+                    ),
+                    button(text("Open the Epic sign-in page").size(14))
+                        .padding(0)
+                        .on_press(msg(EpicMsg::OpenLoginPage))
+                        .style(theme::link),
+                    text_input("{\"authorizationCode\": \"…\"}", &self.epic.input)
+                        .secure(true)
+                        .on_input(|v| Message::Epic(EpicMsg::Input(v)))
+                        .on_submit(msg(EpicMsg::SignIn))
+                        .style(theme::field)
+                        .font(theme::font())
+                        .padding([8, 12]),
+                ]
+                .spacing(8)
+                .into(),
+                Some(
+                    button(text(if busy { "Signing in…" } else { "Sign in" }).size(14))
+                        .padding([8, 14])
+                        .on_press_maybe((!busy && typed).then(|| msg(EpicMsg::SignIn)))
+                        .style(theme::tonal)
+                        .into(),
+                ),
+            );
+        }
+        let read = match self.epic.fetched_at {
+            Some(ts) => format!(
+                "{} games · Last read {}",
+                self.epic.games.len(),
+                local_time(ts)
+            ),
+            None => "Not read yet".into(),
+        };
+        let again = button(
+            text(if self.epic.reading {
+                "Reading…"
+            } else {
+                "Read again"
+            })
+            .size(14),
+        )
+        .padding([8, 16])
+        .on_press_maybe((!self.epic.reading).then(|| msg(EpicMsg::Refresh)))
+        .style(theme::tonal);
+        setting(
+            wide,
+            "Epic Games",
+            column![
+                text(self.epic.name.as_deref().unwrap_or_default()).size(15),
+                note(read),
+            ]
+            .spacing(4)
+            .into(),
+            Some(
+                row![again, action("Sign out", msg(EpicMsg::SignOut))]
+                    .spacing(8)
+                    .into(),
+            ),
+        )
+    }
+
     /// The key to Steam's Web API: typed once, then kept in the keyring and never shown.
     fn steam_web_key_row(&self, wide: bool) -> Element<'_, Message> {
         use crate::steam::SteamMsg;
@@ -820,12 +896,15 @@ impl App {
                 (true, false) => "your Steam games",
                 _ => "the games added by hand",
             };
-            return vec![setting(
-                wide,
-                "GOG",
-                note(format!("Not signed in: only {shown} show.")),
-                Some(action("Sign in to GOG", Message::ShowLogin(true))),
-            )];
+            return vec![
+                setting(
+                    wide,
+                    "GOG",
+                    note(format!("Not signed in: only {shown} show.")),
+                    Some(action("Sign in to GOG", Message::ShowLogin(true))),
+                ),
+                self.epic_row(wide),
+            ];
         }
         let name = self.account.as_ref().map(|a| a.username.as_str());
         vec![
@@ -844,6 +923,7 @@ impl App {
                 ),
                 Some(action("Forget account", Message::AskForget)),
             ),
+            self.epic_row(wide),
         ]
     }
 

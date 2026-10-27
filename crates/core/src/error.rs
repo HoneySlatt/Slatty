@@ -14,6 +14,8 @@ pub enum Error {
     NotLoggedIn,
     #[error("the GOG session was rejected (expired or revoked); log in again")]
     SessionRejected,
+    #[error("the Epic Games session was rejected (expired or revoked); sign in again")]
+    EpicSessionRejected,
     #[error("secret storage unavailable: {0}")]
     Keyring(String),
     #[error("invalid login input: {0}")]

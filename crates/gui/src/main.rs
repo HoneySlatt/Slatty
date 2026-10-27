@@ -6,6 +6,7 @@ mod couch;
 mod downloads;
 mod edit;
 mod emulators;
+mod epic;
 mod graphics;
 mod icons;
 mod install;
@@ -324,6 +325,8 @@ pub struct App {
     pub runners: runners::RunnersView,
     /// Steam's games beside GOG's (Settings → Steam).
     pub steam: steam::SteamView,
+    /// Epic's games beside GOG's (Settings → Epic Games).
+    pub epic: epic::EpicView,
     /// The emulators and where their games are looked for (Settings → Emulators).
     pub emulators: emulators::EmulatorsView,
     /// The emulator of each emulated game, by game id.
@@ -477,6 +480,7 @@ impl Default for App {
             proton_choices: Vec::new(),
             runners: runners::RunnersView::default(),
             steam: steam::SteamView::default(),
+            epic: epic::EpicView::default(),
             emulators: emulators::EmulatorsView::default(),
             emulated: HashMap::new(),
             login_open: false,
@@ -600,6 +604,7 @@ pub enum Message {
     Settings(SettingsMsg),
     Runners(runners::RunnersMsg),
     Steam(steam::SteamMsg),
+    Epic(epic::EpicMsg),
     Emulators(emulators::EmulatorsMsg),
     /// Shows GOG's sign-in, or goes back from it, while Steam's games or those added by hand show
     /// without GOG.
@@ -667,6 +672,7 @@ impl Message {
                 | Message::ArtScaled(..)
                 | Message::CouchCoversScaled(..)
                 | Message::Steam(steam::SteamMsg::Cover(..))
+                | Message::Epic(epic::EpicMsg::Cover(..))
                 | Message::CachedCovers(_)
                 | Message::Image(..)
                 | Message::Key(_)
@@ -888,6 +894,7 @@ impl App {
                 self.forget_again();
             }
             Message::Booted(Ok(boot)) => {
+                let boot = *boot;
                 self.core = Some(boot.core);
                 self.account = boot.account;
                 self.library_root = boot.library_root.display().to_string();
@@ -987,6 +994,17 @@ impl App {
                 } else {
                     Task::none()
                 };
+                // The games as last read show at once; read again from Epic meanwhile.
+                self.epic.account = boot.epic_account;
+                let epic = match boot.epic_library {
+                    Some(read) if self.epic.account.as_ref() == Some(&read.account_id) => {
+                        Task::batch([
+                            self.epic_read(read),
+                            Task::done(Message::Epic(epic::EpicMsg::Refresh)),
+                        ])
+                    }
+                    _ => Task::done(Message::Epic(epic::EpicMsg::Refresh)),
+                };
                 // Whether the keys are in the keyring, asked once the library shows: a locked
                 // keyring holds a read until its prompt is answered. Unanswered, as before, they
                 // stay unknown.
@@ -1016,6 +1034,7 @@ impl App {
                     folders,
                     protons,
                     steam,
+                    epic,
                     web_key,
                     griddb_key,
                 ];
@@ -1201,6 +1220,7 @@ impl App {
             Message::Runners(msg) => return self.update_runners(msg),
             Message::Emulators(msg) => return self.update_emulators(msg),
             Message::Steam(msg) => return self.update_steam(msg),
+            Message::Epic(msg) => return self.update_epic(msg),
             Message::ShowLogin(open) => self.login_open = open,
             Message::Updates(msg) => return self.update_updates(msg),
             Message::Edit(msg) => return self.update_edit(msg),
@@ -1414,6 +1434,7 @@ impl App {
         if !self.installs.contains_key(&id)
             && !self.installability.contains_key(&id)
             && self.steam_game(&id).is_none()
+            && slatty_core::store::epic_app(&id).is_none()
             && let Some(core) = &self.core
         {
             let (http, game_id) = (core.http.clone(), id.clone());

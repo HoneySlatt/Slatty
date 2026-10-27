@@ -51,6 +51,9 @@ pub struct Boot {
     /// Whether Steam's Web API is asked; whether its key is in the keyring is asked once the
     /// library shows.
     pub steam_web_api: bool,
+    /// The Epic Games account signed in, and its library as last read, from the cache.
+    pub epic_account: Option<String>,
+    pub epic_library: Option<slatty_core::epic::library::EpicLibrary>,
     pub proton: Option<PathBuf>,
     /// Whether Proton builds may be downloaded from GitHub, and those already downloaded.
     pub proton_downloads: bool,
@@ -296,6 +299,13 @@ async fn boot() -> Result<Boot, String> {
         .and_then(|steam| slatty_core::steam::local::signed_in_user(&steam))
         .map(|user| user.name);
     let steamgriddb = slatty_core::settings::steamgriddb(&db).map_err(err)?;
+    let epic_account = slatty_core::settings::epic_account(&db).map_err(err)?;
+    // Unreadable, it is read again from Epic once the library shows.
+    let epic_library = epic_account.as_ref().and_then(|a| {
+        slatty_core::epic::library::load_cache(&dirs, a)
+            .ok()
+            .flatten()
+    });
     // A link it could not make only leaves that `-latest` entry out of the menus. Game folders and
     // Steam libraries, which can sit on a network drive still waking up, are read once the library
     // shows (`App::read_launch_options`, `runners::list`).
@@ -373,6 +383,8 @@ async fn boot() -> Result<Boot, String> {
         steam_games,
         steam_images,
         steam_web_api,
+        epic_account,
+        epic_library,
         favorites,
         playtime,
         overview,

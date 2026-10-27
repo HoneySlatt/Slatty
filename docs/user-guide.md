@@ -16,6 +16,7 @@ guide follows the window, and gives the command where there is one.
 - [Verify, repair, uninstall](#verify-repair-uninstall)
 - [Offline installers](#offline-installers)
 - [Steam games](#steam-games)
+- [Epic games](#epic-games)
 - [Games added by hand](#games-added-by-hand)
 - [Emulated games](#emulated-games)
 - [Games installed elsewhere](#games-installed-elsewhere)
@@ -560,6 +561,26 @@ there are and are installed. If a Steam update changes the format of its list of
 game can show until Slatty reads the new one: Settings → Steam and `slatty steam status`
 say so.
 
+## Epic games
+
+The games of your Epic Games account can show beside GOG's: in Settings → Account, under **Epic
+Games**, choose **Open the Epic sign-in page**, sign in in your browser, then copy the short page
+of text Epic shows (it holds an `authorizationCode`), paste it and press **Sign in**. That code
+opens your Epic account to whoever has it, once: never give it to anyone. Slatty never sees your
+Epic password; the session goes to the system keyring.
+
+- **Read from Epic.** The library is read again at each start and on **Read again**; the games as
+  last read show at once meanwhile. Add-ons, mods and Unreal Engine's marketplace are left out.
+  Covers come from Epic's image servers.
+- **Not installable yet.** An Epic game's page says **Not installable yet**: installing and playing
+  Epic games from Slatty is the next step (see the [roadmap](roadmap.md)).
+- The library's filters have **Epic** while you are signed in.
+- **Sign out** forgets the session; the games leave the library. The cache of the library and its
+  covers stays (`~/.cache/slatty/epic/`).
+
+From the command line: `slatty epic login`, `slatty epic list`, `slatty epic status` and
+`slatty epic logout` (see [command-line.md](command-line.md#epic-games)).
+
 ## Games added by hand
 
 Games bought elsewhere, or made by you, join the library by the program that starts them. The
@@ -782,6 +803,7 @@ Settings lists its parts on the left; the list follows the page as it scrolls.
 | **Signed in as** | The GOG account, with **Log out** |
 | **Forget** | **Forget account**: signs out and deletes what Slatty keeps of the account (see [above](#signing-out-and-forgetting-an-account)) |
 | **GOG** | Signed out: which games show, with **Sign in to GOG** |
+| **Epic Games** | Signed out: **Open the Epic sign-in page** and the field for the page it ends on, with **Sign in**. Signed in: the account, how many games and when they were read, with **Read again** and **Sign out** (see [Epic games](#epic-games)) |
 
 ### Library
 
@@ -877,6 +899,7 @@ Folders follow the XDG variables (`XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG
 | Path | What it holds |
 |---|---|
 | System keyring, `slatty` / `gog:<user id>` | Your GOG session |
+| System keyring, `slatty` / `epic:<account id>` | Your Epic Games session, once signed in |
 | System keyring, `slatty` / `key:steamgriddb`, `key:steam-web-api` | Your SteamGridDB and Steam Web API keys, once saved |
 | `~/.local/share/slatty/state.db` | Accounts, installed games, sessions, cloud sync history, settings, your changes to games |
 | `~/.local/share/slatty/prefixes/<id>/` | Wine prefixes (most saves live here) |
@@ -895,6 +918,7 @@ Folders follow the XDG variables (`XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG
 | `~/.config/slatty/theme.toml` | Your theme file, once created |
 | `~/.cache/slatty/<user id>/` | Your GOG library, covers and images. Safe to delete |
 | `~/.cache/slatty/steam/`, `steamgriddb/` | Images from Steam's servers and SteamGridDB's thumbnails. Safe to delete |
+| `~/.cache/slatty/epic/<account id>/` | Your Epic library and its covers. Safe to delete |
 | `…/scaled/<width>/`, `…/art/<width>/` in those caches | The covers and key art made at the size they are drawn; key art copies take at most 2 GiB. Safe to delete |
 | `~/.local/state/slatty/logs/` | Logs of each game, prefix creation, setup, Galaxy service and Comet: the last run of each and the two before (`.1`, `.2`). A game's logs go when it is uninstalled |
 | `~/.local/state/slatty/locks/` | Locks that keep two operations off the same game |

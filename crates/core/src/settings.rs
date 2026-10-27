@@ -32,6 +32,7 @@ const AUTO_UPDATE: &str = "auto_update";
 const PAUSE_WHILE_PLAYING: &str = "pause_downloads_while_playing";
 const VULKAN_ONLY: &str = "vulkan_only";
 const STEAM_GAMES: &str = "steam_games";
+const EPIC_ACCOUNT: &str = "epic_account";
 const STEAM_IMAGES: &str = "steam_images";
 const STEAM_WEB_API: &str = "steam_web_api";
 const TWIN_PLAYTIME: &str = "twin_playtime";
@@ -219,6 +220,15 @@ pub fn pause_while_playing(db: &Db) -> Result<bool> {
 
 pub fn set_pause_while_playing(db: &Db, on: bool) -> Result<()> {
     db.set_setting(PAUSE_WHILE_PLAYING, Some(if on { "on" } else { "off" }))
+}
+
+/// The id of the Epic Games account signed in, whose tokens are in the keyring.
+pub fn epic_account(db: &Db) -> Result<Option<String>> {
+    db.setting(EPIC_ACCOUNT)
+}
+
+pub fn set_epic_account(db: &Db, account_id: Option<&str>) -> Result<()> {
+    db.set_setting(EPIC_ACCOUNT, account_id)
 }
 
 /// Whether the Steam games of the account signed in to the Steam client show in the library, read

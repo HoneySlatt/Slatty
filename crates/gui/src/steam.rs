@@ -512,7 +512,8 @@ impl App {
     }
 
     /// Puts Steam's games in the library beside GOG's, with their covers, or takes them out once
-    /// turned off; and those added by hand or emulated, from their installs.
+    /// turned off; Epic's, while an account is signed in; and those added by hand or emulated,
+    /// from their installs.
     pub fn merge_steam(&mut self) {
         self.library
             .retain(|g| store::of(&g.id).is_ok_and(|s| s == Store::Gog));
@@ -526,7 +527,14 @@ impl App {
             .collect();
         added.sort_by(|a, b| a.id.cmp(&b.id));
         self.library.extend(added);
-        self.covers.retain(|id, _| store::steam_app(id).is_none());
+        self.covers
+            .retain(|id, _| store::steam_app(id).is_none() && store::epic_app(id).is_none());
+        let epic: Vec<LibraryGame> = self.epic_library_games().collect();
+        self.library.extend(epic);
+        for (id, cover) in &self.epic.covers {
+            self.covers
+                .insert(id.clone(), iced::widget::image::Handle::from_path(cover));
+        }
         self.steam.twins.clear();
         if self.steam.on {
             // A game owned on both shows once, as GOG's: matched with GOG's own titles, not the

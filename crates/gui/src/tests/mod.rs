@@ -330,6 +330,7 @@ mod couch;
 mod downloads;
 mod edit;
 mod emulated;
+mod epic;
 mod game_page;
 mod install;
 mod library;

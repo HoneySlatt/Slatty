@@ -81,10 +81,26 @@ impl App {
         // the room their values need, without their icons.
         let steam = self.steam_game(&g.id).is_some();
         let added = slatty_core::store::from_no_store(&g.id);
+        let epic = slatty_core::store::epic_app(&g.id).is_some();
         let cards = container(responsive(move |size| {
             let narrow = size.width < NARROW_CARDS;
             let (stats, achievements) = if narrow { (11, 8) } else { (10, 9) };
             // Neither cloud saves nor achievements: what it is in their place.
+            if epic {
+                return row![
+                    container(self.stats(g, narrow))
+                        .padding([0, 18])
+                        .align_y(Alignment::Center)
+                        .width(Length::FillPortion(stats))
+                        .height(CARD_HEIGHT)
+                        .style(theme::block),
+                    container(epic_card())
+                        .width(Length::FillPortion(7 + achievements))
+                        .height(CARD_HEIGHT),
+                ]
+                .spacing(14)
+                .into();
+            }
             if added {
                 return row![
                     container(self.stats(g, narrow))
@@ -309,6 +325,8 @@ impl App {
                     false,
                 ),
             }
+        } else if slatty_core::store::epic_app(&g.id).is_some() {
+            big(Icon::Download, "Not installable yet".into(), None, false)
         } else if self.installs.contains_key(&g.id) {
             if this_running {
                 big(Icon::Stop, "Stop".into(), Some(Message::StopGame), true)
@@ -1027,4 +1045,38 @@ pub(super) fn cancel_prompt<'a>(
         ),
         Cancelling::Confirmed => Some(note("Cancelling… the downloaded files are deleted.")),
     }
+}
+
+/// What an Epic game is, in place of cloud saves and achievements.
+fn epic_card<'a>() -> Element<'a, Message> {
+    let card = responsive(move |size| {
+        let content = row![]
+            .push(
+                (size.width >= 240.0)
+                    .then(|| container(icon(Icon::Globe, 22.0, tokens().text)).center(40)),
+            )
+            .push(
+                column![
+                    text("Epic Games")
+                        .size(15)
+                        .font(semibold())
+                        .wrapping(Wrapping::None),
+                    text("Installing and playing it from Slatty comes later")
+                        .size(14)
+                        .color(tokens().muted)
+                        .width(Length::Fill),
+                ]
+                .spacing(4)
+                .width(Length::Fill),
+            )
+            .spacing(14)
+            .align_y(Alignment::Center);
+        container(content).center_y(Length::Fill).into()
+    });
+    container(card)
+        .padding([0, 18])
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(theme::block)
+        .into()
 }

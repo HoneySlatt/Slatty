@@ -17,6 +17,7 @@ Most commands take a game id:
 |---|---|
 | `1207658924` | A GOG game: its product id |
 | `steam-440` | A Steam game: `steam-` and its app id |
+| `epic-Fortnite` | An Epic game: `epic-` and its app name |
 | `local-3` | A game added by hand |
 
 `slatty library list` shows them. GOG commands (install, cloud saves, achievements, updates) take
@@ -185,6 +186,17 @@ them out of the library without touching their files; a scan does not add them a
 | Command | What it does |
 |---|---|
 | `slatty steam status` | Whether Steam is found, the account signed in to it, how many of its games there are and how many are installed. Reads Steam's files and changes nothing |
+
+## Epic Games
+
+| Command | What it does |
+|---|---|
+| `slatty epic login` | Opens Epic's sign-in page in your browser, then asks for the page of text it ends on (or its `authorizationCode`). `--no-browser` prints the page's address instead of opening it |
+| `slatty epic status` | The Epic account signed in, until when its session is valid, and how many games were read |
+| `slatty epic list` | Reads the account's games again from Epic and lists them with their ids. `--offline` lists them from the cache |
+| `slatty epic logout` | Deletes the Epic session from the keyring. The library cache stays |
+
+Epic games cannot be installed or played from Slatty yet.
 
 ## Diagnostics
 

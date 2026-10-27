@@ -61,6 +61,8 @@ files by default.
 **Beyond GOG**
 - Steam games, read from the Steam client's own files and played, installed and uninstalled
   through it. A game owned on both stores shows once. No GOG account needed for them.
+- Epic Games Store games, after signing in to Epic: shown in the library with their covers, not
+  installable from Slatty yet.
 - Games from no store, added by the program that starts them, or from an installer or archive.
 - Games of other consoles, from your own files, run in DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4,
   Kyty, Dolphin or Eden: a scan of their folders adds them.
@@ -73,7 +75,8 @@ hardware is recorded in [docs/compatibility.md](docs/compatibility.md): sign-in,
 and Linux installs, updates, DLC and languages, pausing and resuming, playing isolated, cloud
 saves both ways and their deletions, achievements earned in game, verify, repair and uninstall,
 offline installers, the download queue, Proton builds kept up to date, games added by hand,
-Steam's client and Web API, controller compatibility, and the couch mode with a real gamepad.
+Steam's client and Web API, Epic sign-in and library, controller compatibility, and the couch mode
+with a real gamepad.
 Not checked yet: a redistributable asking for a restart, the account shown online to GOG friends,
 an offline installer whose checksums GOG does not keep, Ubuntu with AppArmor, Steam as a Flatpak,
 and the couch mode on a Steam Deck or on a television.
@@ -176,6 +179,8 @@ Report vulnerabilities privately, as [SECURITY.md](SECURITY.md#reporting-a-vulne
 - [Theming](docs/theming.md): colours, corners and motion from a file
 - [Architecture](docs/architecture.md): crates, modules, main flows and design decisions
 - [GOG integration](docs/gog-integration.md): every GOG service used, its source, what is verified
+- [Epic Games integration](docs/epic-integration.md): every Epic service used, its source, what is
+  verified
 - [Compatibility](docs/compatibility.md): results of real tests
 - [Testing](docs/testing.md): automated tests, benchmarks and checks against GOG and Steam
 - [Roadmap](docs/roadmap.md) · [Changelog](CHANGELOG.md)

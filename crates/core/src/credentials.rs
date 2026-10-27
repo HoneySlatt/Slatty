@@ -42,6 +42,35 @@ pub fn delete(user_id: &str) -> Result<()> {
     }
 }
 
+/// The Epic Games account's tokens, under its account id.
+fn epic_entry(account_id: &str) -> Result<keyring::Entry> {
+    keyring::Entry::new(SERVICE, &format!("epic:{account_id}")).map_err(describe)
+}
+
+pub fn save_epic(tokens: &crate::epic::auth::Tokens) -> Result<()> {
+    let json = serde_json::to_string(tokens).map_err(|e| Error::Keyring(e.to_string()))?;
+    epic_entry(&tokens.account_id)?
+        .set_password(&json)
+        .map_err(describe)
+}
+
+pub fn load_epic(account_id: &str) -> Result<Option<crate::epic::auth::Tokens>> {
+    match epic_entry(account_id)?.get_password() {
+        Ok(json) => serde_json::from_str(&json)
+            .map(Some)
+            .map_err(|_| Error::Keyring("stored credential is unreadable".into())),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(describe(e)),
+    }
+}
+
+pub fn delete_epic(account_id: &str) -> Result<()> {
+    match epic_entry(account_id)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(describe(e)),
+    }
+}
+
 /// Another secret of slatty's, kept under its own name (an API key).
 fn key_entry(name: &str) -> Result<keyring::Entry> {
     keyring::Entry::new(SERVICE, &format!("key:{name}")).map_err(describe)

@@ -2,6 +2,7 @@ mod achievements;
 mod added;
 mod auth;
 mod cloud;
+mod epic;
 mod games;
 mod install;
 mod installers;
@@ -79,6 +80,9 @@ enum Command {
     /// Steam games, read from the Steam client's files
     #[command(subcommand)]
     Steam(steam::SteamCommand),
+    /// Epic Games Store account and library
+    #[command(subcommand)]
+    Epic(epic::EpicCommand),
 }
 
 pub struct Ctx {
@@ -150,6 +154,7 @@ async fn run() -> Result<()> {
         Command::Achievements(args) => achievements::run(&ctx, args).await,
         Command::Proton(cmd) => proton::run(&ctx, cmd).await,
         Command::Steam(cmd) => steam::run(&ctx, cmd),
+        Command::Epic(cmd) => epic::run(&ctx, cmd).await,
     }
 }
 

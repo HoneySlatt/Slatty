@@ -253,6 +253,8 @@ impl App {
         let mut items = row![
             check("GOG", f.gog, |f, v| Filters { gog: v, ..f }),
             check("Steam", f.steam, |f, v| Filters { steam: v, ..f }),
+            (self.epic.account.is_some() || f.epic)
+                .then(|| check("Epic", f.epic, |f, v| Filters { epic: v, ..f })),
             check("Added", f.added, |f, v| Filters { added: v, ..f }),
             (!self.emulated.is_empty() || f.emulated).then(|| check(
                 "Emulated",
@@ -335,6 +337,11 @@ impl App {
                 .padding([8, 14])
                 .on_press_maybe(action.map(|a| Message::Steam(SteamMsg::Ask(g.id.clone(), a))))
                 .style(theme::primary)
+        } else if slatty_core::store::epic_app(&g.id).is_some() {
+            // Not installable from Slatty yet.
+            button(icon(Icon::Download, 16.0, tokens().on_accent))
+                .padding([8, 14])
+                .style(theme::primary)
         } else if installed {
             button(icon(Icon::Play, 16.0, tokens().on_accent))
                 .padding([8, 14])
@@ -352,18 +359,23 @@ impl App {
         // GOG offers nothing to install for has none: its page says why.
         let settings = button(icon(Icon::SlidersHorizontal, 16.0, tokens().text))
             .padding(8)
-            .on_press(if self.steam_game(&g.id).is_some() || !installable {
-                Message::Select(g.id.clone())
-            } else {
-                Message::OpenDialog(
-                    g.id.clone(),
-                    if installed {
-                        Panel::GameSettings
-                    } else {
-                        Panel::Install
-                    },
-                )
-            })
+            .on_press(
+                if self.steam_game(&g.id).is_some()
+                    || slatty_core::store::epic_app(&g.id).is_some()
+                    || !installable
+                {
+                    Message::Select(g.id.clone())
+                } else {
+                    Message::OpenDialog(
+                        g.id.clone(),
+                        if installed {
+                            Panel::GameSettings
+                        } else {
+                            Panel::Install
+                        },
+                    )
+                },
+            )
             .style(theme::plain);
         let overlay = column![
             space().height(Length::Fill),

@@ -95,6 +95,7 @@ impl fmt::Display for Sort {
 pub struct Filters {
     pub gog: bool,
     pub steam: bool,
+    pub epic: bool,
     pub added: bool,
     pub emulated: bool,
     pub windows: bool,
@@ -110,10 +111,11 @@ impl Filters {
         *self != Filters::default()
     }
 
-    fn flags(&mut self) -> [(&'static str, &mut bool); 8] {
+    fn flags(&mut self) -> [(&'static str, &mut bool); 9] {
         [
             ("gog", &mut self.gog),
             ("steam", &mut self.steam),
+            ("epic", &mut self.epic),
             ("added", &mut self.added),
             ("emulated", &mut self.emulated),
             ("windows", &mut self.windows),
@@ -637,13 +639,14 @@ impl App {
                 Shelf::Favorites => self.favorites.contains(&g.id),
             })
             .filter(|(_, g)| {
-                if !(f.gog || f.steam || f.added || f.emulated) {
+                if !(f.gog || f.steam || f.epic || f.added || f.emulated) {
                     return true;
                 }
                 // A GOG game owned on Steam too shows once, as GOG's: either store keeps it.
                 match store::of(&g.id) {
                     Ok(Store::Gog) => f.gog || (f.steam && self.steam_twin(&g.id).is_some()),
                     Ok(Store::Steam) => f.steam,
+                    Ok(Store::Epic) => f.epic,
                     Ok(Store::Local) => f.added,
                     Ok(Store::Emulated) => f.emulated,
                     Err(_) => false,
