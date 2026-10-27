@@ -49,10 +49,7 @@ impl App {
                 .on_press(Message::OpenPanel(panel))
                 .style(theme::ghost)
         };
-        if self.installs.contains_key(&g.id) && slatty_core::store::epic_app(&g.id).is_some() {
-            // GOG's game settings do not apply: Manage uninstalls it.
-            tools = tools.push(tool(Icon::EllipsisVertical, Panel::Manage));
-        } else if self.installs.contains_key(&g.id) {
+        if self.installs.contains_key(&g.id) {
             tools = tools
                 .push(tool(Icon::SlidersHorizontal, Panel::GameSettings))
                 .push(tool(Icon::EllipsisVertical, Panel::Manage));

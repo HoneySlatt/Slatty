@@ -14,8 +14,9 @@ until 1.0, a minor version may change commands and on-disk formats.
 - Epic Games Store games in the library: sign in under Settings → Account → Epic Games (or
   `slatty epic login`), and your Epic games show with their covers, and an **Epic** filter. They
   install like GOG's, from the same drawer and queue (or `slatty install epic-<app name>`), each
-  file checked against Epic's checksum, play through Proton signed in to your Epic account, and
-  uninstall from Manage. `slatty epic list` lists them.
+  file checked against Epic's checksum, play through Proton signed in to your Epic account, take
+  their Proton build, controller compatibility and isolation from Game settings, and uninstall from
+  Manage. `slatty epic list` lists them.
 - `slatty installs --json` lists, for other programs (a game menu of your desktop), the games the
   Installed shelf shows, with their titles, the files of their covers and how to start them.
 

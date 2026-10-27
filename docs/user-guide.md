@@ -585,6 +585,8 @@ Epic password; the session goes to the system keyring.
   them: one that can run offline still runs. **Details → Session** says which. GOG is not told of
   it: no cloud saves nor achievements through GOG, and its play time is the time played here.
   Proton's fixes for it come from umu's database, under its Epic name.
+- **Game settings** change its Proton build, controller compatibility and isolation, as for a GOG
+  game; its version, language and DLC are not chosen there.
 - The library's filters have **Epic** while you are signed in.
 - **Sign out** forgets the session; the games leave the library. The cache of the library and its
   covers stays (`~/.cache/slatty/epic/`).

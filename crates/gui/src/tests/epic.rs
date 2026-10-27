@@ -221,6 +221,80 @@ fn an_installed_epic_game_is_played() {
     );
 }
 
+/// An installed Epic game's settings, from its page: its Proton, controller and isolation, and
+/// nothing of GOG's, which is not asked for its languages and DLC.
+#[test]
+fn an_installed_epic_games_settings_change_its_proton_and_isolation() {
+    let mut app = epic_app();
+    app.installs.insert("epic-Alpha".into(), epic_install());
+    let _ = app.update(Message::Select("epic-Alpha".into()));
+    let mut ui = render(&app);
+    for x in (0..80).map(|i| SIZE.width - 4.0 - i as f32 * 4.0) {
+        for y in (0..15).map(|i| 4.0 + i as f32 * 4.0) {
+            ui.point_at(iced::Point::new(x, y));
+            let _ = ui.simulate(iced_test::simulator::click());
+        }
+    }
+    let messages: Vec<Message> = ui.into_messages().collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::OpenPanel(Panel::GameSettings))),
+        "settings on its page"
+    );
+    let _ = app.update(Message::OpenPanel(Panel::GameSettings));
+    assert!(
+        app.maintenance
+            .get("epic-Alpha")
+            .is_none_or(|m| !m.busy && m.lines.is_empty()),
+        "GOG not asked"
+    );
+    let mut ui = render(&app);
+    assert!(ui.find("Used from the next launch.").is_ok(), "Proton");
+    assert!(
+        ui.find(
+            "Turn on if the game does not recognize your controller. For UMU-Proton, GE-Proton \
+             and Proton-CachyOS. Used from the next launch."
+        )
+        .is_ok()
+    );
+    assert!(
+        ui.find(
+            "The game sees its own folder and a home folder of its own, not your files. Used \
+             from the next launch."
+        )
+        .is_ok(),
+        "isolation"
+    );
+    assert!(ui.find("Game version").is_err(), "nothing of GOG's");
+    assert!(ui.find("Language").is_err());
+}
+
+/// Its cover's settings button opens them over the library, as a GOG game's does.
+#[test]
+fn an_installed_epic_games_cover_opens_its_settings() {
+    let mut app = epic_app();
+    app.installs.insert("epic-Alpha".into(), epic_install());
+    app.library.retain(|g| g.id == "epic-Alpha");
+    app.lists = Default::default();
+    let mut ui = render(&app);
+    let grid = ui
+        .find(iced_test::selector::id(crate::library::GRID))
+        .unwrap()
+        .bounds();
+    for x in (0..30).map(|i| grid.x + 4.0 + i as f32 * 6.0) {
+        for y in (0..50).map(|i| grid.y + 4.0 + i as f32 * 6.0) {
+            ui.point_at(iced::Point::new(x, y));
+            let _ = ui.simulate(iced_test::simulator::click());
+        }
+    }
+    assert!(
+        ui.into_messages().any(
+            |m| matches!(m, Message::OpenDialog(id, Panel::GameSettings) if id == "epic-Alpha")
+        )
+    );
+}
+
 /// Downloads waiting for Epic say so, not GOG.
 #[test]
 fn downloads_waiting_for_epic_name_epic() {

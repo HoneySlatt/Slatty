@@ -351,8 +351,9 @@ impl App {
             }
             // A game added by hand or emulated has no versions, languages or DLC to choose from
             // GOG.
-            MaintenanceMsg::LoadContent(game_id) if slatty_core::store::from_no_store(&game_id) => {
-            }
+            MaintenanceMsg::LoadContent(game_id)
+                if slatty_core::store::from_no_store(&game_id)
+                    || slatty_core::store::epic_app(&game_id).is_some() => {}
             MaintenanceMsg::LoadContent(game_id) => {
                 let view = self.maintenance.entry(game_id.clone()).or_default();
                 view.busy = true;

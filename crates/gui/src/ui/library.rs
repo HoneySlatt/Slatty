@@ -354,23 +354,18 @@ impl App {
         // GOG offers nothing to install for has none: its page says why.
         let settings = button(icon(Icon::SlidersHorizontal, 16.0, tokens().text))
             .padding(8)
-            .on_press(
-                if self.steam_game(&g.id).is_some()
-                    || slatty_core::store::epic_app(&g.id).is_some()
-                    || !installable
-                {
-                    Message::Select(g.id.clone())
-                } else {
-                    Message::OpenDialog(
-                        g.id.clone(),
-                        if installed {
-                            Panel::GameSettings
-                        } else {
-                            Panel::Install
-                        },
-                    )
-                },
-            )
+            .on_press(if self.steam_game(&g.id).is_some() || !installable {
+                Message::Select(g.id.clone())
+            } else {
+                Message::OpenDialog(
+                    g.id.clone(),
+                    if installed {
+                        Panel::GameSettings
+                    } else {
+                        Panel::Install
+                    },
+                )
+            })
             .style(theme::plain);
         let overlay = column![
             space().height(Length::Fill),

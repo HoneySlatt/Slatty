@@ -160,7 +160,7 @@ impl App {
         let busy = self.maintenance_busy(&g.id);
         match view.and_then(|v| v.content.as_ref()) {
             // Versions, languages and DLC are GOG's.
-            _ if added => {}
+            _ if added || slatty_core::store::epic_app(&g.id).is_some() => {}
             Some(c) => {
                 sections.push(section(
                     Icon::RefreshCw,

@@ -68,8 +68,8 @@ There are no dates. What has been checked against real services, and what not ye
 - GOG games installed by another tool, imported from their folder or from Heroic.
 - Epic Games Store: signing in and the account's games in the library, with their covers; a game's
   Windows build installed from the window or the command line, each file checked against Epic's
-  checksum, played through Proton signed in to the account, and uninstalled. Playing one has not
-  been tried with a real game yet.
+  checksum, played through Proton signed in to the account, its Proton build and isolation changed
+  in Game settings, and uninstalled. Playing one has not been tried with a real game yet.
 
 **Privacy, security and packaging**
 - Switches for every third party, off until turned on; private data folders; no write through a
@@ -78,8 +78,8 @@ There are no dates. What has been checked against real services, and what not ye
 
 ## Planned
 
-- **Epic games kept up to date**: updated, verified and repaired; their game settings (Proton,
-  isolation) changed after install; then Epic's cloud saves and achievements.
+- **Epic games kept up to date**: updated, verified and repaired; then Epic's cloud saves and
+  achievements.
 - **Translations** of the interface, in English for now.
 - **Steam downloads** followed more exactly while the client downloads.
 - **Packaging** for other distributions.

@@ -615,8 +615,9 @@ one; `paths::check_owned_id` accepts them, as Slatty installs them. Automatic up
 shows at start (`boot.rs` reads it) and is read again from Epic meanwhile; `merge_steam` puts its
 games in the library beside Steam's. They install through the same drawer, queue and progress
 as GOG's: `install::plan` and `install_stream` call `epic::install` for an Epic id, given the game
-as the library describes it (`App::epic_game`), and play as GOG's do; their Manage drawer offers
-only Uninstall, and their play time is the time played here.
+as the library describes it (`App::epic_game`), and play as GOG's do; their Game settings leave out
+what is GOG's (version, language, DLC: `MaintenanceMsg::LoadContent` asks nothing), their Manage
+drawer offers only Uninstall, and their play time is the time played here.
 
 ### Games added by hand
 
