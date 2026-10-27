@@ -295,6 +295,39 @@ fn an_epic_games_achievements_show_on_its_page() {
     assert!(render(&app).find("1 / 2").is_ok());
 }
 
+/// The covers in the account's cache show at once, read in one pass; only the others are
+/// downloaded, each asked for once though the library is read twice at start.
+#[test]
+fn epic_covers_come_from_the_cache_first() {
+    use crate::epic::EpicMsg;
+    let mut app = epic_app();
+    for g in &mut app.epic.games {
+        g.cover = Some(format!("https://cdn.example/{}.jpg", g.app_name));
+    }
+    assert!(app.epic.covers_reading, "the cache is read first");
+    assert!(app.epic.requested.is_empty());
+    let cached = std::path::PathBuf::from("/cache/epic-Alpha.jpg");
+    let _ = app.update(Message::Epic(EpicMsg::CachedCovers(
+        ACCOUNT.into(),
+        [("epic-Alpha".to_string(), cached.clone())].into(),
+    )));
+    assert_eq!(app.epic.covers.get("epic-Alpha"), Some(&cached));
+    assert!(app.covers.contains_key("epic-Alpha"));
+    assert_eq!(
+        app.epic.requested,
+        ["epic-Beta".to_string()].into(),
+        "the missing one alone"
+    );
+    // The library read again from Epic: Beta is not asked for twice.
+    let _ = app.update(Message::Epic(EpicMsg::Read(
+        ACCOUNT.into(),
+        Ok(epic_library(ACCOUNT)),
+    )));
+    assert_eq!(app.epic.requested.len(), 1);
+    let _ = app.update(Message::Epic(EpicMsg::Cover("epic-Beta".into(), None)));
+    assert!(app.epic.requested.is_empty());
+}
+
 /// Achievements read for an account no longer signed in are left out, and signing out forgets
 /// those read.
 #[test]

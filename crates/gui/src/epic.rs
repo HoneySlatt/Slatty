@@ -23,6 +23,11 @@ pub struct EpicView {
     pub fetched_at: Option<i64>,
     /// Their covers, by game id, once in the cache.
     pub covers: HashMap<String, PathBuf>,
+    /// The account's cache of covers: being read, or read.
+    pub covers_reading: bool,
+    pub covers_read: bool,
+    /// Covers being downloaded, asked for once.
+    pub requested: std::collections::HashSet<String>,
     /// What is pasted from the page Epic shows after signing in.
     pub input: String,
     pub signing_in: bool,
@@ -49,6 +54,8 @@ pub enum EpicMsg {
     Read(String, Result<EpicLibrary, String>),
     /// A cover in the cache.
     Cover(String, Option<PathBuf>),
+    /// The covers already in the cache of the account of that id.
+    CachedCovers(String, HashMap<String, PathBuf>),
     /// The achievement counts kept for the account of that id.
     CountsRead(String, slatty_core::epic::achievements::Counts),
     /// Reads every game's achievements again from Epic (Refresh in the Achievements tab).
@@ -168,19 +175,33 @@ impl App {
                 self.epic.reading = false;
                 self.notify_error(format!("Epic Games: {e}"));
             }
-            EpicMsg::Cover(id, Some(path))
-                if self
-                    .epic
-                    .games
-                    .iter()
-                    .any(|g| store::epic_id(&g.app_name) == id) =>
-            {
-                self.covers
-                    .insert(id.clone(), iced::widget::image::Handle::from_path(&path));
-                self.epic.covers.insert(id.clone(), path);
-                return self.scale_covers(Some(vec![id]));
+            EpicMsg::Cover(id, path) => {
+                self.epic.requested.remove(&id);
+                if let Some(path) = path
+                    && self
+                        .epic
+                        .games
+                        .iter()
+                        .any(|g| store::epic_id(&g.app_name) == id)
+                {
+                    self.covers
+                        .insert(id.clone(), iced::widget::image::Handle::from_path(&path));
+                    self.epic.covers.insert(id.clone(), path);
+                    return self.scale_covers(Some(vec![id]));
+                }
             }
-            EpicMsg::Cover(..) => {}
+            EpicMsg::CachedCovers(account, _) if self.epic.account.as_ref() != Some(&account) => {}
+            EpicMsg::CachedCovers(_, found) => {
+                self.epic.covers_reading = false;
+                self.epic.covers_read = true;
+                let ids: Vec<String> = found.keys().cloned().collect();
+                for (id, path) in found {
+                    self.covers
+                        .insert(id.clone(), iced::widget::image::Handle::from_path(&path));
+                    self.epic.covers.insert(id, path);
+                }
+                return Task::batch([self.scale_covers(Some(ids)), self.epic_covers()]);
+            }
             EpicMsg::CountsRead(account, _) | EpicMsg::CountingDone(account)
                 if self.epic.account.as_ref() != Some(&account) => {}
             EpicMsg::CountsRead(_, kept) => {
@@ -331,32 +352,57 @@ impl App {
     }
 
     /// The covers not shown yet: from the cache, else downloaded from Epic's image servers.
-    fn epic_covers(&self) -> Task<Message> {
+    fn epic_covers(&mut self) -> Task<Message> {
         let (Some(core), Some(account)) = (self.core.clone(), self.epic.account.clone()) else {
             return Task::none();
         };
-        Task::batch(
-            self.epic
-                .games
-                .iter()
-                .filter(|g| g.cover.is_some())
-                .filter(|g| !self.epic.covers.contains_key(&store::epic_id(&g.app_name)))
-                .cloned()
-                .map(|game| {
-                    let (core, account) = (core.clone(), account.clone());
-                    let id = store::epic_id(&game.app_name);
-                    Task::perform(
-                        async move {
-                            let _permit = core.downloads.acquire().await.ok()?;
-                            library::cover(&core.http, &core.dirs, &account, &game)
-                                .await
-                                .ok()
-                                .flatten()
-                        },
-                        move |path| Message::Epic(EpicMsg::Cover(id, path)),
-                    )
-                }),
-        )
+        // The cache first, read at once off the interface thread: covers there do not wait
+        // behind downloads, one task each.
+        if !self.epic.covers_read {
+            if std::mem::replace(&mut self.epic.covers_reading, true) {
+                return Task::none();
+            }
+            return Task::perform(
+                async move {
+                    let read = account.clone();
+                    let found = tokio::task::spawn_blocking(move || {
+                        library::cached_covers(&core.dirs, &read).unwrap_or_default()
+                    })
+                    .await
+                    .unwrap_or_default();
+                    (account, found)
+                },
+                |(account, found)| Message::Epic(EpicMsg::CachedCovers(account, found)),
+            );
+        }
+        let missing: Vec<EpicGame> = self
+            .epic
+            .games
+            .iter()
+            .filter(|g| g.cover.is_some())
+            .filter(|g| {
+                let id = store::epic_id(&g.app_name);
+                !self.epic.covers.contains_key(&id) && !self.epic.requested.contains(&id)
+            })
+            .cloned()
+            .collect();
+        self.epic
+            .requested
+            .extend(missing.iter().map(|g| store::epic_id(&g.app_name)));
+        Task::batch(missing.into_iter().map(|game| {
+            let (core, account) = (core.clone(), account.clone());
+            let id = store::epic_id(&game.app_name);
+            Task::perform(
+                async move {
+                    let _permit = core.downloads.acquire().await.ok()?;
+                    library::cover(&core.http, &core.dirs, &account, &game)
+                        .await
+                        .ok()
+                        .flatten()
+                },
+                move |path| Message::Epic(EpicMsg::Cover(id, path)),
+            )
+        }))
     }
 
     /// The Epic game of that id, as the account's library describes it.

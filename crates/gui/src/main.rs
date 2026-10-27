@@ -675,7 +675,7 @@ impl Message {
                 | Message::ArtScaled(..)
                 | Message::CouchCoversScaled(..)
                 | Message::Steam(steam::SteamMsg::Cover(..))
-                | Message::Epic(epic::EpicMsg::Cover(..))
+                | Message::Epic(epic::EpicMsg::Cover(..) | epic::EpicMsg::CachedCovers(..))
                 | Message::CachedCovers(_)
                 | Message::Image(..)
                 | Message::Key(_)
