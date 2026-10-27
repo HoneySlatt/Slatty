@@ -72,6 +72,19 @@ impl BuildFiles {
                 continue;
             }
             let rel = safe_relative(&f.name)?;
+            // Names Slatty gives its own files there: a file written beside its place, the mark
+            // of a folder being installed.
+            let name = rel.file_name().map(|n| n.to_string_lossy());
+            if name
+                .as_deref()
+                .is_some_and(|n| n.ends_with(DOWNLOAD_SUFFIX))
+                || rel == Path::new(crate::installer::STAGED_MARK)
+            {
+                return Err(Error::Refused(format!(
+                    "Epic's build names a file `{}` as Slatty names its own",
+                    rel.display()
+                )));
+            }
             let key = rel.to_string_lossy().to_lowercase();
             match index.get(&key) {
                 Some(&i) => set.files[i] = (rel, f.clone()),
@@ -147,7 +160,7 @@ impl<S: ChunkSource> Download<'_, S> {
     ) -> Result<Vec<PathBuf>> {
         let bad = self.bad_files(set, dir, false).await?;
         if repair && !bad.is_empty() {
-            self.check_space(set, dir)?;
+            self.check_rewrite_space(set, &bad, dir)?;
             self.write(set, &bad, dir).await?;
             fsutil::sync_filesystem(dir)?;
         }
@@ -163,12 +176,38 @@ impl<S: ChunkSource> Download<'_, S> {
         dir: &Path,
         begin: impl FnOnce() -> Result<()>,
     ) -> Result<Vec<PathBuf>> {
-        self.check_space(set, dir)?;
         let bad = self.bad_files(set, dir, false).await?;
+        self.check_rewrite_space(set, &bad, dir)?;
         begin()?;
         self.write(set, &bad, dir).await?;
         fsutil::sync_filesystem(dir)?;
         Ok(bad.into_iter().map(|i| set.files[i].0.clone()).collect())
+    }
+
+    /// Refuses writing again the files of `set` at `which` in `dir` when the disk cannot hold it:
+    /// each is written beside the one it replaces, which goes once it is renamed, so the most
+    /// taken is what the files grow by, and the largest one replaced at once.
+    fn check_rewrite_space(&self, set: &BuildFiles, which: &[usize], dir: &Path) -> Result<()> {
+        let (mut grow, mut largest) = (0u64, 0u64);
+        for &i in which {
+            let (rel, f) = &set.files[i];
+            let old = std::fs::symlink_metadata(dir.join(rel)).map_or(0, |m| m.len());
+            grow += f.size().saturating_sub(old);
+            largest = largest.max(old.min(f.size()));
+        }
+        self.require(grow + largest, dir)
+    }
+
+    fn require(&self, needed: u64, dir: &Path) -> Result<()> {
+        let free = (self.free_space)(dir)?;
+        if needed + needed / 50 > free {
+            return Err(Error::Refused(format!(
+                "not enough disk space: {} needed, {} free",
+                crate::units::size(needed),
+                crate::units::size(free)
+            )));
+        }
+        Ok(())
     }
 
     fn check_space(&self, set: &BuildFiles, dir: &Path) -> Result<()> {
@@ -182,16 +221,7 @@ impl<S: ChunkSource> Download<'_, S> {
             })
             .map(|m| m.len())
             .sum();
-        let needed = set.disk_size().saturating_sub(present);
-        let free = (self.free_space)(dir)?;
-        if needed + needed / 50 > free {
-            return Err(Error::Refused(format!(
-                "not enough disk space: {} needed, {} free",
-                crate::units::size(needed),
-                crate::units::size(free)
-            )));
-        }
-        Ok(())
+        self.require(set.disk_size().saturating_sub(present), dir)
     }
 
     async fn fill(&self, set: &BuildFiles, dir: &Path, resumed: bool) -> Result<()> {
@@ -217,7 +247,7 @@ impl<S: ChunkSource> Download<'_, S> {
                     return Err(Error::Cancelled);
                 }
                 let good = (resumed && crate::installer::synced(path, *size))
-                    || verify_file(path, sha1, *size)?;
+                    || verify_file(path, sha1, *size, &cancel)?;
                 if good {
                     let _ = good_tx.send(*size);
                 } else {
@@ -303,10 +333,13 @@ impl<S: ChunkSource> Download<'_, S> {
                         Some(data) => data,
                         None if order.get(next_new) == Some(&g) => {
                             next_new += 1;
-                            stream.next().await.expect("one chunk for each")?
+                            self.unless_cancelled(async {
+                                stream.next().await.expect("one chunk for each")
+                            })
+                            .await?
                         }
                         // Dropped from the cache: downloaded again.
-                        None => self.fetch(g, network).await?,
+                        None => self.unless_cancelled(self.fetch(g, network)).await?,
                     };
                     let slice = &data[part.offset as usize..(part.offset + part.size) as usize];
                     out.write_all_at(slice, at)
@@ -348,6 +381,16 @@ impl<S: ChunkSource> Download<'_, S> {
         }
         debug_assert_eq!(n, uses.len());
         Ok(())
+    }
+
+    /// `work`, stopped as soon as the download is: a chunk waiting on the network (its retries
+    /// take a minute and a half) does not hold a pause.
+    async fn unless_cancelled<T>(&self, work: impl Future<Output = Result<T>>) -> Result<T> {
+        tokio::select! {
+            biased;
+            _ = self.cancel.cancelled() => Err(Error::Cancelled),
+            done = work => done,
+        }
     }
 
     /// A chunk, downloaded and unpacked.
@@ -403,22 +446,33 @@ impl Cache {
     }
 }
 
-/// Whether `path` holds exactly the file of that SHA-1 and size.
-pub fn verify_file(path: &Path, sha1: &[u8; 20], size: u64) -> Result<bool> {
+/// Whether `path` holds exactly the file of that SHA-1 and size. One that cannot be read (a bad
+/// sector, no permission) is not: repairing writes it again. Stops when `cancel` is, between
+/// reads.
+pub fn verify_file(
+    path: &Path,
+    sha1: &[u8; 20],
+    size: u64,
+    cancel: &CancellationToken,
+) -> Result<bool> {
     let Ok(meta) = std::fs::symlink_metadata(path) else {
         return Ok(false);
     };
     if !meta.is_file() || meta.len() != size {
         return Ok(false);
     }
-    let mut f =
-        std::fs::File::open(path).map_err(|e| Error::io(format!("open {}", path.display()), e))?;
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return Ok(false);
+    };
     let mut hash = aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY);
     let mut buf = vec![0; 1 << 20];
     loop {
-        let n = f
-            .read(&mut buf)
-            .map_err(|e| Error::io(format!("read {}", path.display()), e))?;
+        if cancel.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        let Ok(n) = f.read(&mut buf) else {
+            return Ok(false);
+        };
         if n == 0 {
             break;
         }
@@ -441,11 +495,16 @@ pub(crate) mod tests {
         pub chunks: HashMap<String, Vec<u8>>,
         pub asked: Mutex<Vec<String>>,
         pub broken: Mutex<HashSet<String>>,
+        /// Chunks it never answers for, as a stalled connection.
+        pub stalled: Mutex<HashSet<String>>,
     }
 
     impl ChunkSource for FakeCdn {
         async fn chunk(&self, path: &str) -> Result<Vec<u8>> {
             self.asked.lock().unwrap().push(path.to_string());
+            if self.stalled.lock().unwrap().contains(path) {
+                std::future::pending::<()>().await;
+            }
             if self.broken.lock().unwrap().contains(path) {
                 return Err(Error::Http {
                     context: "downloading an Epic chunk",
@@ -675,6 +734,118 @@ pub(crate) mod tests {
         assert!(cache.take(&[1; 4]).is_none(), "used again the latest");
         assert!(cache.take(&[2; 4]).is_some());
         assert_eq!(cache.bytes, 0);
+    }
+
+    fn download<'a>(
+        manifest: &'a Manifest,
+        cdn: &'a FakeCdn,
+        secrets: &'a HashMap<String, String>,
+        free: &'a (dyn Fn(&Path) -> Result<u64> + Send + Sync),
+        cancel: CancellationToken,
+    ) -> Download<'a, FakeCdn> {
+        Download {
+            source: cdn,
+            manifest,
+            secrets,
+            cancel,
+            progress: &|_| {},
+            free_space: free,
+        }
+    }
+
+    /// A file that cannot be read is one to repair, not a reason to stop: Verify lists it, Repair
+    /// writes it again.
+    #[tokio::test]
+    async fn an_unreadable_file_is_repaired() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = root("unreadable");
+        let (manifest, cdn) = build(&sample(), 1024);
+        let game = root.join("Game");
+        install(&manifest, &cdn, &root.join(".Game.part"), &game)
+            .await
+            .unwrap();
+        let locked = game.join("Data/small.txt");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::File::open(&locked).is_ok() {
+            // Run as root, which reads anything: nothing to check.
+            std::fs::remove_dir_all(&root).unwrap();
+            return;
+        }
+        let set = BuildFiles::of(&manifest).unwrap();
+        let secrets = HashMap::new();
+        let dl = download(&manifest, &cdn, &secrets, &plenty, CancellationToken::new());
+        let bad = dl.check_installed(&set, &game, false).await.unwrap();
+        assert_eq!(bad, [PathBuf::from("Data/small.txt")]);
+        dl.check_installed(&set, &game, true).await.unwrap();
+        assert_eq!(std::fs::read(&locked).unwrap(), sample()[1].1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Pausing while a chunk waits on the network stops at once, not after its retries.
+    #[tokio::test]
+    async fn a_pause_does_not_wait_for_a_stalled_chunk() {
+        let root = root("stalled");
+        let (manifest, cdn) = build(&sample(), 1024);
+        let first = manifest.chunks.values().next().unwrap().path(18);
+        cdn.stalled.lock().unwrap().insert(first);
+        let set = BuildFiles::of(&manifest).unwrap();
+        let secrets = HashMap::new();
+        let cancel = CancellationToken::new();
+        let dl = download(&manifest, &cdn, &secrets, &plenty, cancel.clone());
+        let stop = async {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            cancel.cancel();
+        };
+        let (partial, target) = (root.join(".Game.part"), root.join("Game"));
+        let (ran, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(dl.run(&set, &partial, &target), stop)
+        })
+        .await
+        .expect("stopped at once");
+        assert!(matches!(ran, Err(Error::Cancelled)));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A changed file of the same size is written beside the one it replaces: an update needs
+    /// room for it, though its size does not change.
+    #[tokio::test]
+    async fn an_update_needs_room_for_a_file_beside_the_one_it_replaces() {
+        let root = root("room");
+        let (manifest, cdn) = build(&sample(), 1024);
+        let game = root.join("Game");
+        install(&manifest, &cdn, &root.join(".Game.part"), &game)
+            .await
+            .unwrap();
+        let mut files = sample();
+        files[2].1 = content(9, 5000);
+        let (newer, cdn) = build(&files, 1024);
+        let set = BuildFiles::of(&newer).unwrap();
+        let secrets = HashMap::new();
+        let full = |_: &Path| Ok(100);
+        let dl = download(&newer, &cdn, &secrets, &full, CancellationToken::new());
+        let e = dl
+            .update_installed(&set, &game, || Ok(()))
+            .await
+            .unwrap_err();
+        assert!(matches!(e, Error::Refused(_)), "{e}");
+        assert_eq!(
+            std::fs::read(game.join("Data/Pak/big.pak")).unwrap(),
+            sample()[2].1
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A build naming a file as Slatty names its own (written beside its place, the mark of a
+    /// folder being installed) is refused: one would be taken for the other.
+    #[test]
+    fn names_slatty_gives_its_own_files_are_refused() {
+        for name in ["Data/x.slatty-dl", ".slatty-staged"] {
+            let (manifest, _) = build(&[("Game.exe", content(1, 5)), (name, content(2, 5))], 64);
+            assert!(
+                matches!(BuildFiles::of(&manifest), Err(Error::Refused(_))),
+                "{name}"
+            );
+        }
     }
 
     /// Two paths differing by case are one file on Windows: the last listed is written.
