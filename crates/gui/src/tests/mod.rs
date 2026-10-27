@@ -339,5 +339,6 @@ mod notify;
 mod offline;
 mod runners;
 mod settings;
+mod sidebar;
 mod steam;
 mod updates;

@@ -7,6 +7,10 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 ### Added
 
+- A list of every game beside the library, as in Steam: names and icons (GOG's, or the Steam
+  client's), A to Z, games not installed dimmed, a search of its own, closed and opened again at
+  will.
+
 - Emulated games in the library: games of PlayStation 1 to 5, PSP, GameCube, Wii and Switch, from
   your own files, run full screen in DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4, Kyty, Dolphin or
   Eden. Settings → Emulators finds each emulator, takes the folders of its games and scans them;

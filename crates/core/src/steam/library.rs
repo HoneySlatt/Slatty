@@ -100,11 +100,18 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
             None => server("library_capsule", "library_600x900.jpg"),
         };
         let oslist = common.text("oslist").unwrap_or_default();
+        // The small square icon the client keeps, named after its SHA-1; none downloaded.
+        let icon = common
+            .text("icon")
+            .filter(|h| h.len() == 40 && h.bytes().all(|b| b.is_ascii_hexdigit()))
+            .map(|h| folder.join(format!("{h}.jpg")))
+            .filter(|path| cached_image(path))
+            .map(|path| path.display().to_string());
         library.games.push(LibraryGame {
             id,
             title: name.to_string(),
             cover,
-            icon: None,
+            icon,
             background: image("library_hero", "library_hero.jpg"),
             logo: image("library_logo", "logo.png"),
             os: ["windows", "linux"]
@@ -325,8 +332,16 @@ mod tests {
         let cache = root.join("appcache/librarycache/70");
         std::fs::create_dir_all(&cache).unwrap();
         std::fs::write(cache.join("library_600x900.jpg"), b"jpg").unwrap();
+        let icon = cache.join(format!("{:040x}.jpg", 70));
+        std::fs::write(&icon, b"jpg").unwrap();
 
         let library = read(&fake.steam, false).unwrap();
+        assert_eq!(
+            library.games[0].icon.as_deref(),
+            Some(icon.display().to_string().as_str()),
+            "the icon the client keeps"
+        );
+        assert_eq!(library.games[1].icon, None, "none kept: none");
         assert_eq!(library.user.name, "[FAKE] Player");
         let games: Vec<(&str, &str)> = library
             .games

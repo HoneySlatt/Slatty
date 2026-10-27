@@ -21,6 +21,7 @@ mod presets;
 mod runners;
 mod scaled;
 mod settings;
+mod sidebar;
 mod steam;
 #[cfg(test)]
 mod tests;
@@ -254,6 +255,9 @@ pub struct App {
     pub grid_view: Option<iced::widget::scrollable::Viewport>,
     /// Where the cover grid was left for the game page open, to find it there again.
     pub library_scroll: Option<iced::widget::scrollable::Viewport>,
+    /// The list of every game beside the library: open or closed, what it is searched for, and
+    /// where it is scrolled to (only the rows in view are built).
+    pub sidebar: sidebar::Sidebar,
     /// The same for the grid of the Achievements tab.
     pub achievements_view: Option<iced::widget::scrollable::Viewport>,
     pub filters: Filters,
@@ -432,6 +436,7 @@ impl Default for App {
             card_width: 150.0,
             grid_view: None,
             library_scroll: None,
+            sidebar: sidebar::Sidebar::default(),
             achievements_view: None,
             filters: Filters::default(),
             filters_open: false,
@@ -549,6 +554,7 @@ pub enum Message {
     SyncLibrary,
     GridScrolled(iced::widget::scrollable::Viewport),
     AchievementsScrolled(iced::widget::scrollable::Viewport),
+    Sidebar(sidebar::SidebarMsg),
     LibrarySynced(Result<LibraryCache, String>),
     Search(String),
     ShowPage(Page),
@@ -666,6 +672,7 @@ impl Message {
         matches!(
             self,
             Message::GridScrolled(_)
+                | Message::Sidebar(sidebar::SidebarMsg::Scrolled(_))
                 | Message::AchievementsScrolled(_)
                 | Message::Frame(_)
                 | Message::WindowResized(_)
@@ -837,7 +844,7 @@ impl App {
         // Lists made again may have moved the games the couch mode's focus was on.
         self.refocus_couch();
         // Whatever ended (a game, an install, an update) may let a waiting update start.
-        let task = Task::batch([task, self.next_update()]);
+        let task = Task::batch([task, self.next_update(), self.sidebar_icons()]);
         // The gamepad's reader sends nothing while the player is elsewhere.
         pad::set_away(self.couch.is_some() && self.away());
         let now = self.location();
@@ -958,6 +965,7 @@ impl App {
                 if let Some(width) = boot.cover_width {
                     self.card_width = width.clamp(COVER_WIDTHS.0, COVER_WIDTHS.1);
                 }
+                self.sidebar.open = boot.sidebar;
                 if !boot.interrupted.is_empty() {
                     let titles: Vec<String> = boot
                         .interrupted
@@ -1077,7 +1085,11 @@ impl App {
             }
             Message::LoggedOut(Err(e)) => self.notify_error(e),
             Message::SyncLibrary => return self.sync_library(),
-            Message::GridScrolled(viewport) => self.grid_view = Some(viewport),
+            Message::GridScrolled(viewport) => {
+                self.grid_view = Some(viewport);
+                self.sidebar.open_when_measured = self.sidebar.open;
+            }
+            Message::Sidebar(msg) => return self.update_sidebar(msg),
             Message::AchievementsScrolled(viewport) => self.achievements_view = Some(viewport),
             Message::LibrarySynced(result) => return self.library_synced(result),
             Message::Search(s) => {

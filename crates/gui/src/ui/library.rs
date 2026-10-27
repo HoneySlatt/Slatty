@@ -66,29 +66,43 @@ impl App {
                 .style(theme::block),
             tooltip::Position::Bottom,
         );
-        let toolbar = row![
-            pick_list(self.shelves(), Some(self.shelf), Message::ShowShelf)
-                .style(theme::dropdown)
-                .font(theme::font())
-                .padding([9, 16])
-                .text_size(14)
-                .width(150),
-            vertical_rule(22.0),
-            text(format!("{} games", games.len()))
-                .size(14)
-                .color(tokens().muted),
-            space().width(Length::Fill),
-            pick_list(Sort::ALL, Some(self.sort), Message::SortBy)
-                .style(theme::dropdown)
-                .font(theme::font())
-                .padding([9, 16])
-                .text_size(14)
-                .width(170),
-            filter_button,
-            add_button,
-        ]
-        .spacing(14)
-        .align_y(Alignment::Center);
+        // The list of games closed, its button to open it again.
+        let open_list = (!self.sidebar.open).then(|| {
+            button(icon(Icon::PanelLeftOpen, 20.0, tokens().text))
+                .padding(8)
+                .on_press(Message::Sidebar(crate::sidebar::SidebarMsg::Toggle))
+                .style(theme::ghost)
+        });
+        let toolbar = row![]
+            .push(open_list)
+            .push(
+                row![
+                    pick_list(self.shelves(), Some(self.shelf), Message::ShowShelf)
+                        .style(theme::dropdown)
+                        .font(theme::font())
+                        .padding([9, 16])
+                        .text_size(14)
+                        .width(150),
+                    vertical_rule(22.0),
+                    text(format!("{} games", games.len()))
+                        .size(14)
+                        .color(tokens().muted),
+                    space().width(Length::Fill),
+                    pick_list(Sort::ALL, Some(self.sort), Message::SortBy)
+                        .style(theme::dropdown)
+                        .font(theme::font())
+                        .padding([9, 16])
+                        .text_size(14)
+                        .width(170),
+                    filter_button,
+                    add_button,
+                ]
+                .spacing(14)
+                .align_y(Alignment::Center)
+                .width(Length::Fill),
+            )
+            .spacing(6)
+            .align_y(Alignment::Center);
 
         // What shows above the grid, in one column: the grid keeps its place in the page, and with
         // it its scroll position, when a bar or a banner comes or goes.
@@ -132,9 +146,9 @@ impl App {
         } else {
             // Only the rows in view are built; the area's size comes from its last scroll, or from the
             // window until then (less the page's margins and the scrollbar's room).
-            let view = self.grid_view;
+            let (measured, view) = self.grid_measured();
             let width =
-                view.map_or(self.window.width - 40.0, |v| v.bounds().width) - SCROLLBAR_ROOM;
+                measured.unwrap_or(self.window.width - 40.0 - self.sidebar_room()) - SCROLLBAR_ROOM;
             let height = view.map_or(self.window.height, |v| v.bounds().height);
             let offset = view.map_or(0.0, |v| v.absolute_offset().y);
             let w = GridWindow::new(

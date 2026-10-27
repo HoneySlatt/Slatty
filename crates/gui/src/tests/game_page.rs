@@ -318,6 +318,7 @@ pub(super) fn booted(installs: Vec<Install>, interrupted: &[&str]) -> Message {
         customs: Default::default(),
         sort_keys: Vec::new(),
         cover_width: None,
+        sidebar: false,
         sort: None,
         remember_filters: false,
         filters: None,

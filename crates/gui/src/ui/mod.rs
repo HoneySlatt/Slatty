@@ -17,6 +17,7 @@ mod manage;
 mod panels;
 mod pointer;
 mod settings;
+mod sidebar;
 mod widgets;
 
 use crate::theme::text;
@@ -72,22 +73,24 @@ impl App {
             (Some(_), Some(game)) => self.arriving(self.game_page(game)),
             (Some(username), None) => column![
                 self.top_bar(username),
-                container(
-                    self.arriving(match self.page {
-                        Page::Library => self.library_page(),
-                        Page::Achievements => match self
-                            .achievements_game
-                            .as_ref()
-                            .and_then(|id| self.library.iter().find(|g| &g.id == id))
-                        {
-                            Some(game) => self.achievements_game_page(game),
-                            None => self.achievements_page(),
-                        },
-                        Page::Downloads => self.downloads_page(),
-                        Page::Settings => self.settings_page(),
-                    })
-                )
-                .padding(Padding::new(20.0).top(16.0)),
+                self.beside_list(
+                    container(
+                        self.arriving(match self.page {
+                            Page::Library => self.library_page(),
+                            Page::Achievements => match self
+                                .achievements_game
+                                .as_ref()
+                                .and_then(|id| self.library.iter().find(|g| &g.id == id))
+                            {
+                                Some(game) => self.achievements_game_page(game),
+                                None => self.achievements_page(),
+                            },
+                            Page::Downloads => self.downloads_page(),
+                            Page::Settings => self.settings_page(),
+                        })
+                    )
+                    .padding(Padding::new(20.0).top(16.0))
+                ),
             ]
             .into(),
         };
@@ -201,6 +204,15 @@ impl App {
             .align_right(Length::Fill)
             .align_bottom(Length::Fill)
             .into()
+    }
+
+    /// The library's page beside the list of games (open, or closed to its strip); another page
+    /// as it is.
+    fn beside_list<'a>(&'a self, page: container::Container<'a, Message>) -> Element<'a, Message> {
+        if !self.on_library_page() {
+            return page.into();
+        }
+        row![self.sidebar_view(), page.width(Length::Fill)].into()
     }
 
     pub(crate) fn selected_game(&self) -> Option<&LibraryGame> {

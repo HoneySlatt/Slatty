@@ -81,6 +81,8 @@ pub struct Boot {
     /// What each game sorts by, made here rather than in the first view (10 ms at 10,000 games).
     pub sort_keys: Vec<(String, crate::library::NaturalKey)>,
     pub cover_width: Option<f32>,
+    /// Whether the list of games shows beside the library.
+    pub sidebar: bool,
     pub sort: Option<Sort>,
     pub remember_filters: bool,
     pub filters: Option<Filters>,
@@ -325,6 +327,7 @@ async fn boot() -> Result<Boot, String> {
         .map(|l| crate::library::sort_names(&l.games, &customs))
         .unwrap_or_default();
     let cover_width = slatty_core::settings::cover_width(&db).map_err(err)?;
+    let sidebar = slatty_core::settings::sidebar(&db).map_err(err)?;
     let sort = slatty_core::settings::library_sort(&db)
         .map_err(err)?
         .and_then(|s| Sort::from_key(&s));
@@ -396,6 +399,7 @@ async fn boot() -> Result<Boot, String> {
         customs,
         sort_keys,
         cover_width,
+        sidebar,
         sort,
         remember_filters,
         filters,

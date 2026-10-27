@@ -1024,6 +1024,16 @@ fn library_at_10000_games() {
     app.search = "世界 99".into();
     time(&app, "view, searching");
     app.search.clear();
+    // The list of every game beside it, open: its rows in view alone are built.
+    app.sidebar.open = true;
+    time(&app, "view with the list of games");
+    let t = std::time::Instant::now();
+    for _ in 0..10 {
+        app.lists.clear();
+        let _ = app.sidebar_games();
+    }
+    println!("list of games made again: {:?}", t.elapsed() / 10);
+    app.sidebar.open = false;
     // The Achievements tab, every game with achievements.
     for g in &app.library {
         app.overview.entry(g.id.clone()).or_default().achievements = Some((3, 10));

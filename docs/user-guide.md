@@ -98,6 +98,12 @@ Your games, as covers. Above the grid:
   start.
 - **+** adds a game from no store (see [Games added by hand](#games-added-by-hand)).
 
+**The list of games**, on the library's left as in Steam's, names every game but the hidden ones,
+A to Z, with its icon when it has one: GOG's square icon, or the one the Steam client keeps;
+none otherwise. Games not installed are dimmed. Its search is its own, apart from the library's;
+a click opens the game's page. The button beside the search closes it, and the one at the left of
+the library's toolbar opens it again; it comes back as you left it.
+
 Hovering a cover shows its title, a settings button and Play (or Install). Clicking a cover opens
 the game's page; going back (the **Library** link or Escape) finds the grid scrolled where you
 left it. The install and settings buttons open their choices in a dialog over the library, which

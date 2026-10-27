@@ -788,6 +788,8 @@ pub struct Lists {
     /// The couch mode's library and its home rows.
     pub couch: RefCell<Option<(ListKey, Rc<[usize]>)>>,
     pub couch_home: RefCell<Option<Rc<[crate::couch::HomeRow]>>>,
+    /// The sidebar's games, by what it is searched for.
+    pub sidebar: RefCell<Option<(String, Rc<[usize]>)>>,
 }
 
 pub(crate) type ListKey = (String, Shelf, Filters, Sort, usize);
@@ -800,6 +802,7 @@ impl Lists {
         self.overview_read.take();
         self.couch.take();
         self.couch_home.take();
+        self.sidebar.take();
     }
 }
 

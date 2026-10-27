@@ -134,7 +134,7 @@ impl<'a> Keys<'a> {
 }
 
 /// Which entries of an app are decoded, by depth and key: what the library shows (`common`'s
-/// name, type, systems and images) and the app's id. The rest, most of the file (`config`,
+/// name, type, systems, images and icon) and the app's id. The rest, most of the file (`config`,
 /// `depots`, `extended`, the store's texts in every language), is read past, not decoded: about
 /// 60 KB an app otherwise.
 fn shown(depth: usize, key: &str) -> bool {
@@ -142,7 +142,7 @@ fn shown(depth: usize, key: &str) -> bool {
     match depth {
         0 => is("appinfo"),
         1 => is("appid") || is("common"),
-        2 => is("name") || is("type") || is("oslist") || is("library_assets_full"),
+        2 => is("name") || is("type") || is("oslist") || is("library_assets_full") || is("icon"),
         _ => true,
     }
 }
@@ -287,7 +287,13 @@ pub(crate) mod tests {
             kv.extend(app_id.to_le_bytes());
             kv.push(0x00);
             key("common", &mut kv);
-            for (k, v) in [("name", name), ("type", kind), ("oslist", oslist)] {
+            let icon = format!("{app_id:040x}");
+            for (k, v) in [
+                ("name", name),
+                ("type", kind),
+                ("oslist", oslist),
+                ("icon", icon.as_str()),
+            ] {
                 kv.push(0x01);
                 key(k, &mut kv);
                 kv.extend(v.as_bytes());
