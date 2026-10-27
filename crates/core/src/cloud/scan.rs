@@ -57,10 +57,12 @@ fn walk(root: &Path, dir: &Path, out: &mut LocalScan) -> Result<()> {
         } else if file_type.is_dir() {
             walk(root, &path, out)?;
         } else if file_type.is_file() {
+            // A file Slatty was writing (`fsutil::temp_sibling`), left by a crash; a save of the
+            // game's own is never named so.
             if rel
                 .rsplit('/')
                 .next()
-                .is_some_and(|n| n.contains(".slatty-tmp-"))
+                .is_some_and(|n| n.starts_with('.') && n.contains(".slatty-tmp-"))
             {
                 continue;
             }
@@ -133,12 +135,16 @@ mod tests {
         std::fs::create_dir_all(root.join("Slot1")).unwrap();
         std::fs::write(root.join("Slot1/Save.DAT"), b"abc").unwrap();
         std::fs::write(root.join(".x.slatty-tmp-1"), b"tmp").unwrap();
+        // A game's own save, whatever its name holds.
+        std::fs::write(root.join("keep.slatty-tmp-x.sav"), b"save").unwrap();
         std::os::unix::fs::symlink("/etc/hostname", root.join("link")).unwrap();
         let s = scan(&root).unwrap();
         let f = &s.files["slot1/save.dat"];
         assert_eq!((f.rel.as_str(), f.size), ("Slot1/Save.DAT", 3));
         assert_eq!(f.sha256, fsutil::sha256_hex(b"abc"));
-        assert_eq!(s.files.len(), 1);
+        let mut names: Vec<&str> = s.files.keys().map(String::as_str).collect();
+        names.sort();
+        assert_eq!(names, ["keep.slatty-tmp-x.sav", "slot1/save.dat"]);
         assert_eq!(s.skipped, vec!["link (symbolic link)"]);
         std::fs::remove_dir_all(root).unwrap();
     }
