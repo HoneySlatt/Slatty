@@ -850,8 +850,8 @@ pub fn sort_names(
         .collect()
 }
 
-/// A title sorted the way people read it: case aside, and numbers by their value, so "Game 2"
-/// comes before "Game 10".
+/// A title sorted the way people read it: case aside, numbers by their value, so "Game 2" comes
+/// before "Game 10", and a leading "The" left out, as Steam's library does.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NaturalKey(Vec<Part>);
 
@@ -863,6 +863,10 @@ enum Part {
 
 impl NaturalKey {
     pub fn of(title: &str) -> NaturalKey {
+        let title = match title.get(..4) {
+            Some(the) if the.eq_ignore_ascii_case("the ") => title[4..].trim_start(),
+            _ => title,
+        };
         let mut parts = Vec::new();
         let mut chars = title.chars().peekable();
         while let Some(&c) = chars.peek() {

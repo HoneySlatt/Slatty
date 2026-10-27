@@ -32,6 +32,8 @@ until 1.0, a minor version may change commands and on-disk formats.
   with the theme's accent: on its page, in the Achievements tab and in the couch mode.
 - Game settings no longer says controller compatibility was checked with UMU-Proton only: it was
   checked with GE-Proton and Proton-CachyOS too.
+- Sorted by name, the library leaves out a leading "The", as Steam's does: "The Witcher 3" sorts
+  under W.
 
 ### Fixed
 

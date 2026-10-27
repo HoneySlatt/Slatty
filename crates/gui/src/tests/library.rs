@@ -920,6 +920,26 @@ fn the_sort_keys_made_at_start_are_all_the_first_view_needs() {
     assert!(titles(&app).contains(&"Renamed".to_string()));
 }
 
+/// Sorted by name, a leading "The" counts for nothing, as in Steam's library ("The Witcher" sorts
+/// under W), whatever its case; a word that only begins with it ("Theme") keeps its place.
+#[test]
+fn a_leading_the_is_left_out_of_the_name_order() {
+    let mut app = library_app();
+    app.library.truncate(4);
+    for (game, title) in app.library.iter_mut().zip([
+        "The [FAKE] Zebra",
+        "[FAKE] Theme",
+        "THE [FAKE] Banana",
+        "[FAKE] Apple",
+    ]) {
+        game.title = title.into();
+    }
+    app.lists.clear();
+    assert_eq!(titles(&app), ["Apple", "THE Banana", "Theme", "The Zebra"]);
+    app.sort = Sort::NameDesc;
+    assert_eq!(titles(&app), ["The Zebra", "Theme", "THE Banana", "Apple"]);
+}
+
 #[test]
 fn the_games_listed_are_kept_while_scrolling_and_made_again_after_anything_else() {
     let mut app = library_app();

@@ -86,7 +86,8 @@ Your games, as covers. Above the grid:
 
 - **Shelves**: **All**, **Installed**, **Favorites**, and **Hidden games** once you hid one.
 - **Sort**: **Name A–Z**, **Name Z–A**, **Recently played** or **Most played**. Numbers sort by
-  value (Game 2 before Game 10). The choice is kept.
+  value (Game 2 before Game 10), and a leading "The" is left out, as in Steam's library ("The
+  Witcher 3" under W). The choice is kept.
 - **Filters**:
   - by store: **GOG**, **Steam**, **Added** (by hand). Ticking several shows the games of any of
     them; a game owned on both GOG and Steam counts for both;
@@ -138,8 +139,8 @@ Escape closes the drawer, then the page.
 
 Right-click a cover, or a game page's key art, and choose **Edit game**. You can change:
 
-- the **Title**, and the **Sorting title** used when sorting by name ("Witcher 3" for "The
-  Witcher 3");
+- the **Title**, and the **Sorting title** used when sorting by name ("Final Fantasy 7" for
+  "Final Fantasy VII");
 - the **Cover** and the **Background** (the key art of the game page): click a picture to pick an
   image file (PNG, JPEG, WebP, GIF or BMP), copied into Slatty's data so the original can
   go. With SteamGridDB turned on (Settings → Advanced), **From SteamGridDB** searches its
