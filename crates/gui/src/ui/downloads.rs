@@ -76,8 +76,9 @@ impl App {
             downloading = downloading.push(
                 row![
                     container(note(format!(
-                        "GOG cannot be reached ({e}). Downloads go on by themselves once it \
-                         answers."
+                        "{} cannot be reached ({e}). Downloads go on by themselves once it \
+                         answers.",
+                        self.waiting_for
                     )))
                     .width(Length::Fill),
                     button(text("Try now").size(14))

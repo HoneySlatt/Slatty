@@ -20,10 +20,10 @@ const API: &str = "https://umu.openwinecomponents.org/umu_api.php";
 pub const UNKNOWN: &str = "umu-0";
 
 /// The game's umu id, or [`UNKNOWN`] when the database does not list it.
-pub async fn lookup(http: &Client, game_id: &str) -> Result<String> {
+pub async fn lookup(http: &Client, store: &str, codename: &str) -> Result<String> {
     let req = http
         .get(API)
-        .query(&[("codename", game_id), ("store", "gog")]);
+        .query(&[("codename", codename), ("store", store)]);
     let body: Value = http::json(req, "looking up the game in umu's database").await?;
     Ok(parse(&body))
 }
@@ -39,13 +39,13 @@ fn parse(body: &Value) -> String {
 
 /// The umu id of a GOG game in the copy of umu's database `proton` carries
 /// (`protonfixes/umu-database.csv`: title, store, store's id, umu id, …).
-fn in_proton(proton: &Path, game_id: &str) -> Option<String> {
+fn in_proton(proton: &Path, store: &str, codename: &str) -> Option<String> {
     let csv = std::fs::read_to_string(proton.join("protonfixes/umu-database.csv")).ok()?;
     csv.lines()
         .map(csv_fields)
         .find(|f| {
-            f.get(1).map(String::as_str) == Some("gog")
-                && f.get(2).map(String::as_str) == Some(game_id)
+            f.get(1).map(String::as_str) == Some(store)
+                && f.get(2).map(String::as_str) == Some(codename)
         })
         .and_then(|f| f.get(3).cloned())
         .filter(|id| valid(id))
@@ -89,18 +89,26 @@ pub async fn resolve(db: &Db, http: &Client, install: &mut Install) {
     let Runner::Umu { proton, .. } = &install.runner else {
         return;
     };
-    // umu's database knows games by their store's id: one added by hand has none to look up.
-    if install.umu_id.is_some() || crate::paths::check_game_id(&install.game_id).is_err() {
+    // umu's database knows games by their store's id: GOG's product id, Epic's app name (store
+    // `egs`). One added by hand has none to look up.
+    if install.umu_id.is_some() {
         return;
     }
-    if let Some(id) = in_proton(proton, &install.game_id) {
+    let (store, codename) = match crate::store::epic_app(&install.game_id) {
+        Some(app) => ("egs", app.to_string()),
+        None if crate::paths::check_game_id(&install.game_id).is_ok() => {
+            ("gog", install.game_id.clone())
+        }
+        None => return,
+    };
+    if let Some(id) = in_proton(proton, store, &codename) {
         install.umu_id = Some(id);
         return;
     }
     if !crate::settings::umu_lookup(db).unwrap_or(false) {
         return;
     }
-    match tokio::time::timeout(Duration::from_secs(5), lookup(http, &install.game_id)).await {
+    match tokio::time::timeout(Duration::from_secs(5), lookup(http, store, &codename)).await {
         Ok(Ok(id)) => {
             install.umu_id = Some(id);
             if let Err(e) = install.save(db) {
@@ -145,13 +153,25 @@ mod tests {
             "TITLE,STORE,CODENAME,UMU_ID,COMMON ACRONYM (Optional),NOTE (Optional),EXE_STRINGS (Optional)\n\
              \"[FAKE] Space, the \"\"Game\"\"\",gog,1234567890,umu-42,,,\n\
              [FAKE] Other,steam,1234567891,umu-7,,,\n\
-             [FAKE] Odd,gog,1234567892,umu-1; rm -rf ~,,,\n",
+             [FAKE] Odd,gog,1234567892,umu-1; rm -rf ~,,,\n\
+             [FAKE] Epic,egs,FakeApp,umu-99,,,\n",
         )
         .unwrap();
-        assert_eq!(in_proton(&proton, "1234567890").as_deref(), Some("umu-42"));
-        assert_eq!(in_proton(&proton, "1234567891"), None, "another store's id");
-        assert_eq!(in_proton(&proton, "1234567892"), None, "not a plain id");
-        assert_eq!(in_proton(&proton, "9"), None);
+        assert_eq!(
+            in_proton(&proton, "gog", "1234567890").as_deref(),
+            Some("umu-42")
+        );
+        assert_eq!(
+            in_proton(&proton, "gog", "1234567891"),
+            None,
+            "another store's id"
+        );
+        assert_eq!(
+            in_proton(&proton, "gog", "1234567892"),
+            None,
+            "not a plain id"
+        );
+        assert_eq!(in_proton(&proton, "gog", "9"), None);
 
         let db = Db::in_memory().unwrap();
         let mut install = crate::install::Install {
@@ -183,6 +203,10 @@ mod tests {
         resolve(&db, &http, &mut install).await;
         assert_eq!(install.umu_id, None);
         assert!(proxy.accept().is_err(), "no request made");
+        // An Epic game, by its app name in Epic's store.
+        install.game_id = "epic-FakeApp".into();
+        resolve(&db, &http, &mut install).await;
+        assert_eq!(install.umu_id.as_deref(), Some("umu-99"));
         std::fs::remove_dir_all(proton).unwrap();
     }
 

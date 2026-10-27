@@ -13,8 +13,8 @@ lists them and whether each was checked against Epic.
 Requests to Epic send the Epic Games Launcher's `User-Agent`, as legendary does, so that Epic's
 services answer Slatty as they answer the launcher whose client it signs in with.
 
-So far Slatty signs in, reads the account's library and installs a game's Windows build. Playing
-and cloud saves are planned (see [roadmap.md](roadmap.md)).
+Slatty signs in, reads the account's library, installs a game's Windows build and plays it.
+Updates and cloud saves are planned (see [roadmap.md](roadmap.md)).
 
 ## Authentication
 
@@ -79,3 +79,30 @@ is. Symbolic links the manifest lists are not made; paths differing only by case
 last listed. Install tags (optional parts such as language packs) are not chosen: every file is
 installed. Encrypted chunks and manifests were checked against data Slatty encrypted itself, not
 against Epic's.
+
+## Launch
+
+| Use | Request | Source | Status |
+|---|---|---|---|
+| Sign-in code for the game | `GET https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/exchange`, with the token: `code`, good once and for five minutes | legendary (`EPCAPI.get_game_token`) | Implemented |
+| Ownership token, for a game whose catalog says `OwnershipToken: true` | `POST https://ecommerceintegration-public-service-ecomprod02.ol.epicgames.com/ecommerceintegration/api/public/platforms/EPIC/identities/{account_id}/ownershipToken`, with the token, form `nsCatalogItemId={namespace}:{catalogItemId}`: the token's bytes | legendary (`EPCAPI.get_ownership_token`) | Implemented |
+| Deployment of Epic's online services | The build service's `elements[0].sidecar.config`, a JSON object as a string: `deploymentId` | legendary (`LegendaryCore.get_game_and_dlc_list`, `Sidecar`) | Implemented |
+
+The game is started as legendary starts it (`LegendaryCore.get_launch_parameters`): the program
+the manifest names (`launch_exe`), from its own folder, with the manifest's arguments
+(`launch_command`) and the catalog's (`AdditionalCommandline`), then:
+
+```
+-AUTH_LOGIN=unused -AUTH_PASSWORD=<code> -AUTH_TYPE=exchangecode -epicapp=<app name> -epicenv=Prod
+[-epicovt=<ownership token file>] -EpicPortal -epicusername=<display name> -epicuserid=<account id>
+-epiclocale=<language> -epicsandboxid=<namespace> [-epicdeploymentid=<deployment>]
+```
+
+The language is the system's (`fr` for `fr_FR.UTF-8`), else `en`. The ownership token is written in
+the prefix's `C:` (`-epicovt=C:\slatty-epic.ovt`), where an isolated game sees it too, and deleted
+once the game ends; legendary writes it in its own temporary folder, as a Linux path. Without a code
+(Epic out of reach, the session rejected) the game starts without any of these arguments, as
+legendary's offline launch does, which a game that can run offline accepts.
+
+umu's database lists Epic games under the store `egs`, by app name: Proton's fixes are found for
+them as for GOG's (checked in UMU-Proton 10.0-4's copy of the database: 108 Epic games).

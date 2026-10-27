@@ -52,8 +52,8 @@ slatty install <id> [options]
 
 `<id>` is a GOG game's, or an Epic game's (`epic-<app name>`, as `slatty epic list` shows it). An
 Epic game installs the newest Windows build Epic offers, every file of it: `--language`,
-`--platform linux`, `--dlc` and `--no-dlc` do not apply to it, and it cannot be played from Slatty
-yet. `slatty uninstall epic-<app name>` uninstalls it.
+`--platform linux`, `--dlc` and `--no-dlc` do not apply to it. `slatty launch epic-<app name>`
+plays it, `slatty uninstall epic-<app name>` uninstalls it.
 
 | Option | Effect |
 |---|---|
@@ -98,10 +98,10 @@ one there at another size is never replaced.
 
 | Command | What it does |
 |---|---|
-| `slatty launch <id>` | Starts the game and follows it until its last process ends. Ctrl+C asks the game to quit, a second Ctrl+C forces it |
+| `slatty launch <id>` | Starts the game and follows it until its last process ends. Ctrl+C asks the game to quit, a second Ctrl+C forces it. An Epic game (`epic-<app name>`) is signed in to your Epic account for the launch |
 | `slatty launch <id> --no-cloud` | Without syncing cloud saves before and after |
 | `slatty launch <id> --no-comet` | Without Comet: no achievements reported during this session |
-| `slatty launch-spec <id>` | Prints the exact command, folder and environment a launch would use, including controller compatibility saved in Game settings |
+| `slatty launch-spec <id>` | Prints the exact command, folder and environment a launch would use, including controller compatibility saved in Game settings; for an Epic game, without the sign-in arguments a launch adds |
 | `slatty isolation <id>` | Whether the game runs isolated from your files |
 | `slatty isolation <id> --on` / `--off` | Changes it from the next launch on |
 | `slatty setup <id>` | Runs GOG's post-install setup again. `--dry-run` shows what it would do; `--force` runs it even if it already ran for this build |
@@ -201,8 +201,8 @@ them out of the library without touching their files; a scan does not add them a
 | `slatty epic list` | Reads the account's games again from Epic and lists them with their ids. `--offline` lists them from the cache |
 | `slatty epic logout` | Deletes the Epic session from the keyring. The library cache stays |
 
-`slatty install epic-<app name>` installs an Epic game (see [Installing games](#installing-games));
-it cannot be played from Slatty yet.
+`slatty install epic-<app name>` installs an Epic game (see [Installing games](#installing-games)),
+`slatty launch epic-<app name>` plays it.
 
 ## Diagnostics
 

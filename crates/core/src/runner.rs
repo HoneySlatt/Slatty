@@ -159,6 +159,8 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
         (Platform::Windows, Runner::Umu { .. } | Runner::Wine { .. }) => {
             let (exe, args, cwd) = if added {
                 crate::added::launch_task(dirs, install)?
+            } else if crate::store::epic_app(&install.game_id).is_some() {
+                crate::epic::launch::task(dirs, install)?
             } else {
                 windows_task(install, choice)?
             };

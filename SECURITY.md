@@ -54,7 +54,14 @@ account), and a game you run without isolation (it runs as you).
   again. Once you sign in to Epic Games, its session is kept there too, entry
   `slatty` / `epic:<account id>`.
 - **Tokens stay out of logs, error messages and process arguments.** Some GOG endpoints take
-  tokens in the address, so network errors are reported without it.
+  tokens in the address, so network errors are reported without it. One exception: an Epic game
+  takes its sign-in code in its arguments (`-AUTH_PASSWORD=`), as Epic's own launcher gives it,
+  and accepts it no other way. That code is asked for just before the game starts, works once and
+  for five minutes, and gives a session of your Epic account to whatever uses it first. While it
+  waits there, your other programs can read it in the game's command line, and so can other users
+  of the computer unless `/proc` hides processes (`hidepid`). It never goes to a log or a file of
+  Slatty's. A game asking for an ownership token gets it in a file of its prefix, readable by you
+  only, deleted when the game ends.
 - **Your token goes to GOG only.** It is sent to `https://` addresses on `gog.com` alone, whatever
   a GOG answer names, and a redirect never tells the next server where it came from.
 - **Signing out** deletes the session from the keyring. Work still running keeps its copy in memory
@@ -107,12 +114,13 @@ No telemetry, no crash reports, no usage statistics.
 | GOG: `content-system`, `gog-cdn-fastly`, `remote-config`, `auth` and `gameplay.gog.com` | For each game: whether it has cloud saves, and its achievements, through a token for the game, as Galaxy asks (about six requests a game) | When the library loads, for the games not read yet; for all on **Refresh** (Achievements tab) | — |
 | GOG: `content-system.gog.com` (Windows builds), `api.gog.com` (Linux builds) | The installed games whose new builds are looked for | At start, at sign-in and every six hours | Update games automatically, Settings → Installs (on) |
 | GOG, `gameplay.gog.com` | Each play session (game, start, length), as Galaxy sends them; sessions played while off are never sent | After a session | Play time on GOG, Settings → Privacy (on) |
-| umu's game database, `umu.openwinecomponents.org` | A game's GOG product id | At its first launch, only when its Proton build's own copy of umu's database does not list it | Proton fixes online, Settings → Privacy (off) |
+| umu's game database, `umu.openwinecomponents.org` | A game's GOG product id, or an Epic game's app name | At its first launch, only when its Proton build's own copy of umu's database does not list it | Proton fixes online, Settings → Privacy (off) |
 | GitHub: `api.github.com`, `github.com`, and the release servers it names | Which project's releases are asked for, without any account | When you list or download Proton builds; at start, at most once a day, for the builds games follow as `<project>-latest` | Proton downloads, Settings → Runners (off); Keep up to date (off) |
 | SteamGridDB: `www.steamgriddb.com` and its image servers | The name you search, and your SteamGridDB API key in a header | When you search in Edit game | SteamGridDB, Settings → Advanced (off) |
 | Valve, `api.steampowered.com` (Steam's Web API) | Your Steam Web API key and Steam id, in the address as the API takes them; the app ids whose achievements are asked for (how common they are is asked without the key) | As Steam's games load, and when a Steam game's achievements show while the client keeps none | Steam Web API, Settings → Steam (off) |
 | Epic Games: `www.epicgames.com` (sign-in, in your browser), `account-public-service-prod03.ol.epicgames.com`, `library-service.live.use1a.on.epicgames.com`, `catalog-public-service-prod06.ol.epicgames.com` | Sign-in and your library: the items you own, then the catalog's description of each new one, with your Epic token | When you sign in, at start and on **Read again** | Signing in to Epic Games, Settings → Account (signed out) |
-| Epic Games, `launcher-public-service-prod06.ol.epicgames.com` | Which game's newest build is asked for, with your Epic token | When an Epic game is installed (`slatty install epic-…`) | — |
+| Epic Games, `launcher-public-service-prod06.ol.epicgames.com` | Which game's newest build is asked for, with your Epic token | When an Epic game is installed | — |
+| Epic Games: `account-public-service-prod03.ol.epicgames.com` (a sign-in code for the game), `ecommerceintegration-public-service-ecomprod02.ol.epicgames.com` (an ownership token, for a game that asks for one) | Your Epic token, and which game | Just before an Epic game starts | — |
 | Epic's download servers, as its launcher service names them (such as `epicgames-download1.akamaized.net`, `download.epicgames.com`, `fastly-download.epicgames.com`) | The build's manifest and chunks, without any account | While an Epic game is installed | — |
 | Epic's image servers, as the catalog names them (such as `cdn1.epicgames.com`) | The covers asked for, without any account | When an Epic game's cover is not in the cache yet | Signing in to Epic Games (signed out) |
 | Valve, `shared.steamstatic.com` (Steam's image servers) | The app ids of the images asked for, without any account | When a Steam game's cover, background or logo is missing from the client's image cache, and for achievement icons; an image is kept once downloaded | Images from Steam, Settings → Steam (off) |

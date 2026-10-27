@@ -578,8 +578,13 @@ Epic password; the session goes to the system keyring.
   pauses and resumes as a GOG game does. **Manage** uninstalls it; verifying, repairing and
   updating it come later. From the command line: `slatty install epic-<app name>` (see
   [command-line.md](command-line.md#installing-games)).
-- **Not played yet.** An installed Epic game's page says **Installed**: playing it from Slatty is
-  the next step (see the [roadmap](roadmap.md)).
+- **Played like a GOG game**, through Proton, isolated when it is set so. Just before it starts,
+  Slatty asks Epic for a sign-in code for it, good once and for five minutes, and gives it to the
+  game with your account's name and id, as Epic's launcher does; a game that asks for an ownership
+  token gets one, in its prefix, deleted once it ends. Epic out of reach, the game starts without
+  them: one that can run offline still runs. **Details → Session** says which. GOG is not told of
+  it: no cloud saves nor achievements through GOG, and its play time is the time played here.
+  Proton's fixes for it come from umu's database, under its Epic name.
 - The library's filters have **Epic** while you are signed in.
 - **Sign out** forgets the session; the games leave the library. The cache of the library and its
   covers stays (`~/.cache/slatty/epic/`).

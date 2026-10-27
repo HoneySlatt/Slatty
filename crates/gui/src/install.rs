@@ -136,14 +136,22 @@ pub enum InstallMsg {
 }
 
 impl App {
-    /// The downloads wait for GOG, said once as they start waiting.
-    pub(crate) fn wait_for_gog(&mut self, e: String) -> Task<Message> {
+    /// The downloads wait for GOG, or Epic for one of its games, said once as they start waiting.
+    pub(crate) fn wait_for_gog(&mut self, game_id: &str, e: String) -> Task<Message> {
+        let store = if slatty_core::store::epic_app(game_id).is_some() {
+            "Epic"
+        } else {
+            "GOG"
+        };
+        self.waiting_for = store;
         let told = if !std::mem::replace(&mut self.waiting_told, true) {
             self.notify(
                 Kind::Downloads,
                 None,
-                "Downloads waiting for GOG",
-                format!("GOG cannot be reached ({e}). They go on by themselves once it answers."),
+                format!("Downloads waiting for {store}"),
+                format!(
+                    "{store} cannot be reached ({e}). They go on by themselves once it answers."
+                ),
             )
         } else {
             Task::none()
@@ -275,12 +283,13 @@ impl App {
                     .interrupted
                     .iter()
                     .any(|(id, k)| *id == game_id && *k == crate::Interrupted::Download);
+                let waiting = self.wait_for_gog(&game_id, e);
                 if !cut_off {
                     self.drag = None;
                     self.queue.insert(0, game_id);
                     self.save_queue();
                 }
-                return self.wait_for_gog(e);
+                return waiting;
             }
             InstallMsg::Retry => {
                 self.downloads_waiting = None;
@@ -569,7 +578,7 @@ impl App {
                     .any(|(id, k)| *id == game_id && *k == crate::Interrupted::Download);
                 if cut_off && temporary {
                     self.install_views.remove(&game_id);
-                    return self.wait_for_gog(e);
+                    return self.wait_for_gog(&game_id, e);
                 }
                 // Stopped otherwise (the game busy elsewhere), it is not started again by itself.
                 for (id, kind) in &mut self.interrupted {

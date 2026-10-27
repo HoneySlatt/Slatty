@@ -193,9 +193,10 @@ fn settings_sign_in_to_epic_and_out() {
     assert!(ui.find("Sign out").is_ok());
 }
 
-/// An installed Epic game shows as installed, and offers no Play until the window can play it.
+/// An installed Epic game is played as a GOG one; GOG keeps neither its saves nor its play time,
+/// which comes from the sessions played here.
 #[test]
-fn an_installed_epic_game_is_not_played_yet() {
+fn an_installed_epic_game_is_played() {
     let mut app = epic_app();
     app.installs.insert("epic-Alpha".into(), epic_install());
     assert!(app.is_installed("epic-Alpha"));
@@ -203,8 +204,35 @@ fn an_installed_epic_game_is_not_played_yet() {
         !app.may_sync_cloud("epic-Alpha"),
         "GOG keeps no saves of it"
     );
+    app.playtime.insert(
+        "epic-Alpha".into(),
+        slatty_core::session::Playtime {
+            seconds: 5400,
+            last_played: 1_791_500_000,
+        },
+    );
+    assert_eq!(app.played_seconds("epic-Alpha"), 5400);
     let _ = app.update(Message::Select("epic-Alpha".into()));
     let mut ui = render(&app);
-    assert!(ui.click("Installed").is_ok());
-    assert!(ui.into_messages().next().is_none(), "nothing to press yet");
+    assert!(ui.click("Play").is_ok());
+    assert!(
+        ui.into_messages()
+            .any(|m| matches!(m, Message::Play(id) if id == "epic-Alpha"))
+    );
+}
+
+/// Downloads waiting for Epic say so, not GOG.
+#[test]
+fn downloads_waiting_for_epic_name_epic() {
+    let mut app = epic_app();
+    let _ = app.wait_for_gog("epic-Alpha", "[FAKE] network error".into());
+    app.page = Page::Downloads;
+    assert!(
+        render(&app)
+            .find(
+                "Epic cannot be reached ([FAKE] network error). Downloads go on by themselves \
+                 once it answers."
+            )
+            .is_ok()
+    );
 }

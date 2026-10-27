@@ -7,6 +7,7 @@ pub mod auth;
 pub mod chunk;
 pub mod download;
 pub mod install;
+pub mod launch;
 pub mod library;
 pub mod manifest;
 

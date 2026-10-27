@@ -328,10 +328,6 @@ impl App {
                     false,
                 ),
             }
-        } else if slatty_core::store::epic_app(&g.id).is_some() && self.installs.contains_key(&g.id)
-        {
-            // Played from Slatty in a later version.
-            big(Icon::Play, "Installed".into(), None, false)
         } else if self.installs.contains_key(&g.id) {
             if this_running {
                 big(Icon::Stop, "Stop".into(), Some(Message::StopGame), true)

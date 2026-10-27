@@ -236,6 +236,10 @@ pub fn redist_dir(dirs: &Dirs) -> PathBuf {
 
 /// True when the installed build still needs its setup. Linux builds have none.
 pub fn pending(dirs: &Dirs, game_id: &str) -> Result<bool> {
+    // GOG's setup: an Epic game has none.
+    if crate::store::epic_app(game_id).is_some() {
+        return Ok(false);
+    }
     Ok(InstallRecord::load(dirs, game_id)?.is_some_and(|r| {
         r.setup_build.as_deref() != Some(&r.build_id)
             && !installer::linux::is_linux_build(&r.build_id)

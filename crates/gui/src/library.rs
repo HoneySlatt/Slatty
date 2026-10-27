@@ -326,8 +326,9 @@ impl App {
         if store::steam_app(game_id).is_some() {
             return on_steam(game_id);
         }
-        // GOG is not told of a game added by hand or emulated: the sessions played here.
-        if store::from_no_store(game_id) {
+        // GOG is not told of a game added by hand or emulated, nor of an Epic game: the sessions
+        // played here.
+        if store::from_no_store(game_id) || store::epic_app(game_id).is_some() {
             return self.playtime.get(game_id).map_or(0, |p| p.seconds);
         }
         let on_gog = self

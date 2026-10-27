@@ -390,6 +390,8 @@ pub struct App {
     /// once until GOG answers again, whatever the retries.
     pub downloads_waiting: Option<String>,
     pub waiting_told: bool,
+    /// The store the downloads wait for, as named to the user: GOG, or Epic.
+    pub waiting_for: &'static str,
     /// A game's install or settings, open over the library.
     pub dialog: Option<(String, Panel)>,
     /// Font families of the system, listed when Settings first opens.
@@ -513,6 +515,7 @@ impl Default for App {
             context_menu: None,
             auto_resume: None,
             downloads_waiting: None,
+            waiting_for: "GOG",
             waiting_told: false,
             font_families: Vec::new(),
             dialog: None,

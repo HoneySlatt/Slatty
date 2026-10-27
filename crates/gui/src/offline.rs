@@ -351,7 +351,7 @@ impl App {
                         if started && !self.goes_on.contains(&entry(&game_id)) {
                             self.goes_on.push(entry(&game_id));
                         }
-                        return self.wait_for_gog(e);
+                        return self.wait_for_gog(&game_id, e);
                     }
                     Err(Some((e, false))) => {
                         let failed = self.notify(

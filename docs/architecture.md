@@ -50,7 +50,7 @@ become the session supervisor (see [Game sessions](#game-sessions)).
 | `steamgriddb` | SteamGridDB search, grids and heroes, once turned on |
 | `store` | Which store a game id belongs to: GOG's product id, `steam-<app id>`, `epic-<app name>`, `local-<number>`, `emu-<number>` |
 | `steam` | Steam's games, read from the client's files: `local`, `appinfo`, `vdf`, `stats`, `running`, `library`, `client`, `web` (see [Steam games](#steam-games)) |
-| `epic` | The Epic Games Store: `auth` (sign-in, tokens refreshed under a lock), `library` (the account's games and their covers, cached), `manifest` and `chunk` (Epic's build formats), `download` (writing a build from its chunks), `install` (a game's newest build, installed and registered) (see [Epic games](#epic-games)) |
+| `epic` | The Epic Games Store: `auth` (sign-in, tokens refreshed under a lock), `library` (the account's games and their covers, cached), `manifest` and `chunk` (Epic's build formats), `download` (writing a build from its chunks), `install` (a game's newest build, installed and registered), `launch` (its program, and its sign-in for a launch) (see [Epic games](#epic-games)) |
 | `added` | Games added by hand (see [Games added by hand](#games-added-by-hand)) |
 | `emulated` | Games run in an emulator (see [Emulated games](#emulated-games)) |
 
@@ -599,8 +599,15 @@ and Proton in a prefix of its own. Only the plan and the download differ:
   them, keeping a chunk until its last use within a bounded cache. Each file goes beside its place
   (`.slatty-dl`), its SHA-1 computed as it is written and compared, then renamed; a resumed download
   first keeps the files already there that match, without downloading their chunks;
-- the manifest and what launching needs (`EpicInstall`: the launch program and arguments, the
-  build's keys) are kept in `~/.local/share/slatty/epic/`, and deleted by an uninstall or `forget`.
+- the manifest and what launching needs (`EpicInstall`: the launch program and arguments, whether
+  the game asks for an ownership token, its deployment of Epic's online services, the build's keys)
+  are kept in `~/.local/share/slatty/epic/`, and deleted by an uninstall or `forget`.
+
+Playing one goes through `play::play` as a GOG game does, without what is GOG's (cloud saves,
+Comet, GOG's setup, play time reported). `runner::launch_spec` takes its program from
+`epic::launch::task`; just before the session starts, `epic::launch::sign_in` asks Epic for a
+sign-in code (and an ownership token when needed) and its arguments are added at the end of the
+launch's, so that `launch-spec` never shows them. `umu::resolve` looks it up under the store `egs`.
 
 Epic games are `epic-<app name>`: `paths::check_game_id` refuses them, so GOG is never asked about
 one; `paths::check_owned_id` accepts them, as Slatty installs them. Automatic updates leave them out
@@ -608,8 +615,8 @@ one; `paths::check_owned_id` accepts them, as Slatty installs them. Automatic up
 shows at start (`boot.rs` reads it) and is read again from Epic meanwhile; `merge_steam` puts its
 games in the library beside Steam's. They install through the same drawer, queue and progress
 as GOG's: `install::plan` and `install_stream` call `epic::install` for an Epic id, given the game
-as the library describes it (`App::epic_game`). The window does not play them yet: an installed one
-shows **Installed**, and its Manage drawer offers only Uninstall.
+as the library describes it (`App::epic_game`), and play as GOG's do; their Manage drawer offers
+only Uninstall, and their play time is the time played here.
 
 ### Games added by hand
 

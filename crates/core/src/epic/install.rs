@@ -36,6 +36,9 @@ pub struct BuildInfo {
     pub hash: String,
     pub manifest_urls: Vec<String>,
     pub secrets: HashMap<String, String>,
+    /// The deployment of Epic's online services the game is given at launch, from the build's
+    /// sidecar, when it has one.
+    pub deployment_id: Option<String>,
 }
 
 /// The launcher service's answer (`EPCAPI.get_game_manifest`).
@@ -77,6 +80,12 @@ fn build_info(answer: &serde_json::Value) -> Result<BuildInfo> {
             .flatten()
             .filter_map(|(k, v)| Some((k.to_uppercase(), v.as_str()?.to_owned())))
             .collect(),
+        // A JSON object written as a string (`LegendaryCore.get_game_and_dlc_list`).
+        deployment_id: element["sidecar"]["config"]
+            .as_str()
+            .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
+            .and_then(|c| text(&c["deploymentId"]))
+            .filter(|d| !d.is_empty()),
     })
 }
 
@@ -116,6 +125,10 @@ pub struct EpicPlan {
     pub files: BuildFiles,
     /// The folder the game installs into, under the library's.
     pub folder: String,
+    /// What the catalog says of its launch: whether it asks for an ownership token, and the
+    /// arguments it adds (`OwnershipToken`, `AdditionalCommandline`).
+    pub ownership_token: bool,
+    pub additional_args: String,
     pub base_url: String,
     pub download_size: u64,
     pub disk_size: u64,
@@ -155,6 +168,14 @@ pub async fn plan(http: &Client, tokens: &Tokens, game: &EpicGame) -> Result<Epi
         .filter(|f| !f.is_empty())
         .unwrap_or_else(|| game.app_name.clone());
     let folder = check_folder(&folder)?;
+    let attribute = |name: &str| {
+        item.as_ref()
+            .and_then(|i| i.custom_attributes.get(name))
+            .map(|a| a.value.trim().to_string())
+            .unwrap_or_default()
+    };
+    let ownership_token = attribute("OwnershipToken").eq_ignore_ascii_case("true");
+    let additional_args = attribute("AdditionalCommandline");
     let (raw_manifest, manifest_url) = download_manifest(http, &build).await?;
     let manifest = manifest::parse(&raw_manifest, &build.secrets)?;
     let files = BuildFiles::of(&manifest)?;
@@ -169,6 +190,8 @@ pub async fn plan(http: &Client, tokens: &Tokens, game: &EpicGame) -> Result<Epi
         manifest,
         files,
         folder,
+        ownership_token,
+        additional_args,
     })
 }
 
@@ -225,6 +248,14 @@ pub struct EpicInstall {
     pub build_version: String,
     pub launch_exe: String,
     pub launch_command: String,
+    /// The arguments Epic's catalog adds, whether the game asks for an ownership token, and its
+    /// deployment of Epic's online services (see `epic::launch`).
+    #[serde(default)]
+    pub additional_args: String,
+    #[serde(default)]
+    pub ownership_token: bool,
+    #[serde(default)]
+    pub deployment_id: Option<String>,
     /// The build's keys, to read its manifest again when it is encrypted.
     #[serde(default)]
     pub secrets: HashMap<String, String>,
@@ -256,7 +287,7 @@ impl EpicInstall {
         manifest::parse(&raw, &self.secrets)
     }
 
-    fn save(&self, dirs: &Dirs, raw_manifest: &[u8]) -> Result<()> {
+    pub(crate) fn save(&self, dirs: &Dirs, raw_manifest: &[u8]) -> Result<()> {
         let game_id = store::epic_id(&self.app_name);
         let folder = Self::folder(dirs);
         fsutil::write_atomic(&folder.join(format!("{game_id}.manifest")), raw_manifest)?;
@@ -417,6 +448,9 @@ async fn install_planned<S: ChunkSource>(
             build_version: plan.build.build_version.clone(),
             launch_exe: plan.manifest.launch_exe.clone(),
             launch_command: plan.manifest.launch_command.clone(),
+            additional_args: plan.additional_args.clone(),
+            ownership_token: plan.ownership_token,
+            deployment_id: plan.build.deployment_id.clone(),
             secrets: plan.build.secrets.clone(),
         }
         .save(dirs, &plan.raw_manifest)?;
@@ -509,6 +543,7 @@ mod tests {
                 hash: String::new(),
                 manifest_urls: Vec::new(),
                 secrets: HashMap::new(),
+                deployment_id: None,
             },
             raw_manifest: manifest::write::manifest(&manifest, &HashMap::new()),
             download_size: set.download_size(&manifest),
@@ -516,6 +551,8 @@ mod tests {
             files: set,
             manifest,
             folder: "Fake Game".into(),
+            ownership_token: false,
+            additional_args: String::new(),
             base_url: String::new(),
         };
         (plan, cdn, files)
@@ -650,7 +687,8 @@ mod tests {
                      "queryParams": [{"name": "f_token", "value": "[FAKE]"}]},
                     {"uri": "http://cdn2.example/Builds/Org/x/default/abc.manifest"}
                 ],
-                "secrets": {"0a0b0c0d": "00112233"}
+                "secrets": {"0a0b0c0d": "00112233"},
+                "sidecar": {"rvn": 1, "config": "{\"deploymentId\": \"[FAKE]deployment\"}"}
             }]
         });
         let build = build_info(&answer).unwrap();
@@ -664,6 +702,7 @@ mod tests {
             ]
         );
         assert_eq!(build.secrets["0A0B0C0D"], "00112233");
+        assert_eq!(build.deployment_id.as_deref(), Some("[FAKE]deployment"));
         assert_eq!(
             base_url(&build.manifest_urls[0]),
             "https://cdn.example/Builds/Org/x/default"

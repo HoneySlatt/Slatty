@@ -79,6 +79,11 @@ fn print_event(game_id: &str, event: PlayEvent) {
         PlayEvent::Isolated => {
             println!("Isolated from your files: the game sees its own folder and its own home.")
         }
+        PlayEvent::EpicSignedIn => println!("Signed in to Epic for this launch."),
+        PlayEvent::EpicNotSignedIn(why) => println!(
+            "Not signed in to Epic: {}. The game starts without it; one that needs it may refuse.",
+            shown(why)
+        ),
         PlayEvent::Started { pid } => println!("Game started (pid {pid})."),
         PlayEvent::LauncherExited { code } => {
             println!("Launch process exited ({code:?}); waiting for remaining game processes…")

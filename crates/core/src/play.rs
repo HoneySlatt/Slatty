@@ -95,6 +95,10 @@ pub enum PlayEvent {
     CometUnavailable(String),
     /// The game runs without access to the user's files (see `runner`).
     Isolated,
+    /// An Epic game was signed in to the account for this launch.
+    EpicSignedIn,
+    /// An Epic game starts without being signed in, for this reason.
+    EpicNotSignedIn(String),
     Started {
         pid: u32,
     },
@@ -168,12 +172,15 @@ pub async fn play(
     // A game added by hand or emulated is not GOG's at all: GOG is not asked anything about it.
     let native = install.platform == Platform::Linux;
     let added = crate::store::from_no_store(&install.game_id);
-    let cloud = req.cloud && !native && !added;
+    // Nor is it asked about an Epic game, whose saves and achievements are Epic's.
+    let epic = crate::store::epic_app(&install.game_id).is_some();
+    let cloud = req.cloud && !native && !added && !epic;
     // Comet acts for the account and listens on this computer while it runs: only for a game that
     // can talk to it, and only if allowed in Settings.
     let use_comet = req.comet
         && !native
         && !added
+        && !epic
         && crate::settings::game_achievements(db)?
         && crate::comet::uses_galaxy(dirs, &install);
 
@@ -265,7 +272,7 @@ pub async fn play(
 
     // Built again: the setup steps above ran the game's own programs in its folder, which an
     // isolated launch checks for what umu would share (`runner::launch_spec`).
-    let spec = runner::game_launch_spec(db, dirs, &install)?;
+    let mut spec = runner::game_launch_spec(db, dirs, &install)?;
 
     if cloud {
         match cloud_sync(db, dirs, http, &install, user_id.as_deref()).await {
@@ -296,9 +303,30 @@ pub async fn play(
         None
     };
 
+    // Last, as its code is good for five minutes. Without it the game starts all the same, as
+    // legendary's offline launch does: one that can run offline still runs.
+    let signed_in = if epic {
+        match crate::epic::launch::sign_in(http, db, dirs, &install).await {
+            Ok(signed_in) => {
+                emit(PlayEvent::EpicSignedIn);
+                spec.args.extend(signed_in.args.iter().cloned());
+                Some(signed_in)
+            }
+            Err(e) => {
+                emit(PlayEvent::EpicNotSignedIn(e.to_string()));
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     // Stop asked for while all this ran (it can take long offline): the game is not started, rather
     // than started and asked to quit at once, its saves then left out of the upload.
     if stop.try_recv().is_ok() {
+        if let Some(signed_in) = &signed_in {
+            crate::epic::launch::forget(signed_in);
+        }
         if let Some((comet, _, _)) = comet {
             let _ = comet.stop().await;
         }
@@ -321,6 +349,9 @@ pub async fn play(
         unlocks,
     )
     .await;
+    if let Some(signed_in) = &signed_in {
+        crate::epic::launch::forget(signed_in);
+    }
     let outcome = match outcome {
         Ok(o) => o,
         Err(e) => {
