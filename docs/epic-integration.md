@@ -73,8 +73,8 @@ that it is the chunk asked for and of the size the manifest gives; its content i
 files made of it.
 
 **Files** are made of parts of chunks, a chunk often holding the end of one file and the start of
-the next. Slatty writes them in the order legendary does (by path, regardless of case), downloads
-each chunk once, eight at a time, and keeps a chunk until its last use, at most 512 MiB of them:
+the next. Slatty writes them in the order legendary does (by path, regardless of case), on a thread
+of its own while the next chunks download, downloads each chunk once, eight at a time, and keeps a chunk until its last use, at most 512 MiB of them:
 past that, the chunk used again the latest is dropped and downloaded again. Each file is written
 beside its place, checked against its SHA-1, then renamed; the game folder appears once every file
 is. Symbolic links the manifest lists are not made; paths differing only by case are one file, the

@@ -327,32 +327,56 @@ impl<S: ChunkSource> Download<'_, S> {
         }
         let network = AtomicU64::new(0);
         let network = &network;
-        let mut stream = futures::stream::iter(order.clone())
-            .map(|g| self.fetch(g, network))
-            .buffered(AT_ONCE);
-        let mut next_new = 0;
-        let mut cache = Cache::default();
-        let mut n = 0;
 
-        for &i in which {
-            let (rel, file) = &set.files[i];
-            let dest = dir.join(rel);
-            refuse_outside(dir, &dest)?;
-            if let Some(parent) = dest.parent() {
-                crate::paths::ensure_dir(parent)?;
+        // Three things go on at once, so that neither the network nor the disk waits on the
+        // other: chunks downloaded, a few at a time, ahead of their use; the parts of each file
+        // handed out in order; and the files written, hashed and synced on a thread of their own.
+        // Each hands on through a bounded channel, so none runs far ahead of the next.
+        let (chunk_tx, chunk_rx) = tokio::sync::mpsc::channel::<Result<Arc<Vec<u8>>>>(AT_ONCE);
+        let (part_tx, part_rx) = tokio::sync::mpsc::channel::<Written>(WRITES_AHEAD);
+        let jobs: Vec<FileJob> = which
+            .iter()
+            .map(|&i| {
+                let (rel, file) = &set.files[i];
+                FileJob {
+                    rel: rel.clone(),
+                    sha1: file.sha1,
+                    size: file.size(),
+                    executable: file.is_executable(),
+                }
+            })
+            .collect();
+        let folder = dir.to_path_buf();
+        let writer = tokio::task::spawn_blocking(move || write_files(&folder, jobs, part_rx));
+
+        let downloads = async {
+            let chunk_tx = chunk_tx;
+            let mut stream = futures::stream::iter(order.clone())
+                .map(|g| self.fetch(g, network))
+                .buffered(AT_ONCE);
+            loop {
+                // Stopped as soon as the parts stop being handed out (a pause, an error), even
+                // while a chunk waits on the network.
+                let chunk = tokio::select! {
+                    biased;
+                    () = chunk_tx.closed() => break,
+                    chunk = stream.next() => chunk,
+                };
+                let Some(chunk) = chunk else {
+                    break;
+                };
+                let failed = chunk.is_err();
+                if chunk_tx.send(chunk).await.is_err() || failed {
+                    break;
+                }
             }
-            let tmp = dest.with_file_name(format!(
-                "{}{DOWNLOAD_SUFFIX}",
-                dest.file_name()
-                    .map(|n| n.to_string_lossy())
-                    .unwrap_or_default()
-            ));
-            let out = fsutil::restart_staging(&tmp)?;
-            let written = async {
-                let mut hash =
-                    aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY);
-                let mut at = 0u64;
-                for part in &file.parts {
+        };
+        let handing = async {
+            let (mut chunk_rx, part_tx) = (chunk_rx, part_tx);
+            let mut next_new = 0;
+            let mut cache = Cache::default();
+            for &i in which {
+                for part in &set.files[i].1.parts {
                     if self.cancel.is_cancelled() {
                         return Err(Error::Cancelled);
                     }
@@ -362,53 +386,43 @@ impl<S: ChunkSource> Download<'_, S> {
                         None if order.get(next_new) == Some(&g) => {
                             next_new += 1;
                             self.unless_cancelled(async {
-                                stream.next().await.expect("one chunk for each")
+                                chunk_rx.recv().await.unwrap_or(Err(Error::Cancelled))
                             })
                             .await?
                         }
                         // Dropped from the cache: downloaded again.
                         None => self.unless_cancelled(self.fetch(g, network)).await?,
                     };
-                    let slice = &data[part.offset as usize..(part.offset + part.size) as usize];
-                    out.write_all_at(slice, at)
-                        .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
-                    hash.update(slice);
-                    at += part.size as u64;
+                    let range = part.offset as usize..(part.offset + part.size) as usize;
+                    // The writer stopped, on an error it tells.
+                    if part_tx
+                        .send(Written::Part(data.clone(), range))
+                        .await
+                        .is_err()
+                    {
+                        return Ok(());
+                    }
                     let uses = pending.get_mut(&g).expect("counted");
                     uses.pop_front();
                     if let Some(&next) = uses.front() {
                         cache.keep(g, data, next);
                     }
-                    n += 1;
                     done.bytes_done += part.size as u64;
                     done.network_bytes = network.load(Ordering::Relaxed);
                     (self.progress)(done);
                 }
-                if hash.finish().as_ref() != file.sha1 {
-                    return Err(Error::Refused(format!(
-                        "{} does not match its checksum: Epic sent damaged data",
-                        rel.display()
-                    )));
+                if part_tx.send(Written::End).await.is_err() {
+                    return Ok(());
                 }
-                if file.size() >= crate::installer::SYNCED_FROM {
-                    out.sync_all()
-                        .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
-                }
-                Ok(())
+                done.files_done += 1;
+                (self.progress)(done);
             }
-            .await;
-            drop(out);
-            written.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
-            if file.is_executable() {
-                let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
-            }
-            std::fs::rename(&tmp, &dest)
-                .map_err(|e| Error::io(format!("rename {}", tmp.display()), e))?;
-            done.files_done += 1;
-            (self.progress)(done);
-        }
-        debug_assert_eq!(n, uses.len());
-        Ok(())
+            Ok(())
+        };
+        let ((), handed) = tokio::join!(downloads, handing);
+        let wrote = writer.await.expect("the writing thread panicked");
+        // Stopped here (a pause, the network): the writer only saw its parts stop coming.
+        handed.and(wrote)
     }
 
     /// `work`, stopped as soon as the download is: a chunk waiting on the network (its retries
@@ -443,6 +457,85 @@ impl<S: ChunkSource> Download<'_, S> {
             .expect("chunk task panicked")
             .map(Arc::new)
     }
+}
+
+/// Parts handed to the writing thread ahead of it, at most.
+const WRITES_AHEAD: usize = 64;
+
+/// A file the writing thread writes, in the order handed out.
+struct FileJob {
+    rel: PathBuf,
+    sha1: [u8; 20],
+    size: u64,
+    executable: bool,
+}
+
+/// What the writing thread is handed: the next part of the file it writes, from a chunk, or the
+/// end of that file.
+enum Written {
+    Part(Arc<Vec<u8>>, std::ops::Range<usize>),
+    End,
+}
+
+/// Writes `jobs` in `dir` from the parts handed out, each file beside its place, checked with its
+/// SHA-1, then given its name. Parts that stop coming before a file's end leave nothing of it.
+fn write_files(
+    dir: &Path,
+    jobs: Vec<FileJob>,
+    mut parts: tokio::sync::mpsc::Receiver<Written>,
+) -> Result<()> {
+    for job in jobs {
+        let dest = dir.join(&job.rel);
+        refuse_outside(dir, &dest)?;
+        if let Some(parent) = dest.parent() {
+            crate::paths::ensure_dir(parent)?;
+        }
+        let tmp = dest.with_file_name(format!(
+            "{}{DOWNLOAD_SUFFIX}",
+            dest.file_name()
+                .map(|n| n.to_string_lossy())
+                .unwrap_or_default()
+        ));
+        let out = fsutil::restart_staging(&tmp)?;
+        let mut written = || {
+            let mut hash =
+                aws_lc_rs::digest::Context::new(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY);
+            let mut at = 0u64;
+            loop {
+                match parts.blocking_recv() {
+                    Some(Written::Part(data, range)) => {
+                        let slice = &data[range];
+                        out.write_all_at(slice, at)
+                            .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
+                        hash.update(slice);
+                        at += slice.len() as u64;
+                    }
+                    Some(Written::End) => break,
+                    None => return Err(Error::Cancelled),
+                }
+            }
+            if hash.finish().as_ref() != job.sha1 {
+                return Err(Error::Refused(format!(
+                    "{} does not match its checksum: Epic sent damaged data",
+                    job.rel.display()
+                )));
+            }
+            if job.size >= crate::installer::SYNCED_FROM {
+                out.sync_all()
+                    .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
+            }
+            Ok(())
+        };
+        let result = written();
+        drop(out);
+        result.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
+        if job.executable {
+            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
+        }
+        std::fs::rename(&tmp, &dest)
+            .map_err(|e| Error::io(format!("rename {}", tmp.display()), e))?;
+    }
+    Ok(())
 }
 
 /// The chunks used again later, with the place of their next use; bounded by `CACHE_LIMIT`.
