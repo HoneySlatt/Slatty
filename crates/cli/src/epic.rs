@@ -33,7 +33,7 @@ pub async fn run(ctx: &Ctx, cmd: EpicCommand) -> Result<()> {
         EpicCommand::Status => status(ctx).await,
         EpicCommand::List { offline } => list(ctx, offline).await,
         EpicCommand::Logout => {
-            match auth::sign_out(&ctx.db)? {
+            match auth::sign_out(&ctx.db, &ctx.dirs).await? {
                 Some(_) => println!("Signed out of Epic Games. The library cache is kept."),
                 None => println!("Not signed in to Epic Games."),
             }

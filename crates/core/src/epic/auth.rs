@@ -181,18 +181,48 @@ async fn token_request(
 pub async fn sign_in(http: &Client, db: &Db, code: &Secret) -> Result<Tokens> {
     let tokens = exchange_code(http, code).await?;
     store(tokens.clone()).await?;
+    let before = settings::epic_account(db)?;
     settings::set_epic_account(db, Some(&tokens.account_id))?;
+    // Another account signed in before: its session leaves the keyring, out of reach otherwise.
+    if let Some(before) = before.filter(|b| *b != tokens.account_id) {
+        tokio::task::spawn_blocking(move || credentials::delete_epic(&before))
+            .await
+            .expect("keyring task panicked")?;
+    }
     Ok(tokens)
 }
 
-/// Signs the Epic account out: its tokens leave the keyring. Its library cache stays.
-pub fn sign_out(db: &Db) -> Result<Option<String>> {
+/// Signs the Epic account out: its tokens leave the keyring. Its library cache stays. A refresh
+/// running meanwhile, in this process or another, ends first: it would store its tokens again.
+pub async fn sign_out(db: &Db, dirs: &Dirs) -> Result<Option<String>> {
     let Some(account_id) = settings::epic_account(db)? else {
         return Ok(None);
     };
-    credentials::delete_epic(&account_id)?;
+    check_account_id(&account_id)?;
+    let _lock = lock::acquire(&auth_lock(dirs, &account_id), Duration::from_secs(30)).await?;
+    let id = account_id.clone();
+    tokio::task::spawn_blocking(move || credentials::delete_epic(&id))
+        .await
+        .expect("keyring task panicked")?;
     settings::set_epic_account(db, None)?;
     Ok(Some(account_id))
+}
+
+/// Held while the account's tokens are refreshed or deleted.
+fn auth_lock(dirs: &Dirs, account_id: &str) -> std::path::PathBuf {
+    dirs.locks().join(format!("epic-auth-{account_id}.lock"))
+}
+
+/// `fresh`, for `account_id` alone: refused when another account was signed in since (from the
+/// command line), so that its games or counts are never taken for this one's.
+pub async fn fresh_as(http: &Client, db: &Db, dirs: &Dirs, account_id: &str) -> Result<Tokens> {
+    let tokens = fresh(http, db, dirs).await?;
+    if tokens.account_id != account_id {
+        return Err(Error::Refused(
+            "another Epic account was signed in since".into(),
+        ));
+    }
+    Ok(tokens)
 }
 
 /// Valid tokens of the account signed in: the keyring's, refreshed when they expired, under a
@@ -200,8 +230,7 @@ pub fn sign_out(db: &Db) -> Result<Option<String>> {
 pub async fn fresh(http: &Client, db: &Db, dirs: &Dirs) -> Result<Tokens> {
     let account_id = settings::epic_account(db)?.ok_or(Error::NotLoggedIn)?;
     check_account_id(&account_id)?;
-    let lock_path = dirs.locks().join(format!("epic-auth-{account_id}.lock"));
-    let _lock = lock::acquire(&lock_path, Duration::from_secs(30)).await?;
+    let _lock = lock::acquire(&auth_lock(dirs, &account_id), Duration::from_secs(30)).await?;
     let id = account_id.clone();
     let tokens = tokio::task::spawn_blocking(move || credentials::load_epic(&id))
         .await
@@ -216,6 +245,10 @@ pub async fn fresh(http: &Client, db: &Db, dirs: &Dirs) -> Result<Tokens> {
             "refreshing the Epic session",
             "token belongs to another account",
         ));
+    }
+    // Signed out while Epic answered: its session is not stored again.
+    if settings::epic_account(db)?.as_deref() != Some(account_id.as_str()) {
+        return Err(Error::NotLoggedIn);
     }
     store(fresh.clone()).await?;
     Ok(fresh)
@@ -297,9 +330,32 @@ mod tests {
         }
     }
 
-    #[test]
-    fn signing_out_with_nobody_signed_in_changes_nothing() {
+    #[tokio::test]
+    async fn signing_out_with_nobody_signed_in_changes_nothing() {
         let db = Db::in_memory().unwrap();
-        assert_eq!(sign_out(&db).unwrap(), None);
+        let dirs = Dirs::under(&std::env::temp_dir().join("slatty-epic-nobody"));
+        assert_eq!(sign_out(&db, &dirs).await.unwrap(), None);
+    }
+
+    /// Signing out waits for a refresh running, which would otherwise store its session again
+    /// once Epic answered: the account stays signed in until it ended.
+    #[tokio::test]
+    async fn signing_out_waits_for_a_refresh() {
+        let root = std::env::temp_dir().join(format!("slatty-epic-out-{}", std::process::id()));
+        let dirs = Dirs::under(&root);
+        let db = Db::in_memory().unwrap();
+        let account = "0123456789abcdef0123456789abcdef";
+        settings::set_epic_account(&db, Some(account)).unwrap();
+        let refreshing = lock::acquire(&auth_lock(&dirs, account), Duration::from_secs(1))
+            .await
+            .unwrap();
+        let waited = tokio::time::timeout(Duration::from_millis(300), sign_out(&db, &dirs)).await;
+        assert!(waited.is_err(), "waits for the refresh");
+        assert_eq!(
+            settings::epic_account(&db).unwrap().as_deref(),
+            Some(account)
+        );
+        drop(refreshing);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -43,17 +43,19 @@ impl App {
         }
         // An Epic game's are Epic's, read while signed in to it, without any GOG account.
         if slatty_core::store::epic_app(&game_id).is_some() {
-            let (Some(core), Some(game)) = (self.core.clone(), self.epic_game(&game_id)) else {
+            let (Some(core), Some(game), Some(account)) = (
+                self.core.clone(),
+                self.epic_game(&game_id),
+                self.epic.account.clone(),
+            ) else {
                 return Task::none();
             };
-            if self.epic.account.is_none() {
-                return Task::none();
-            }
             self.achievements.insert(game_id.clone(), Loadable::Loading);
+            let reader = account.clone();
             return Task::perform(
                 async move {
                     use slatty_core::epic::{achievements, auth, launch};
-                    let tokens = auth::fresh(&core.http, &core.db, &core.dirs)
+                    let tokens = auth::fresh_as(&core.http, &core.db, &core.dirs, &reader)
                         .await
                         .map_err(err)?;
                     let graphql = achievements::EpicGraphql {
@@ -65,7 +67,8 @@ impl App {
                         .await
                         .map_err(err)
                 },
-                move |r| Message::Achievements(game_id, r),
+                // Read for that account: left out once another one is signed in.
+                move |r| Message::Epic(crate::epic::EpicMsg::Achieved(account, game_id, r)),
             );
         }
         // A game added by hand or emulated has none, and GOG is not told of it.

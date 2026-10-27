@@ -55,6 +55,12 @@ pub enum EpicMsg {
     Recount,
     /// A game's counts read from Epic for that account.
     Counted(String, String, Result<Option<(usize, usize)>, String>),
+    /// A game's achievements read from Epic for that account.
+    Achieved(
+        String,
+        String,
+        Result<Vec<slatty_core::achievements::Achievement>, String>,
+    ),
     CountingDone(String),
 }
 
@@ -101,6 +107,7 @@ impl App {
                         account: Some(account),
                         ..Default::default()
                     };
+                    self.forget_epic_achievements();
                 }
                 self.epic.name = Some(name);
                 // Its installed games' updates are looked for, as at sign-in to GOG.
@@ -116,12 +123,13 @@ impl App {
                     return Task::none();
                 };
                 self.epic = EpicView::default();
+                self.forget_epic_achievements();
                 self.merge_steam();
                 return Task::perform(
                     async move {
-                        tokio::task::spawn_blocking(move || auth::sign_out(&core.db).map(drop))
+                        auth::sign_out(&core.db, &core.dirs)
                             .await
-                            .expect("sign-out task panicked")
+                            .map(drop)
                             .map_err(err)
                     },
                     |r| Message::Epic(EpicMsg::SignedOut(r)),
@@ -140,10 +148,12 @@ impl App {
                 return Task::perform(
                     async move {
                         let read = async {
-                            let tokens = auth::fresh(&core.http, &core.db, &core.dirs).await?;
+                            let tokens =
+                                auth::fresh_as(&core.http, &core.db, &core.dirs, &account).await?;
                             library::refresh(&core.http, &core.dirs, &tokens).await
                         };
-                        (account, read.await.map_err(err))
+                        let read = read.await.map_err(err);
+                        (account, read)
                     },
                     |(account, read)| Message::Epic(EpicMsg::Read(account, read)),
                 );
@@ -181,6 +191,12 @@ impl App {
                 return self.count_epic_achievements(false);
             }
             EpicMsg::Recount => return self.count_epic_achievements(true),
+            EpicMsg::Achieved(account, id, list) => {
+                if self.epic.account.as_ref() == Some(&account) {
+                    return self.achievements_received(id, list);
+                }
+                self.achievements.remove(&id);
+            }
             EpicMsg::Counted(account, id, Ok(counts))
                 if self.epic.account.as_ref() == Some(&account) =>
             {
@@ -224,7 +240,8 @@ impl App {
             iced::stream::channel(16, async move |mut output| {
                 use iced::futures::{SinkExt, StreamExt};
                 use slatty_core::epic::achievements::{EpicGraphql, fetch};
-                if let Ok(tokens) = auth::fresh(&core.http, &core.db, &core.dirs).await {
+                if let Ok(tokens) = auth::fresh_as(&core.http, &core.db, &core.dirs, &account).await
+                {
                     let graphql = EpicGraphql {
                         http: &core.http,
                         token: &tokens.access_token,
@@ -251,6 +268,12 @@ impl App {
             }),
             |m| m,
         )
+    }
+
+    /// Forgets the achievements read for an Epic account no longer signed in.
+    fn forget_epic_achievements(&mut self) {
+        self.achievements
+            .retain(|id, _| store::epic_app(id).is_none());
     }
 
     /// Keeps the counts read in the account's cache.

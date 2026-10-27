@@ -295,6 +295,33 @@ fn an_epic_games_achievements_show_on_its_page() {
     assert!(render(&app).find("1 / 2").is_ok());
 }
 
+/// Achievements read for an account no longer signed in are left out, and signing out forgets
+/// those read.
+#[test]
+fn epic_achievements_are_the_signed_in_accounts() {
+    use crate::epic::EpicMsg;
+    let mut app = epic_app();
+    let list = || Ok(vec![fake_achievement("first", true)]);
+    let _ = app.update(Message::Epic(EpicMsg::Achieved(
+        "fedcba9876543210fedcba9876543210".into(),
+        "epic-Alpha".into(),
+        list(),
+    )));
+    assert!(
+        !app.achievements.contains_key("epic-Alpha"),
+        "another account's"
+    );
+    let _ = app.update(Message::Epic(EpicMsg::Achieved(
+        ACCOUNT.into(),
+        "epic-Alpha".into(),
+        list(),
+    )));
+    assert_eq!(app.achievement_counts("epic-Alpha"), Some((1, 1)));
+    let _ = app.update(Message::Epic(EpicMsg::SignOut));
+    assert!(!app.achievements.contains_key("epic-Alpha"));
+    assert_eq!(app.achievement_counts("epic-Alpha"), None);
+}
+
 /// The Achievements tab counts Epic's games: those kept in the cache at once, the others then
 /// read from Epic, never another account's; Refresh asks Epic again, signed in to it alone.
 #[test]
