@@ -5,7 +5,7 @@ use clap::Subcommand;
 use slatty_core::account::Account;
 use slatty_core::auth;
 
-use crate::Ctx;
+use crate::{Ctx, shown};
 
 #[derive(Subcommand)]
 pub enum AuthCommand {
@@ -54,12 +54,12 @@ pub async fn run(ctx: &Ctx, cmd: AuthCommand) -> Result<()> {
             Ok(())
         }
         AuthCommand::Logout { forget: false } => {
-            let name = Account::sign_out(&ctx.db, &ctx.dirs, false).await?.username;
+            let name = shown(Account::sign_out(&ctx.db, &ctx.dirs, false).await?.username);
             println!("Logged out {name}. Local cache and saves are kept.");
             Ok(())
         }
         AuthCommand::Logout { forget: true } => {
-            let name = Account::sign_out(&ctx.db, &ctx.dirs, true).await?.username;
+            let name = shown(Account::sign_out(&ctx.db, &ctx.dirs, true).await?.username);
             println!(
                 "Logged out {name} and deleted its data on this computer. Games, saves, prefixes \
                  and save backups are kept."
@@ -87,7 +87,8 @@ async fn login(ctx: &Ctx, no_browser: bool) -> Result<()> {
     let account = Account::login(&ctx.http, &ctx.db, &ctx.dirs, &code).await?;
     println!(
         "Logged in as {} (user id {}).",
-        account.info.username, account.info.user_id
+        shown(&account.info.username),
+        account.info.user_id
     );
     Ok(())
 }
@@ -97,7 +98,11 @@ async fn status(ctx: &Ctx) -> Result<()> {
         println!("Not logged in.");
         return Ok(());
     };
-    println!("Account: {} (user id {})", info.username, info.user_id);
+    println!(
+        "Account: {} (user id {})",
+        shown(&info.username),
+        info.user_id
+    );
     match Account::load(&ctx.db, &ctx.dirs).await {
         Ok(account) => println!(
             "Access token valid until {}",
