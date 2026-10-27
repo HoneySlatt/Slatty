@@ -60,6 +60,7 @@ Checked with the user's own Epic Games account.
 |---|---|---|---|
 | 2026-10-27 | Sign-in, library and covers | OK | Checked by the user: signed in through the browser and the pasted page; the account's games listed with their covers, without add-ons. Session refresh not met yet |
 | 2026-10-27 | Install and uninstall from the window | OK | Checked by the user: a game's Windows build planned, downloaded from Epic's CDN and verified, paused and resumed, then uninstalled from Manage. Which manifest version it had, and whether it was encrypted, was not recorded |
+| 2026-10-27 | Install planning of every game of the account (`slatty install epic-… --info`) | 15 of 16 OK | Read-only, from the command line: for 15 games the build service named the newest Windows build, and its manifest downloaded, matched its checksum and was read (1 to 42,065 files, 68 MB to 153 GB). One game's manifest is of the older JSON kind, which Slatty refuses ("does not read yet") |
 
 ## Runners
 
