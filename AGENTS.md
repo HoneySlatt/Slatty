@@ -118,10 +118,11 @@ These act on a real person's account, disk or system. Ask the human first, every
 - An operation that changes a game's files or saves holds `lock::game(dirs, game_id)` for its
   whole duration.
 - A game id names files (locks, records, prefixes, covers): check it before building a path from
-  it. A game id is GOG's product id, `steam-<app id>`, or `local-<number>` for a game added by
-  hand: `store::of` tells which and accepts all three (locks, customisation, covers);
-  `paths::check_owned_id` accepts GOG's and those added by hand, and guards whatever installs,
-  records or deletes a game's files, so a Steam game's, which Steam owns, never is;
+  it. A game id is GOG's product id, `steam-<app id>`, `epic-<app name>`, `local-<number>` for a
+  game added by hand or `emu-<number>` for an emulated one: `store::of` tells which and accepts
+  them all (locks, customisation, covers); `paths::check_owned_id` accepts all but Steam's, and
+  guards whatever installs, records or deletes a game's files, so a Steam game's, which Steam
+  owns, never is;
   `paths::check_game_id` accepts GOG's alone and guards every request to GOG about a game.
 - A destructive action either refuses when the situation looks wrong, or keeps a copy first. Only
   files Slatty installed (its install record) are ever deleted from a game folder.

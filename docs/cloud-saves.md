@@ -154,7 +154,10 @@ same snapshots.
   made by another computer *after* the last check and *before* the upload finishes can be
   overwritten. The window lasts as long as one upload. A test
   (`residual_window_after_fresh_listing_is_not_detected`) pins this behaviour so it is not
-  forgotten.
+  forgotten. Epic's cloud has the same window: a new snapshot is made from the newest one, read
+  again just before, and holds the files it does not change as that one had them; a snapshot
+  another computer stores while it is read and sent is not seen, and its changes to those other
+  files are not in the new one, which becomes the newest. Both stay in Epic's cloud.
 - **Ignored marker.** Cloud entries whose hash is `aadd86936a80ee8a369579c3926f1b3c` are ignored, as
   heroic-gogdl does. Their meaning is not known: it is neither an empty file nor an empty gzip
   stream.

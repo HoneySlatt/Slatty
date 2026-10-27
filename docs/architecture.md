@@ -210,10 +210,10 @@ references measured in the application itself.
 ## Rules every part follows
 
 - **Game ids.** A game id names files (locks, records, prefixes, covers), so it is checked before
-  any path is built from it. `store::of` accepts GOG's product id, `steam-<app id>` and
-  `local-<number>`, and refuses anything unsafe in a file name. `paths::check_owned_id` accepts
-  GOG's and those added by hand, and guards whatever installs, records or deletes a game's files:
-  a Steam game's files, which Steam owns, never are. `paths::check_game_id` accepts GOG's alone and
+  any path is built from it. `store::of` accepts GOG's product id, `steam-<app id>`,
+  `epic-<app name>`, `local-<number>` and `emu-<number>`, and refuses anything unsafe in a file
+  name. `paths::check_owned_id` accepts all but Steam's, and guards whatever installs, records or
+  deletes a game's files: a Steam game's files, which Steam owns, never are. `paths::check_game_id` accepts GOG's alone and
   guards every request to GOG about a game, so GOG never learns of the others.
 - **One operation per game.** Installing, discarding an install, verifying or repairing, updating
   or changing content, uninstalling, syncing cloud saves (checking does not), running setup and
