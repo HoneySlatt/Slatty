@@ -3,7 +3,7 @@ use clap::{Args, Subcommand, ValueEnum};
 use slatty_core::account::Account;
 use slatty_core::cloud::{
     self,
-    plan::Action,
+    plan::{Action, Warning},
     sync::{Prefer, SyncOptions, SyncReport},
 };
 use slatty_core::install::Install;
@@ -105,11 +105,26 @@ fn print_report(r: &SyncReport, dry_run: bool) {
     let _ = write_report(&mut std::io::stdout().lock(), r, dry_run);
 }
 
+fn warning_text(w: Warning) -> &'static str {
+    match w {
+        Warning::LocalRootMissing => "local folder missing: no cloud file will be deleted",
+        Warning::LocalEmptyWithHistory => {
+            "local folder empty although it held saves: deletions blocked"
+        }
+        Warning::RemoteEmptyWithHistory => {
+            "cloud empty although it held saves: local deletions blocked"
+        }
+        Warning::RootChanged => {
+            "the save folder changed, or another account synced it: previous history is ignored"
+        }
+    }
+}
+
 /// The report of a sync. Save names come from the game's folder and the cloud: they are shown
 /// escaped.
 fn write_report(out: &mut impl Write, r: &SyncReport, dry_run: bool) -> std::io::Result<()> {
     for w in &r.plan.warnings {
-        writeln!(out, "  warning: {}", shown(format!("{w:?}")))?;
+        writeln!(out, "  warning: {}", warning_text(*w))?;
     }
     if dry_run {
         let p = &r.plan;
@@ -284,5 +299,18 @@ mod tests {
         let text = String::from_utf8(out).unwrap();
         assert!(!text.contains(['\u{1b}', '\u{7}', '\u{202e}']), "{text:?}");
         assert!(text.contains("[FAKE] a\\u{1b}[8m.sav"), "{text}");
+    }
+
+    /// A plan's warnings are said in words, as the window says them, not as the core names them.
+    #[test]
+    fn plan_warnings_are_said_in_words() {
+        let mut report = SyncReport::default();
+        report.plan.warnings = vec![Warning::LocalRootMissing, Warning::RootChanged];
+        let mut out = Vec::new();
+        write_report(&mut out, &report, false).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("local folder missing"), "{text}");
+        assert!(text.contains("the save folder changed"), "{text}");
+        assert!(!text.contains("LocalRootMissing"), "{text}");
     }
 }
