@@ -269,11 +269,23 @@ fn epic_save_folders_resolve_in_the_prefix() {
         save_root("{InstallDir}/Saves", "a", &install).unwrap(),
         root.join("games/Fake/Saves")
     );
+    // Unity's games climb from Local AppData to LocalLow, as Epic's templates write it.
+    assert_eq!(
+        save_root("{AppData}/../LocalLow/Fake Studio/Fake/", "a", &install).unwrap(),
+        user.join("AppData/LocalLow/Fake Studio/Fake")
+    );
+    assert_eq!(
+        save_root("{appdata}/./../Roaming/Fake", "a", &install).unwrap(),
+        user.join("AppData/Roaming/Fake")
+    );
     for refused in [
         "{UserProfile}/Fake",
         "Fake/Saved",
         "{AppData}/{Unknown}/Saved",
         "{AppData}/../../Fake",
+        "{AppData}/../../../../../etc",
+        "{InstallDir}/../Fake",
+        "{UserDir}/../Desktop/Fake",
     ] {
         assert!(save_root(refused, "a", &install).is_err(), "{refused}");
     }

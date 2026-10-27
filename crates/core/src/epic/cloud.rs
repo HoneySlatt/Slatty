@@ -252,6 +252,12 @@ impl<S: SaveStore> EpicCloud<S> {
             .iter()
             .filter_map(|s| snapshot_key(&s.key).map(|(stamp, prefix)| (s, stamp, prefix)))
             .collect();
+        // Counts alone: the keys name the account.
+        tracing::debug!(
+            "Epic's cloud: {} files stored, {} snapshots among them",
+            stored.len(),
+            snapshots.len()
+        );
         let latest_stamp = snapshots.iter().map(|(_, stamp, _)| *stamp).max();
         let newest = snapshots
             .iter()
@@ -557,8 +563,10 @@ fn glob(s: &[char], p: &[char]) -> bool {
 
 /// The save folder a template names inside the game's prefix or folder (`get_save_path`): a
 /// whole part `{AppData}` (Local AppData), `{UserDir}` (Documents), `{UserSavedGames}` or
-/// `{InstallDir}` first, `{EpicID}` (the account id) anywhere after. Resolved as GOG's are, and
-/// so refused through a link out of an isolated game's prefix or folder.
+/// `{InstallDir}` first, `{EpicID}` (the account id) anywhere after. `..` climbs within the user's
+/// folder or the game's, as Unity's games write `{AppData}/../LocalLow/…`, never out of them, and
+/// must end in one of the user's folders GOG's templates name. Resolved as GOG's are, and so
+/// refused through a link out of an isolated game's prefix or folder.
 pub fn save_root(template: &str, account_id: &str, install: &Install) -> Result<PathBuf> {
     let unsupported = || {
         Error::Unsupported(format!(
@@ -567,26 +575,43 @@ pub fn save_root(template: &str, account_id: &str, install: &Install) -> Result<
     };
     let template = template.trim().replace('\\', "/");
     let mut parts = template.split('/').filter(|p| !p.is_empty());
-    let root = match parts.next().map(str::to_lowercase).as_deref() {
-        Some("{appdata}") => "<?APPLICATION_DATA_LOCAL?>",
-        Some("{userdir}") => "<?DOCUMENTS?>",
-        Some("{usersavedgames}") => "<?SAVED_GAMES?>",
-        Some("{installdir}") => "<?INSTALL?>",
+    // From the user's folder in the prefix, or from the game's folder.
+    let (install_dir, mut path) = match parts.next().map(str::to_lowercase).as_deref() {
+        Some("{appdata}") => (false, vec!["AppData", "Local"]),
+        Some("{userdir}") => (false, vec!["Documents"]),
+        Some("{usersavedgames}") => (false, vec!["Saved Games"]),
+        Some("{installdir}") => (true, Vec::new()),
         _ => return Err(unsupported()),
     };
-    let mut gog = root.to_string();
     for part in parts {
-        let part = if part.eq_ignore_ascii_case("{epicid}") {
-            account_id
-        } else if part.contains(['{', '}']) {
-            return Err(unsupported());
-        } else {
-            part
-        };
-        gog.push('/');
-        gog.push_str(part);
+        match part {
+            "." => {}
+            ".." => {
+                path.pop().ok_or_else(unsupported)?;
+            }
+            p if p.eq_ignore_ascii_case("{epicid}") => path.push(account_id),
+            p if p.contains(['{', '}']) => return Err(unsupported()),
+            p => path.push(p),
+        }
     }
-    locations::resolve(&gog, install)
+    let (root, skip) = if install_dir {
+        ("INSTALL", 0)
+    } else {
+        let lower: Vec<String> = path.iter().map(|p| p.to_lowercase()).collect();
+        let lower: Vec<&str> = lower.iter().map(String::as_str).collect();
+        match lower.as_slice() {
+            ["appdata", "local", ..] => ("APPLICATION_DATA_LOCAL", 2),
+            ["appdata", "locallow", ..] => ("APPLICATION_DATA_LOCAL_LOW", 2),
+            ["appdata", "roaming", ..] => ("APPLICATION_DATA_ROAMING", 2),
+            ["documents", ..] => ("DOCUMENTS", 1),
+            ["saved games", ..] => ("SAVED_GAMES", 1),
+            _ => return Err(unsupported()),
+        }
+    };
+    let gog: Vec<String> = std::iter::once(format!("<?{root}?>"))
+        .chain(path[skip..].iter().map(|p| p.to_string()))
+        .collect();
+    locations::resolve(&gog.join("/"), install)
 }
 
 /// What syncing a game's Epic cloud saves needs.

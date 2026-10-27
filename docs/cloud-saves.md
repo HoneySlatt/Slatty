@@ -122,8 +122,10 @@ in the format of Epic's builds. The rules above still decide, file by file:
 
 - **The folder** is the one Epic's catalog names (`CloudSaveFolder`), resolved in the prefix as
   GOG's are: `{AppData}` is `AppData/Local`, `{UserDir}` `Documents`, `{UserSavedGames}`
-  `Saved Games`, `{InstallDir}` the game folder, `{EpicID}` your Epic account id. Another
-  variable refuses the location. Only the files Epic's lists of files to include and exclude
+  `Saved Games`, `{InstallDir}` the game folder, `{EpicID}` your Epic account id. `..` climbs
+  within your user folder or the game's, as Unity's games write `{AppData}/../LocalLow/…`, never
+  out of them, and the folder must be under `AppData`, `Documents` or `Saved Games` (or the game
+  folder). Another variable refuses the location. Only the files Epic's lists of files to include and exclude
   keep (`CloudIncludeList`, `CloudExcludeList`, matched as legendary matches them, regardless of
   case) are saves: the others are left alone on both sides.
 - **The cloud's files** are those of the newest snapshot, the one stored last; their hash is the
