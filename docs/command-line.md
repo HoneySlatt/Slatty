@@ -57,7 +57,7 @@ plays it, `slatty uninstall epic-<app name>` uninstalls it.
 
 | Option | Effect |
 |---|---|
-| `--info` | Shows the version, sizes, languages, DLC and redistributables (for an Epic game: its build, sizes, folder, the program it starts and its prerequisite), and downloads nothing |
+| `--info` | Shows the version, sizes, languages, DLC and redistributables (for an Epic game: its build, sizes, folder, the program it starts, its prerequisite, and the folder Epic keeps its cloud saves from, if any), and downloads nothing |
 | `--platform windows\|linux` | Which build to install. Default: the setting, Windows until changed |
 | `--dir <folder>` | The folder that receives the game's folder. Remembered as the default |
 | `--proton <folder>` | The Proton build a Windows game runs with. Remembered as the default. Without one, the command lists the builds it found |

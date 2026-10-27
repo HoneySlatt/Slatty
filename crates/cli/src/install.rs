@@ -211,6 +211,10 @@ async fn install_epic(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         );
         println!("Folder name: {}", shown(&plan.folder));
         println!("Files: {}", plan.files.files.len());
+        match &plan.cloud_folder {
+            Some(folder) => println!("Cloud saves: kept by Epic, from {}", shown(folder)),
+            None => println!("Cloud saves: none kept by Epic"),
+        }
         println!(
             "Starts: {} {}",
             shown(&plan.manifest.launch_exe),

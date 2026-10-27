@@ -130,6 +130,8 @@ pub struct EpicPlan {
     /// arguments it adds (`OwnershipToken`, `AdditionalCommandline`).
     pub ownership_token: bool,
     pub additional_args: String,
+    /// The folder its cloud saves are kept from (`CloudSaveFolder`), when Epic keeps any.
+    pub cloud_folder: Option<String>,
     pub base_url: String,
     pub download_size: u64,
     pub disk_size: u64,
@@ -196,6 +198,7 @@ pub async fn plan(http: &Client, tokens: &Tokens, game: &EpicGame) -> Result<Epi
     };
     let ownership_token = attribute("OwnershipToken").eq_ignore_ascii_case("true");
     let additional_args = attribute("AdditionalCommandline");
+    let cloud_folder = Some(attribute("CloudSaveFolder")).filter(|f| !f.is_empty());
     let (raw_manifest, manifest_url) = download_manifest(http, &build).await?;
     let manifest = manifest::parse(&raw_manifest, &build.secrets)?;
     let files = BuildFiles::of(&manifest)?;
@@ -212,6 +215,7 @@ pub async fn plan(http: &Client, tokens: &Tokens, game: &EpicGame) -> Result<Epi
         folder,
         ownership_token,
         additional_args,
+        cloud_folder,
     })
 }
 
@@ -821,6 +825,7 @@ mod tests {
             folder: "Fake Game".into(),
             ownership_token: false,
             additional_args: String::new(),
+            cloud_folder: None,
             base_url: String::new(),
         };
         (plan, cdn)
