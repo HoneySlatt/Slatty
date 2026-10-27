@@ -103,7 +103,8 @@ A to Z, with its icon when it has one: the one chosen in Edit game, else GOG's s
 (the one the client keeps, else from Steam's image servers with **Images from Steam** on); none
 otherwise. Games not installed are dimmed. Its search is its own, apart from the library's;
 a click opens the game's page. The button beside the search closes it, and the one at the left of
-the library's toolbar opens it again; it comes back as you left it.
+the library's toolbar opens it again. Drag its right edge to widen or narrow it. It comes back as you
+left it, open or closed and as wide.
 
 Hovering a cover shows its title, a settings button and Play (or Install). Clicking a cover opens
 the game's page; going back (the **Library** link or Escape) finds the grid scrolled where you

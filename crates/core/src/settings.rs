@@ -14,6 +14,7 @@ const INTERFACE_FONT: &str = "interface_font";
 const INTERFACE_THEME: &str = "interface_theme";
 const COVER_WIDTH: &str = "cover_width";
 const SIDEBAR: &str = "sidebar";
+const SIDEBAR_WIDTH: &str = "sidebar_width";
 const LIBRARY_SORT: &str = "library_sort";
 const DEFAULT_PLATFORM: &str = "default_platform";
 const DOWNLOAD_QUEUE: &str = "download_queue";
@@ -438,7 +439,6 @@ pub fn set_interface_font(db: &Db, family: Option<&str>) -> Result<()> {
     db.set_setting(INTERFACE_FONT, family)
 }
 
-/// Width of the covers in the library grid, in pixels.
 /// Whether the library's list of games shows beside it. On until closed.
 pub fn sidebar(db: &Db) -> Result<bool> {
     Ok(db.setting(SIDEBAR)?.as_deref() != Some("off"))
@@ -448,6 +448,16 @@ pub fn set_sidebar(db: &Db, open: bool) -> Result<()> {
     db.set_setting(SIDEBAR, Some(if open { "on" } else { "off" }))
 }
 
+/// Width of the library's list of games, in pixels, once dragged to another.
+pub fn sidebar_width(db: &Db) -> Result<Option<f32>> {
+    Ok(db.setting(SIDEBAR_WIDTH)?.and_then(|v| v.parse().ok()))
+}
+
+pub fn set_sidebar_width(db: &Db, width: f32) -> Result<()> {
+    db.set_setting(SIDEBAR_WIDTH, Some(&width.round().to_string()))
+}
+
+/// Width of the covers in the library grid, in pixels.
 pub fn cover_width(db: &Db) -> Result<Option<f32>> {
     Ok(db.setting(COVER_WIDTH)?.and_then(|v| v.parse().ok()))
 }

@@ -672,7 +672,12 @@ impl Message {
         matches!(
             self,
             Message::GridScrolled(_)
-                | Message::Sidebar(sidebar::SidebarMsg::Scrolled(_))
+                | Message::Sidebar(
+                    sidebar::SidebarMsg::Scrolled(_)
+                        | sidebar::SidebarMsg::Grab
+                        | sidebar::SidebarMsg::Drag(_)
+                        | sidebar::SidebarMsg::Drop
+                )
                 | Message::AchievementsScrolled(_)
                 | Message::Frame(_)
                 | Message::WindowResized(_)
@@ -831,6 +836,7 @@ impl App {
             gamepads,
             iced::window::close_requests().map(|_| Message::CloseRequested),
             iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),
+            self.sidebar_drag(),
         ])
     }
 
@@ -966,6 +972,9 @@ impl App {
                     self.card_width = width.clamp(COVER_WIDTHS.0, COVER_WIDTHS.1);
                 }
                 self.sidebar.open = boot.sidebar;
+                if let Some(width) = boot.sidebar_width {
+                    self.sidebar.width = width.clamp(sidebar::WIDTHS.0, sidebar::WIDTHS.1);
+                }
                 if !boot.interrupted.is_empty() {
                     let titles: Vec<String> = boot
                         .interrupted
@@ -1087,7 +1096,7 @@ impl App {
             Message::SyncLibrary => return self.sync_library(),
             Message::GridScrolled(viewport) => {
                 self.grid_view = Some(viewport);
-                self.sidebar.open_when_measured = self.sidebar.open;
+                self.sidebar.room_when_measured = self.sidebar_room();
             }
             Message::Sidebar(msg) => return self.update_sidebar(msg),
             Message::AchievementsScrolled(viewport) => self.achievements_view = Some(viewport),

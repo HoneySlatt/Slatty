@@ -83,6 +83,7 @@ pub struct Boot {
     pub cover_width: Option<f32>,
     /// Whether the list of games shows beside the library.
     pub sidebar: bool,
+    pub sidebar_width: Option<f32>,
     pub sort: Option<Sort>,
     pub remember_filters: bool,
     pub filters: Option<Filters>,
@@ -328,6 +329,7 @@ async fn boot() -> Result<Boot, String> {
         .unwrap_or_default();
     let cover_width = slatty_core::settings::cover_width(&db).map_err(err)?;
     let sidebar = slatty_core::settings::sidebar(&db).map_err(err)?;
+    let sidebar_width = slatty_core::settings::sidebar_width(&db).map_err(err)?;
     let sort = slatty_core::settings::library_sort(&db)
         .map_err(err)?
         .and_then(|s| Sort::from_key(&s));
@@ -400,6 +402,7 @@ async fn boot() -> Result<Boot, String> {
         sort_keys,
         cover_width,
         sidebar,
+        sidebar_width,
         sort,
         remember_filters,
         filters,

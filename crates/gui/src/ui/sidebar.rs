@@ -1,18 +1,21 @@
 //! The list of every game beside the library, or the strip it closes to.
 
 use crate::theme::text;
-use iced::widget::{Space, button, column, container, image, row, scrollable, text_input};
-use iced::{Alignment, Element, Length, Padding};
+use iced::widget::{
+    Space, button, column, container, image, mouse_area, row, scrollable, text_input,
+};
+use iced::{Alignment, Element, Length, Padding, mouse};
 use slatty_core::library::LibraryGame;
 
 use super::widgets::grid_rows;
 use crate::icons::{Icon, icon};
-use crate::sidebar::{ROW, SidebarMsg, WIDTH};
+use crate::sidebar::{ROW, SidebarMsg};
 use crate::theme::{self, tokens};
 use crate::{App, Message};
 
-/// Size of a game's icon in the list.
+/// Size of a game's icon in the list, and width of its edge that can be grabbed.
 const ICON: f32 = 20.0;
+const EDGE: f32 = 6.0;
 
 impl App {
     pub(super) fn sidebar_view(&self) -> Element<'_, Message> {
@@ -63,11 +66,29 @@ impl App {
                 .height(Length::Fill)
                 .into()
         };
-        container(column![head, list].spacing(10))
-            .padding(Padding::new(10.0).top(16.0).left(12.0))
-            .width(WIDTH)
-            .height(Length::Fill)
-            .into()
+        // Its edge, a line a few pixels wide to grab, dragged to widen the list.
+        let edge = mouse_area(
+            container(
+                container(Space::new())
+                    .width(1)
+                    .height(Length::Fill)
+                    .style(theme::divider),
+            )
+            .center_x(EDGE)
+            .height(Length::Fill),
+        )
+        .on_press(Message::Sidebar(SidebarMsg::Grab))
+        .interaction(mouse::Interaction::ResizingHorizontally);
+        row![
+            container(column![head, list].spacing(10))
+                .padding(Padding::new(10.0).top(16.0).left(12.0).right(10.0 - EDGE))
+                .width(Length::Fill)
+                .height(Length::Fill),
+            edge,
+        ]
+        .width(self.sidebar.width)
+        .height(Length::Fill)
+        .into()
     }
 
     /// A game's icon, when it has one, and its name, dimmed when not installed, as Steam's list
