@@ -212,6 +212,7 @@ impl App {
                         local(&mut g.cover);
                         local(&mut g.background);
                         local(&mut g.logo);
+                        local(&mut g.icon);
                     }
                 }
                 self.steam.covers = library.covers;

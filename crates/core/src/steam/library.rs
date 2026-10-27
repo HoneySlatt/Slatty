@@ -100,13 +100,20 @@ pub fn read(steam: &Steam, from_servers: bool) -> Option<SteamLibrary> {
             None => server("library_capsule", "library_600x900.jpg"),
         };
         let oslist = common.text("oslist").unwrap_or_default();
-        // The small square icon the client keeps, named after its SHA-1; none downloaded.
+        // The small square icon, named after its SHA-1: the client keeps only those of the games
+        // it showed; Steam's community serves the others, as achievement icons.
         let icon = common
             .text("icon")
             .filter(|h| h.len() == 40 && h.bytes().all(|b| b.is_ascii_hexdigit()))
-            .map(|h| folder.join(format!("{h}.jpg")))
-            .filter(|path| cached_image(path))
-            .map(|path| path.display().to_string());
+            .and_then(|h| {
+                let path = folder.join(format!("{h}.jpg"));
+                match cached_image(&path) {
+                    true => Some(path.display().to_string()),
+                    false => from_servers.then(|| {
+                        format!("{IMAGE_SERVER}community_assets/images/apps/{app_id}/{h}.jpg")
+                    }),
+                }
+            });
         library.games.push(LibraryGame {
             id,
             title: name.to_string(),
@@ -387,6 +394,15 @@ mod tests {
                 "https://shared.steamstatic.com/store_item_assets/steam/apps/220/library_hero.jpg"
             )
         );
+        assert_eq!(
+            life2.icon,
+            Some(format!(
+                "https://shared.steamstatic.com/community_assets/images/apps/220/{:040x}.jpg",
+                220
+            )),
+            "an icon the client has not kept, named by its SHA-1 where Steam's community has it"
+        );
+        assert!(is_server_image(life2.icon.as_deref().unwrap()));
         assert!(library.games.iter().all(|g| {
             [&g.cover, &g.background, &g.logo]
                 .into_iter()

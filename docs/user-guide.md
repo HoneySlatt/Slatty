@@ -99,8 +99,9 @@ Your games, as covers. Above the grid:
 - **+** adds a game from no store (see [Games added by hand](#games-added-by-hand)).
 
 **The list of games**, on the library's left as in Steam's, names every game but the hidden ones,
-A to Z, with its icon when it has one: the one chosen in Edit game, else GOG's square icon or the
-one the Steam client keeps; none otherwise. Games not installed are dimmed. Its search is its own, apart from the library's;
+A to Z, with its icon when it has one: the one chosen in Edit game, else GOG's square icon or Steam's
+(the one the client keeps, else from Steam's image servers with **Images from Steam** on); none
+otherwise. Games not installed are dimmed. Its search is its own, apart from the library's;
 a click opens the game's page. The button beside the search closes it, and the one at the left of
 the library's toolbar opens it again; it comes back as you left it.
 
@@ -541,8 +542,8 @@ sign-in page.
 - **Achievements** show in the Achievements tab and on the game's page, as the Steam client keeps
   them: those of games played on this computer or whose page was shown in Steam. They cannot be
   changed from Slatty.
-- **Images from Steam** (off until turned on): covers, backgrounds and logos the client has not
-  saved on this computer, and achievement icons, are downloaded from Steam's image servers, without
+- **Images from Steam** (off until turned on): covers, backgrounds, logos and icons the client has
+  not saved on this computer, and achievement icons, are downloaded from Steam's image servers, without
   any account. Off, those games show without them.
 - **Steam Web API** (off until turned on) fills in what the client has not saved here: games it has
   not described, the play time of games never played here, and achievements it keeps none of. It
