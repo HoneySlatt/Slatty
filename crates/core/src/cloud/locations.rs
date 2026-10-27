@@ -103,8 +103,8 @@ fn user_folder(install: &Install, var: &str) -> Result<PathBuf> {
         .prefix()
         .ok_or_else(|| Error::Unsupported("no Wine prefix".into()))?;
     let users = prefix.join("drive_c/users");
-    let user = std::env::var("USER").unwrap_or_default();
-    let existing = ["steamuser", user.as_str()]
+    let user = std::env::var_os("USER").unwrap_or_default();
+    let existing = [std::ffi::OsStr::new("steamuser"), &user]
         .iter()
         .filter(|u| !u.is_empty())
         .map(|u| users.join(u))
