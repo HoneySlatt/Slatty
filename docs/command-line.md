@@ -98,7 +98,7 @@ one there at another size is never replaced.
 
 | Command | What it does |
 |---|---|
-| `slatty launch <id>` | Starts the game and follows it until its last process ends. Ctrl+C asks the game to quit, a second Ctrl+C forces it. An Epic game (`epic-<app name>`) is signed in to your Epic account for the launch |
+| `slatty launch <id>` | Starts the game and follows it until its last process ends. Ctrl+C asks the game to quit, a second Ctrl+C forces it. An Epic game (`epic-<app name>`) is signed in to your Epic account for the launch. When cloud saves need attention first (a conflict), the game does not start and the command fails |
 | `slatty launch <id> --no-cloud` | Without syncing cloud saves before and after |
 | `slatty launch <id> --no-comet` | Without Comet: no achievements reported during this session |
 | `slatty launch-spec <id>` | Prints the exact command, folder and environment a launch would use, including controller compatibility saved in Game settings; for an Epic game, without the sign-in arguments a launch adds |

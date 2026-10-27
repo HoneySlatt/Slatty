@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use anyhow::Result;
 use clap::Args;
 use slatty_core::play::{self, CloudSummary, PlayEvent, PlayRequest};
@@ -38,15 +40,30 @@ pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
         comet: !args.no_comet,
         supervisor: slatty_core::session::supervisor_exe(),
     };
+    let blocked = AtomicBool::new(false);
     play::play(
         &ctx.db,
         &ctx.dirs,
         &ctx.http,
         req,
-        |e| print_event(&game_id, e),
+        |e| {
+            blocked.fetch_or(matches!(e, PlayEvent::Blocked(_)), Ordering::Relaxed);
+            print_event(&game_id, e)
+        },
         stop_rx,
     )
     .await?;
+    ended(&game_id, blocked.into_inner())
+}
+
+/// Fails when cloud saves kept the game from starting, so that a script sees no session happened.
+fn ended(game_id: &str, blocked: bool) -> Result<()> {
+    if blocked {
+        anyhow::bail!(
+            "{} was not launched: its cloud saves need attention",
+            shown(game_id)
+        );
+    }
     Ok(())
 }
 
@@ -157,5 +174,19 @@ fn print_cloud(title: &str, s: &CloudSummary) {
     }
     if let Some(dir) = &s.backup_dir {
         println!("  previous versions saved in {}", shown(dir.display()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A launch cloud saves kept from starting fails, so that `slatty launch <id> && …` does not go
+    /// on as if the game had been played.
+    #[test]
+    fn a_launch_blocked_by_cloud_saves_fails() {
+        assert!(ended("1", false).is_ok());
+        let e = ended("1", true).unwrap_err();
+        assert!(e.to_string().contains("not launched"), "{e}");
     }
 }

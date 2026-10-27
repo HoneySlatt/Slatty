@@ -10,6 +10,8 @@ until 1.0, a minor version may change commands and on-disk formats.
 - A cloud save in a folder, named with backslashes as Windows clients upload it, stays in sync:
   it was uploaded again under another name at the next sync, and reported as a deletion waiting
   at every sync after.
+- `slatty launch` fails, rather than end as a success, when cloud saves needing attention keep
+  the game from starting.
 
 ## 0.2.0 (2026-10-27)
 
