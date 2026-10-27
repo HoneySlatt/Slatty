@@ -3,8 +3,8 @@ use std::sync::atomic::Ordering;
 
 use super::plan::{ConflictKind, Warning};
 use super::sync::{Prefer, SyncOptions, SyncReport, SyncTarget, sync};
-use super::transport::IGNORED_REMOTE_HASH;
 use super::transport::memory::MemoryCloud;
+use super::transport::{CloudTransport, IGNORED_REMOTE_HASH, RemoteEntry};
 use crate::db::Db;
 use crate::paths::Dirs;
 
@@ -116,6 +116,57 @@ async fn first_upload_then_nothing_to_do() {
     assert_eq!(env.remote("Profile/opts.cfg").as_deref(), Some("O"));
     let again = env.sync(SyncOptions::default()).await;
     assert!(again.plan.is_noop() && again.uploaded.is_empty() && again.is_clean());
+}
+
+/// A cloud listing, after an upload, another content than the one sent (another computer's,
+/// sent meanwhile): no history for it, so that change is not hidden; the next sync compares.
+#[tokio::test]
+async fn an_upload_listed_with_another_content_gets_no_history() {
+    struct Elsewhere(MemoryCloud);
+    impl CloudTransport for Elsewhere {
+        async fn list(&self) -> crate::error::Result<Vec<RemoteEntry>> {
+            self.0.list().await
+        }
+        async fn download(&self, name: &str) -> crate::error::Result<Vec<u8>> {
+            self.0.download(name).await
+        }
+        async fn upload(
+            &self,
+            name: &str,
+            data: &[u8],
+            modified: chrono::DateTime<chrono::Utc>,
+        ) -> crate::error::Result<()> {
+            self.0.upload(name, data, modified).await
+        }
+        async fn delete(&self, name: &str) -> crate::error::Result<()> {
+            self.0.delete(name).await
+        }
+        fn listed_hash(&self, _: &[u8]) -> Option<String> {
+            Some("[FAKE] another content".into())
+        }
+    }
+    let env = Env::new("listed-other");
+    env.write("slot1.sav", "A");
+    let root = env.root();
+    let target = |cloud_user| SyncTarget {
+        db: &env.db,
+        dirs: &env.dirs,
+        user_id: cloud_user,
+        game_id: "g",
+        location: "saves",
+        root: &root,
+        keep: None,
+    };
+    let elsewhere = Elsewhere(MemoryCloud::default());
+    let r = sync(&elsewhere, &target("u"), SyncOptions::default())
+        .await
+        .unwrap();
+    assert!(r.uploaded.is_empty());
+    assert_eq!(r.errors.len(), 1, "{r:?}");
+    let r = sync(&elsewhere.0, &target("u"), SyncOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(r.adopted, ["slot1.sav"], "compared, without history");
 }
 
 #[tokio::test]

@@ -415,7 +415,7 @@ impl<T: CloudTransport> Run<'_, T> {
                 Deferred::Upload => self
                     .upload(&key)
                     .await
-                    .map(|sha| uploaded.push((key.clone(), sha))),
+                    .map(|sent| uploaded.push((key.clone(), sent))),
                 Deferred::DeleteRemote { chosen } => self
                     .delete_remote(&key, chosen)
                     .await
@@ -455,8 +455,16 @@ impl<T: CloudTransport> Run<'_, T> {
                 return Ok(());
             }
         };
-        for (key, sha) in uploaded {
+        for (key, (sha, sent)) in uploaded {
             match after.get(&key) {
+                // Listed with another content (sent over from elsewhere meanwhile): its history
+                // would hide that change.
+                Some(r) if sent.as_ref().is_some_and(|sent| *sent != r.hash) => {
+                    self.report.errors.push((
+                        self.display(&key),
+                        "the cloud lists another content than the one sent".into(),
+                    ))
+                }
                 Some(r) => {
                     self.record(&key, &sha, &r.hash)?;
                     self.report.uploaded.push(self.display(&key));
@@ -470,7 +478,8 @@ impl<T: CloudTransport> Run<'_, T> {
         Ok(())
     }
 
-    async fn upload(&mut self, key: &str) -> Result<String> {
+    /// The content's SHA-256, and the hash the cloud should list for it, when known.
+    async fn upload(&mut self, key: &str) -> Result<(String, Option<String>)> {
         let path = self.local_path(key)?;
         let file = &self.local.files[key];
         let data =
@@ -492,7 +501,7 @@ impl<T: CloudTransport> Run<'_, T> {
             self.keep_remote_copy(key).await?;
         }
         self.cloud.upload(&name, &data, modified).await?;
-        Ok(sha)
+        Ok((sha, self.cloud.listed_hash(&data)))
     }
 
     /// Whether the deletion was asked of the cloud; its history goes once the cloud took it.

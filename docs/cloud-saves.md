@@ -125,7 +125,8 @@ in the format of Epic's builds. The rules above still decide, file by file:
   `Saved Games`, `{InstallDir}` the game folder, `{EpicID}` your Epic account id. `..` climbs
   within your user folder or the game's, as Unity's games write `{AppData}/../LocalLow/…`, never
   out of them, and the folder must be under `AppData`, `Documents` or `Saved Games` (or the game
-  folder). Another variable refuses the location. Only the files Epic's lists of files to include and exclude
+  folder), deeper than the folder itself: a whole `Documents` or game folder is refused. Another
+  variable refuses the location. Only the files Epic's lists of files to include and exclude
   keep (`CloudIncludeList`, `CloudExcludeList`, matched as legendary matches them, regardless of
   case) are saves: the others are left alone on both sides.
 - **The cloud's files** are those of the newest snapshot, the one stored last; their hash is the
@@ -133,8 +134,12 @@ in the format of Epic's builds. The rules above still decide, file by file:
   your Epic account.
 - **What a sync uploads or deletes is sent as one new snapshot,** made from the newest one listed
   just before: the files not changed are read back from it, the uploads replace theirs, the
-  deletions are left out. Its chunks are stored first and its manifest last, so a snapshot never
-  names a chunk not stored yet; it is named after every one stored. Older snapshots are never
+  deletions are left out; files it does not change are kept as they are, two names differing
+  only by case and links included. If a file it sends or deletes changed in the cloud since the
+  sync listed it (another computer sent a snapshot meanwhile), nothing is sent: the next sync
+  compares. Its chunks are stored first and its manifest last, so a snapshot never names a chunk
+  not stored yet; it is named after every one stored. An upload the cloud then lists with another
+  content than the one sent gets no history. Older snapshots are never
   deleted: the copies before a change stay in Epic's cloud as well as in the backups.
 - **The last files are never deleted there**: Epic keeps no empty snapshot, and that deletion is
   reported instead.

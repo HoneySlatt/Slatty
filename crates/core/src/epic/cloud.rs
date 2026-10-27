@@ -201,9 +201,26 @@ struct State {
     latest_stamp: Option<String>,
     /// Unpacked chunks of the newest snapshot, read once.
     chunks: HashMap<Guid, Arc<Vec<u8>>>,
-    /// What the next commit sends, by path in the save folder.
-    put: BTreeMap<String, Vec<u8>>,
-    delete: BTreeSet<String>,
+    /// What the next commit sends, by path in the save folder, with the SHA-1 each had in the
+    /// snapshot the sync saw (none: not there), which it must still have then.
+    put: BTreeMap<String, (Vec<u8>, Option<[u8; 20]>)>,
+    delete: BTreeMap<String, Option<[u8; 20]>>,
+}
+
+impl State {
+    /// The SHA-1 of a file of the newest snapshot, whatever the case it is named with.
+    fn listed(&self, rel: &str) -> Option<[u8; 20]> {
+        listed_in(self.newest.as_ref()?, rel)
+    }
+}
+
+fn listed_in(snapshot: &Snapshot, rel: &str) -> Option<[u8; 20]> {
+    snapshot
+        .manifest
+        .files
+        .iter()
+        .find(|f| f.symlink_target.is_empty() && f.name.eq_ignore_ascii_case(rel))
+        .map(|f| f.sha1)
 }
 
 /// A game's Epic cloud saves as a `CloudTransport`.
@@ -259,9 +276,15 @@ impl<S: SaveStore> EpicCloud<S> {
             snapshots.len()
         );
         let latest_stamp = snapshots.iter().map(|(_, stamp, _)| *stamp).max();
+        // Dates read as dates: `…00Z` and `…00.123Z` do not sort as text does.
+        let stored_at = |s: &Stored| {
+            s.last_modified
+                .as_deref()
+                .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+        };
         let newest = snapshots
             .iter()
-            .max_by(|a, b| (&a.0.last_modified, a.1).cmp(&(&b.0.last_modified, b.1)));
+            .max_by_key(|(s, stamp, _)| (stored_at(s), *stamp));
         let snapshot = match newest {
             None => None,
             Some((s, _, prefix)) => {
@@ -332,9 +355,14 @@ impl<S: SaveStore> EpicCloud<S> {
         .to_string()
     }
 
-    /// A snapshot of `files` (path, content), in the order legendary writes them (by path,
-    /// regardless of case): its chunks by name, then its manifest.
-    fn pack(&self, files: Vec<(String, Vec<u8>)>, stamp: &str) -> Vec<(String, Vec<u8>)> {
+    /// A snapshot of `files` (path, content, in the order legendary writes them: by path,
+    /// regardless of case) and of `links` as listed: its chunks by name, then its manifest.
+    fn pack(
+        &self,
+        files: Vec<(String, Vec<u8>)>,
+        links: Vec<FileEntry>,
+        stamp: &str,
+    ) -> Vec<(String, Vec<u8>)> {
         let mut m = Manifest {
             feature_level: FEATURE_LEVEL,
             app_name: self.meta_name.clone(),
@@ -384,6 +412,7 @@ impl<S: SaveStore> EpicCloud<S> {
         if !buf.is_empty() {
             finish(&mut buf, guid, &mut m);
         }
+        m.files.extend(links);
         let raw = manifest::write::manifest_with(&m, &shas, &[("CloudSaveFolder", &self.template)]);
         out.push((format!("manifests/{stamp}.manifest"), raw));
         out
@@ -432,22 +461,31 @@ impl<S: SaveStore> CloudTransport for EpicCloud<S> {
     async fn upload(&self, name: &str, data: &[u8], _: chrono::DateTime<Utc>) -> Result<()> {
         let rel = rel_of(name)?.to_string();
         let mut state = self.state.lock().unwrap();
+        let listed = state.listed(&rel);
         state.delete.remove(&rel);
-        state.put.insert(rel, data.to_vec());
+        state.put.insert(rel, (data.to_vec(), listed));
         Ok(())
     }
 
     async fn delete(&self, name: &str) -> Result<()> {
         let rel = rel_of(name)?.to_string();
         let mut state = self.state.lock().unwrap();
+        let listed = state.listed(&rel);
         state.put.remove(&rel);
-        state.delete.insert(rel);
+        state.delete.insert(rel, listed);
         Ok(())
     }
 
-    /// One snapshot: the newest one listed now, its files not asked for read back from it, with
-    /// the uploads and without the deletions. Its chunks go first, its manifest last, so that no
-    /// snapshot ever names a chunk not stored yet.
+    /// The SHA-1 Epic's snapshot lists for a file of that content.
+    fn listed_hash(&self, data: &[u8]) -> Option<String> {
+        Some(fsutil::hex(&super::sha1(data)))
+    }
+
+    /// One snapshot: the newest one listed now, its files not asked for read back from it (two
+    /// differing only by case included), and its links kept, with the uploads and without the
+    /// deletions. Refused when a file to change is no longer as the sync saw it: another computer
+    /// sent a snapshot meanwhile. Its chunks go first, its manifest last, so that no snapshot ever
+    /// names a chunk not stored yet.
     async fn commit(&self) -> Result<()> {
         let (put, delete) = {
             let mut state = self.state.lock().unwrap();
@@ -459,33 +497,49 @@ impl<S: SaveStore> CloudTransport for EpicCloud<S> {
         if put.is_empty() && delete.is_empty() {
             return Ok(());
         }
+        let snapshot = self.refresh().await?;
+        let seen = put
+            .iter()
+            .map(|(rel, (_, seen))| (rel, seen))
+            .chain(&delete);
+        for (rel, seen) in seen {
+            let now = snapshot.as_ref().and_then(|s| listed_in(s, rel));
+            if now != *seen {
+                return Err(Error::Refused(format!(
+                    "{rel} changed in Epic's cloud during the sync; nothing was sent"
+                )));
+            }
+        }
         // Windows saves are case-insensitive: one file whatever the case it is named with.
         let changed: BTreeSet<String> = put
             .keys()
-            .chain(&delete)
+            .chain(delete.keys())
             .map(|r| r.to_lowercase())
             .collect();
-        let mut files: BTreeMap<String, (String, Vec<u8>)> = BTreeMap::new();
-        if let Some(snapshot) = self.refresh().await? {
+        let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut links = Vec::new();
+        if let Some(snapshot) = &snapshot {
             for f in &snapshot.manifest.files {
-                if !f.symlink_target.is_empty() || changed.contains(&f.name.to_lowercase()) {
+                if changed.contains(&f.name.to_lowercase()) {
                     continue;
                 }
-                let data = self.assemble(&snapshot, f).await?;
-                files.insert(f.name.to_lowercase(), (f.name.clone(), data));
+                if !f.symlink_target.is_empty() {
+                    links.push(f.clone());
+                    continue;
+                }
+                files.push((f.name.clone(), self.assemble(snapshot, f).await?));
             }
         }
-        for (rel, data) in put {
-            files.insert(rel.to_lowercase(), (rel, data));
-        }
+        files.extend(put.into_iter().map(|(rel, (data, _))| (rel, data)));
         if files.is_empty() {
             return Err(Error::Refused(
                 "Epic keeps no empty cloud save: its last files are left there".into(),
             ));
         }
+        files.sort_by_cached_key(|(name, _)| (name.to_lowercase(), name.clone()));
         let latest = self.state.lock().unwrap().latest_stamp.clone();
         let stamp = Self::next_stamp(latest.as_deref());
-        let snapshot = self.pack(files.into_values().collect(), &stamp);
+        let snapshot = self.pack(files, links, &stamp);
         self.store.write(snapshot).await
     }
 }
@@ -528,37 +582,65 @@ fn matches(rel: &str, pattern: &str) -> bool {
         )
 }
 
+/// Matched going back only to the last `*` met, never trying every way to split the path: a
+/// pattern of many `*` against a long path takes no longer than its two lengths multiplied.
 fn glob(s: &[char], p: &[char]) -> bool {
-    match p.first() {
-        None => s.is_empty(),
-        Some('*') => (0..=s.len()).any(|i| glob(&s[i..], &p[1..])),
-        Some('?') => !s.is_empty() && glob(&s[1..], &p[1..]),
-        Some('[') => {
-            let Some(close) = p.iter().skip(2).position(|c| *c == ']').map(|i| i + 2) else {
-                return s.first() == Some(&'[') && glob(&s[1..], &p[1..]);
-            };
-            let Some(c) = s.first() else {
-                return false;
-            };
-            let (negated, set) = match p[1] {
-                '!' => (true, &p[2..close]),
-                _ => (false, &p[1..close]),
-            };
-            let mut found = false;
-            let mut i = 0;
-            while i < set.len() {
-                if i + 2 < set.len() && set[i + 1] == '-' {
-                    found |= (set[i]..=set[i + 2]).contains(c);
-                    i += 3;
-                } else {
-                    found |= set[i] == *c;
-                    i += 1;
-                }
+    let (mut si, mut pi) = (0, 0);
+    // Where the pattern goes on after the last `*`, and the first character it took no further.
+    let mut star: Option<(usize, usize)> = None;
+    while si < s.len() {
+        let step = match p.get(pi) {
+            Some('*') => {
+                star = Some((pi + 1, si));
+                pi += 1;
+                continue;
             }
-            found != negated && glob(&s[1..], &p[close + 1..])
+            Some('?') => Some(1),
+            Some('[') => match class(&p[pi..], s[si]) {
+                Some((true, len)) => Some(len),
+                Some((false, _)) => None,
+                // Not closed: a plain `[`.
+                None => (s[si] == '[').then_some(1),
+            },
+            Some(c) => (*c == s[si]).then_some(1),
+            None => None,
+        };
+        match (step, star) {
+            (Some(len), _) => {
+                pi += len;
+                si += 1;
+            }
+            (None, Some((after, from))) => {
+                pi = after;
+                si = from + 1;
+                star = Some((after, from + 1));
+            }
+            (None, None) => return false,
         }
-        Some(c) => s.first() == Some(c) && glob(&s[1..], &p[1..]),
     }
+    p[pi..].iter().all(|c| *c == '*')
+}
+
+/// Whether `c` is in the `[…]` or `[!…]` `p` begins with, and the length of that class; none
+/// when it is not closed.
+fn class(p: &[char], c: char) -> Option<(bool, usize)> {
+    let close = p.iter().skip(2).position(|c| *c == ']')? + 2;
+    let (negated, set) = match p[1] {
+        '!' => (true, &p[2..close]),
+        _ => (false, &p[1..close]),
+    };
+    let mut found = false;
+    let mut i = 0;
+    while i < set.len() {
+        if i + 2 < set.len() && set[i + 1] == '-' {
+            found |= (set[i]..=set[i + 2]).contains(&c);
+            i += 3;
+        } else {
+            found |= set[i] == c;
+            i += 1;
+        }
+    }
+    Some((found != negated, close + 1))
 }
 
 /// The save folder a template names inside the game's prefix or folder (`get_save_path`): a
@@ -608,6 +690,10 @@ pub fn save_root(template: &str, account_id: &str, install: &Install) -> Result<
             _ => return Err(unsupported()),
         }
     };
+    // A whole game folder, Documents or AppData is not a save folder: syncing it would send them.
+    if path.len() == skip {
+        return Err(unsupported());
+    }
     let gog: Vec<String> = std::iter::once(format!("<?{root}?>"))
         .chain(path[skip..].iter().map(|p| p.to_string()))
         .collect();

@@ -39,6 +39,11 @@ pub trait CloudTransport: Send + Sync {
     fn commit(&self) -> impl Future<Output = Result<()>> + Send {
         async { Ok(()) }
     }
+    /// The hash a listing gives for a file of that content, when the cloud lists one Slatty can
+    /// compute (Epic's SHA-1): an upload listed with another is not taken as sent.
+    fn listed_hash(&self, _data: &[u8]) -> Option<String> {
+        None
+    }
 }
 
 /// Same identification gogdl uses for cloud storage; whether GOG requires it is unverified.

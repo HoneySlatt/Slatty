@@ -197,6 +197,84 @@ async fn a_new_snapshot_is_the_newest_with_the_changes() {
     assert_eq!(*cloud.store.writes.lock().unwrap(), writes);
 }
 
+/// A new snapshot keeps what the newest holds and the sync does not change: two files whose
+/// names differ only by case (the sync leaves both alone), and links.
+#[tokio::test]
+async fn a_new_snapshot_keeps_case_pairs_and_links() {
+    let cloud = cloud();
+    let link = FileEntry {
+        name: "Latest.sav".into(),
+        symlink_target: "Save.dat".into(),
+        sha1: [0; 20],
+        flags: 0,
+        parts: Vec::new(),
+    };
+    let first = cloud.pack(
+        vec![
+            ("Save.dat".into(), b"[FAKE] upper".to_vec()),
+            ("save.dat".into(), b"[FAKE] lower".to_vec()),
+        ],
+        vec![link],
+        "2026.10.27-10.00.00",
+    );
+    cloud.store.write(first).await.unwrap();
+    put(&cloud, &[("Other.sav", b"[FAKE] other")]).await;
+    let files = remote(&cloud).await;
+    assert_eq!(files["saves/Save.dat"], b"[FAKE] upper");
+    assert_eq!(files["saves/save.dat"], b"[FAKE] lower");
+    assert_eq!(files["saves/Other.sav"], b"[FAKE] other");
+    let newest = cloud.state.lock().unwrap().newest.clone().unwrap();
+    assert!(
+        newest
+            .manifest
+            .files
+            .iter()
+            .any(|f| f.name == "Latest.sav" && f.symlink_target == "Save.dat")
+    );
+}
+
+/// Another computer's snapshot sent between the sync's listing and its commit, changing a file
+/// the sync sends: nothing is sent, and theirs stays the newest.
+#[tokio::test]
+async fn a_file_changed_elsewhere_meanwhile_is_not_overwritten() {
+    let cloud = cloud();
+    put(&cloud, &[("A.sav", b"[FAKE] a")]).await;
+    cloud.list().await.unwrap();
+    cloud
+        .upload("saves/A.sav", b"[FAKE] mine", Utc::now())
+        .await
+        .unwrap();
+    let theirs = cloud.pack(
+        vec![("A.sav".into(), b"[FAKE] theirs".to_vec())],
+        Vec::new(),
+        "2999.01.01-00.00.00",
+    );
+    cloud.store.write(theirs).await.unwrap();
+    assert!(matches!(cloud.commit().await, Err(Error::Refused(_))));
+    assert_eq!(cloud.store.snapshots().len(), 2);
+    assert_eq!(remote(&cloud).await["saves/A.sav"], b"[FAKE] theirs");
+}
+
+/// The newest snapshot is the one stored last by date, read as a date: `…00.500Z` is after
+/// `…00Z`, though not as text.
+#[tokio::test]
+async fn the_newest_snapshot_is_dated_as_a_date() {
+    let cloud = cloud();
+    put(&cloud, &[("A.sav", b"[FAKE] older")]).await;
+    put(&cloud, &[("A.sav", b"[FAKE] newer")]).await;
+    {
+        let mut files = cloud.store.files.lock().unwrap();
+        let snapshots: Vec<String> = files
+            .keys()
+            .filter(|k| k.contains("/manifests/"))
+            .cloned()
+            .collect();
+        files.get_mut(&snapshots[0]).unwrap().1 = "2026-10-27T10:00:00Z".into();
+        files.get_mut(&snapshots[1]).unwrap().1 = "2026-10-27T10:00:00.500Z".into();
+    }
+    assert_eq!(remote(&cloud).await["saves/A.sav"], b"[FAKE] newer");
+}
+
 /// Epic keeps no empty snapshot: deleting the last files is refused, and the cloud keeps them.
 #[tokio::test]
 async fn the_last_files_are_not_deleted_from_epics_cloud() {
@@ -286,9 +364,29 @@ fn epic_save_folders_resolve_in_the_prefix() {
         "{AppData}/../../../../../etc",
         "{InstallDir}/../Fake",
         "{UserDir}/../Desktop/Fake",
+        // A whole folder, not a save folder.
+        "{InstallDir}",
+        "{AppData}/",
+        "{UserDir}",
+        "{AppData}/../Local",
     ] {
         assert!(save_root(refused, "a", &install).is_err(), "{refused}");
     }
+}
+
+/// A pattern of many `*` against a long path is matched without trying every way to split it.
+#[test]
+fn many_stars_against_a_long_path_take_no_time() {
+    let chars = |s: &str| s.chars().collect::<Vec<_>>();
+    let long = chars(&"a".repeat(400));
+    assert!(!glob(&long, &chars("*a*a*a*a*a*a*a*a*b")));
+    assert!(glob(&long, &chars("*a*a*a*a*a*a*a*a*")));
+    assert!(glob(&chars("save/slot1.sav"), &chars("*/slot?.sav")));
+    assert!(
+        glob(&chars("x[y"), &chars("x[y")),
+        "a [ not closed is plain"
+    );
+    assert!(!glob(&chars("slot3.sav"), &chars("slot[12].sav")));
 }
 
 /// legendary's matching: a folder, an end of the path, a shell pattern; regardless of case.
