@@ -13,6 +13,7 @@ until 1.0, a minor version may change commands and on-disk formats.
 - `slatty launch` fails, rather than end as a success, when cloud saves needing attention keep
   the game from starting.
 - `slatty doctor` fails when one of its checks does.
+- `slatty library list` lists Epic's games too, as the library was last read from Epic.
 - A second Ctrl+C quits at once while files are downloaded or checked (install, update, verify,
   installers, Proton builds); it was ignored.
 

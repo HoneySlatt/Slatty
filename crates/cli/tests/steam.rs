@@ -240,5 +240,14 @@ fn installed_games_are_printed_as_json() {
             { "id": "local-1", "title": "[FAKE] Renamed", "cover": null, "steam_app": null }
         ])
     );
+    // Epic's games are listed as the library was last read, installed or not.
+    let listed = stdout(&slatty(&root, &["library", "list"]));
+    for id in ["epic-FakeEpic", "epic-FakeOwned"] {
+        assert!(listed.contains(id), "{listed}");
+    }
+    assert!(
+        listed.contains("(Epic games, as last read from Epic)"),
+        "{listed}"
+    );
     std::fs::remove_dir_all(root).unwrap();
 }

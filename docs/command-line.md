@@ -40,7 +40,7 @@ the interface; the command line only lists them.
 | Command | What it does |
 |---|---|
 | `slatty library sync` | Downloads your GOG library into the local cache (titles and details; the interface downloads the covers) |
-| `slatty library list [text]` | Lists your games from the cache, offline too: GOG's, Steam's once turned on, and those added by hand. `text` filters by title |
+| `slatty library list [text]` | Lists your games from the cache, offline too: GOG's, Steam's once turned on, Epic's as last read from Epic, and those added by hand or emulated. `text` filters by title |
 | `slatty installs` | Installed games, and installs that were interrupted |
 | `slatty installs --json` | For other programs: the games the Installed shelf shows, hidden ones left out, as a JSON list of `id`, `title`, `cover` (the file of the cover the library shows, `null` until it is downloaded) and `steam_app` (for a game only Steam installed, to start through Steam; any other starts with `slatty launch <id>`). Reads local files only |
 

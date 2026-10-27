@@ -9,8 +9,8 @@ use crate::{Ctx, shown};
 pub enum LibraryCommand {
     /// Download the library and refresh the local cache
     Sync,
-    /// List games from the local cache (works offline), Steam's once turned on, and those added
-    /// by hand
+    /// List games from the local cache (works offline): GOG's, Steam's once turned on, Epic's once
+    /// signed in, and those added by hand or emulated
     List {
         /// Case-insensitive title filter
         search: Option<String>,
@@ -50,6 +50,10 @@ pub async fn run(ctx: &Ctx, cmd: LibraryCommand) -> Result<()> {
                 }
             };
             let steam = crate::steam::games(ctx)?;
+            let epic = match slatty_core::settings::epic_account(&ctx.db)? {
+                Some(account) => slatty_core::epic::library::load_cache(&ctx.dirs, &account)?,
+                None => None,
+            };
             let added = slatty_core::added::library(&ctx.db)?;
             let emulated = slatty_core::emulated::library(&ctx.db, &ctx.dirs)?;
             match Account::active(&ctx.db)? {
@@ -60,13 +64,25 @@ pub async fn run(ctx: &Ctx, cmd: LibraryCommand) -> Result<()> {
                     }
                     None => println!("No cached library yet. Run `slatty library sync`."),
                 },
-                // Steam's games, those added by hand and emulated ones need no GOG account.
-                None if steam.is_some() || !added.is_empty() || !emulated.is_empty() => {}
+                // Steam's games, Epic's, those added by hand and emulated ones need no GOG account.
+                None if steam.is_some()
+                    || epic.is_some()
+                    || !added.is_empty()
+                    || !emulated.is_empty() => {}
                 None => return Err(slatty_core::Error::NotLoggedIn.into()),
             }
             if let Some(steam) = steam {
                 print(&steam.games);
                 println!("(Steam games, read from the Steam client's files)");
+            }
+            if let Some(epic) = epic {
+                let games: Vec<LibraryGame> = epic
+                    .games
+                    .iter()
+                    .map(slatty_core::epic::library::library_game)
+                    .collect();
+                print(&games);
+                println!("(Epic games, as last read from Epic)");
             }
             if !added.is_empty() {
                 print(&added);
