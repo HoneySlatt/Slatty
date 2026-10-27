@@ -170,6 +170,53 @@ fn installed_games_are_printed_as_json() {
     };
     slatty_core::custom::save(&db, &dirs, "local-1", changes("[FAKE] Renamed", false)).unwrap();
     slatty_core::custom::save(&db, &dirs, "local-2", changes("", true)).unwrap();
+    // An Epic game installed, and one only owned, as the library was last read from Epic.
+    let account = "0123456789abcdef0123456789abcdef";
+    dirs.cache = root.join("cache/slatty");
+    slatty_core::settings::set_epic_account(&db, Some(account)).unwrap();
+    let epic_game = |app: &str, title: &str| slatty_core::epic::library::EpicGame {
+        app_name: app.into(),
+        namespace: "fakens".into(),
+        catalog_item_id: format!("fakeitem{app}"),
+        title: title.into(),
+        cover: None,
+        background: None,
+        logo: None,
+        os: vec!["windows".into()],
+    };
+    slatty_core::epic::library::save_cache(
+        &dirs,
+        &slatty_core::epic::library::EpicLibrary {
+            account_id: account.into(),
+            display_name: "[FAKE] Player".into(),
+            fetched_at: 1_791_500_000,
+            games: vec![
+                epic_game("FakeEpic", "[FAKE] Epic"),
+                epic_game("FakeOwned", "[FAKE] Owned"),
+            ],
+            left_out: Vec::new(),
+        },
+    )
+    .unwrap();
+    let epic_cover = root.join(format!(
+        "cache/slatty/epic/{account}/covers/epic-FakeEpic.jpg"
+    ));
+    write(&epic_cover, b"[FAKE] cover");
+    slatty_core::install::Install {
+        umu_id: None,
+        game_id: "epic-FakeEpic".into(),
+        title: "[FAKE] Epic".into(),
+        platform: slatty_core::install::Platform::Windows,
+        path: root.join("games/FakeEpic"),
+        client_id: None,
+        runner: slatty_core::runner::Runner::Umu {
+            proton: "/proton".into(),
+            prefix: root.join("prefixes/epic-FakeEpic"),
+        },
+        isolated: false,
+    }
+    .save(&db)
+    .unwrap();
     drop(db);
 
     let json: serde_json::Value =
@@ -177,6 +224,12 @@ fn installed_games_are_printed_as_json() {
     assert_eq!(
         json,
         serde_json::json!([
+            {
+                "id": "epic-FakeEpic",
+                "title": "[FAKE] Epic",
+                "cover": epic_cover,
+                "steam_app": null
+            },
             {
                 "id": "steam-440",
                 "title": "[FAKE] Fortress",

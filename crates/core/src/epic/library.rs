@@ -358,6 +358,13 @@ pub async fn refresh(
     Ok(library)
 }
 
+/// The covers already in the account's cache, by game id.
+pub fn cached_covers(dirs: &Dirs, account_id: &str) -> Result<HashMap<String, PathBuf>> {
+    Ok(crate::library::covers_in(
+        &cache_folder(dirs, account_id)?.join("covers"),
+    ))
+}
+
 /// The file of a game's cover in the account's cache, downloaded from Epic's image servers when
 /// missing.
 pub async fn cover(

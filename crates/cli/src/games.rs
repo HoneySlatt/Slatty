@@ -173,9 +173,32 @@ pub fn list_json(ctx: &Ctx) -> Result<()> {
             shown.push((g, Some(app)));
         }
     }
+    // Epic's installed games, as the library was last read from Epic.
+    let epic: Vec<LibraryGame> = match settings::epic_account(&ctx.db)? {
+        Some(account) => {
+            covers.extend(slatty_core::epic::library::cached_covers(
+                &ctx.dirs, &account,
+            )?);
+            slatty_core::epic::library::load_cache(&ctx.dirs, &account)?
+                .map(|l| {
+                    l.games
+                        .iter()
+                        .map(slatty_core::epic::library::library_game)
+                        .filter(|g| installs.contains(&g.id))
+                        .collect()
+                })
+                .unwrap_or_default()
+        }
+        None => Vec::new(),
+    };
     let added = slatty_core::added::library(&ctx.db)?;
     let emulated = slatty_core::emulated::library(&ctx.db, &ctx.dirs)?;
-    shown.extend(added.iter().chain(&emulated).map(|g| (g, None)));
+    shown.extend(
+        epic.iter()
+            .chain(&added)
+            .chain(&emulated)
+            .map(|g| (g, None)),
+    );
 
     let mut games: Vec<(String, Installed)> = shown
         .into_iter()

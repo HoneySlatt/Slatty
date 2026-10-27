@@ -304,7 +304,11 @@ const IMAGE_EXTENSIONS: [&str; 5] = ["jpg", "png", "webp", "gif", "bmp"];
 /// a few checks per game. Covers an earlier version kept without their format in their name are
 /// left to `cover`, which renames them.
 pub fn cached_covers(dirs: &Dirs, user_id: &str) -> HashMap<String, PathBuf> {
-    let folder = dirs.account_cache(user_id).join("covers");
+    covers_in(&dirs.account_cache(user_id).join("covers"))
+}
+
+/// The covers in `folder`, by game id.
+pub(crate) fn covers_in(folder: &Path) -> HashMap<String, PathBuf> {
     std::fs::read_dir(folder)
         .into_iter()
         .flatten()
