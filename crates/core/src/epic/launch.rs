@@ -14,7 +14,7 @@ use crate::error::{Error, Result};
 use crate::install::Install;
 use crate::paths::Dirs;
 use crate::secret::Secret;
-use crate::{fsutil, gameinfo, http};
+use crate::{gameinfo, http};
 
 const EXCHANGE_URL: &str =
     "https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/exchange";
@@ -67,6 +67,10 @@ pub struct SignIn {
 /// asks for one, its ownership token, written in its prefix.
 pub async fn sign_in(http: &Client, db: &Db, dirs: &Dirs, install: &Install) -> Result<SignIn> {
     let epic = kept(dirs, install)?;
+    // One a launch left when Slatty closed while the game ran goes first, signed in or not.
+    if let Some(prefix) = install.runner.prefix() {
+        let _ = std::fs::remove_file(prefix.join("drive_c").join(OWNERSHIP_TOKEN));
+    }
     let tokens = super::auth::fresh(http, db, dirs).await?;
     let source = super::library::Epic {
         http,
@@ -84,10 +88,7 @@ pub async fn sign_in(http: &Client, db: &Db, dirs: &Dirs, install: &Install) -> 
         let prefix = install.runner.prefix().ok_or_else(|| {
             Error::Unsupported("an Epic game runs through Proton, in a prefix".into())
         })?;
-        let path = prefix.join("drive_c").join(OWNERSHIP_TOKEN);
-        crate::installer::refuse_outside(prefix, &path)?;
-        fsutil::write_atomic(&path, &token)?;
-        Some(path)
+        Some(write_token(prefix, &token)?)
     } else {
         None
     };
@@ -102,6 +103,27 @@ pub async fn sign_in(http: &Client, db: &Db, dirs: &Dirs, install: &Install) -> 
         ),
         ownership_token,
     })
+}
+
+/// Writes the ownership token in the prefix's `C:`, readable by the user alone whatever the
+/// folders around it. What is there already (a link the game made) is deleted, never written
+/// through.
+fn write_token(prefix: &Path, token: &[u8]) -> Result<PathBuf> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let path = prefix.join("drive_c").join(OWNERSHIP_TOKEN);
+    crate::installer::refuse_outside(prefix, &path)?;
+    let _ = std::fs::remove_file(&path);
+    let write = || {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)?
+            .write_all(token)
+    };
+    write().map_err(|e| Error::io(format!("write {}", path.display()), e))?;
+    Ok(path)
 }
 
 /// The ownership token of a game that asks for one (`EPCAPI.get_ownership_token`). Sent once: it
@@ -282,6 +304,26 @@ mod tests {
         assert_eq!(exe, game.join("binaries/win64/Game.exe"));
         assert_eq!(args, ["-fake", "two words", "-extra"]);
         assert_eq!(cwd, game.join("binaries/win64"));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// The ownership token is the user's alone to read, and a link the game left in its place is
+    /// replaced, never written through.
+    #[test]
+    fn the_ownership_token_is_private_and_never_written_through_a_link() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("slatty-epic-ovt-{}", std::process::id()));
+        let prefix = root.join("prefix");
+        std::fs::create_dir_all(prefix.join("drive_c")).unwrap();
+        let elsewhere = root.join("elsewhere");
+        std::fs::write(&elsewhere, b"[FAKE] untouched").unwrap();
+        std::os::unix::fs::symlink(&elsewhere, prefix.join("drive_c").join(OWNERSHIP_TOKEN))
+            .unwrap();
+        let path = write_token(&prefix, b"[FAKE] token").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"[FAKE] token");
+        assert_eq!(std::fs::read(&elsewhere).unwrap(), b"[FAKE] untouched");
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
         std::fs::remove_dir_all(&root).unwrap();
     }
 

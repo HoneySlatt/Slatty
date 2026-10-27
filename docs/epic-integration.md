@@ -117,8 +117,8 @@ the manifest names (`launch_exe`), from its own folder, with the manifest's argu
 ```
 
 The language is the system's (`fr` for `fr_FR.UTF-8`), else `en`. The ownership token is written in
-the prefix's `C:` (`-epicovt=C:\slatty-epic.ovt`), where an isolated game sees it too, and deleted
-once the game ends; legendary writes it in its own temporary folder, as a Linux path. Without a code
+the prefix's `C:` (`-epicovt=C:\slatty-epic.ovt`), where an isolated game sees it too, readable by the user alone, and
+deleted once the game ends, or at its next launch if Slatty was closed while it ran; legendary writes it in its own temporary folder, as a Linux path. Without a code
 (Epic out of reach, the session rejected) the game starts without any of these arguments, as
 legendary's offline launch does, which a game that can run offline accepts.
 

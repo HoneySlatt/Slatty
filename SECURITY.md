@@ -61,7 +61,8 @@ account), and a game you run without isolation (it runs as you).
   waits there, your other programs can read it in the game's command line, and so can other users
   of the computer unless `/proc` hides processes (`hidepid`). It never goes to a log or a file of
   Slatty's. A game asking for an ownership token gets it in a file of its prefix, readable by you
-  only, deleted when the game ends.
+  only (mode 0600), deleted when the game ends, or at its next launch if Slatty was closed while
+  it ran.
 - **Your token goes to GOG only.** It is sent to `https://` addresses on `gog.com` alone, whatever
   a GOG answer names, and a redirect never tells the next server where it came from.
 - **Signing out** deletes the session from the keyring. Work still running keeps its copy in memory
