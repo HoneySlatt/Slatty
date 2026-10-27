@@ -45,6 +45,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.2.0" date="2026-10-27" type="development">
+      <description>
+        <p>Epic Games Store games, emulated games, and a list of every game beside the library.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-10-21" type="development">
       <description>
         <p>The first public version.</p>

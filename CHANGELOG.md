@@ -5,6 +5,8 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 ## Unreleased
 
+## 0.2.0 (2026-10-27)
+
 ### Added
 
 - A list of every game beside the library, as in Steam: names and icons (GOG's, Steam's, or one
