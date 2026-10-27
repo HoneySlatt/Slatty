@@ -553,7 +553,8 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one runs at a time.
   is: by the Steam app ids gamesdb gives for it (`game.releases`), or, for a game gamesdb did not
   describe, by a title written alike;
 - `client` builds the `steam://` addresses that ask the client to play, install, verify or
-  uninstall;
+  uninstall, and hands them to `steam -silent` when it is in `PATH` (a client it starts stays in
+  the tray), else to `xdg-open`;
 - `web` asks Steam's Web API, once turned on, with the user's key from the keyring.
 
 Every file is opened without waiting and read only when it is a regular file of bounded size

@@ -72,7 +72,7 @@ pub fn open_with_desktop(target: &std::ffi::OsStr) -> std::io::Result<()> {
 
 /// Starts `command` and reaps it once it exits, rather than leaving it a zombie for as long as
 /// the launcher runs. Its process id.
-fn spawn_reaped(command: &mut std::process::Command) -> std::io::Result<u32> {
+pub(crate) fn spawn_reaped(command: &mut std::process::Command) -> std::io::Result<u32> {
     let mut child = command.spawn()?;
     let pid = child.id();
     std::thread::spawn(move || child.wait());
