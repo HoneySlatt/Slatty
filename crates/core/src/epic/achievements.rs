@@ -106,12 +106,7 @@ impl Graphql for EpicGraphql<'_> {
             }
             .await;
             match answer {
-                Ok(mut answer) => {
-                    return match answer.get_mut("data").map(Value::take) {
-                        Some(data) if !data.is_null() => Ok(data),
-                        _ => Err(Error::parse(context, "Epic answered without data")),
-                    };
-                }
+                Ok(answer) => return data_of(answer),
                 Err(e @ Error::EpicSessionRejected) => return Err(e),
                 Err(e) => last = Some(e),
             }
@@ -122,7 +117,10 @@ impl Graphql for EpicGraphql<'_> {
 
 /// The messages of a GraphQL answer's `errors`.
 fn refused(raw: &[u8]) -> Option<String> {
-    let answer: Value = serde_json::from_slice(raw).ok()?;
+    errors(&serde_json::from_slice(raw).ok()?)
+}
+
+fn errors(answer: &Value) -> Option<String> {
     let messages: Vec<&str> = answer["errors"]
         .as_array()?
         .iter()
@@ -131,23 +129,45 @@ fn refused(raw: &[u8]) -> Option<String> {
     (!messages.is_empty()).then(|| messages.join("; "))
 }
 
+/// The `data` of an answer; an error when Epic says something went wrong, even beside data: a
+/// part it could not read would show as no achievements, or none unlocked.
+fn data_of(mut answer: Value) -> Result<Value> {
+    let context = "reading Epic's achievements";
+    if let Some(why) = errors(&answer) {
+        return Err(Error::parse(context, why));
+    }
+    match answer.get_mut("data").map(Value::take) {
+        Some(data) if !data.is_null() => Ok(data),
+        _ => Err(Error::parse(context, "Epic answered without data")),
+    }
+}
+
+/// A field Epic sends as `null` when it has no value, read as its default.
+fn or_default<'de, D, T>(d: D) -> std::result::Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Option::<T>::deserialize(d).map(Option::unwrap_or_default)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Definition {
     name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "or_default")]
     hidden: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "or_default")]
     unlocked_display_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "or_default")]
     locked_display_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "or_default")]
     unlocked_description: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "or_default")]
     locked_description: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "or_default")]
     unlocked_icon_link: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "or_default")]
     locked_icon_link: String,
     rarity: Option<Rarity>,
 }
@@ -161,7 +181,7 @@ struct Rarity {
 #[serde(rename_all = "camelCase")]
 struct Progress {
     achievement_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "or_default")]
     unlocked: bool,
     unlock_date: Option<String>,
 }

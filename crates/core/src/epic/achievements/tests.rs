@@ -82,6 +82,45 @@ async fn definitions_and_progress_make_the_achievements() {
     );
 }
 
+/// Fields Epic sends as `null` read as having no value, rather than failing the whole game.
+#[tokio::test]
+async fn null_fields_read_as_empty() {
+    let fake = Fake {
+        definitions: json!({ "Achievement": { "productAchievementsRecordBySandbox": {
+            "achievements": [{ "achievement": {
+                "name": "first", "hidden": null,
+                "unlockedDisplayName": "[FAKE] First", "lockedDisplayName": null,
+                "unlockedDescription": null, "lockedDescription": null,
+                "unlockedIconLink": null, "lockedIconLink": null, "rarity": null,
+            }}]
+        }}}),
+        progress: json!({ "PlayerAchievement": { "playerAchievementGameRecordsBySandbox": {
+            "records": [{ "playerAchievements": [{ "playerAchievement": {
+                "achievementName": "first", "unlocked": null, "unlockDate": null } }] }]
+        }}}),
+        asked: Mutex::new(Vec::new()),
+    };
+    let list = fetch(&fake, "fakeaccount", "fakens", "en").await.unwrap();
+    assert_eq!(list[0].name, "[FAKE] First");
+    assert_eq!(list[0].description, "");
+    assert!(list[0].visible);
+    assert_eq!(list[0].date_unlocked, None);
+}
+
+/// An answer saying something went wrong is an error, even beside data: what Epic could not read
+/// would show as no achievements, or none unlocked, and stay so in the cache.
+#[test]
+fn an_answer_with_errors_is_an_error() {
+    let partial = json!({
+        "data": { "PlayerAchievement": { "playerAchievementGameRecordsBySandbox": null } },
+        "errors": [{ "message": "[FAKE] timed out" }]
+    });
+    assert!(matches!(data_of(partial), Err(Error::Parse { .. })));
+    let fine = json!({ "data": { "Achievement": {} } });
+    assert!(data_of(fine).is_ok());
+    assert!(data_of(json!({ "data": null })).is_err());
+}
+
 /// A game without achievements: none, and the account's progress is not asked for.
 #[tokio::test]
 async fn a_game_without_achievements_has_none() {
