@@ -67,7 +67,9 @@ plays it, `slatty uninstall epic-<app name>` uninstalls it.
 | `--restart` | Throws away an interrupted install of this game and starts over |
 | `--cancel` | Abandons an interrupted install: deletes what it downloaded and forgets it |
 
-Run the same command again to resume an interrupted install; Ctrl+C pauses it.
+Run the same command again to resume an interrupted install; Ctrl+C pauses it. In every command
+that downloads or checks files (install, update, verify, installers, Proton builds), a second
+Ctrl+C quits at once, still resumable: files are written aside, then moved into place.
 
 ## Offline installers
 

@@ -8,7 +8,6 @@ use slatty_core::account::Account;
 use slatty_core::installer::Progress;
 use slatty_core::maintenance::{self, Change};
 use slatty_core::settings;
-use tokio_util::sync::CancellationToken;
 
 use crate::{Ctx, shown};
 
@@ -71,13 +70,7 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
 }
 
 pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
-    let cancel = CancellationToken::new();
-    let on_ctrl_c = cancel.clone();
-    tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            on_ctrl_c.cancel();
-        }
-    });
+    let cancel = crate::cancelled_by_ctrl_c();
     let last = Mutex::new(None::<Instant>);
     let progress = |p: Progress| {
         let mut last = last.lock().unwrap();
@@ -285,13 +278,7 @@ async fn apply_change(
     game_id: &str,
     change: Change,
 ) -> Result<()> {
-    let cancel = CancellationToken::new();
-    let on_ctrl_c = cancel.clone();
-    tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            on_ctrl_c.cancel();
-        }
-    });
+    let cancel = crate::cancelled_by_ctrl_c();
     let last = Mutex::new(None::<Instant>);
     let progress = |p: Progress| {
         let mut last = last.lock().unwrap();

@@ -174,6 +174,23 @@ pub fn shown(s: impl std::fmt::Display) -> String {
         .collect()
 }
 
+/// A token the first Ctrl+C cancels, so that the work stops cleanly (an install pauses, its
+/// verified files kept). A second one quits at once, as the work may be waiting on a slow disk:
+/// files are written staged, then renamed, so nothing is left half written.
+pub fn cancelled_by_ctrl_c() -> tokio_util::sync::CancellationToken {
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let on_ctrl_c = cancel.clone();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            on_ctrl_c.cancel();
+            if tokio::signal::ctrl_c().await.is_ok() {
+                std::process::exit(130);
+            }
+        }
+    });
+    cancel
+}
+
 pub fn local_time(ts: i64) -> String {
     use chrono::TimeZone;
     chrono::Utc

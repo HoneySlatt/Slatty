@@ -10,7 +10,6 @@ use slatty_core::installer::{
     self, DlcChoice, DlcSelection, InstallEvent, InstallJob, InstallRequest,
 };
 use slatty_core::settings;
-use tokio_util::sync::CancellationToken;
 
 use crate::{Ctx, shown};
 
@@ -133,7 +132,7 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     let dlcs = args.dlc_selection();
     let (root, proton) = folders(ctx, args.dir, args.proton, platform)?;
 
-    let cancel = paused_by_ctrl_c();
+    let cancel = crate::cancelled_by_ctrl_c();
     let emit = print_events();
     let req = InstallRequest {
         game_id: args.game_id.clone(),
@@ -243,7 +242,7 @@ async fn install_epic(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         &tokens,
         req,
         print_events(),
-        paused_by_ctrl_c(),
+        crate::cancelled_by_ctrl_c(),
     )
     .await;
     match installed {
@@ -260,18 +259,6 @@ async fn install_epic(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         }
         Err(e) => Err(e.into()),
     }
-}
-
-/// A token Ctrl+C cancels: the install pauses, its verified files kept.
-fn paused_by_ctrl_c() -> CancellationToken {
-    let cancel = CancellationToken::new();
-    let on_ctrl_c = cancel.clone();
-    tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            on_ctrl_c.cancel();
-        }
-    });
-    cancel
 }
 
 /// Prints what an install does, its progress at most once a second.

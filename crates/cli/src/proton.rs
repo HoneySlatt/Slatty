@@ -5,7 +5,6 @@ use anyhow::Result;
 use clap::{Subcommand, ValueEnum};
 use slatty_core::protons::{self, Source, Stage};
 use slatty_core::settings;
-use tokio_util::sync::CancellationToken;
 
 use crate::Ctx;
 use crate::install::size;
@@ -118,9 +117,14 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
                 size(release.size)
             );
             let progress = printer();
-            let path =
-                protons::install(&ctx.http, &ctx.dirs, &release, progress, &stop_on_ctrl_c())
-                    .await?;
+            let path = protons::install(
+                &ctx.http,
+                &ctx.dirs,
+                &release,
+                progress,
+                &crate::cancelled_by_ctrl_c(),
+            )
+            .await?;
             sync_shared(ctx);
             println!("Installed in {}", path.display());
         }
@@ -158,7 +162,7 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
                 &ctx.dirs,
                 protons::API,
                 move |_, stage| print(stage),
-                &stop_on_ctrl_c(),
+                &crate::cancelled_by_ctrl_c(),
             )
             .await?;
             sync_shared(ctx);
@@ -190,18 +194,6 @@ pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
         }
     }
     Ok(())
-}
-
-/// A token Ctrl+C cancels.
-fn stop_on_ctrl_c() -> CancellationToken {
-    let cancel = CancellationToken::new();
-    let on_ctrl_c = cancel.clone();
-    tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            on_ctrl_c.cancel();
-        }
-    });
-    cancel
 }
 
 /// Prints where a download stands, at most once a second.
