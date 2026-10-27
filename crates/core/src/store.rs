@@ -169,8 +169,8 @@ mod tests {
         assert!(!from_no_store("1456487183") && !from_no_store("steam-440"));
     }
 
-    /// What installs, records or deletes a game's files accepts GOG's ids and those of games added
-    /// by hand, never a Steam game's; what asks GOG accepts GOG's alone.
+    /// What installs, records or deletes a game's files accepts GOG's and Epic's ids and those of
+    /// games added by hand, never a Steam game's; what asks GOG accepts GOG's alone.
     #[test]
     fn steam_games_never_enter_what_slatty_writes() {
         use crate::paths::{check_game_id, check_owned_id};
@@ -178,10 +178,7 @@ mod tests {
         assert!(check_owned_id("local-7").is_ok());
         assert!(check_owned_id("emu-3").is_ok());
         assert!(check_owned_id("steam-440").is_err());
-        assert!(
-            check_owned_id("epic-Fortnite").is_err(),
-            "not installed by Slatty yet"
-        );
+        assert!(check_owned_id("epic-Fortnite").is_ok());
         assert!(check_owned_id("local-../1").is_err());
         assert!(check_game_id("1456487183").is_ok());
         assert!(check_game_id("steam-440").is_err());

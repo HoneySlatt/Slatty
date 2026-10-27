@@ -59,6 +59,7 @@ Checked with the user's own Epic Games account.
 | Date | Feature | Result | Notes |
 |---|---|---|---|
 | 2026-10-27 | Sign-in, library and covers | OK | Checked by the user: signed in through the browser and the pasted page; the account's games listed with their covers, without add-ons. Session refresh not met yet |
+| 2026-10-27 | Install and uninstall from the window | OK | Checked by the user: a game's Windows build planned, downloaded from Epic's CDN and verified, paused and resumed, then uninstalled from Manage. Which manifest version it had, and whether it was encrypted, was not recorded |
 
 ## Runners
 
@@ -140,6 +141,8 @@ and details were not recorded.
 **Epic Games**
 
 - The session refreshed once its access token expired.
+- An encrypted Epic build, and one whose manifest is of feature level 22 or more (its chunks under
+  `ChunksV5`): which kind the game installed was is not known.
 
 **Systems**
 

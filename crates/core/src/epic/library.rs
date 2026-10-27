@@ -86,6 +86,15 @@ pub struct CatalogItem {
     pub categories: Vec<Category>,
     #[serde(default)]
     pub release_info: Vec<ReleaseInfo>,
+    /// Among others `FolderName`, the folder the game installs into, and `CanRunOffline`.
+    #[serde(default)]
+    pub custom_attributes: HashMap<String, CustomAttribute>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CustomAttribute {
+    #[serde(default)]
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -127,7 +136,7 @@ pub struct Epic<'a> {
 }
 
 impl Epic<'_> {
-    fn get(&self, url: &str) -> reqwest::RequestBuilder {
+    pub(crate) fn get(&self, url: &str) -> reqwest::RequestBuilder {
         self.http
             .get(url)
             .bearer_auth(self.token.expose())
@@ -163,7 +172,7 @@ impl Source for Epic<'_> {
 }
 
 /// A token Epic no longer accepts is a session to sign in to again.
-fn session_checked<T>(result: Result<T>) -> Result<T> {
+pub(crate) fn session_checked<T>(result: Result<T>) -> Result<T> {
     match result {
         Err(Error::Http { status: 401, .. }) => Err(Error::EpicSessionRejected),
         other => other,

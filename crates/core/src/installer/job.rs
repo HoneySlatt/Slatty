@@ -99,7 +99,7 @@ impl InstallJob {
     }
 
     pub fn save(&self, db: &Db) -> Result<()> {
-        crate::paths::check_game_id(&self.game_id)?;
+        crate::paths::check_owned_id(&self.game_id)?;
         db.conn().execute(
             "INSERT INTO install_jobs (game_id, build_id, language, root, directory, state, updated_at, dlcs, proton)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)

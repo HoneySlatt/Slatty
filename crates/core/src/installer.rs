@@ -281,7 +281,7 @@ pub async fn install(
 
 /// Forgets an interrupted install to start it again. Its partial folder must go first: left in
 /// part, a new install going into the same folder would take its files for its own.
-fn restart(db: &Db, job: &InstallJob) -> Result<()> {
+pub(crate) fn restart(db: &Db, job: &InstallJob) -> Result<()> {
     let partial = partial_dir(&job.root, &job.directory);
     match std::fs::remove_dir_all(&partial) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
@@ -297,7 +297,7 @@ fn restart(db: &Db, job: &InstallJob) -> Result<()> {
 /// installer's, and none of it would be recorded: it starts again, as a discarded one would. The
 /// build it started with is the one its mark names, else, for a mark without one, `job_build`,
 /// that of the job resumed.
-fn drop_replaced(
+pub(crate) fn drop_replaced(
     partial: &Path,
     game_id: &str,
     job_build: Option<&str>,
@@ -315,7 +315,12 @@ fn drop_replaced(
 /// The partial folder of a resumed install is gone and the game folder it became exists: the
 /// download finished and was renamed into place, but the game was not registered yet. A folder
 /// already there that Slatty did not publish for this game is never taken for it.
-fn published_unregistered(resumed: bool, partial: &Path, target: &Path, game_id: &str) -> bool {
+pub(crate) fn published_unregistered(
+    resumed: bool,
+    partial: &Path,
+    target: &Path,
+    game_id: &str,
+) -> bool {
     resumed && !partial.exists() && staged_here(target, game_id)
 }
 
@@ -329,7 +334,7 @@ fn held_on_start(job: Option<&InstallJob>, plan: &InstallPlan) -> Option<bool> {
 /// The state a download that stopped on `e` is left in: paused when asked; cut off, to resume by
 /// itself, when GOG could not be reached for now; failed otherwise (a full disk, a refusal), for
 /// it would fail the same way again.
-fn state_after(e: &Error) -> &'static str {
+pub(crate) fn state_after(e: &Error) -> &'static str {
     match e {
         Error::Cancelled => PAUSED,
         e if e.is_temporary() => DOWNLOADING,

@@ -213,6 +213,7 @@ pub fn uninstall(
     crate::settings::set_held_back(db, game_id, false)?;
     let _ = std::fs::remove_file(InstallRecord::file(dirs, game_id));
     let _ = std::fs::remove_dir_all(installer::support_dir(dirs, game_id));
+    crate::epic::install::EpicInstall::remove(dirs, game_id);
     crate::logs::remove_game(dirs, game_id)?;
     Ok(report)
 }
@@ -234,6 +235,7 @@ pub fn forget(db: &Db, dirs: &Dirs, game_id: &str) -> Result<Install> {
     InstallJob::delete(db, game_id)?;
     let _ = std::fs::remove_file(InstallRecord::file(dirs, game_id));
     let _ = std::fs::remove_dir_all(installer::support_dir(dirs, game_id));
+    crate::epic::install::EpicInstall::remove(dirs, game_id);
     Ok(install)
 }
 
@@ -395,8 +397,10 @@ pub fn auto_update_candidates(db: &Db, dirs: &Dirs) -> Result<Vec<String>> {
     }
     let mut ids = Vec::new();
     for install in Install::list(db)? {
-        // A record that cannot be read leaves that game out; its update would fail anyway.
+        // A record that cannot be read leaves that game out; its update would fail anyway. An
+        // Epic game's new builds are not looked for yet.
         if matches!(InstallRecord::load(dirs, &install.game_id), Ok(Some(_)))
+            && crate::store::epic_app(&install.game_id).is_none()
             && !crate::settings::held_back(db, &install.game_id)?
         {
             ids.push(install.game_id);
@@ -1176,6 +1180,18 @@ mod tests {
         .save(&env.db)
         .unwrap();
         std::fs::write(InstallRecord::file(&env.dirs, "3"), b"{").unwrap();
+        // GOG is never asked about an Epic game.
+        Install {
+            game_id: "epic-Fake".into(),
+            ..Install::get(&env.db, "1").unwrap().unwrap()
+        }
+        .save(&env.db)
+        .unwrap();
+        InstallRecord::load(&env.dirs, "1")
+            .unwrap()
+            .unwrap()
+            .save(&env.dirs, "epic-Fake")
+            .unwrap();
         assert_eq!(auto_update_candidates(&env.db, &env.dirs).unwrap(), ["1"]);
         crate::settings::set_held_back(&env.db, "1", true).unwrap();
         assert!(

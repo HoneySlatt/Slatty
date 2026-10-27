@@ -4345,6 +4345,7 @@ dependencies = [
 name = "slatty-core"
 version = "0.1.0"
 dependencies = [
+ "aws-lc-rs",
  "chrono",
  "directories",
  "flate2",

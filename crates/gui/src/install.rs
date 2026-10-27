@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use iced::Task;
 use iced::futures::Stream;
 use slatty_core::account::Account;
+use slatty_core::epic::library::EpicGame;
 use slatty_core::install::{Install, Platform};
 use slatty_core::installer::{
     self, DlcChoice, DlcSelection, InstallEvent, InstallJob, InstallRequest, Progress,
@@ -356,7 +357,11 @@ impl App {
                 {
                     self.panel = None;
                 }
-                return Task::batch([Task::run(install_stream(core, req, cancel), |m| m), started]);
+                let epic = self.epic_game(&game_id);
+                return Task::batch([
+                    Task::run(install_stream(core, req, epic, cancel), |m| m),
+                    started,
+                ]);
             }
             InstallMsg::Progress(game_id, p) => {
                 if let Some(InstallView::Running { progress, rate, .. }) =
@@ -624,6 +629,7 @@ impl App {
             platforms,
             root,
             proton,
+            epic: self.epic_game(&game_id),
         };
         Task::perform(plan(core, id, choice), move |r| {
             Message::Install(match r {
@@ -660,6 +666,8 @@ struct Choice {
     platforms: Vec<Platform>,
     root: PathBuf,
     proton: Option<PathBuf>,
+    /// For an Epic game, the game as the account's library describes it.
+    epic: Option<EpicGame>,
 }
 
 /// A build of a game, named for a pick list: its version, date and branch.
@@ -717,6 +725,9 @@ impl From<slatty_core::Error> for Failure {
 }
 
 async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, Failure> {
+    if slatty_core::store::epic_app(&game_id).is_some() {
+        return epic_plan(core, game_id, choice).await;
+    }
     let mut account = Account::load(&core.db, &core.dirs).await?;
     let tokens = account.tokens(&core.http).await?.clone();
     let job = InstallJob::load(&core.db, &game_id)?;
@@ -789,9 +800,58 @@ async fn plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, F
     })
 }
 
+/// An Epic game's plan: the newest Windows build Epic offers, every file of it.
+async fn epic_plan(core: Core, game_id: String, choice: Choice) -> Result<PlanInfo, Failure> {
+    let game = choice.epic.ok_or_else(|| not_in_epic_library(&game_id))?;
+    let tokens = slatty_core::epic::auth::fresh(&core.http, &core.db, &core.dirs).await?;
+    let job = InstallJob::load(&core.db, &game_id)?;
+    // An interrupted install resumes into its own folder.
+    let root = job.as_ref().map_or(choice.root, |j| j.root.clone());
+    let plan = slatty_core::epic::install::plan(&core.http, &tokens, &game).await?;
+    let free = free_space(root.display().to_string()).await;
+    let build_id = plan.build_id();
+    Ok(PlanInfo {
+        title: plan.title.clone(),
+        platform: Platform::Windows,
+        platforms: vec![Platform::Windows],
+        versions: vec![Version {
+            build_id: build_id.clone(),
+            label: format!("{} (latest)", plan.build.build_version),
+        }],
+        version: plan.build.build_version.clone(),
+        build_id,
+        newest: true,
+        // Every file is installed, language packs included.
+        language: "*".into(),
+        languages: Vec::new(),
+        download_size: plan.download_size,
+        disk_size: plan.disk_size,
+        root: root.display().to_string(),
+        directory: job
+            .as_ref()
+            .map_or_else(|| plan.folder.clone(), |j| j.directory.clone()),
+        dependencies: Vec::new(),
+        resumable: job.is_some(),
+        dlcs: Vec::new(),
+        proton: job
+            .as_ref()
+            .and_then(|j| j.proton.clone())
+            .or(choice.proton),
+        free,
+    })
+}
+
+fn not_in_epic_library(game_id: &str) -> Failure {
+    Failure(
+        format!("{game_id} is not in the Epic library as last read: sign in to Epic Games again"),
+        false,
+    )
+}
+
 fn install_stream(
     core: Core,
     req: InstallRequest,
+    epic: Option<EpicGame>,
     cancel: CancellationToken,
 ) -> impl Stream<Item = Message> {
     let game_id = req.game_id.clone();
@@ -799,13 +859,30 @@ fn install_stream(
     progress_stream(
         async move |throttle| {
             let result = async {
-                let mut account = Account::load(&core.db, &core.dirs).await?;
-                let tokens = account.tokens(&core.http).await?.clone();
                 let emit = move |e| {
                     if let InstallEvent::Progress(p) = e {
                         throttle.report(p);
                     }
                 };
+                if slatty_core::store::epic_app(&req.game_id).is_some() {
+                    use slatty_core::epic;
+                    let game = epic.ok_or_else(|| {
+                        slatty_core::Error::NotFound(not_in_epic_library(&req.game_id).0)
+                    })?;
+                    let tokens = epic::auth::fresh(&core.http, &core.db, &core.dirs).await?;
+                    let req = epic::install::EpicInstallRequest {
+                        game,
+                        root: req.root,
+                        proton: req.proton,
+                        restart: false,
+                    };
+                    return epic::install::install(
+                        &core.db, &core.dirs, &core.http, &tokens, req, emit, cancel,
+                    )
+                    .await;
+                }
+                let mut account = Account::load(&core.db, &core.dirs).await?;
+                let tokens = account.tokens(&core.http).await?.clone();
                 installer::install(&core.db, &core.dirs, &core.http, &tokens, req, emit, cancel)
                     .await
             }

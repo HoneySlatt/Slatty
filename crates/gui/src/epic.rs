@@ -1,6 +1,7 @@
 //! Epic Games Store games in the library, beside GOG's: the account signed in from Settings →
-//! Epic Games, its library read from Epic's services at start and on demand, kept in a cache.
-//! They cannot be installed or played from Slatty yet.
+//! Account, its library read from Epic's services at start and on demand, kept in a cache. They
+//! install through the same drawer and queue as GOG's (`install`); they cannot be played from
+//! Slatty yet.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -203,6 +204,12 @@ impl App {
                     )
                 }),
         )
+    }
+
+    /// The Epic game of that id, as the account's library describes it.
+    pub fn epic_game(&self, game_id: &str) -> Option<EpicGame> {
+        let app = store::epic_app(game_id)?;
+        self.epic.games.iter().find(|g| g.app_name == app).cloned()
     }
 
     /// The Epic games the library shows.

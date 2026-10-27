@@ -92,20 +92,82 @@ fn a_library_read_for_another_account_is_dropped() {
     assert!(epic_ids(&app).is_empty());
 }
 
-/// An Epic game's page offers no install, and asks GOG nothing about it: neither whether it can
-/// be installed nor its achievements.
+/// An Epic game's page offers Install, which opens the same drawer as a GOG game's; once planned,
+/// it downloads as any other. GOG is asked nothing about it: neither whether it can be installed
+/// nor its achievements.
 #[test]
-fn an_epic_game_is_not_installable_yet() {
+fn an_epic_game_installs_through_the_install_drawer() {
+    use crate::install::{InstallMsg, InstallView};
     let mut app = epic_app();
     let _ = app.update(Message::Select("epic-Alpha".into()));
     assert!(!app.achievements.contains_key("epic-Alpha"));
-    let mut ui = render(&app);
-    assert!(ui.find("[FAKE] Alpha").is_ok());
-    assert!(ui.click("Not installable yet").is_ok());
-    assert!(
-        ui.into_messages().next().is_none(),
-        "nothing to press while it cannot be installed"
+    assert!(!app.installability.contains_key("epic-Alpha"));
+    {
+        let mut ui = render(&app);
+        assert!(ui.click("Install").is_ok());
+        assert!(
+            ui.into_messages()
+                .any(|m| matches!(m, Message::OpenPanel(Panel::Install)))
+        );
+    }
+    assert_eq!(
+        app.epic_game("epic-Alpha").map(|g| g.app_name),
+        Some("Alpha".into()),
+        "the plan and the download are given the game as Epic describes it"
     );
+    let plan = crate::install::PlanInfo {
+        title: "[FAKE] Alpha".into(),
+        language: "*".into(),
+        languages: Vec::new(),
+        dlcs: Vec::new(),
+        dependencies: Vec::new(),
+        ..fake_plan()
+    };
+    let _ = app.update(Message::Install(InstallMsg::Planned(
+        "epic-Alpha".into(),
+        Ok(plan),
+    )));
+    open(&mut app, "epic-Alpha", Some(Panel::Install));
+    assert!(
+        render(&app)
+            .find("Windows (the only build Epic offers)")
+            .is_ok()
+    );
+    let _ = app.update(Message::Install(InstallMsg::Start("epic-Alpha".into())));
+    assert!(matches!(
+        app.install_views.get("epic-Alpha"),
+        Some(InstallView::Running { .. })
+    ));
+}
+
+/// An installed Epic game is uninstalled from Manage, which offers nothing else for it yet.
+#[test]
+fn an_installed_epic_game_is_uninstalled_from_manage() {
+    let mut app = epic_app();
+    app.installs.insert("epic-Alpha".into(), epic_install());
+    open(&mut app, "epic-Alpha", Some(Panel::Manage));
+    let mut ui = render(&app);
+    assert!(ui.find("Uninstall…").is_ok());
+    assert!(ui.find("Verify files").is_err());
+    assert!(ui.find("Check for update").is_err());
+}
+
+fn epic_install() -> slatty_core::install::Install {
+    use slatty_core::install::{Install, Platform};
+    use slatty_core::runner::Runner;
+    Install {
+        umu_id: None,
+        game_id: "epic-Alpha".into(),
+        title: "[FAKE] Alpha".into(),
+        platform: Platform::Windows,
+        path: "/games/Alpha".into(),
+        client_id: None,
+        runner: Runner::Umu {
+            proton: "/proton/[FAKE]".into(),
+            prefix: "/prefixes/epic-Alpha".into(),
+        },
+        isolated: true,
+    }
 }
 
 /// Signed out, Settings → Epic Games offers to sign in; signed in, it names the account, its
@@ -129,4 +191,20 @@ fn settings_sign_in_to_epic_and_out() {
     assert!(ui.find("[FAKE] Player").is_ok());
     assert!(ui.find("2 games · Last read 09/10/2026 00:53").is_ok());
     assert!(ui.find("Sign out").is_ok());
+}
+
+/// An installed Epic game shows as installed, and offers no Play until the window can play it.
+#[test]
+fn an_installed_epic_game_is_not_played_yet() {
+    let mut app = epic_app();
+    app.installs.insert("epic-Alpha".into(), epic_install());
+    assert!(app.is_installed("epic-Alpha"));
+    assert!(
+        !app.may_sync_cloud("epic-Alpha"),
+        "GOG keeps no saves of it"
+    );
+    let _ = app.update(Message::Select("epic-Alpha".into()));
+    let mut ui = render(&app);
+    assert!(ui.click("Installed").is_ok());
+    assert!(ui.into_messages().next().is_none(), "nothing to press yet");
 }

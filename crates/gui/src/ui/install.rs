@@ -289,7 +289,12 @@ impl App {
                 "{chosen} (an interrupted install keeps its platform)"
             ))
         } else if info.platforms.len() <= 1 {
-            note(format!("{chosen} (the only build GOG offers)"))
+            let store = if slatty_core::store::epic_app(&g.id).is_some() {
+                "Epic"
+            } else {
+                "GOG"
+            };
+            note(format!("{chosen} (the only build {store} offers)"))
         } else {
             let id = g.id.clone();
             pick_list(

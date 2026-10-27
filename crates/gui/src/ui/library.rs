@@ -337,9 +337,9 @@ impl App {
                 .padding([8, 14])
                 .on_press_maybe(action.map(|a| Message::Steam(SteamMsg::Ask(g.id.clone(), a))))
                 .style(theme::primary)
-        } else if slatty_core::store::epic_app(&g.id).is_some() {
-            // Not installable from Slatty yet.
-            button(icon(Icon::Download, 16.0, tokens().on_accent))
+        } else if slatty_core::store::epic_app(&g.id).is_some() && installed {
+            // Not played from the window yet.
+            button(icon(Icon::Play, 16.0, tokens().on_accent))
                 .padding([8, 14])
                 .style(theme::primary)
         } else if installed {

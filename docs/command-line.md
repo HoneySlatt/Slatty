@@ -44,15 +44,20 @@ the interface; the command line only lists them.
 | `slatty installs` | Installed games, and installs that were interrupted |
 | `slatty installs --json` | For other programs: the games the Installed shelf shows, hidden ones left out, as a JSON list of `id`, `title`, `cover` (the file of the cover the library shows, `null` until it is downloaded) and `steam_app` (for a game only Steam installed, to start through Steam; any other starts with `slatty launch <id>`). Reads local files only |
 
-## Installing GOG games
+## Installing games
 
 ```sh
 slatty install <id> [options]
 ```
 
+`<id>` is a GOG game's, or an Epic game's (`epic-<app name>`, as `slatty epic list` shows it). An
+Epic game installs the newest Windows build Epic offers, every file of it: `--language`,
+`--platform linux`, `--dlc` and `--no-dlc` do not apply to it, and it cannot be played from Slatty
+yet. `slatty uninstall epic-<app name>` uninstalls it.
+
 | Option | Effect |
 |---|---|
-| `--info` | Shows the version, sizes, languages, DLC and redistributables, and downloads nothing |
+| `--info` | Shows the version, sizes, languages, DLC and redistributables (for an Epic game: its build, sizes, folder, the program it starts and its prerequisite), and downloads nothing |
 | `--platform windows\|linux` | Which build to install. Default: the setting, Windows until changed |
 | `--dir <folder>` | The folder that receives the game's folder. Remembered as the default |
 | `--proton <folder>` | The Proton build a Windows game runs with. Remembered as the default. Without one, the command lists the builds it found |
@@ -196,7 +201,8 @@ them out of the library without touching their files; a scan does not add them a
 | `slatty epic list` | Reads the account's games again from Epic and lists them with their ids. `--offline` lists them from the cache |
 | `slatty epic logout` | Deletes the Epic session from the keyring. The library cache stays |
 
-Epic games cannot be installed or played from Slatty yet.
+`slatty install epic-<app name>` installs an Epic game (see [Installing games](#installing-games));
+it cannot be played from Slatty yet.
 
 ## Diagnostics
 

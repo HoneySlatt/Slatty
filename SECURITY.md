@@ -112,6 +112,8 @@ No telemetry, no crash reports, no usage statistics.
 | SteamGridDB: `www.steamgriddb.com` and its image servers | The name you search, and your SteamGridDB API key in a header | When you search in Edit game | SteamGridDB, Settings → Advanced (off) |
 | Valve, `api.steampowered.com` (Steam's Web API) | Your Steam Web API key and Steam id, in the address as the API takes them; the app ids whose achievements are asked for (how common they are is asked without the key) | As Steam's games load, and when a Steam game's achievements show while the client keeps none | Steam Web API, Settings → Steam (off) |
 | Epic Games: `www.epicgames.com` (sign-in, in your browser), `account-public-service-prod03.ol.epicgames.com`, `library-service.live.use1a.on.epicgames.com`, `catalog-public-service-prod06.ol.epicgames.com` | Sign-in and your library: the items you own, then the catalog's description of each new one, with your Epic token | When you sign in, at start and on **Read again** | Signing in to Epic Games, Settings → Account (signed out) |
+| Epic Games, `launcher-public-service-prod06.ol.epicgames.com` | Which game's newest build is asked for, with your Epic token | When an Epic game is installed (`slatty install epic-…`) | — |
+| Epic's download servers, as its launcher service names them (such as `epicgames-download1.akamaized.net`, `download.epicgames.com`, `fastly-download.epicgames.com`) | The build's manifest and chunks, without any account | While an Epic game is installed | — |
 | Epic's image servers, as the catalog names them (such as `cdn1.epicgames.com`) | The covers asked for, without any account | When an Epic game's cover is not in the cache yet | Signing in to Epic Games (signed out) |
 | Valve, `shared.steamstatic.com` (Steam's image servers) | The app ids of the images asked for, without any account | When a Steam game's cover, background or logo is missing from the client's image cache, and for achievement icons; an image is kept once downloaded | Images from Steam, Settings → Steam (off) |
 
@@ -126,9 +128,9 @@ No telemetry, no crash reports, no usage statistics.
 Every request names Slatty and its version in its `User-Agent`, except those to GOG's
 cloud storage, which send Galaxy's, as heroic-gogdl does, and those to Epic's services, which send
 the Epic Games Launcher's, as legendary does. Your Epic token goes only to the Epic addresses
-above, never to an address an answer names; GOG is never told of an Epic game. Desktop notifications (Settings →
-Notifications, on) go to your desktop's notification service, not to the network, but they can
-show game titles and achievement names on a lock screen.
+above, never to an address an answer names (download servers included); GOG is never told of an
+Epic game. Desktop notifications (Settings → Notifications, on) go to your desktop's notification
+service, not to the network, but they can show game titles and achievement names on a lock screen.
 
 ## Your files
 
@@ -148,11 +150,16 @@ show game titles and achievement names on a lock screen.
 
 ## Downloads and what they write
 
-- **Paths.** Every path from GOG's manifests, installers and cloud listings is checked: none may
-  leave the game or save folder. No file is written through a symbolic link that leads out of the
+- **Paths.** Every path from GOG's and Epic's manifests, installers and cloud listings is checked:
+  none may leave the game or save folder. No file is written through a symbolic link that leads out of the
   game folder, and an update or uninstall that would delete through one deletes nothing. Temporary
   files get names never used before and never follow a link already there. These checks do not
   guard against another program changing the folders at the same moment.
+- **Epic builds.** An Epic game's manifest is checked against the SHA-1 Epic's launcher service
+  gives, over a request made with your token, before it is read, and every count and size in it is
+  bounded before anything is allocated. Each file is checked against the manifest's SHA-1 before it
+  takes its name, and the game folder appears only once every file is. Its downloads go over HTTPS,
+  where the Epic Games Launcher uses plain HTTP.
 - **Cloud saves.** Nothing is written or deleted through a link below a save folder. For an
   isolated game, a save folder reached through a link out of its prefix or game folder is refused.
   For a game that is not isolated, the save folder is reached as Wine sees it, links included,

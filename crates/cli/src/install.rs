@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::Args;
 use slatty_core::account::Account;
 use slatty_core::install::Platform;
@@ -16,7 +16,8 @@ use crate::{Ctx, shown};
 
 #[derive(Args)]
 pub struct InstallArgs {
-    /// GOG product id (see `slatty library list`)
+    /// GOG product id, or `epic-<app name>` for an Epic game (see `slatty library list`, `slatty
+    /// epic list`)
     game_id: String,
     /// Language code offered by the build, e.g. fr-FR (defaults to English)
     #[arg(long)]
@@ -77,6 +78,9 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
         }
         return Ok(());
     }
+    if slatty_core::store::epic_app(&args.game_id).is_some() {
+        return install_epic(ctx, args).await;
+    }
     let mut account = Account::load(&ctx.db, &ctx.dirs).await?;
     let tokens = account.tokens(&ctx.http).await?.clone();
     let platform = match args.platform {
@@ -127,41 +131,135 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     }
 
     let dlcs = args.dlc_selection();
-    let root = match args.dir {
-        Some(d) => {
-            let d = std::path::absolute(&d)?;
-            settings::set_library_root(&ctx.db, &d)?;
-            d
-        }
-        None => settings::library_root(&ctx.db)?,
-    };
-    let proton = if platform == Platform::Linux {
-        PathBuf::new()
-    } else {
-        let proton = match args.proton {
-            Some(p) => {
-                let p = std::path::absolute(&p)?;
-                settings::set_default_proton(&ctx.db, &p)?;
-                p
-            }
-            None => match settings::default_proton(&ctx.db)? {
-                Some(p) => p,
-                None => bail!(
-                    "choose a Proton build once with --proton <dir containing `proton`>, e.g. one of:\n{}",
-                    settings::proton_candidates(&ctx.dirs)
-                        .iter()
-                        .map(|p| format!("  {}", p.display()))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                ),
-            },
-        };
-        if !proton.join("proton").is_file() {
-            bail!("{} does not contain a `proton` script", proton.display());
-        }
-        proton
-    };
+    let (root, proton) = folders(ctx, args.dir, args.proton, platform)?;
 
+    let cancel = paused_by_ctrl_c();
+    let emit = print_events();
+    let req = InstallRequest {
+        game_id: args.game_id.clone(),
+        dlcs,
+        language: args.language,
+        build: None,
+        platform,
+        root,
+        proton,
+        restart: args.restart,
+    };
+    match installer::install(
+        &ctx.db,
+        &ctx.dirs,
+        &ctx.http,
+        &tokens,
+        req,
+        emit,
+        cancel.clone(),
+    )
+    .await
+    {
+        Ok(install) => {
+            println!("Ready: `slatty launch {}`", install.game_id);
+            Ok(())
+        }
+        Err(slatty_core::Error::Cancelled) => {
+            println!(
+                "Paused. Verified files are kept; run `slatty install {}` to resume.",
+                args.game_id
+            );
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Installs the Windows build of an Epic game of the account's library, as last read (`slatty
+/// epic list`).
+async fn install_epic(ctx: &Ctx, args: InstallArgs) -> Result<()> {
+    use slatty_core::epic;
+    if args.language.is_some()
+        || args.no_dlc
+        || !args.dlc.is_empty()
+        || matches!(args.platform, Some(PlatformArg::Linux))
+    {
+        bail!(
+            "an Epic game installs its Windows build alone: --language, --platform linux, --dlc \
+             and --no-dlc do not apply"
+        );
+    }
+    let app = slatty_core::store::epic_app(&args.game_id).expect("checked by the caller");
+    let account = settings::epic_account(&ctx.db)?
+        .context("not signed in to Epic Games: run `slatty epic login`")?;
+    let game = epic::library::load_cache(&ctx.dirs, &account)?
+        .and_then(|l| l.games.into_iter().find(|g| g.app_name == app))
+        .with_context(|| {
+            format!(
+                "{} is not in your Epic library as last read: run `slatty epic list`",
+                args.game_id
+            )
+        })?;
+    let tokens = epic::auth::fresh(&ctx.http, &ctx.db, &ctx.dirs).await?;
+    if args.info {
+        let plan = epic::install::plan(&ctx.http, &tokens, &game).await?;
+        println!(
+            "{} — build {}",
+            shown(&plan.title),
+            shown(&plan.build.build_version)
+        );
+        println!(
+            "Download: {}, on disk: {}",
+            size(plan.download_size),
+            size(plan.disk_size)
+        );
+        println!("Folder name: {}", shown(&plan.folder));
+        println!("Files: {}", plan.files.files.len());
+        println!(
+            "Starts: {} {}",
+            shown(&plan.manifest.launch_exe),
+            shown(&plan.manifest.launch_command)
+        );
+        if let Some(p) = &plan.manifest.prerequisites {
+            println!(
+                "Prerequisite, not installed: {} ({})",
+                shown(&p.name),
+                shown(&p.path)
+            );
+        }
+        return Ok(());
+    }
+    let (root, proton) = folders(ctx, args.dir, args.proton, Platform::Windows)?;
+    let req = epic::install::EpicInstallRequest {
+        game,
+        root,
+        proton,
+        restart: args.restart,
+    };
+    let installed = epic::install::install(
+        &ctx.db,
+        &ctx.dirs,
+        &ctx.http,
+        &tokens,
+        req,
+        print_events(),
+        paused_by_ctrl_c(),
+    )
+    .await;
+    match installed {
+        Ok(_) => {
+            println!("Installed. Playing Epic games from Slatty comes in a later version.");
+            Ok(())
+        }
+        Err(slatty_core::Error::Cancelled) => {
+            println!(
+                "Paused. Verified files are kept; run `slatty install {}` to resume.",
+                args.game_id
+            );
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// A token Ctrl+C cancels: the install pauses, its verified files kept.
+fn paused_by_ctrl_c() -> CancellationToken {
     let cancel = CancellationToken::new();
     let on_ctrl_c = cancel.clone();
     tokio::spawn(async move {
@@ -169,8 +267,13 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             on_ctrl_c.cancel();
         }
     });
+    cancel
+}
+
+/// Prints what an install does, its progress at most once a second.
+fn print_events() -> impl Fn(InstallEvent) + Send + Sync {
     let last = Mutex::new(None::<Instant>);
-    let emit = |e: InstallEvent| match e {
+    move |e: InstallEvent| match e {
         InstallEvent::Planned {
             title,
             version,
@@ -181,8 +284,14 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             resumed,
             ..
         } => {
+            // An Epic build has no language of its own.
+            let language = if language.is_empty() {
+                String::new()
+            } else {
+                format!(" ({language})")
+            };
             println!(
-                "{} {title} {version} ({language}) into {}\nDownload {}, on disk {}. Ctrl+C pauses; run the same command to resume.",
+                "{} {title} {version}{language} into {}\nDownload {}, on disk {}. Ctrl+C pauses; run the same command to resume.",
                 if resumed { "Resuming" } else { "Installing" },
                 target.display(),
                 size(download_size),
@@ -227,41 +336,53 @@ pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
                 );
             }
         }
-    };
-    let req = InstallRequest {
-        game_id: args.game_id.clone(),
-        dlcs,
-        language: args.language,
-        build: None,
-        platform,
-        root,
-        proton,
-        restart: args.restart,
-    };
-    match installer::install(
-        &ctx.db,
-        &ctx.dirs,
-        &ctx.http,
-        &tokens,
-        req,
-        emit,
-        cancel.clone(),
-    )
-    .await
-    {
-        Ok(install) => {
-            println!("Ready: `slatty launch {}`", install.game_id);
-            Ok(())
-        }
-        Err(slatty_core::Error::Cancelled) => {
-            println!(
-                "Paused. Verified files are kept; run `slatty install {}` to resume.",
-                args.game_id
-            );
-            Ok(())
-        }
-        Err(e) => Err(e.into()),
     }
+}
+
+/// The folder the game's folder goes into and the Proton build it runs with, remembered as the
+/// defaults when given.
+fn folders(
+    ctx: &Ctx,
+    dir: Option<PathBuf>,
+    proton: Option<PathBuf>,
+    platform: Platform,
+) -> Result<(PathBuf, PathBuf)> {
+    let root = match dir {
+        Some(d) => {
+            let d = std::path::absolute(&d)?;
+            settings::set_library_root(&ctx.db, &d)?;
+            d
+        }
+        None => settings::library_root(&ctx.db)?,
+    };
+    let proton = if platform == Platform::Linux {
+        PathBuf::new()
+    } else {
+        let proton = match proton {
+            Some(p) => {
+                let p = std::path::absolute(&p)?;
+                settings::set_default_proton(&ctx.db, &p)?;
+                p
+            }
+            None => match settings::default_proton(&ctx.db)? {
+                Some(p) => p,
+                None => bail!(
+                    "choose a Proton build once with --proton <dir containing `proton`>, e.g. one of:\n{}",
+                    settings::proton_candidates(&ctx.dirs)
+                        .iter()
+                        .map(|p| format!("  {}", p.display()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ),
+            },
+        };
+        if !proton.join("proton").is_file() {
+            bail!("{} does not contain a `proton` script", proton.display());
+        }
+        proton
+    };
+
+    Ok((root, proton))
 }
 
 pub fn list_jobs(ctx: &Ctx) -> Result<()> {

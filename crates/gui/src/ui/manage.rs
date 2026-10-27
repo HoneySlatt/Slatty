@@ -39,6 +39,17 @@ impl App {
         if !self.installs.contains_key(&g.id) {
             return self.offline_section(g);
         }
+        // Neither verified nor updated from Epic yet.
+        if slatty_core::store::epic_app(&g.id).is_some() {
+            let mut sections = vec![note(
+                "Verifying, repairing and updating Epic games come in a later version.",
+            )];
+            if let Some(v) = view.filter(|v| !v.lines.is_empty()) {
+                sections.extend(v.lines.iter().map(|l| note(l.as_str())));
+            }
+            sections.push(self.uninstall_section(g));
+            return stacked(sections);
+        }
         let on = |msg| (!busy).then(|| Message::Maintenance(msg));
         let files = column![
             row![
@@ -90,6 +101,16 @@ impl App {
             );
         }
         sections.push(self.offline_section(g));
+        sections.push(self.uninstall_section(g));
+        stacked(sections)
+    }
+
+    /// Uninstall, asked for twice: whether the prefix goes too.
+    fn uninstall_section<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let view = self.maintenance.get(&g.id);
+        let busy = self.maintenance_busy(&g.id);
+        let id = || g.id.clone();
+        let on = |msg| (!busy).then(|| Message::Maintenance(msg));
         let uninstall = if view.is_some_and(|v| v.confirm_uninstall && !v.busy) {
             column![
                 note(
@@ -122,13 +143,7 @@ impl App {
                 note("Only files Slatty installed are deleted."),
             ]
         };
-        sections.push(titled(
-            Icon::Trash,
-            "Uninstall",
-            uninstall.spacing(10).into(),
-            0.0,
-        ));
-        stacked(sections)
+        titled(Icon::Trash, "Uninstall", uninstall.spacing(10).into(), 0.0)
     }
 
     /// GOG's offline installers, opened in their own drawer, and where their download stands.

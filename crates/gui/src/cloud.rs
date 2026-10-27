@@ -80,6 +80,7 @@ impl App {
     /// of its own games alone.
     pub fn may_sync_cloud(&self, game_id: &str) -> bool {
         !slatty_core::store::from_no_store(game_id)
+            && slatty_core::store::epic_app(game_id).is_none()
             && self
                 .installs
                 .get(game_id)

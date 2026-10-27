@@ -75,8 +75,8 @@ hardware is recorded in [docs/compatibility.md](docs/compatibility.md): sign-in,
 and Linux installs, updates, DLC and languages, pausing and resuming, playing isolated, cloud
 saves both ways and their deletions, achievements earned in game, verify, repair and uninstall,
 offline installers, the download queue, Proton builds kept up to date, games added by hand,
-Steam's client and Web API, Epic sign-in and library, controller compatibility, and the couch mode
-with a real gamepad.
+Steam's client and Web API, Epic sign-in, library and installs, controller compatibility, and the
+couch mode with a real gamepad.
 Not checked yet: a redistributable asking for a restart, the account shown online to GOG friends,
 an offline installer whose checksums GOG does not keep, Ubuntu with AppArmor, Steam as a Flatpak,
 and the couch mode on a Steam Deck or on a television.

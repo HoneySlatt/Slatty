@@ -50,7 +50,7 @@ become the session supervisor (see [Game sessions](#game-sessions)).
 | `steamgriddb` | SteamGridDB search, grids and heroes, once turned on |
 | `store` | Which store a game id belongs to: GOG's product id, `steam-<app id>`, `epic-<app name>`, `local-<number>`, `emu-<number>` |
 | `steam` | Steam's games, read from the client's files: `local`, `appinfo`, `vdf`, `stats`, `running`, `library`, `client`, `web` (see [Steam games](#steam-games)) |
-| `epic` | The Epic Games Store: `auth` (sign-in, tokens refreshed under a lock), `library` (the account's games and their covers, cached) (see [Epic games](#epic-games)) |
+| `epic` | The Epic Games Store: `auth` (sign-in, tokens refreshed under a lock), `library` (the account's games and their covers, cached), `manifest` and `chunk` (Epic's build formats), `download` (writing a build from its chunks), `install` (a game's newest build, installed and registered) (see [Epic games](#epic-games)) |
 | `added` | Games added by hand (see [Games added by hand](#games-added-by-hand)) |
 | `emulated` | Games run in an emulator (see [Emulated games](#emulated-games)) |
 
@@ -585,10 +585,31 @@ the account's library, as legendary does (see [epic-integration.md](epic-integra
   library and its covers are cached in `~/.cache/slatty/epic/<account id>/`, with the catalog
   items left out, so that the catalog is asked only about new items.
 
+Installing one (`epic::install`) follows a GOG Windows install: the same job (`InstallJob`, its
+build id `epic:<build version>`), partial folder and `.slatty-staged` mark, so that it resumes and
+publishes its folder the same way, and the same install record and `Install`, to run through umu
+and Proton in a prefix of its own. Only the plan and the download differ:
+
+- `plan` asks Epic's launcher service for the newest Windows build, downloads its manifest without
+  the token, checked with the SHA-1 the service gave, and reads it (`manifest`, decrypted with the
+  build's keys when it is encrypted);
+- `download` writes the build into the partial folder (`Download`, over a `ChunkSource`: Epic's CDN
+  or, in tests, one in memory). It lists every part of every file to write, fetches the chunks in
+  the order first needed, eight at a time (`buffered`), and writes each file part after part from
+  them, keeping a chunk until its last use within a bounded cache. Each file goes beside its place
+  (`.slatty-dl`), its SHA-1 computed as it is written and compared, then renamed; a resumed download
+  first keeps the files already there that match, without downloading their chunks;
+- the manifest and what launching needs (`EpicInstall`: the launch program and arguments, the
+  build's keys) are kept in `~/.local/share/slatty/epic/`, and deleted by an uninstall or `forget`.
+
 Epic games are `epic-<app name>`: `paths::check_game_id` refuses them, so GOG is never asked about
-one, and `paths::check_owned_id` too, until Slatty installs them. In the interface
-(`gui/src/epic.rs`) the cached library shows at start (`boot.rs` reads it) and is read again from
-Epic meanwhile; `merge_steam` puts its games in the library beside Steam's.
+one; `paths::check_owned_id` accepts them, as Slatty installs them. Automatic updates leave them out
+(`maintenance::auto_update_candidates`). In the interface (`gui/src/epic.rs`) the cached library
+shows at start (`boot.rs` reads it) and is read again from Epic meanwhile; `merge_steam` puts its
+games in the library beside Steam's. They install through the same drawer, queue and progress
+as GOG's: `install::plan` and `install_stream` call `epic::install` for an Epic id, given the game
+as the library describes it (`App::epic_game`). The window does not play them yet: an installed one
+shows **Installed**, and its Manage drawer offers only Uninstall.
 
 ### Games added by hand
 

@@ -572,8 +572,14 @@ Epic password; the session goes to the system keyring.
 - **Read from Epic.** The library is read again at each start and on **Read again**; the games as
   last read show at once meanwhile. Add-ons, mods and Unreal Engine's marketplace are left out.
   Covers come from Epic's image servers.
-- **Not installable yet.** An Epic game's page says **Not installable yet**: installing and playing
-  Epic games from Slatty is the next step (see the [roadmap](roadmap.md)).
+- **Installed like a GOG game.** **Install** opens the same drawer: the folder and the Proton
+  build are chosen there; the newest Windows build Epic offers is installed, every file of it
+  (language packs included), each checked against Epic's checksum. It waits in the Downloads tab,
+  pauses and resumes as a GOG game does. **Manage** uninstalls it; verifying, repairing and
+  updating it come later. From the command line: `slatty install epic-<app name>` (see
+  [command-line.md](command-line.md#installing-games)).
+- **Not played yet.** An installed Epic game's page says **Installed**: playing it from Slatty is
+  the next step (see the [roadmap](roadmap.md)).
 - The library's filters have **Epic** while you are signed in.
 - **Sign out** forgets the session; the games leave the library. The cache of the library and its
   covers stays (`~/.cache/slatty/epic/`).
@@ -919,6 +925,7 @@ Folders follow the XDG variables (`XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG
 | `~/.cache/slatty/<user id>/` | Your GOG library, covers and images. Safe to delete |
 | `~/.cache/slatty/steam/`, `steamgriddb/` | Images from Steam's servers and SteamGridDB's thumbnails. Safe to delete |
 | `~/.cache/slatty/epic/<account id>/` | Your Epic library and its covers. Safe to delete |
+| `~/.local/share/slatty/epic/` | For each Epic game installed, its build's manifest and what launching it needs |
 | `…/scaled/<width>/`, `…/art/<width>/` in those caches | The covers and key art made at the size they are drawn; key art copies take at most 2 GiB. Safe to delete |
 | `~/.local/state/slatty/logs/` | Logs of each game, prefix creation, setup, Galaxy service and Comet: the last run of each and the two before (`.1`, `.2`). A game's logs go when it is uninstalled |
 | `~/.local/state/slatty/locks/` | Locks that keep two operations off the same game |

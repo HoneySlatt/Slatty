@@ -85,16 +85,14 @@ pub fn check_game_id(game_id: &str) -> Result<()> {
 }
 
 /// Refuses a game id Slatty may not name its own files after (records, prefixes, homes,
-/// logs): GOG's, a game added by hand or an emulated one. A Steam game's files are Steam's.
+/// logs): GOG's, Epic's, a game added by hand or an emulated one. A Steam game's files are
+/// Steam's.
 pub fn check_owned_id(game_id: &str) -> Result<()> {
     use crate::store::Store;
     match crate::store::of(game_id)? {
-        Store::Gog | Store::Local | Store::Emulated => Ok(()),
+        Store::Gog | Store::Local | Store::Emulated | Store::Epic => Ok(()),
         Store::Steam => Err(Error::Refused(format!(
             "{game_id} is Steam's: Steam installs and removes it"
-        ))),
-        Store::Epic => Err(Error::Refused(format!(
-            "{game_id} is an Epic game, which Slatty cannot install yet"
         ))),
     }
 }
