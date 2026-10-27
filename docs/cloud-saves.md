@@ -11,7 +11,8 @@ their known limits.
   a name and a path template such as `<?SAVED_GAMES?>/id Software/DOOM/base`.
 - Templates are resolved inside the game's Wine prefix (`drive_c/users/steamuser/…`, or your user
   name for a game run through Wine alone), or inside the game folder for `<?INSTALL?>`. Path parts
-  are matched case-insensitively, as on Windows.
+  are matched case-insensitively, as on Windows, and a cloud name's backslashes separate folders
+  as its slashes do (`Dir\slot.sav` is the file `Dir/slot.sav`), the object keeping its name.
 - If GOG turns cloud saves on for a game but lists no location, the Galaxy SDK's storage folder is
   used (`<?APPLICATION_DATA_LOCAL?>/GOG.com/Galaxy/Applications/<client id>/Storage/Shared/Files`).
 - Before a game's first launch its prefix does not exist yet. A check still shows what will be

@@ -535,15 +535,18 @@ pub(crate) fn remote_map(
         if e.hash == IGNORED_REMOTE_HASH || rel.is_empty() {
             continue;
         }
-        let rel = rel.to_string();
-        // Saves are resolved with backslashes as separators too (`gameinfo::resolve_relative`).
-        if !Path::new(&rel.replace('\\', "/"))
+        // Windows clients name a save in a folder with backslashes: its file is resolved with them
+        // as separators (`gameinfo::resolve_relative`), and the scan names it with `/`. The object
+        // keeps its own name.
+        let normal = rel.replace('\\', "/");
+        if !Path::new(&normal)
             .components()
             .all(|c| matches!(c, std::path::Component::Normal(_)))
         {
-            skipped.push(rel);
+            skipped.push(rel.to_string());
             continue;
         }
+        let rel = normal;
         let key = scan::key(&rel);
         if let Some(previous) = map.insert(
             key.clone(),

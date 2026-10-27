@@ -517,6 +517,37 @@ async fn remote_paths_with_backslashes_cannot_escape_the_save_folder() {
     assert_eq!(r.downloaded, ["b.sav"]);
 }
 
+/// A save in a folder, named with a backslash as Windows clients upload it, is the file the scan
+/// finds under `/`: once downloaded, the next syncs have nothing to do, and the cloud keeps one
+/// object under its own name.
+#[tokio::test]
+async fn a_cloud_save_named_with_backslashes_is_in_sync_once_downloaded() {
+    let env = Env::new("backslash-folder");
+    std::fs::create_dir_all(env.root()).unwrap();
+    env.put_remote("Dir\\slot.sav", "slot");
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(r.is_clean(), "{:?}", r.errors);
+    assert_eq!(r.downloaded, ["Dir/slot.sav"]);
+    assert_eq!(env.read("Dir/slot.sav").as_deref(), Some("slot"));
+    for opts in [SyncOptions::default(), ALLOW_DELETIONS] {
+        let r = env.sync(opts).await;
+        assert!(r.is_clean(), "{:?}", r.errors);
+        assert!(r.uploaded.is_empty(), "{:?}", r.uploaded);
+        assert!(r.pending_deletions.is_empty(), "{:?}", r.pending_deletions);
+        assert!(r.deleted_local.is_empty() && r.deleted_remote.is_empty());
+    }
+    assert_eq!(env.remote("Dir\\slot.sav").as_deref(), Some("slot"));
+    assert_eq!(env.remote("Dir/slot.sav"), None, "not uploaded again");
+
+    // Changed by the game, it replaces the object of that name.
+    env.write("Dir/slot.sav", "played");
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(r.is_clean(), "{:?}", r.errors);
+    assert_eq!(r.uploaded, ["Dir/slot.sav"]);
+    assert_eq!(env.remote("Dir\\slot.sav").as_deref(), Some("played"));
+    assert_eq!(env.remote("Dir/slot.sav"), None);
+}
+
 /// `Save.dat` and `save.dat` in the cloud are one file on Windows: that pair is left out, on both
 /// sides, and the location's other saves still sync.
 #[tokio::test]

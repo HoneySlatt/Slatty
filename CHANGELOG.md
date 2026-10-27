@@ -5,6 +5,12 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 ## Unreleased
 
+### Fixed
+
+- A cloud save in a folder, named with backslashes as Windows clients upload it, stays in sync:
+  it was uploaded again under another name at the next sync, and reported as a deletion waiting
+  at every sync after.
+
 ## 0.2.0 (2026-10-27)
 
 ### Added
