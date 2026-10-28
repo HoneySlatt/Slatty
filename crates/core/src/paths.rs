@@ -40,10 +40,9 @@ impl Dirs {
     /// earlier version left readable by others: they hold the library, play times, saves
     /// backups and Wine prefixes.
     pub fn keep_private(&self) -> Result<()> {
-        use std::os::unix::fs::PermissionsExt;
         for dir in [&self.config, &self.data, &self.cache, &self.state] {
             ensure_dir(dir)?;
-            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+            crate::platform::set_mode(dir, 0o700)
                 .map_err(|e| Error::io(format!("protect {}", dir.display()), e))?;
         }
         Ok(())

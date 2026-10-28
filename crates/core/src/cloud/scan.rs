@@ -93,10 +93,7 @@ fn relative(root: &Path, path: &Path) -> Option<String> {
 /// The SHA-256 and size of a save. The game writes its save folder: what is there is opened without
 /// waiting, as a pipe would wait for a writer forever, and refused unless it is a regular file.
 pub fn hash_file(path: &Path) -> Result<(String, u64)> {
-    use std::os::unix::fs::OpenOptionsExt;
-    let mut f = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(nix::fcntl::OFlag::O_NONBLOCK.bits())
+    let mut f = crate::platform::without_waiting(std::fs::OpenOptions::new().read(true))
         .open(path)
         .map_err(|e| Error::io(format!("open {}", path.display()), e))?;
     if !f

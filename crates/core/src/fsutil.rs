@@ -50,11 +50,8 @@ const GAME_FILE_LIMIT: u64 = 16 << 20;
 /// without waiting, then checked, so it cannot be swapped for a pipe in between.
 pub fn read_game_file(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
     use std::io::Read;
-    use std::os::unix::fs::OpenOptionsExt;
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(nix::fcntl::OFlag::O_NONBLOCK.bits())
-        .open(path)?;
+    let file =
+        crate::platform::without_waiting(std::fs::OpenOptions::new().read(true)).open(path)?;
     let meta = file.metadata()?;
     if !meta.is_file() || meta.len() > GAME_FILE_LIMIT {
         return Ok(None);
@@ -69,7 +66,8 @@ pub fn read_game_file(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
 pub fn sync_filesystem(path: &Path) -> Result<()> {
     let dir =
         std::fs::File::open(path).map_err(|e| Error::io(format!("open {}", path.display()), e))?;
-    nix::unistd::syncfs(&dir).map_err(|e| Error::io(format!("sync {}", path.display()), e.into()))
+    crate::platform::sync_filesystem(&dir)
+        .map_err(|e| Error::io(format!("sync {}", path.display()), e))
 }
 
 /// Writes to a sibling temp file, fsyncs, then renames over `path`.
@@ -111,8 +109,7 @@ pub async fn in_background<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'st
     std::thread::Builder::new()
         .name("slatty-background".into())
         .spawn(move || {
-            // SAFETY: sets the calling thread's nice value, which Linux keeps per thread.
-            unsafe { nix::libc::setpriority(nix::libc::PRIO_PROCESS, 0, 19) };
+            crate::platform::lowest_priority();
             let _ = tx.send(f());
         })
         .expect("start a thread");

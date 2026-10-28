@@ -4,7 +4,6 @@
 
 use std::collections::HashMap;
 use std::io::{BufWriter, Read, Write};
-use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 
 use flate2::read::ZlibDecoder;
@@ -21,6 +20,7 @@ use crate::fsutil;
 use crate::galaxy::{self, Chunk, ContentSource};
 use crate::http;
 use crate::installer::{self, FileSet, InstallRecord};
+use crate::platform::FileAt;
 
 const CONTENT_SYSTEM: &str = "https://content-system.gog.com";
 const CDN: &str = "https://gog-cdn-fastly.gog.com";

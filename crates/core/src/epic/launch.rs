@@ -110,15 +110,11 @@ pub async fn sign_in(http: &Client, db: &Db, dirs: &Dirs, install: &Install) -> 
 /// through.
 fn write_token(prefix: &Path, token: &[u8]) -> Result<PathBuf> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
     let path = prefix.join("drive_c").join(OWNERSHIP_TOKEN);
     crate::installer::refuse_outside(prefix, &path)?;
     let _ = std::fs::remove_file(&path);
     let write = || {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
+        crate::platform::private_file(std::fs::OpenOptions::new().write(true).create_new(true))
             .open(&path)?
             .write_all(token)
     };

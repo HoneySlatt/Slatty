@@ -3,7 +3,6 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
-use std::os::unix::fs::{FileExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
@@ -15,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::{Error, Result};
 use crate::fsutil;
 use crate::galaxy::{ContentSource, Depot, DepotFile, DepotItem};
+use crate::platform::FileAt;
 
 /// The largest chunk accepted. GOG cuts files into chunks of 1 MiB; a manifest saying otherwise is
 /// not trusted with an allocation of the size it gives.
@@ -430,7 +430,7 @@ impl<S: ContentSource> Download<'_, S> {
         drop(out);
         let reused = written.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
         if file.is_executable() {
-            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
+            let _ = crate::platform::set_mode(&tmp, 0o755);
         }
         std::fs::rename(&tmp, dest)
             .map_err(|e| Error::io(format!("rename {}", tmp.display()), e))?;
@@ -612,7 +612,6 @@ pub fn free_space(path: &Path) -> Result<u64> {
             break;
         }
     }
-    let st = nix::sys::statvfs::statvfs(&probe)
-        .map_err(|e| Error::io(format!("statvfs {}", probe.display()), e.into()))?;
-    Ok(st.blocks_available() as u64 * st.fragment_size() as u64)
+    crate::platform::free_space(&probe)
+        .map_err(|e| Error::io(format!("statvfs {}", probe.display()), e))
 }

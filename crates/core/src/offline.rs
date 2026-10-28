@@ -5,7 +5,6 @@
 
 use std::future::Future;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
@@ -22,6 +21,7 @@ use crate::error::{Error, Result};
 use crate::installer::linux::{GogInstallers, Source as Bytes};
 use crate::installer::{DOWNLOADING, FAILED, PAUSED, Progress, QUEUED, folder_name, free_space};
 use crate::paths::Dirs;
+use crate::platform::FileAt;
 use crate::{fsutil, http};
 
 /// The systems GOG makes installers for, in the order they are offered.
@@ -611,14 +611,15 @@ pub async fn download<S: Source>(
 /// when nothing is there.
 fn stamp(path: &Path) -> Option<String> {
     let m = std::fs::symlink_metadata(path).ok()?;
+    let id = crate::platform::identity(path, false)?;
     Some(format!(
         "{} {} {}.{:09} {}.{:09} {}",
-        m.ino(),
+        id.file,
         m.len(),
-        m.mtime(),
-        m.mtime_nsec(),
-        m.ctime(),
-        m.ctime_nsec(),
+        id.modified.0,
+        id.modified.1,
+        id.changed.0,
+        id.changed.1,
         path.display()
     ))
 }
@@ -672,14 +673,16 @@ async fn fetch<S: Source>(
 ) -> Result<()> {
     let io = |what: &str, e| Error::io(format!("{what} {}", partial.display()), e);
     // Never through a link left in its place.
-    let mut file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .custom_flags(nix::libc::O_NOFOLLOW)
-        .open(partial)
-        .map_err(|e| io("open", e))?;
+    let mut file = crate::platform::not_through_link(
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false),
+    )
+    .open(partial)
+    .map_err(|e| io("open", e))?;
+    crate::platform::refuse_link(&file).map_err(|e| io("open", e))?;
     let mut have = file.metadata().map_err(|e| io("read", e))?.len();
     if have > size {
         file.set_len(0).map_err(|e| io("empty", e))?;
@@ -821,10 +824,9 @@ async fn check<S: Source>(
 ) -> Result<()> {
     let mut bad = damaged(partial, sums, cancel).await?;
     if bad.as_ref().is_some_and(|b| !b.is_empty()) {
-        let file = std::fs::OpenOptions::new()
-            .write(true)
-            .custom_flags(nix::libc::O_NOFOLLOW)
+        let file = crate::platform::not_through_link(std::fs::OpenOptions::new().write(true))
             .open(partial)
+            .and_then(|f| crate::platform::refuse_link(&f).map(|()| f))
             .map_err(|e| Error::io(format!("open {}", partial.display()), e))?;
         for c in bad.unwrap_or_default() {
             // Written as it comes: a part's size is GOG's sums' to tell, never taken into memory.

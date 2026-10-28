@@ -643,10 +643,7 @@ fn stored_root(t: &SyncTarget<'_>) -> Result<Option<StoredRoot>> {
 /// Which folder `root` is (device and inode): a folder deleted and made again at the same path
 /// (a broken prefix made again) is another one, whose files the history does not describe.
 fn folder_identity(root: &Path) -> Option<String> {
-    use std::os::unix::fs::MetadataExt;
-    std::fs::metadata(root)
-        .ok()
-        .map(|m| format!("{}:{}", m.dev(), m.ino()))
+    crate::platform::identity(root, true).map(|i| format!("{}:{}", i.device, i.file))
 }
 
 /// Whether another account synced the same folder since this one last did (accounts that own the

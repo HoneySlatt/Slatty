@@ -56,13 +56,13 @@ pub enum UnpackedFile {
 impl UnpackedFile {
     /// `rel` in `folder` as it is now, or `None` when nothing is there.
     fn stamp(folder: &Path, rel: PathBuf) -> Option<UnpackedFile> {
-        use std::os::unix::fs::MetadataExt;
         let m = std::fs::symlink_metadata(folder.join(&rel)).ok()?;
+        let (mtime, mtime_nsec) = crate::platform::modified(&m);
         Some(UnpackedFile::Stamped {
             path: rel,
             size: m.len(),
-            mtime: m.mtime(),
-            mtime_nsec: m.mtime_nsec(),
+            mtime,
+            mtime_nsec,
         })
     }
 
@@ -305,8 +305,13 @@ pub fn map_drive(prefix: &Path, folder: &Path) -> Result<()> {
         std::fs::remove_file(&drive)
             .map_err(|e| Error::io(format!("delete {}", drive.display()), e))?;
     }
-    std::os::unix::fs::symlink(folder, &drive)
-        .map_err(|e| Error::io(format!("link {}", drive.display()), e))
+    #[cfg(unix)]
+    return std::os::unix::fs::symlink(folder, &drive)
+        .map_err(|e| Error::io(format!("link {}", drive.display()), e));
+    #[cfg(windows)]
+    Err(Error::Unsupported(
+        "Wine prefixes are made on Linux alone".into(),
+    ))
 }
 
 /// The folder a game added by hand is installed or unpacked into: named after its title, in
@@ -365,9 +370,19 @@ fn installer_file(dirs: &Dirs, game_id: &str) -> PathBuf {
 /// The folder a Windows installer run for `game_id` installed into (its drive D:), while the game
 /// waits to be added.
 fn installed_into(dirs: &Dirs, game_id: &str) -> Option<PathBuf> {
-    use std::os::unix::ffi::OsStrExt;
     let target = std::fs::read(installer_file(dirs, game_id)).ok()?;
-    (!target.is_empty()).then(|| PathBuf::from(std::ffi::OsStr::from_bytes(&target)))
+    if target.is_empty() {
+        return None;
+    }
+    // Written from the path's own bytes (`as_encoded_bytes`), which are UTF-8 on Windows.
+    #[cfg(unix)]
+    let target = {
+        use std::os::unix::ffi::OsStrExt;
+        std::ffi::OsStr::from_bytes(&target)
+    };
+    #[cfg(windows)]
+    let target = std::str::from_utf8(&target).ok()?;
+    Some(PathBuf::from(target))
 }
 
 /// A number never given, whose id nothing is left of either (a database made again while the
@@ -606,7 +621,7 @@ impl crate::installer::linux::Source for LocalArchive {
         use futures::StreamExt;
         let path = self.0.clone();
         let bytes = tokio::task::spawn_blocking(move || {
-            use std::os::unix::fs::FileExt;
+            use crate::platform::FileAt;
             let file = std::fs::File::open(&path)
                 .map_err(|e| Error::io(format!("read {}", path.display()), e))?;
             let mut buf = vec![0; end.saturating_sub(start) as usize];
@@ -938,16 +953,13 @@ pub fn is_program(path: &Path) -> bool {
 /// always, a script unless isolated (then started through its interpreter). One Slatty
 /// unpacked for the game is made executable instead: an archive made on Windows keeps no modes.
 fn check_executable(program: &Path, task: &Task, isolated: bool) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    let mode = std::fs::metadata(program)
-        .map_err(|e| Error::io(format!("read {}", program.display()), e))?
-        .permissions()
-        .mode();
-    if mode & 0o111 != 0 || isolated && !is_program(program) {
+    let meta = std::fs::metadata(program)
+        .map_err(|e| Error::io(format!("read {}", program.display()), e))?;
+    if crate::platform::is_executable(program, &meta) || isolated && !is_program(program) {
         return Ok(());
     }
     if task.unpacked.iter().any(|f| f.path() == task.program) {
-        return std::fs::set_permissions(program, std::fs::Permissions::from_mode(0o755))
+        return crate::platform::set_mode(program, 0o755)
             .map_err(|e| Error::io(format!("make {} executable", program.display()), e));
     }
     Err(Error::Refused(format!(
@@ -1077,10 +1089,7 @@ fn real(path: &Path) -> Result<PathBuf> {
 /// The first bytes of a program, which tell what it is.
 fn head(program: &Path) -> Result<Vec<u8>> {
     use std::io::Read;
-    use std::os::unix::fs::OpenOptionsExt;
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(nix::fcntl::OFlag::O_NONBLOCK.bits())
+    let file = crate::platform::without_waiting(std::fs::OpenOptions::new().read(true))
         .open(program)
         .map_err(|e| Error::io(format!("open {}", program.display()), e))?;
     if !file

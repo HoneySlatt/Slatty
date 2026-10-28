@@ -24,13 +24,20 @@ md-5 = "0.11.0"
 flate2 = { version = "1.1.10", features = ["zlib-rs"] }
 url = "2.5.8"
 chrono = { version = "0.4.45", features = ["serde"] }
-nix = { version = "0.31", features = ["process", "signal", "feature", "fs"] }
 futures = "0.3"
 oxidelta = { version = "0.1.4", default-features = false, features = ["adler32"] }
 tar = { version = "0.4.46", default-features = false }
 lzma-rust2 = { version = "0.21.0", default-features = false, features = ["std", "optimization", "xz"] }
 # Already built for rustls: SHA-1 and AES-GCM for Epic's manifests and chunks.
 aws-lc-rs = { version = "1.18.1", default-features = false, features = ["aws-lc-sys"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", features = ["process", "signal", "feature", "fs"] }
+
+# Windows' own calls where the standard library has none (docs/windows-port.md); already built for
+# tokio and the keyring on Windows, the same version, no crate added.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
 
 [dev-dependencies]
 lzma-rust2 = { version = "0.21.0", default-features = false, features = ["std", "xz", "encoder"] }

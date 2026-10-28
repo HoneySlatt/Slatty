@@ -26,6 +26,7 @@ pub mod offline;
 pub mod overview;
 pub mod patches;
 pub mod paths;
+pub mod platform;
 pub mod play;
 pub mod playtime;
 pub mod protons;

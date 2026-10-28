@@ -127,12 +127,9 @@ pub struct Db {
 
 impl Db {
     pub fn open(path: &Path) -> Result<Self> {
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
         // Made private as it is made: the interface opens the database before anything else.
         if let Some(parent) = path.parent() {
-            std::fs::DirBuilder::new()
-                .recursive(true)
-                .mode(0o700)
+            crate::platform::private_dirs(std::fs::DirBuilder::new().recursive(true))
                 .create(parent)
                 .map_err(|e| Error::io(format!("create {}", parent.display()), e))?;
         }
@@ -141,7 +138,7 @@ impl Db {
         for suffix in ["", "-wal", "-shm"] {
             let file = PathBuf::from(format!("{}{suffix}", path.display()));
             if file.exists() {
-                std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))
+                crate::platform::set_mode(&file, 0o600)
                     .map_err(|e| Error::io(format!("protect {}", file.display()), e))?;
             }
         }

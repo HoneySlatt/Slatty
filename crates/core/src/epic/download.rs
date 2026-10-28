@@ -5,7 +5,6 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::Read;
-use std::os::unix::fs::{FileExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -19,6 +18,7 @@ use crate::error::{Error, Result};
 use crate::fsutil;
 use crate::http;
 use crate::installer::{Progress, refuse_outside, safe_relative};
+use crate::platform::FileAt;
 
 /// Chunks downloaded at once.
 const AT_ONCE: usize = 8;
@@ -530,7 +530,7 @@ fn write_files(
         drop(out);
         result.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
         if job.executable {
-            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
+            let _ = crate::platform::set_mode(&tmp, 0o755);
         }
         std::fs::rename(&tmp, &dest)
             .map_err(|e| Error::io(format!("rename {}", tmp.display()), e))?;
