@@ -1,14 +1,20 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+#[cfg(unix)]
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::Utc;
+#[cfg(unix)]
 use nix::errno::Errno;
+#[cfg(unix)]
 use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet, SigmaskHow, Signal};
+#[cfg(unix)]
 use nix::sys::wait::{WaitPidFlag, WaitStatus, waitpid};
+#[cfg(unix)]
 use nix::unistd::Pid;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -19,13 +25,24 @@ use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::runner::LaunchSpec;
 
+#[cfg(windows)]
+mod windows;
+
 /// First argument that turns a launcher binary into a session supervisor.
 pub const SUPERVISE_ARG: &str = "__slatty-supervise";
 
-/// The running binary, to start supervisors with. Unlike `current_exe`, it still works once the
-/// file was replaced on disk (an update or a rebuild while the launcher runs).
+/// The running binary, to start supervisors with. On Linux, unlike `current_exe`, it still works
+/// once the file was replaced on disk (an update or a rebuild while the launcher runs); Windows
+/// keeps a running program's file from being replaced.
 pub fn supervisor_exe() -> PathBuf {
-    PathBuf::from("/proc/self/exe")
+    #[cfg(unix)]
+    {
+        PathBuf::from("/proc/self/exe")
+    }
+    #[cfg(windows)]
+    {
+        std::env::current_exe().unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -45,13 +62,16 @@ pub enum SupervisorEvent {
     Failed { message: String },
 }
 
+#[cfg(unix)]
 static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 
+#[cfg(unix)]
 extern "C" fn on_stop(_: nix::libc::c_int) {
     STOP_REQUESTED.store(true, Ordering::SeqCst);
 }
 
 /// Only wakes the supervisor from `sigsuspend`; its loop reaps the children.
+#[cfg(unix)]
 extern "C" fn on_child(_: nix::libc::c_int) {}
 
 /// Runs in the supervisor process. The session ends only when no descendant is left,
@@ -95,6 +115,29 @@ pub fn supervise_main() -> i32 {
             return 2;
         }
     };
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&request.log);
+    let (stdout, stderr) = match log.and_then(|f| Ok((f.try_clone()?, f))) {
+        Ok((a, b)) => (Stdio::from(a), Stdio::from(b)),
+        Err(_) => (Stdio::null(), Stdio::null()),
+    };
+    #[cfg(unix)]
+    return supervise(&request.spec, stdout, stderr, emit);
+    #[cfg(windows)]
+    return windows::supervise(&request.spec, stdout, stderr, emit);
+}
+
+/// Starts the game and follows its processes until none is left, as a subreaper; SIGTERM or
+/// SIGINT stops them, a second one kills them.
+#[cfg(unix)]
+fn supervise(
+    spec: &LaunchSpec,
+    stdout: Stdio,
+    stderr: Stdio,
+    mut emit: impl FnMut(&SupervisorEvent),
+) -> i32 {
     if let Err(e) = nix::sys::prctl::set_child_subreaper(true) {
         emit(&SupervisorEvent::Failed {
             message: format!("PR_SET_CHILD_SUBREAPER: {e}"),
@@ -118,15 +161,6 @@ pub fn supervise_main() -> i32 {
     // SAFETY: the handler does nothing.
     unsafe { signal::sigaction(Signal::SIGCHLD, &woken) }.expect("installing a signal handler");
 
-    let log = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&request.log);
-    let (stdout, stderr) = match log.and_then(|f| Ok((f.try_clone()?, f))) {
-        Ok((a, b)) => (Stdio::from(a), Stdio::from(b)),
-        Err(_) => (Stdio::null(), Stdio::null()),
-    };
-    let spec = &request.spec;
     let child = std::process::Command::new(&spec.program)
         .args(&spec.args)
         .current_dir(&spec.cwd)
@@ -199,6 +233,7 @@ pub fn supervise_main() -> i32 {
     0
 }
 
+#[cfg(unix)]
 fn direct_children() -> Vec<Pid> {
     let me = std::process::id().to_string();
     let Ok(entries) = std::fs::read_dir("/proc") else {
@@ -245,12 +280,21 @@ impl SessionHandle {
         }
         // In a process group of its own: a Ctrl+C or a terminal closing reaches the launcher alone,
         // which asks the supervisor to stop the game once; the supervisor outlives the launcher.
-        let mut child = tokio::process::Command::new(supervisor)
+        let mut command = tokio::process::Command::new(supervisor);
+        command
             .arg(SUPERVISE_ARG)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .process_group(0)
+            .stderr(Stdio::inherit());
+        #[cfg(unix)]
+        command.process_group(0);
+        // Without a console window of its own either.
+        #[cfg(windows)]
+        command.creation_flags(
+            windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP
+                | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW,
+        );
+        let mut child = command
             .spawn()
             .map_err(|e| Error::io("starting the session supervisor", e))?;
         let request = serde_json::to_vec(&SuperviseRequest {
@@ -286,10 +330,14 @@ impl SessionHandle {
             .transpose()
     }
 
-    /// Asks the supervisor to terminate the game; a second call escalates to SIGKILL.
+    /// Asks the supervisor to terminate the game; a second call escalates to SIGKILL (on Windows,
+    /// closing its windows, then ending its processes).
     pub fn request_stop(&self) {
         if let Some(pid) = self.child.id() {
+            #[cfg(unix)]
             let _ = signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM);
+            #[cfg(windows)]
+            windows::request_stop(pid);
         }
     }
 

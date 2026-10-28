@@ -5,7 +5,15 @@ pub mod appinfo;
 pub mod client;
 pub mod library;
 pub mod local;
+#[cfg(unix)]
 pub mod running;
+/// The Steam games running are not found yet on Windows (docs/windows-port.md, step 4).
+#[cfg(windows)]
+pub mod running {
+    pub fn running(_: &std::path::Path) -> std::collections::BTreeSet<u32> {
+        Default::default()
+    }
+}
 pub mod stats;
 pub mod vdf;
 pub mod web;

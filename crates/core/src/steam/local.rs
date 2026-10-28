@@ -99,7 +99,6 @@ const MAX_WRITTEN_ENTRIES: usize = 500_000;
 /// folder (not begun, done, or waiting for another to end). Links are not followed. Reads a
 /// folder of a library, which can be a network drive: not for the interface thread.
 pub fn written(game: &Installed) -> Option<Written> {
-    use std::os::unix::fs::MetadataExt;
     let apps = game.dir.parent()?.parent()?;
     let folder = apps.join("downloading").join(game.app_id.to_string());
     if !std::fs::symlink_metadata(&folder).is_ok_and(|m| m.is_dir()) {
@@ -117,7 +116,7 @@ pub fn written(game: &Installed) -> Option<Written> {
                 Ok(m) if m.is_dir() => dirs.push(entry.path()),
                 Ok(m) if m.is_file() => {
                     out.apparent += m.len();
-                    out.allocated += m.blocks() * 512;
+                    out.allocated += crate::platform::allocated(&m);
                 }
                 _ => {}
             }

@@ -1,10 +1,14 @@
 use std::collections::HashSet;
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::process::Stdio;
 use std::time::Duration;
 
+#[cfg(unix)]
 use nix::sys::signal::{self, Signal};
+#[cfg(unix)]
 use nix::unistd::Pid;
 use tokio::process::Child;
 
@@ -14,6 +18,7 @@ use crate::error::{Error, Result};
 use crate::paths::Dirs;
 
 pub const PORT: u16 = 9977;
+#[cfg(unix)]
 const READY_TIMEOUT: Duration = Duration::from_secs(15);
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -24,8 +29,18 @@ pub struct Comet {
 }
 
 impl Comet {
+    /// Comet is not started on Windows yet: how its tokens would reach it there safely is to be
+    /// decided (docs/windows-port.md, step 7).
+    #[cfg(windows)]
+    pub async fn start(_: &Path, _: &Tokens, _: &str, _: &Dirs) -> Result<Comet> {
+        Err(Error::Unsupported(
+            "achievements through Comet are not available on Windows yet".into(),
+        ))
+    }
+
     /// Tokens reach Comet through its Lutris importer: a 0600 file in a private runtime
     /// directory, removed as soon as Comet listens. They never appear in argv.
+    #[cfg(unix)]
     pub async fn start(bin: &Path, tokens: &Tokens, username: &str, dirs: &Dirs) -> Result<Comet> {
         if !crate::doctor::comet_port_free() {
             return Err(Error::Refused(format!(
@@ -87,6 +102,7 @@ impl Comet {
         ready.map(|()| comet)
     }
 
+    #[cfg(unix)]
     async fn wait_ready(&mut self) -> Result<()> {
         let deadline = tokio::time::Instant::now() + READY_TIMEOUT;
         loop {
@@ -115,6 +131,7 @@ impl Comet {
 
     /// SIGINT lets Comet finish pending requests before exiting.
     pub async fn stop(mut self) -> Result<()> {
+        #[cfg(unix)]
         if let Some(pid) = self.child.id() {
             let _ = signal::kill(Pid::from_raw(pid as i32), Signal::SIGINT);
         }
@@ -136,6 +153,7 @@ impl Drop for Comet {
     /// A Comet not stopped (the launcher quitting during a session, a failed start) is asked to
     /// stop as `stop` does, so that it sends what it holds.
     fn drop(&mut self) {
+        #[cfg(unix)]
         if let Some(pid) = self.child.id() {
             let _ = signal::kill(Pid::from_raw(pid as i32), Signal::SIGINT);
         }
@@ -146,6 +164,7 @@ impl Drop for Comet {
 /// Has the program `command` starts stopped (SIGINT, so that Comet sends what it holds) when the
 /// thread starting it ends: Tokio's worker threads live as long as the launcher, and a launcher
 /// killed outright (a crash, the system out of memory) runs no code that could stop it.
+#[cfg(unix)]
 fn tied_to_this_thread(command: &mut tokio::process::Command) {
     // SAFETY: the closure only makes one system call (prctl), which is async-signal-safe.
     unsafe {
@@ -157,6 +176,7 @@ fn tied_to_this_thread(command: &mut tokio::process::Command) {
 
 /// Whether, in the kernel's table of TCP sockets (`/proc/net/tcp`), Comet's port on 127.0.0.1 is
 /// listened on by the user this process runs as.
+#[cfg(unix)]
 fn listening_as_me(table: &str) -> bool {
     use std::os::unix::fs::MetadataExt;
     let me = std::fs::metadata("/proc/self").map(|m| m.uid().to_string());
@@ -176,6 +196,7 @@ fn listening_as_me(table: &str) -> bool {
 /// tokens go there, so the folders on the way must be the user's alone: some sessions point
 /// `XDG_RUNTIME_DIR` at a folder others can write. Handoffs of launchers no longer running (killed
 /// while Comet started) are removed on the way.
+#[cfg(unix)]
 fn private_dir(runtime: &Path) -> Result<PathBuf> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt};
     // The process's own entry belongs to the user it runs as.
@@ -215,6 +236,7 @@ fn private_dir(runtime: &Path) -> Result<PathBuf> {
     Ok(dir)
 }
 
+#[cfg(unix)]
 fn write_private(private_dir: &Path, token_file: &Path, tokens: &Tokens) -> Result<()> {
     let mkdir = |p: &Path| {
         std::fs::DirBuilder::new()

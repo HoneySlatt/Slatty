@@ -144,7 +144,6 @@
               cross.buildPackages.cargo
               cross.buildPackages.rustc
               cross.stdenv.cc
-              pkgs.clippy
               pkgs.rustfmt
               pkgs.wineWow64Packages.stable
             ];

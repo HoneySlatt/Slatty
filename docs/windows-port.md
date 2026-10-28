@@ -65,14 +65,16 @@ Found by building the core for Windows (109 errors in its first build) and readi
 Each step is a series of small commits; the Linux build, clippy and tests pass after each, and the
 Windows target builds as far as the step reached.
 
-1. **The Windows build environment** (done when the shell builds `slatty-core`'s dependencies):
+1. **The Windows build environment** (done):
    the `windows` development shell in `flake.nix`, its Wine test runner, and this page.
 2. **Everything compiles for Windows.** A `platform` module in the core gathers what differs by
    system (processes, priority, private folders, opening without following links, known folders,
    finding programs). Linux-only modules (Proton, umu, isolation, Linux installers, Proton builds,
    the Galaxy service in a prefix) build on Linux alone; their callers on Windows get
    `Error::Unsupported`. Done when `slatty`, `slatty-gui` and the core build for Windows, and the
-   core's tests that do not need Linux pass under Wine.
+   core's tests that do not need Linux pass under Wine. *Where it stands:* the core builds for
+   Windows; its session supervisor has a Windows version (a job object); Comet and the games
+   Steam runs are not available there yet.
 3. **Play a GOG game.** Install a Windows build (the download code is shared), start it directly,
    follow and stop its session through a job object, record play time, run GOG's setup with the
    person's consent for administrator rights. Cloud saves in the real folders.

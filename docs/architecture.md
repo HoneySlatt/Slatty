@@ -74,7 +74,7 @@ become the session supervisor (see [Game sessions](#game-sessions)).
 |---|---|
 | `runner` | Launch commands for umu and Proton, Wine and native games; prefix creation; isolation |
 | `umu` | A game's id in umu's database, so umu applies its fixes |
-| `session` | The session supervisor, session records, play time |
+| `session` | The session supervisor (a subreaper on Linux, a job object on Windows: `session::windows`), session records, play time |
 | `play` | The whole play flow (see [Play](#play)) |
 | `playtime` | Play time read from GOG, sessions reported to GOG |
 | `logs` | Logs of the programs the launcher starts, the last run and the two before |
@@ -97,6 +97,7 @@ become the session supervisor (see [Game sessions](#game-sessions)).
 | `settings` | Every setting, a key/value row with a getter and a setter |
 | `paths` | Data folders (`Dirs`), game id checks |
 | `fsutil` | Staged writes, file reads of bounded size, work at the lowest priority (`in_background`) |
+| `platform` | The file and process calls that differ between Linux and Windows, made the same way everywhere else |
 | `lock` | One operation per game, one interface at a time |
 | `error` | Typed errors |
 | `doctor` | Checks of the system (`slatty doctor`) and the sandbox check before an isolated launch |

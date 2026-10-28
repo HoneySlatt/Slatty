@@ -37,7 +37,7 @@ nix = { version = "0.31", features = ["process", "signal", "feature", "fs"] }
 # Windows' own calls where the standard library has none (docs/windows-port.md); already built for
 # tokio and the keyring on Windows, the same version, no crate added.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 lzma-rust2 = { version = "0.21.0", default-features = false, features = ["std", "xz", "encoder"] }

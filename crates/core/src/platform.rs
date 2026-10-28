@@ -138,6 +138,23 @@ pub fn is_executable(path: &Path, meta: &Metadata) -> bool {
     }
 }
 
+/// Makes `link` a symbolic link to `target`. Only Linux's tools (umu, Proton, Wine prefixes) are
+/// given links: on Windows, making one needs a right users do not have by default.
+pub fn symlink(target: &Path, link: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link)
+    }
+    #[cfg(windows)]
+    {
+        let _ = (target, link);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "links are made on Linux alone",
+        ))
+    }
+}
+
 /// Folders made readable by the user alone (0700 on Linux).
 pub fn private_dirs(builder: &mut DirBuilder) -> &mut DirBuilder {
     #[cfg(unix)]
@@ -153,13 +170,19 @@ pub fn private_dirs(builder: &mut DirBuilder) -> &mut DirBuilder {
 
 /// A file made readable by the user alone (0600 on Linux).
 pub fn private_file(opts: &mut OpenOptions) -> &mut OpenOptions {
+    with_mode(opts, 0o600)
+}
+
+/// A file made with the permissions `mode` on Linux.
+pub fn with_mode(opts: &mut OpenOptions, mode: u32) -> &mut OpenOptions {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600)
+        opts.mode(mode)
     }
     #[cfg(windows)]
     {
+        let _ = mode;
         opts
     }
 }
@@ -176,6 +199,20 @@ pub fn modified(meta: &Metadata) -> (i64, i64) {
     {
         use std::os::windows::fs::MetadataExt;
         since_1970(meta.last_write_time() as i64)
+    }
+}
+
+/// The bytes a file takes on the disk: less than its size while it has holes (a download writing
+/// its parts out of order). Windows' are taken as its size.
+pub fn allocated(meta: &Metadata) -> u64 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        meta.blocks() * 512
+    }
+    #[cfg(windows)]
+    {
+        meta.len()
     }
 }
 

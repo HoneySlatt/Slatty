@@ -6,7 +6,6 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::io::{Read, Write};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
@@ -736,7 +735,7 @@ impl<S: Source> LinuxDownload<'_, S> {
                 std::fs::remove_file(&dest)
                     .map_err(|e| Error::io(format!("replace {}", dest.display()), e))?;
             }
-            std::os::unix::fs::symlink(&target, &dest)
+            crate::platform::symlink(&target, &dest)
                 .map_err(|e| Error::io(format!("link {}", dest.display()), e))?;
         }
         Ok(LinkState::Wrong)
@@ -828,7 +827,7 @@ impl<S: Source> LinuxDownload<'_, S> {
         } else {
             0o644
         };
-        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(mode));
+        let _ = crate::platform::set_mode(&tmp, mode);
         std::fs::rename(&tmp, dest).map_err(|e| Error::io(format!("rename {}", tmp.display()), e))
     }
 

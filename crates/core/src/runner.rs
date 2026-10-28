@@ -547,7 +547,7 @@ fn steam_sdk_links(home: &Path, libs: &[PathBuf; 2]) -> Result<()> {
             continue;
         }
         let _ = std::fs::remove_file(&link);
-        std::os::unix::fs::symlink(&target, &link)
+        crate::platform::symlink(&target, &link)
             .map_err(|e| Error::io(format!("link {}", link.display()), e))?;
     }
     Ok(())
@@ -760,7 +760,6 @@ struct SteamPipeFixups {
 /// its `dist.lock`. Whether `proton` is one of Valve's builds. One Proton never set up (no default
 /// prefix yet, or a `dist` folder of old versions) is refused: Proton would write in it.
 fn set_up_valve_build(proton: &Path) -> Result<bool> {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
     let json = proton.join("steampipe_fixups.json");
     let Ok(meta) = std::fs::metadata(&json) else {
         return Ok(false);
@@ -778,7 +777,8 @@ fn set_up_valve_build(proton: &Path) -> Result<bool> {
         std::fs::File::create(&lock).map_err(|e| io("create", &lock, e))?;
     }
     let stamp = proton.join("files/steampipe_fixups_mtime");
-    let now = python_time(meta.mtime(), meta.mtime_nsec() as u32);
+    let (secs, nsecs) = crate::platform::modified(&meta);
+    let now = python_time(secs, nsecs as u32);
     let done = std::fs::read_to_string(&stamp).unwrap_or_default();
     if done.lines().next().map(str::trim) == Some(now.as_str()) {
         return Ok(true);
@@ -800,9 +800,10 @@ fn set_up_valve_build(proton: &Path) -> Result<bool> {
         if meta.is_symlink() {
             continue;
         }
-        let mode = meta.permissions().mode() & !0o222;
-        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode))
-            .map_err(|e| io("make read-only", &file, e))?;
+        // Every write permission taken away, the others kept.
+        let mut read_only = meta.permissions();
+        read_only.set_readonly(true);
+        std::fs::set_permissions(&file, read_only).map_err(|e| io("make read-only", &file, e))?;
     }
     std::fs::write(&stamp, format!("{now}\n")).map_err(|e| io("write", &stamp, e))?;
     Ok(true)
@@ -936,7 +937,6 @@ fn container_of(proton: &Path) -> Result<&'static str> {
 /// tool is reached through `UMU_NO_PROTON`, with which umu first asks GitHub for its Proton
 /// releases. `None` for a runtime umu 1.4 does not know.
 fn runtime_tool(dirs: &Dirs, name: &str) -> Option<Result<PathBuf>> {
-    use std::os::unix::fs::PermissionsExt;
     let (_, appid) = RUNTIME_APPIDS.iter().find(|(n, _)| *n == name)?;
     let tool = dirs.data.join("umu-runtimes/tools").join(name);
     let manifest = format!(
@@ -948,7 +948,7 @@ fn runtime_tool(dirs: &Dirs, name: &str) -> Option<Result<PathBuf>> {
     let made = crate::fsutil::write_atomic(&tool.join("toolmanifest.vdf"), manifest.as_bytes())
         .and_then(|()| crate::fsutil::write_atomic(&entry, b"#!/bin/sh\nexec \"$@\"\n"))
         .and_then(|()| {
-            std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o700))
+            crate::platform::set_mode(&entry, 0o700)
                 .map_err(|e| Error::io(format!("make {} executable", entry.display()), e))
         });
     Some(made.map(|()| tool))

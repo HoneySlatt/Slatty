@@ -1,7 +1,6 @@
 //! Comet's dummy `GalaxyCommunication` Windows service. Some Galaxy SDK versions refuse to talk
 //! to Comet unless this service is registered in the prefix, as GOG Galaxy would register it.
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
@@ -104,7 +103,7 @@ fn copy_into(prefix: &Path, exe: &Path, isolated: bool) -> Result<()> {
     // Written as a new file: the source may be read-only (Nix store), and fs::copy carries its mode.
     std::fs::File::open(exe)
         .and_then(|mut source| std::io::copy(&mut source, &mut out))
-        .and_then(|_| std::fs::set_permissions(&partial, std::fs::Permissions::from_mode(0o644)))
+        .and_then(|_| crate::platform::set_mode(&partial, 0o644))
         .and_then(|_| std::fs::rename(&partial, &dest))
         .map_err(|e| {
             let _ = std::fs::remove_file(&partial);

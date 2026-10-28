@@ -190,7 +190,7 @@ fn newest_build(dirs: &Dirs, source: Source) -> Option<PathBuf> {
 fn point_latest(dirs: &Dirs, source: Source, name: &str) -> Result<()> {
     let link = latest_link(dirs, source);
     let temp = crate::fsutil::temp_sibling(&link);
-    std::os::unix::fs::symlink(name, &temp)
+    crate::platform::symlink(Path::new(name), &temp)
         .map_err(|e| Error::io(format!("link {}", link.display()), e))?;
     std::fs::rename(&temp, &link).map_err(|e| {
         let _ = std::fs::remove_file(&temp);
@@ -238,7 +238,7 @@ fn sync_shared_in(dirs: &Dirs, shared: &Path, on: bool) -> Result<()> {
         if std::fs::symlink_metadata(&link).is_ok() {
             continue;
         }
-        std::os::unix::fs::symlink(&build, &link).map_err(|e| io("link", &link, e))?;
+        crate::platform::symlink(&build, &link).map_err(|e| io("link", &link, e))?;
     }
     Ok(())
 }
@@ -1022,7 +1022,7 @@ pub(crate) fn unpack_tar(
             if !stays_inside(&rel, &target) {
                 continue;
             }
-            std::os::unix::fs::symlink(&target, &dest).map_err(|e| Error::io(context(), e))?;
+            crate::platform::symlink(&target, &dest).map_err(|e| Error::io(context(), e))?;
             links.push(dest);
         } else if kind.is_hard_link() {
             let Some(target) = entry.link_name().map_err(|e| Error::io(context(), e))? else {
@@ -1040,14 +1040,13 @@ pub(crate) fn unpack_tar(
             }
             std::fs::hard_link(&target, &dest).map_err(|e| Error::io(context(), e))?;
         } else {
-            use std::os::unix::fs::OpenOptionsExt;
             let mode = entry.header().mode().map_err(|e| Error::io(context(), e))? & 0o777;
-            let out = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .mode(mode | 0o600)
-                .open(&dest)
-                .map_err(|e| Error::io(format!("create {}", dest.display()), e))?;
+            let out = crate::platform::with_mode(
+                std::fs::OpenOptions::new().write(true).create_new(true),
+                mode | 0o600,
+            )
+            .open(&dest)
+            .map_err(|e| Error::io(format!("create {}", dest.display()), e))?;
             // Written a megabyte at a time: by default, 8 KiB, 139,000 writes for a 1 GB build.
             let mut out = std::io::BufWriter::with_capacity(1 << 20, out);
             std::io::copy(&mut entry, &mut out).map_err(|e| Error::io(context(), e))?;

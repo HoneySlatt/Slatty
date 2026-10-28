@@ -309,9 +309,12 @@ pub fn map_drive(prefix: &Path, folder: &Path) -> Result<()> {
     return std::os::unix::fs::symlink(folder, &drive)
         .map_err(|e| Error::io(format!("link {}", drive.display()), e));
     #[cfg(windows)]
-    Err(Error::Unsupported(
-        "Wine prefixes are made on Linux alone".into(),
-    ))
+    {
+        let _ = folder;
+        Err(Error::Unsupported(
+            "Wine prefixes are made on Linux alone".into(),
+        ))
+    }
 }
 
 /// The folder a game added by hand is installed or unpacked into: named after its title, in
