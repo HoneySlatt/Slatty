@@ -38,6 +38,13 @@
           # Gamepads, found and followed through udev.
           udev
         ];
+      # Linked by GPUI (slatty-gpui): fonts found through fontconfig, X11 through xcb.
+      gpuiLibs =
+        pkgs: with pkgs; [
+          fontconfig
+          freetype
+          libxcb
+        ];
       slatty =
         pkgs:
         let
@@ -55,7 +62,29 @@
           pname = "slatty";
           version = (pkgs.lib.importTOML ./Cargo.toml).workspace.package.version;
           src = pkgs.lib.cleanSource ./.;
-          cargoLock.lockFile = ./Cargo.lock;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+            # The git repositories GPUI comes from (slatty-gpui), one crate of each.
+            outputHashes = {
+              "gpui-0.2.2" = "sha256-KKbU6ssi1v6QmQJhL+bXaK1d8o5y6xdsVo+Nulo7s/Y=";
+              "wgpu-30.0.0" = "sha256-OqPeK1cr3OSZgIl+F3GMuXWz31PxFoOO0u4INN9GmgM=";
+              "async-process-2.5.0" = "sha256-Y37QTr6sjayv+JjGz00v0AMLQtsix1nH1lNKmky+6bU=";
+              "async-task-4.7.1" = "sha256-503Yewi444XtYodEWIggMmVN3NKqCgtMBNegiMyJcCI=";
+              "khronos-egl-6.0.0" = "sha256-VeDtEMFI7C9b5INaIIVI3AO9akPxXiE11TiM3Gw/knU=";
+              "oo7-0.6.0" = "sha256-QXblWsnq+graWOSW0iA8pUzpwizDLi/kOSWDdSQVZ/0=";
+              "zed-xim-0.4.0-zed" = "sha256-pRT4Sz1JU9ros47/7pmIW9kosWOGMOItcnNd+VrvnpE=";
+              "zed-font-kit-0.14.1-zed" = "sha256-KXygi0olNQi5yM8eaJVykNDtbPMDjT+cWPBF8UrtXR4=";
+              "zed-scap-0.0.8-zed" = "sha256-WVcjceVESUhPKL9z/1y+l/vmtHRJS4EecaMOaVN686o=";
+            };
+          };
+          # The command line and the Iced interface; slatty-gpui, not ready, is left out, and with
+          # it the features its dependencies would turn on in theirs.
+          cargoBuildFlags = [
+            "--package"
+            "slatty-cli"
+            "--package"
+            "slatty-gui"
+          ];
           nativeBuildInputs = [
             pkgs.makeWrapper
             pkgs.pkg-config
@@ -120,7 +149,7 @@
             # Isolated games run inside it, with umu's runtime and Proton read-only.
             bubblewrap
           ];
-          buildInputs = runtimeLibs pkgs;
+          buildInputs = runtimeLibs pkgs ++ gpuiLibs pkgs;
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (runtimeLibs pkgs);
           RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
           SLATTY_GALAXY_COMMUNICATION = "${galaxyCommunication pkgs}/share/slatty/GalaxyCommunication.exe";

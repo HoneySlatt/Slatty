@@ -199,7 +199,7 @@ impl App {
 
 /// The desktop's notification, through its notification service (freedesktop.org). Nothing when
 /// there is none.
-fn desktop(title: &str, body: &str, image: Option<&std::path::Path>) {
+pub fn desktop(title: &str, body: &str, image: Option<&std::path::Path>) {
     use std::collections::HashMap;
     use zbus::zvariant::Value;
     let Ok(connection) = zbus::blocking::Connection::session() else {

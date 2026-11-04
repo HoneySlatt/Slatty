@@ -21,6 +21,7 @@ crates/core   slatty-core   every behaviour; no interface code
 crates/cli    slatty        command line, diagnostics; tests that spawn real processes
 crates/app    slatty-app    the interface's state, messages, update and background work, free of Iced
 crates/gui    slatty-gui    Iced interface: views, styles, what Iced runs for the state
+crates/gpui   slatty-gpui   the same state drawn with GPUI, being built; not shipped yet
 ```
 
 The core has no interface dependency and is tested on its own. Both front ends call the same core
@@ -122,7 +123,13 @@ The interface follows Iced's state, message, update and view split, in two crate
   are its own, so another interface framework could draw the same state;
 - `slatty-gui` (`crates/gui`) draws it with Iced: `main.rs` starts Iced with an `App` that wraps
   the state and dereferences to it; views live under `ui/`, one module per page or panel, as
-  `impl App` blocks; `run` hands the state's tasks and subscriptions to Iced, `theme` its look.
+  `impl App` blocks; `run` hands the state's tasks and subscriptions to Iced, `theme` its look;
+- `slatty-gpui` (`crates/gpui`) is the same state drawn with GPUI, Zed's interface framework,
+  built page by page beside `slatty-gui`, which stays the interface until this one matches it in
+  look, speed and use. GPUI comes from a revision of Zed's repository pinned in the workspace's
+  `Cargo.toml`, with the forks Zed patches in (`[patch.crates-io]`), moved by hand; the Nix
+  package leaves it out for now. GPUI draws with the graphics card alone (Vulkan, else OpenGL):
+  where neither driver is found, the window does not open and the program says why.
 
 The modules below are the state's (`crates/app/src`) unless named under `ui/`, `run`, `theme`,
 `icons` or `graphics` (`crates/gui/src`).

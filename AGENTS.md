@@ -147,7 +147,13 @@ crates/core   slatty-core  all behaviour; no interface code, typed errors, progr
 crates/cli    slatty       command line, diagnostics, process-level integration tests
 crates/app    slatty-app   the interface's state, messages, update and background work, free of Iced
 crates/gui    slatty-gui   Iced interface: the views, the styles, what Iced runs for the state
+crates/gpui   slatty-gpui  the same state drawn with GPUI, being built beside slatty-gui; not shipped
 ```
+
+`slatty-gpui` takes GPUI from a revision of Zed pinned in the workspace's `Cargo.toml`: moving it
+means the same revision for `gpui` and `gpui_platform`, the forks of Zed's own `[patch.crates-io]`
+at that revision, `deny.toml`'s `allow-git` and the Nix package's `outputHashes`. A build of the
+whole workspace compiles GPUI too (about three minutes the first time).
 
 ### Core
 
