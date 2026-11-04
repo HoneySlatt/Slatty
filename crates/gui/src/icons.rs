@@ -5,60 +5,8 @@ use iced::{Color, Theme};
 
 pub use slatty_app::icons::Icon;
 
-/// The icon's SVG, built into the binary.
-fn bytes(which: Icon) -> &'static [u8] {
-    match which {
-        Icon::ArrowDown => include_bytes!("../assets/icons/arrow-down.svg"),
-        Icon::ArrowRight => include_bytes!("../assets/icons/arrow-right.svg"),
-        Icon::ArrowRightLeft => include_bytes!("../assets/icons/arrow-right-left.svg"),
-        Icon::ArrowUp => include_bytes!("../assets/icons/arrow-up.svg"),
-        Icon::Bell => include_bytes!("../assets/icons/bell.svg"),
-        Icon::Calendar => include_bytes!("../assets/icons/calendar.svg"),
-        Icon::Check => include_bytes!("../assets/icons/check.svg"),
-        Icon::ChevronLeft => include_bytes!("../assets/icons/chevron-left.svg"),
-        Icon::CircleCheck => include_bytes!("../assets/icons/circle-check.svg"),
-        Icon::Clock => include_bytes!("../assets/icons/clock.svg"),
-        Icon::Cloud => include_bytes!("../assets/icons/cloud.svg"),
-        Icon::Download => include_bytes!("../assets/icons/download.svg"),
-        Icon::EllipsisVertical => include_bytes!("../assets/icons/ellipsis-vertical.svg"),
-        Icon::FileCheck => include_bytes!("../assets/icons/file-check.svg"),
-        Icon::Folder => include_bytes!("../assets/icons/folder.svg"),
-        Icon::Gamepad => include_bytes!("../assets/icons/gamepad-2.svg"),
-        Icon::FolderOpen => include_bytes!("../assets/icons/folder-open.svg"),
-        Icon::Globe => include_bytes!("../assets/icons/globe.svg"),
-        Icon::GripVertical => include_bytes!("../assets/icons/grip-vertical.svg"),
-        Icon::HardDrive => include_bytes!("../assets/icons/hard-drive.svg"),
-        Icon::Heart => include_bytes!("../assets/icons/heart.svg"),
-        Icon::HeartFilled => include_bytes!("../assets/icons/heart-filled.svg"),
-        Icon::Info => include_bytes!("../assets/icons/info.svg"),
-        Icon::LayoutGrid => include_bytes!("../assets/icons/layout-grid.svg"),
-        Icon::ListFilter => include_bytes!("../assets/icons/list-filter.svg"),
-        Icon::Package => include_bytes!("../assets/icons/package.svg"),
-        Icon::PanelLeftClose => include_bytes!("../assets/icons/panel-left-close.svg"),
-        Icon::PanelLeftOpen => include_bytes!("../assets/icons/panel-left-open.svg"),
-        Icon::Palette => include_bytes!("../assets/icons/palette.svg"),
-        Icon::Pause => include_bytes!("../assets/icons/pause-filled.svg"),
-        Icon::Pencil => include_bytes!("../assets/icons/pencil.svg"),
-        Icon::Play => include_bytes!("../assets/icons/play-filled.svg"),
-        Icon::Plus => include_bytes!("../assets/icons/plus.svg"),
-        Icon::Puzzle => include_bytes!("../assets/icons/puzzle.svg"),
-        Icon::RefreshCw => include_bytes!("../assets/icons/refresh-cw.svg"),
-        Icon::Search => include_bytes!("../assets/icons/search.svg"),
-        Icon::Settings => include_bytes!("../assets/icons/settings.svg"),
-        Icon::Shield => include_bytes!("../assets/icons/shield.svg"),
-        Icon::SlidersHorizontal => include_bytes!("../assets/icons/sliders-horizontal.svg"),
-        Icon::Stop => include_bytes!("../assets/icons/square-filled.svg"),
-        Icon::Trash => include_bytes!("../assets/icons/trash-2.svg"),
-        Icon::TriangleAlert => include_bytes!("../assets/icons/triangle-alert.svg"),
-        Icon::Trophy => include_bytes!("../assets/icons/trophy.svg"),
-        Icon::User => include_bytes!("../assets/icons/user.svg"),
-        Icon::Wrench => include_bytes!("../assets/icons/wrench.svg"),
-        Icon::X => include_bytes!("../assets/icons/x.svg"),
-    }
-}
-
 pub fn icon<'a>(which: Icon, size: f32, color: Color) -> Svg<'a, Theme> {
-    svg(svg::Handle::from_memory(bytes(which)))
+    svg(svg::Handle::from_memory(which.svg()))
         .width(size)
         .height(size)
         .style(move |_, _| svg::Style { color: Some(color) })

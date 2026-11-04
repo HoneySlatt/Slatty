@@ -202,8 +202,8 @@ and the views in `slatty-gui`:
   read from the theme file), into `theme::Tokens` if the views draw with it (Iced's colours), the
   theme file format and docs/theming.md. Controls and covers take their corners from the tokens; cards, drawers and
   dialogs still have corners of their own in `theme.rs` (and one in `ui/widgets.rs::inner`).
-- Icons are Lucide SVGs in `crates/gui/assets/icons`, named in the `Icon` enum
-  (`crates/app/src/icons.rs`) and given their file in `crates/gui/src/icons.rs`.
+- Icons are Lucide SVGs in `crates/gui/assets/icons`, named in the `Icon` enum and given their
+  file there (`crates/app/src/icons.rs`, `Icon::ALL` too), for both interfaces.
 - Dialogs and menus are **layers over the page** (`ui/mod.rs`), each over an empty layer, and the
   notice banner keeps its place even when empty. Do not wrap the page in a different widget
   depending on what is open: Iced would rebuild it and lose its state (the library's scroll
