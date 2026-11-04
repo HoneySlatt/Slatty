@@ -88,7 +88,7 @@ fn a_card_goes_after_one_wait_of_its_own() {
     assert_eq!(task.units(), 1, "its wait");
     assert_eq!(app.toasts.len(), 1);
     settle(&mut app);
-    let recipes = |app: &App| iced::advanced::subscription::into_recipes(app.subscription()).len();
+    let recipes = |app: &App| app.subscription().len();
     let mut quiet = library_app();
     quiet.toasts.clear();
     assert_eq!(recipes(&app), recipes(&quiet), "no tick while it shows");

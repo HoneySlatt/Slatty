@@ -33,6 +33,29 @@ fn couch(app: &App) -> &crate::couch::Couch {
     app.couch.as_ref().expect("couch mode")
 }
 
+/// Gamepads and the couch mode's keys are listened to in the couch mode alone, frames only while
+/// something moves.
+#[test]
+fn gamepads_are_read_in_the_couch_mode_alone() {
+    use crate::listen::Listen;
+    let listens = |app: &App| {
+        let all = app.subscription();
+        let gamepads = all.iter().any(|l| matches!(l, Listen::Gamepads));
+        let couch_keys = all
+            .iter()
+            .any(|l| matches!(l, Listen::Keys { couch: true }));
+        let frames = all.iter().any(|l| matches!(l, Listen::Frames));
+        (gamepads, couch_keys, frames)
+    };
+    let mut desktop = library_app();
+    settle(&mut desktop);
+    assert_eq!(listens(&desktop), (false, false, false));
+    let mut app = couch_app();
+    assert!(listens(&app).2, "frames while the focus comes in");
+    settle(&mut app);
+    assert_eq!(listens(&app), (true, true, false));
+}
+
 /// The focus moving to another cover rings it by degrees while the cover it left goes back, and
 /// frames stop once they are done.
 #[test]

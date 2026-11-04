@@ -11,6 +11,7 @@ mod graphics;
 mod icons;
 mod install;
 mod library;
+mod listen;
 mod login;
 mod maintenance;
 mod motion;
@@ -48,7 +49,8 @@ use settings::SettingsMsg;
 use iced::animation::Easing;
 use iced::time::Instant;
 use iced::widget::image;
-use iced::{Animation, Size, Subscription, keyboard};
+use iced::{Animation, Size, keyboard};
+use listen::Listen;
 use slatty_core::account::AccountInfo;
 use slatty_core::achievements::Achievement;
 use slatty_core::db::Db;
@@ -125,7 +127,7 @@ fn main() -> iced::Result {
         app = app.font(font);
     }
     app.title("Slatty")
-        .subscription(App::subscription)
+        .subscription(|app: &App| listen::into_iced(app.subscription()))
         .theme(App::theme)
         .scale_factor(App::scale_factor)
         .window(window_settings(couch::ask_at_start()))
@@ -810,60 +812,47 @@ impl App {
         theme::theme()
     }
 
-    fn subscription(&self) -> Subscription<Message> {
-        let frames = if self.animating() {
-            iced::window::frames().map(Message::Frame)
-        } else {
-            Subscription::none()
-        };
-        let update_checks = if self.updates.on
-            && (self.account.is_some() || self.epic.account.is_some())
-        {
-            iced::time::every(updates::EVERY).map(|_| Message::Updates(updates::UpdatesMsg::Check))
-        } else {
-            Subscription::none()
-        };
-        let downloads = if self.downloads_waiting.is_some() {
-            iced::time::every(DOWNLOADS_RETRY).map(|_| Message::Install(InstallMsg::Retry))
-        } else {
-            Subscription::none()
-        };
-        let steam_games = if self.watching_steam() {
-            iced::time::every(steam::LOOK_EVERY).map(|_| Message::Steam(steam::SteamMsg::Look))
-        } else {
-            Subscription::none()
-        };
-        let steam_downloads = match self.steam_downloads_every() {
-            Some(every) => {
-                iced::time::every(every).map(|_| Message::Steam(steam::SteamMsg::ReadDownloads))
-            }
-            None => Subscription::none(),
-        };
-        // The couch mode reads gamepads, and keys of its own.
-        let (keys, gamepads) = if self.couch.is_some() {
-            (
-                keyboard::listen().filter_map(couch_key),
-                Subscription::run(pad::moves).map(|nav| Message::Couch(couch::CouchMsg::Nav(nav))),
-            )
-        } else {
-            (
-                keyboard::listen().filter_map(key_message),
-                Subscription::none(),
-            )
-        };
-        Subscription::batch([
-            frames,
-            update_checks,
-            downloads,
-            steam_games,
-            steam_downloads,
-            iced::window::events().filter_map(window_message),
-            keys,
-            gamepads,
-            iced::window::close_requests().map(|_| Message::CloseRequested),
-            iced::window::resize_events().map(|(_, size)| Message::WindowResized(size)),
-            self.sidebar_drag(),
-        ])
+    /// What the interface listens to after this message.
+    fn subscription(&self) -> Vec<Listen> {
+        let mut listens = vec![
+            Listen::Window,
+            Listen::CloseRequests,
+            Listen::Resizes,
+            // The couch mode reads gamepads, and keys of its own.
+            Listen::Keys {
+                couch: self.couch.is_some(),
+            },
+        ];
+        if self.couch.is_some() {
+            listens.push(Listen::Gamepads);
+        }
+        if self.animating() {
+            listens.push(Listen::Frames);
+        }
+        if self.updates.on && (self.account.is_some() || self.epic.account.is_some()) {
+            listens.push(Listen::Every(updates::EVERY, || {
+                Message::Updates(updates::UpdatesMsg::Check)
+            }));
+        }
+        if self.downloads_waiting.is_some() {
+            listens.push(Listen::Every(DOWNLOADS_RETRY, || {
+                Message::Install(InstallMsg::Retry)
+            }));
+        }
+        if self.watching_steam() {
+            listens.push(Listen::Every(steam::LOOK_EVERY, || {
+                Message::Steam(steam::SteamMsg::Look)
+            }));
+        }
+        if let Some(every) = self.steam_downloads_every() {
+            listens.push(Listen::Every(every, || {
+                Message::Steam(steam::SteamMsg::ReadDownloads)
+            }));
+        }
+        if self.sidebar.dragging {
+            listens.push(Listen::Pointer);
+        }
+        listens
     }
 
     /// Plays the page transition when the update moved to another page.

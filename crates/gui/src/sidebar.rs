@@ -8,7 +8,6 @@ use std::rc::Rc;
 
 use iced::widget::image;
 use iced::widget::scrollable::Viewport;
-use iced::{Event, Subscription, mouse};
 
 use crate::task::Task;
 use slatty_core::custom::ImageChange;
@@ -110,24 +109,6 @@ impl App {
             }
         }
         Task::none()
-    }
-
-    /// The pointer's moves and its button let go, while the list's edge is dragged: they happen
-    /// anywhere in the window, beyond the edge itself.
-    pub fn sidebar_drag(&self) -> Subscription<Message> {
-        if !self.sidebar.dragging {
-            return Subscription::none();
-        }
-        iced::event::listen_with(|event, _, _| match event {
-            Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                Some(Message::Sidebar(SidebarMsg::Drag(position.x)))
-            }
-            // Let go out of the window, where its release is not told.
-            Event::Mouse(
-                mouse::Event::ButtonReleased(mouse::Button::Left) | mouse::Event::CursorLeft,
-            ) => Some(Message::Sidebar(SidebarMsg::Drop)),
-            _ => None,
-        })
     }
 
     /// Whether the list shows: open, on the library's page.
