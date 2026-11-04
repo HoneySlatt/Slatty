@@ -7,7 +7,7 @@ use slatty_core::session;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::notify::Kind;
-use crate::{App, CloudRequest, Core, Message, err, ui};
+use crate::{App, CloudRequest, Core, Message, err, format};
 
 pub struct PlayState {
     pub game_id: String,
@@ -148,7 +148,7 @@ impl App {
         };
         let result = match msg {
             PlayMsg::Event(event) => {
-                p.log.push(ui::format::describe_play_event(&event));
+                p.log.push(format::describe_play_event(&event));
                 let game = p.game_id.clone();
                 return self.play_notification(&game, &event);
             }

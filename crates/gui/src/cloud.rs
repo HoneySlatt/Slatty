@@ -9,7 +9,7 @@ use slatty_core::cloud::{
 use slatty_core::install::{Install, Platform};
 
 use crate::work::tokens_for;
-use crate::{App, Core, Message, err, ui};
+use crate::{App, Core, Message, err, format};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CloudStatus {
@@ -230,7 +230,7 @@ async fn cloud_task(
                     r.plan
                         .warnings
                         .iter()
-                        .map(|w| ui::format::describe_warning(*w).to_string()),
+                        .map(|w| format::describe_warning(*w).to_string()),
                 );
                 if opts.dry_run {
                     let p = &r.plan;

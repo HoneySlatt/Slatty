@@ -199,8 +199,9 @@ static STARTED: std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<Result<Bo
 
 /// Begins reading what the first page needs on a thread of its own, at once: the window and the
 /// graphics driver take about a hundred milliseconds to set up, which this read no longer waits
-/// for.
-pub fn start(backends: Option<wgpu::Backends>) {
+/// for. `then` runs on that thread once the read is done (the interface checks there which
+/// graphics backends the next start can do with).
+pub fn start(then: impl FnOnce() + Send + 'static) {
     let (tx, rx) = tokio::sync::oneshot::channel();
     *STARTED.lock().unwrap_or_else(|e| e.into_inner()) = Some(rx);
     std::thread::spawn(move || {
@@ -213,15 +214,7 @@ pub fn start(backends: Option<wgpu::Backends>) {
             Err(e) => Err(e.clone()),
         };
         let _ = tx.send(result);
-        // Which backends the next start can do with, once this one is over.
-        if let (Ok(runtime), Some(backends)) = (runtime, backends) {
-            std::thread::sleep(crate::graphics::CHECK_AFTER);
-            if let Ok(dirs) = Dirs::from_system()
-                && let Ok(db) = Db::open(&dirs.db_file())
-            {
-                runtime.block_on(crate::graphics::check(&db, backends));
-            }
-        }
+        then();
     });
 }
 

@@ -7,7 +7,7 @@ mod couch;
 mod downloads;
 mod edit;
 mod even_grid;
-pub mod format;
+pub(crate) use crate::format;
 mod game;
 mod game_settings;
 mod install;

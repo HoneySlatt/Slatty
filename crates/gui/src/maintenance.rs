@@ -7,8 +7,8 @@ use slatty_core::installer::{DlcChoice, Progress};
 use slatty_core::maintenance::{Change, UninstallReport};
 use tokio_util::sync::CancellationToken;
 
+use crate::format::human_size;
 use crate::notify::Kind;
-use crate::ui::format::human_size;
 use crate::work::{paused_or, progress_stream, tokens};
 use crate::{App, Message, err};
 

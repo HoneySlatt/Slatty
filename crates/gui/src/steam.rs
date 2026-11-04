@@ -832,7 +832,7 @@ impl App {
 
     /// Where an install or update Steam makes is, in words.
     pub fn steam_status(&self, id: &str, u: &local::Update) -> String {
-        crate::ui::format::steam_download(
+        crate::format::steam_download(
             u,
             self.steam_progress(id, u),
             self.steam.written.contains_key(id),

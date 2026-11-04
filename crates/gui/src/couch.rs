@@ -1178,10 +1178,7 @@ impl App {
             };
             let size = match self.install_views.get(entry) {
                 Some(InstallView::Queued(info) | InstallView::Ready(info)) => {
-                    format!(
-                        " · {}",
-                        crate::ui::format::human_size(info.total_download())
-                    )
+                    format!(" · {}", crate::format::human_size(info.total_download()))
                 }
                 _ => String::new(),
             };

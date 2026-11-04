@@ -176,7 +176,7 @@ The interface follows Iced's state / message / update / view split:
   none to buttons, and starts its work through the same messages as the desktop window: a new
   action there sends the desktop's message rather than doing the work again.
 - Views live under `ui/`, one module per page or panel. Shared pieces are in `ui/widgets.rs`,
-  `ui/panels.rs` (drawers and library dialogs) and `ui/format.rs` (text shown to the user).
+  `ui/panels.rs` (drawers and library dialogs); text shown to the user is made in `format.rs`.
 - Nothing slow runs on the interface thread: use `Task::perform`, `tokio::task::spawn_blocking`
   for file and CPU work, and `work::progress_stream` for progress (throttled to four updates a
   second). `boot.rs` reads everything the first page needs on a thread begun as the program starts,

@@ -7,6 +7,7 @@ mod downloads;
 mod edit;
 mod emulators;
 mod epic;
+mod format;
 mod geometry;
 mod graphics;
 mod icons;
@@ -111,7 +112,17 @@ fn main() -> iced::Result {
         // SAFETY: as above.
         unsafe { std::env::set_var("WINIT_X11_SCALE_FACTOR", scale) };
     }
-    boot::start(backends);
+    boot::start(move || {
+        // Which backends the next start can do with, once this one is over.
+        if let Some(backends) = backends {
+            std::thread::sleep(graphics::CHECK_AFTER);
+            if let Ok(dirs) = Dirs::from_system()
+                && let Ok(db) = Db::open(&dirs.db_file())
+            {
+                futures::executor::block_on(graphics::check(&db, backends));
+            }
+        }
+    });
     // Iced reads them once the graphics driver is set up: up to a tenth of a second more before
     // the first frame when they are not in the disk cache yet, as after the computer starts.
     std::thread::spawn(|| {
@@ -1455,14 +1466,14 @@ impl App {
         if let Some((_, title, p)) = self.installing() {
             work.push(format!(
                 "Downloading {title} ({:.0}%). It stops here and resumes where it stopped when Slatty starts again.",
-                ui::format::fraction(p) * 100.0
+                format::fraction(p) * 100.0
             ));
         }
         if let Some(run) = &self.offline_run {
             work.push(format!(
                 "Downloading the installers of {} ({:.0}%). It stops here and resumes where it stopped when Slatty starts again.",
                 self.title_of(&run.game_id),
-                ui::format::fraction(run.progress) * 100.0
+                format::fraction(run.progress) * 100.0
             ));
         }
         for (id, m) in &self.maintenance {
