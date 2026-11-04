@@ -24,6 +24,7 @@ fn find_in(path: &std::ffi::OsStr, program: &str) -> Option<PathBuf> {
 }
 
 /// Whether bubblewrap, which every isolated launch runs in, is there and can hold one.
+#[cfg(unix)]
 fn bubblewrap(bwrap: Option<PathBuf>) -> Check {
     let name = "bubblewrap";
     let Some(bwrap) = bwrap else {
@@ -105,7 +106,10 @@ pub fn comet_port_free() -> bool {
     TcpListener::bind(("127.0.0.1", crate::comet::PORT)).is_ok()
 }
 
+/// What Slatty needs; on Windows, the tools Linux needs (umu, bubblewrap, a runtime folder for
+/// Comet's handoff, the Galaxy service for Wine prefixes) are not checked.
 pub fn run(dirs: &Dirs) -> Vec<Check> {
+    #[cfg(unix)]
     let tool = |name: &'static str, program: &str| match find_in_path(program) {
         Some(p) => Check {
             name,
@@ -138,6 +142,12 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
             crate::comet::PORT
         ),
     };
+    #[cfg(windows)]
+    {
+        let _ = dirs;
+        return vec![keyring, port];
+    }
+    #[cfg(unix)]
     let runtime = Check {
         name: "runtime dir",
         ok: dirs.runtime.is_some(),
@@ -148,6 +158,7 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
                 p.display().to_string()
             }),
     };
+    #[cfg(unix)]
     let service = match crate::galaxy_service::find(dirs) {
         Some(p) => Check {
             name: "galaxy service",
@@ -164,6 +175,7 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
             ),
         },
     };
+    #[cfg(unix)]
     vec![
         tool("umu-launcher", "umu-run"),
         bubblewrap(find_in_path("bwrap")),

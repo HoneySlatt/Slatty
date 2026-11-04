@@ -148,6 +148,7 @@ fn window_settings(fullscreen: bool) -> iced::window::Settings {
         size: iced::Size::new(1440.0, 900.0),
         fullscreen,
         min_size: Some(iced::Size::new(800.0, 560.0)),
+        #[cfg(unix)]
         platform_specific: iced::window::settings::PlatformSpecific {
             application_id: APP_ID.into(),
             ..Default::default()
