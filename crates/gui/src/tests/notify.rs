@@ -13,6 +13,24 @@ fn unlocks(list: &[(&str, &str)]) -> Vec<Unlock> {
         .collect()
 }
 
+/// A card slides in from the window's edge to its place, frames stopping once it is there.
+#[test]
+fn a_card_slides_into_place() {
+    let mut app = library_app();
+    settle(&mut app);
+    let _ = app.notify(Kind::Downloads, Some("5"), "[FAKE] Card", "[FAKE] Text");
+    assert!(app.animating());
+    let coming = render(&app).find("[FAKE] Card").unwrap().bounds();
+    settle(&mut app);
+    assert!(!app.animating());
+    let there = render(&app).find("[FAKE] Card").unwrap().bounds();
+    assert!(
+        coming.x > there.x && coming.y == there.y,
+        "{coming:?} {there:?}"
+    );
+    assert!(there.x + there.width < SIZE.width, "in the window");
+}
+
 /// A download says when it starts and when it is done, in a card in the window's corner; the card
 /// goes after a few seconds, and a click opens the game's page.
 #[test]
@@ -61,13 +79,15 @@ fn a_download_says_when_it_starts_and_ends_in_a_card() {
 }
 
 /// A card is taken away by one wait of its own, not by a tick every half second while it shows,
-/// each tick a view, a layout and a frame: 12 for a card shown its six seconds.
+/// each tick a view, a layout and a frame: 12 for a card shown its six seconds. Frames are drawn
+/// while it slides in, and no more once it is in place.
 #[test]
 fn a_card_goes_after_one_wait_of_its_own() {
     let mut app = library_app();
     let task = app.notify(Kind::Downloads, Some("5"), "Download complete", "[FAKE]");
     assert_eq!(task.units(), 1, "its wait");
     assert_eq!(app.toasts.len(), 1);
+    settle(&mut app);
     let recipes = |app: &App| iced::advanced::subscription::into_recipes(app.subscription()).len();
     let mut quiet = library_app();
     quiet.toasts.clear();

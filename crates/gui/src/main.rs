@@ -928,6 +928,7 @@ impl App {
             || self.art_shown.is_animating(self.now)
             || self.hovers.animating(self.now)
             || self.arrivals.animating(self.now)
+            || self.toasts.iter().any(|t| t.shown.is_animating(self.now))
     }
 
     /// What each drawer and dialog layer shows, by layer: one changed to something new comes

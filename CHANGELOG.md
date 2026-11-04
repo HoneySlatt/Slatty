@@ -12,6 +12,7 @@ until 1.0, a minor version may change commands and on-disk formats.
   file's `hover_ms` sets how long it takes, 0 turning it off.
 - Drawers slide in from the window's edge and dialogs rise into place as the page behind darkens,
   over the theme's `transition_ms`, as pages do.
+- Notification cards slide in from the window's edge.
 
 ### Fixed
 

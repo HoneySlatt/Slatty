@@ -1,7 +1,7 @@
-//! Moves its content to the right while keeping its size, and draws only what stays within its own
-//! bounds: a drawer sliding in from the window's edge. The content is laid out where it is drawn,
-//! so it takes clicks there all along. Iced's `pin` gives its content only the room left after the
-//! move, which would narrow the drawer as it comes in.
+//! Moves its content to the right while keeping its size: a drawer or a notification card sliding
+//! in from the window's edge. The content is laid out where it is drawn, so it takes clicks there
+//! all along. Iced's `pin` gives its content only the room left after the move, which would narrow
+//! the drawer as it comes in.
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{Operation, Tree, Widget};
@@ -120,20 +120,15 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let Some(bounds) = layout.bounds().intersection(viewport) else {
-            return;
-        };
-        renderer.with_layer(bounds, |renderer| {
-            self.content.as_widget().draw(
-                &tree.children[0],
-                renderer,
-                theme,
-                style,
-                content(layout),
-                cursor,
-                &bounds,
-            );
-        });
+        self.content.as_widget().draw(
+            &tree.children[0],
+            renderer,
+            theme,
+            style,
+            content(layout),
+            cursor,
+            viewport,
+        );
     }
 
     fn overlay<'b>(

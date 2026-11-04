@@ -87,6 +87,8 @@ pub struct Toast {
     /// The game it is about: a click opens its page, its cover shows beside.
     pub game: Option<String>,
     pub until: Instant,
+    /// Slides in from the window's edge.
+    pub shown: iced::Animation<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -117,12 +119,17 @@ impl App {
         let (title, body) = (title.into(), body.into());
         if !self.unfocused {
             self.next_toast += 1;
+            self.now = self.now.max(Instant::now());
             self.toasts.push(Toast {
                 id: self.next_toast,
                 title,
                 body,
                 game: game.map(String::from),
                 until: Instant::now() + SHOWN_FOR,
+                shown: iced::Animation::new(false)
+                    .duration(crate::theme::tokens().transition)
+                    .easing(iced::animation::Easing::EaseOutCubic)
+                    .go(true, self.now),
             });
             if self.toasts.len() > AT_ONCE {
                 self.toasts.remove(0);

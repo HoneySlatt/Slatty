@@ -33,6 +33,9 @@ use crate::{App, Message, Page, Panel};
 use widgets::{avatar, icon_tab, logo, nav_tab, vertical_rule};
 pub(super) use widgets::{dark, dialog_over, inner, note, round_button};
 
+/// Width of a notification card.
+const TOAST_WIDTH: f32 = 360.0;
+
 impl App {
     pub fn view(&self) -> Element<'_, Message> {
         if let Some(e) = &self.fatal {
@@ -184,16 +187,18 @@ impl App {
                 )
                 .spacing(12)
                 .align_y(Alignment::Center);
-            button(card)
+            let card = button(card)
                 .padding([12, 14])
-                .width(360)
+                .width(TOAST_WIDTH)
                 .on_press_maybe(
                     t.game
                         .is_some()
                         .then_some(Message::Notify(crate::notify::NotifyMsg::Open(t.id))),
                 )
-                .style(theme::toast)
-                .into()
+                .style(theme::toast);
+            // From beyond the window's edge into its place, past the margin around the cards.
+            let away = (1.0 - t.shown.interpolate(0.0, 1.0, self.now)) * (TOAST_WIDTH + 20.0);
+            slide::slide(card, away).into()
         });
         container(Column::with_children(cards).spacing(10))
             .padding(20)
