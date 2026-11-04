@@ -1,6 +1,6 @@
 //! Steam's `appcache/appinfo.vdf`: what the client knows of each app (its name, type, platforms,
 //! library images), as binary KeyValues. Layout from SteamDatabase's description
-//! (https://github.com/SteamDatabase/SteamAppInfo): versions 40 and 41 are read. Only the apps
+//! (<https://github.com/SteamDatabase/SteamAppInfo>): versions 40 and 41 are read. Only the apps
 //! asked for are decoded; the others are skipped by their size.
 
 use std::borrow::Cow;

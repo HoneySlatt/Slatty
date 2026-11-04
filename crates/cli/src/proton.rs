@@ -9,6 +9,9 @@ use slatty_core::settings;
 use crate::Ctx;
 use crate::install::size;
 
+// These comments are the commands' help, which clap shows as written: `<project>-latest` is text
+// there, not an HTML tag.
+#[allow(rustdoc::invalid_html_tags)]
 #[derive(Subcommand)]
 pub enum ProtonCommand {
     /// List the Proton builds on this computer, those Slatty downloaded first
