@@ -6581,10 +6581,12 @@ dependencies = [
 name = "slatty-gpui"
 version = "0.2.0"
 dependencies = [
+ "futures",
  "gpui",
  "gpui_platform",
  "slatty-app",
  "slatty-core",
+ "tokio",
  "tracing-subscriber",
 ]
 

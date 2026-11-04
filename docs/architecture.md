@@ -126,7 +126,11 @@ The interface follows Iced's state, message, update and view split, in two crate
   `impl App` blocks; `run` hands the state's tasks and subscriptions to Iced, `theme` its look;
 - `slatty-gpui` (`crates/gpui`) is the same state drawn with GPUI, Zed's interface framework,
   built page by page beside `slatty-gui`, which stays the interface until this one matches it in
-  look, speed and use. GPUI comes from a revision of Zed's repository pinned in the workspace's
+  look, speed and use. `main.rs` holds the state in GPUI's root entity, which hands it each
+  message and the window's events; `run` runs the state's tasks on a tokio runtime, does what
+  they ask of the window, and starts or stops what the state listens to after each message
+  (timers and the gamepads as tasks, frames, keys, the pointer and the window's events as flags
+  the root reads). GPUI comes from a revision of Zed's repository pinned in the workspace's
   `Cargo.toml`, with the forks Zed patches in (`[patch.crates-io]`), moved by hand; the Nix
   package leaves it out for now. GPUI draws with the graphics card alone (Vulkan, else OpenGL):
   where neither driver is found, the window does not open and the program says why.

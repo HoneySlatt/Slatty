@@ -13,9 +13,13 @@ name = "slatty-gpui"
 path = "src/main.rs"
 
 [dependencies]
+# What GPUI runs for the state (`run`).
+futures = "0.3"
 gpui.workspace = true
 gpui_platform.workspace = true
 # The interface's state, shared with slatty-gui.
 slatty-app.workspace = true
 slatty-core.workspace = true
+# The state's tasks run on it, as under Iced.
+tokio.workspace = true
 tracing-subscriber.workspace = true
