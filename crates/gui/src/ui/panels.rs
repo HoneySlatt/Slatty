@@ -2,8 +2,8 @@
 
 use crate::theme::text;
 use iced::widget::{
-    Column, Space, button, center, checkbox, column, container, mouse_area, opaque, progress_bar,
-    row, scrollable, space, stack,
+    Column, Space, button, checkbox, column, container, opaque, progress_bar, row, scrollable,
+    space, stack,
 };
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::install::Install;
@@ -13,7 +13,8 @@ use slatty_core::runner::Runner;
 
 use super::achievements::{completed, lit_badge, unlock_all_button};
 use super::format::*;
-use super::{note, round_button};
+use super::slide::slide;
+use super::{dark, dialog_over, note, round_button};
 use crate::achievements::by_rarity;
 use crate::icons::{Icon, icon};
 use crate::maintenance::MaintenanceMsg;
@@ -179,18 +180,15 @@ impl App {
             .width(DRAWER_WIDTH)
             .height(Length::Fill)
             .style(theme::drawer);
+        // It slides in from the window's edge as it opens.
+        let shown = self.arrived(if self.edit.is_some() { "edit" } else { "panel" });
+        let drawer = slide(opaque(drawer), (1.0 - shown) * DRAWER_WIDTH);
         // Beside the page while it keeps room for its cards, over it in a narrow window.
         if self.window.width - DRAWER_WIDTH < PAGE_BESIDE_DRAWER {
             return stack![
                 page,
-                mouse_area(
-                    container(Space::new())
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .style(theme::backdrop)
-                )
-                .on_press(Message::ClosePanel),
-                container(opaque(drawer)).align_right(Length::Fill),
+                dark(Some(Message::ClosePanel), shown),
+                container(drawer).align_right(Length::Fill),
             ]
             .into();
         }
@@ -333,17 +331,11 @@ impl App {
             .max_width(640)
             .max_height(self.window.height - 60.0)
             .style(theme::card);
-        stack![
+        dialog_over(
             page,
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(theme::backdrop)
-            )
-            .on_press(Message::CloseDialog),
-            center(opaque(dialog)),
-        ]
-        .into()
+            dialog,
+            Some(Message::CloseDialog),
+            self.arrived("dialog"),
+        )
     }
 }

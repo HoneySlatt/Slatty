@@ -61,7 +61,7 @@ radius = 8                  # Corners of controls: buttons, fields, menus, tabs
 cover_radius = 6            # Corners of game covers
 
 [motion]
-transition_ms = 180         # Page transition; 0 turns it off
+transition_ms = 180         # Pages, drawers, dialogs coming into place; 0 turns it off
 transition_rise = 8         # How far a new page rises, in pixels
 hover_ms = 160              # Hover feedback: a cover's title and buttons; 0 turns it off
 ```

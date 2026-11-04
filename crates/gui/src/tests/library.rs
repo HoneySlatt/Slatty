@@ -874,6 +874,38 @@ fn a_game_read_again_as_it_was_leaves_the_lists_as_they_were() {
     assert!(render(&app).find("2 / 4").is_ok());
 }
 
+/// A drawer slides in from the window's edge and a dialog rises into place as they open, frames
+/// stopping once they are there; one opened before stays where it is.
+#[test]
+fn drawers_and_dialogs_come_into_place() {
+    let mut app = library_app();
+    let _ = app.update(Message::OpenDialog("5".into(), Panel::Install));
+    assert!(app.animating());
+    let opening = render(&app).find("Install").unwrap().bounds();
+    settle(&mut app);
+    assert!(!app.animating());
+    let open = render(&app).find("Install").unwrap().bounds();
+    assert!(
+        opening.y > open.y && opening.x == open.x,
+        "{opening:?} {open:?}"
+    );
+
+    let _ = app.update(Message::CloseDialog);
+    let _ = app.update(Message::Select("3".into()));
+    settle(&mut app);
+    let _ = app.update(Message::OpenPanel(Panel::Achievements));
+    let opening = render(&app).find("Achievements").unwrap().bounds();
+    settle(&mut app);
+    let open = render(&app).find("Achievements").unwrap().bounds();
+    assert!(
+        opening.x > open.x && opening.y == open.y,
+        "{opening:?} {open:?}"
+    );
+    // Something else changing leaves the drawer where it is.
+    let _ = app.update(Message::ToggleFavorite("3".into()));
+    assert!(!app.animating());
+}
+
 #[test]
 fn a_new_page_fades_in_then_stops_drawing_frames() {
     use std::time::Duration;

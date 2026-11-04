@@ -2,8 +2,10 @@
 //! tokens only, so a custom theme changes them everywhere at once.
 
 use crate::theme::text;
-use iced::widget::{Column, Space, button, container, image, row, stack, svg};
-use iced::{Alignment, ContentFit, Element, Length};
+use iced::widget::{
+    Column, Space, button, center, container, image, mouse_area, opaque, row, stack, svg,
+};
+use iced::{Alignment, ContentFit, Element, Length, Padding};
 
 use crate::Message;
 use crate::icons::{Icon, icon};
@@ -107,6 +109,39 @@ pub fn avatar<'a>(
                 .align_bottom(size)
         }))
         .into()
+}
+
+/// How far a dialog rises into place as it opens.
+const DIALOG_RISE: f32 = 16.0;
+
+/// `dialog` centred over `page`, the page darkened behind it. As `shown` goes from 0 (just
+/// opened) to 1, the dark fades in and the dialog rises into place. A click on the dark part sends
+/// `close`; without one, it does nothing.
+pub fn dialog_over<'a>(
+    page: Element<'a, Message>,
+    dialog: impl Into<Element<'a, Message>>,
+    close: Option<Message>,
+    shown: f32,
+) -> Element<'a, Message> {
+    stack![
+        page,
+        dark(close, shown),
+        center(opaque(dialog)).padding(Padding::ZERO.top(2.0 * DIALOG_RISE * (1.0 - shown))),
+    ]
+    .into()
+}
+
+/// The page darkened behind a dialog or a drawer, fading in as `shown` goes from 0 to 1. A click
+/// on it sends `close`; without one, it does nothing.
+pub fn dark<'a>(close: Option<Message>, shown: f32) -> Element<'a, Message> {
+    let dark = container(Space::new())
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(theme::backdrop_shown(shown));
+    match close {
+        Some(close) => mouse_area(dark).on_press(close).into(),
+        None => opaque(dark),
+    }
 }
 
 /// A titled block of the settings page or of a panel.

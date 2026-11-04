@@ -229,9 +229,11 @@ fn closing_from_the_sign_in_page_asks_first_too() {
         told: Vec::new(),
     });
     let _ = app.update(Message::CloseRequested);
+    settle(&mut app);
     let mut ui = render(&app);
     assert!(ui.find("Sign in to GOG").is_ok(), "over the sign-in page");
-    // Where it sits over the library: the page fills the window, as the layers over it do.
+    // Where it sits over the library, once risen into place: the page fills the window, as the
+    // layers over it do.
     let mut library = library_app();
     library.quit_confirm = app.quit_confirm.clone();
     let over_library = render(&library).find("Quit Slatty?").unwrap().bounds();

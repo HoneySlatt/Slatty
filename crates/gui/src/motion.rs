@@ -1,5 +1,6 @@
-//! Motion answering the pointer: a cover the pointer enters shows hovered by degrees, and goes
-//! back the same way once left. Frames are drawn only while one of them moves.
+//! Motion answering the pointer and what opens: a cover the pointer enters shows hovered by
+//! degrees, and goes back the same way once left; a drawer or a dialog comes into place. Frames
+//! are drawn only while one of them moves.
 
 use std::time::Duration;
 
@@ -55,11 +56,63 @@ impl Hovers {
     }
 }
 
+/// Drawers and dialogs coming into place, each by the layer it is in: one opening over another
+/// leaves that one still.
+#[derive(Default)]
+pub struct Arrivals(Vec<(&'static str, Animation<bool>)>);
+
+impl Arrivals {
+    /// What the layer `layer` shows changed to something new at `now`: it comes into place.
+    pub fn open(&mut self, layer: &'static str, now: Instant, lasting: Duration) {
+        self.0.retain(|(l, a)| *l != layer && a.is_animating(now));
+        self.0.push((
+            layer,
+            Animation::new(false)
+                .duration(lasting)
+                .easing(Easing::EaseOutCubic)
+                .go(true, now),
+        ));
+    }
+
+    /// How far what `layer` shows has come into place at `now`, from 0 to 1.
+    pub fn shown(&self, layer: &str, now: Instant) -> f32 {
+        self.0
+            .iter()
+            .find(|(l, _)| *l == layer)
+            .map_or(1.0, |(_, a)| a.interpolate(0.0, 1.0, now))
+    }
+
+    pub fn animating(&self, now: Instant) -> bool {
+        self.0.iter().any(|(_, a)| a.is_animating(now))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const LASTING: Duration = Duration::from_millis(100);
+
+    #[test]
+    fn what_opens_comes_into_place_and_leaves_the_others_still() {
+        let start = Instant::now();
+        let at = |ms| start + Duration::from_millis(ms);
+        let mut arrivals = Arrivals::default();
+        assert_eq!(arrivals.shown("drawer", start), 1.0, "nothing opened");
+        arrivals.open("drawer", start, LASTING);
+        assert_eq!(arrivals.shown("drawer", start), 0.0);
+        let half = arrivals.shown("drawer", at(50));
+        assert!(half > 0.0 && half < 1.0, "{half}");
+        arrivals.open("dialog", at(50), LASTING);
+        assert_eq!(arrivals.shown("drawer", at(50)), half, "the drawer goes on");
+        assert_eq!(arrivals.shown("dialog", at(50)), 0.0);
+        assert!(arrivals.animating(at(120)));
+        assert!(!arrivals.animating(at(150)));
+        assert_eq!(arrivals.shown("dialog", at(150)), 1.0);
+        // Done, they are forgotten when the next opens.
+        arrivals.open("drawer", at(200), LASTING);
+        assert_eq!(arrivals.0.len(), 1);
+    }
 
     #[test]
     fn a_cover_shows_hovered_by_degrees_and_goes_back_once_left() {

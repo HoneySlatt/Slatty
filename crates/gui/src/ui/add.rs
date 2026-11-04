@@ -2,12 +2,11 @@
 
 use crate::theme::text;
 use iced::widget::{
-    Space, button, center, column, container, mouse_area, opaque, pick_list, row, scrollable,
-    space, stack, text_input, toggler,
+    button, column, container, pick_list, row, scrollable, space, text_input, toggler,
 };
 use iced::{Alignment, Element, Length, Padding};
 
-use super::note;
+use super::{dialog_over, note};
 use crate::add::{AddDraft, AddMsg};
 use crate::icons::{Icon, icon};
 use crate::settings::ProtonChoice;
@@ -314,16 +313,8 @@ impl App {
             .padding(Padding::new(26.0).right(12.0))
             .max_width(640)
             .style(theme::card);
-        let backdrop = container(Space::new())
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(theme::backdrop);
         // Once an installer ran, closing throws away what it installed: not on a click beside.
-        let backdrop: Element<'_, Message> = if d.busy || d.installed_by.is_some() {
-            opaque(backdrop)
-        } else {
-            mouse_area(backdrop).on_press(msg(AddMsg::Cancel)).into()
-        };
-        stack![page, backdrop, center(opaque(dialog))].into()
+        let close = (!d.busy && d.installed_by.is_none()).then(|| msg(AddMsg::Cancel));
+        dialog_over(page, dialog, close, self.arrived("add"))
     }
 }

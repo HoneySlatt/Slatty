@@ -415,6 +415,8 @@ pub struct App {
     pub art_shown: Animation<bool>,
     /// Covers of the library hovered, or going back once left.
     pub hovers: motion::Hovers,
+    /// Drawers and dialogs coming into place.
+    pub arrivals: motion::Arrivals,
     pub now: Instant,
 }
 
@@ -533,6 +535,7 @@ impl Default for App {
             page_shown: Animation::new(true),
             art_shown: Animation::new(true),
             hovers: Default::default(),
+            arrivals: Default::default(),
             now: Instant::now(),
         }
     }
@@ -866,7 +869,15 @@ impl App {
             self.hovers.clear();
         }
         let shown = self.location();
+        let open = self.layers();
         let task = self.handle(message);
+        for ((layer, now), (_, before)) in self.layers().into_iter().zip(open) {
+            if now.is_some() && now != before {
+                self.now = self.now.max(Instant::now());
+                self.arrivals
+                    .open(layer, self.now, theme::tokens().transition);
+            }
+        }
         // Lists made again may have moved the games the couch mode's focus was on.
         self.refocus_couch();
         // Whatever ended (a game, an install, an update) may let a waiting update start.
@@ -916,6 +927,39 @@ impl App {
         self.page_shown.is_animating(self.now)
             || self.art_shown.is_animating(self.now)
             || self.hovers.animating(self.now)
+            || self.arrivals.animating(self.now)
+    }
+
+    /// What each drawer and dialog layer shows, by layer: one changed to something new comes
+    /// into place (`arrivals`).
+    fn layers(&self) -> [(&'static str, Option<String>); 7] {
+        let on_page = self.selected.as_ref();
+        [
+            (
+                "panel",
+                on_page
+                    .zip(self.panel)
+                    .filter(|_| self.edit.is_none())
+                    .map(|(id, panel)| format!("{id} {panel:?}")),
+            ),
+            ("edit", self.edit.as_ref().map(|d| d.game_id.clone())),
+            (
+                "dialog",
+                self.dialog
+                    .as_ref()
+                    .filter(|_| on_page.is_none())
+                    .map(|(id, panel)| format!("{id} {panel:?}")),
+            ),
+            ("add", self.add_game.as_ref().map(|_| String::new())),
+            ("launch", self.launch_prompt.clone()),
+            ("quit", self.quit_confirm.as_ref().map(|_| String::new())),
+            ("forget", self.forget_confirm.then(String::new)),
+        ]
+    }
+
+    /// How far what `layer` shows has come into place, from 0 to 1.
+    pub fn arrived(&self, layer: &str) -> f32 {
+        self.arrivals.shown(layer, self.now)
     }
 
     /// The page shown, apart from panels and dialogs over it.
@@ -1300,7 +1344,7 @@ impl App {
             }
             Message::Frame(now) => self.now = now,
             Message::CoverHovered(id, on) => {
-                self.now = Instant::now();
+                self.now = self.now.max(Instant::now());
                 self.hovers.set(&id, on, self.now, theme::tokens().hover);
             }
             Message::DismissNotice => self.notice = None,

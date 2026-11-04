@@ -37,7 +37,8 @@ pub struct Tokens {
     pub radius: f32,
     /// Corner radius of game covers.
     pub cover_radius: f32,
-    /// How long a new page takes to appear, and how far it rises meanwhile. Zero turns it off.
+    /// How long a new page, a drawer or a dialog takes to come into place, and how far a page rises
+    /// meanwhile. Zero turns it off.
     pub transition: Duration,
     pub transition_rise: f32,
     /// How long what the pointer enters takes to show hovered, and to go back once left. Zero
@@ -328,7 +329,7 @@ impl Tokens {
         out += "\n[motion]\n";
         out += &noted(
             format!("transition_ms = {}", self.transition.as_millis()),
-            "Page transition; 0 turns it off",
+            "Pages, drawers, dialogs; 0 turns it off",
         );
         out += &noted(
             format!("transition_rise = {}", self.transition_rise),
@@ -842,6 +843,14 @@ pub fn couch_panel(_: &Theme) -> container::Style {
 pub fn backdrop(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(tokens().scrim)),
+        ..Default::default()
+    }
+}
+
+/// The backdrop fading in, `shown` from 0 (clear) to 1.
+pub fn backdrop_shown(shown: f32) -> impl Fn(&Theme) -> container::Style {
+    move |_| container::Style {
+        background: Some(Background::Color(tokens().scrim.scale_alpha(shown))),
         ..Default::default()
     }
 }

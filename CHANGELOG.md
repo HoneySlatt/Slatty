@@ -10,6 +10,8 @@ until 1.0, a minor version may change commands and on-disk formats.
 - A cover of the library answers the pointer smoothly: its title and buttons fade in, its art
   grows slightly in its frame, and both go back the same way once the pointer leaves. The theme
   file's `hover_ms` sets how long it takes, 0 turning it off.
+- Drawers slide in from the window's edge and dialogs rise into place as the page behind darkens,
+  over the theme's `transition_ms`, as pages do.
 
 ### Fixed
 

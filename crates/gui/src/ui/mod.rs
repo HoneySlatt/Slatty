@@ -18,13 +18,11 @@ mod panels;
 mod pointer;
 mod settings;
 mod sidebar;
+mod slide;
 mod widgets;
 
 use crate::theme::text;
-use iced::widget::{
-    Column, Space, button, center, column, container, mouse_area, opaque, row, space, stack,
-    text_input,
-};
+use iced::widget::{Column, Space, button, column, container, row, space, stack, text_input};
 use iced::{Alignment, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
 
@@ -33,7 +31,7 @@ use crate::icons::{Icon, icon};
 use crate::theme::{self, bold, tokens};
 use crate::{App, Message, Page, Panel};
 use widgets::{avatar, icon_tab, logo, nav_tab, vertical_rule};
-pub(super) use widgets::{inner, note, round_button};
+pub(super) use widgets::{dark, dialog_over, inner, note, round_button};
 
 impl App {
     pub fn view(&self) -> Element<'_, Message> {
@@ -139,13 +137,13 @@ impl App {
             .push(
                 self.quit_confirm
                     .as_ref()
-                    .map(|work| quit_dialog(empty(), work)),
+                    .map(|work| quit_dialog(empty(), work, self.arrived("quit"))),
             )
             .push(
                 self.account
                     .as_ref()
                     .filter(|_| self.forget_confirm)
-                    .map(|a| forget_dialog(empty(), &a.username)),
+                    .map(|a| forget_dialog(empty(), &a.username, self.arrived("forget"))),
             )
             .push((!self.toasts.is_empty()).then(|| self.toasts()));
         pointer::right_clicks(layers, |at| Message::Edit(EditMsg::At(at))).into()
@@ -334,7 +332,11 @@ impl App {
 }
 
 /// Asks before closing the window while something is still running.
-fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a, Message> {
+fn quit_dialog<'a>(
+    page: Element<'a, Message>,
+    work: &'a [String],
+    shown: f32,
+) -> Element<'a, Message> {
     let items = work.iter().map(|w| {
         row![
             icon(Icon::TriangleAlert, 18.0, theme::tokens().warning),
@@ -365,22 +367,11 @@ fn quit_dialog<'a>(page: Element<'a, Message>, work: &'a [String]) -> Element<'a
     .padding(26)
     .max_width(560)
     .style(theme::card);
-    stack![
-        page,
-        mouse_area(
-            container(Space::new())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(theme::backdrop)
-        )
-        .on_press(Message::CancelQuit),
-        center(opaque(dialog)),
-    ]
-    .into()
+    dialog_over(page, dialog, Some(Message::CancelQuit), shown)
 }
 
 /// Asks before deleting what Slatty keeps of the signed-in account.
-fn forget_dialog<'a>(page: Element<'a, Message>, name: &str) -> Element<'a, Message> {
+fn forget_dialog<'a>(page: Element<'a, Message>, name: &str, shown: f32) -> Element<'a, Message> {
     let paragraph = |s: &'a str| text(s).size(14).color(tokens().muted);
     let dialog = container(
         column![
@@ -409,18 +400,7 @@ fn forget_dialog<'a>(page: Element<'a, Message>, name: &str) -> Element<'a, Mess
     .padding(26)
     .max_width(560)
     .style(theme::card);
-    stack![
-        page,
-        mouse_area(
-            container(Space::new())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(theme::backdrop)
-        )
-        .on_press(Message::CancelForget),
-        center(opaque(dialog)),
-    ]
-    .into()
+    dialog_over(page, dialog, Some(Message::CancelForget), shown)
 }
 
 impl App {
@@ -478,18 +458,12 @@ impl App {
         .padding(26)
         .max_width(560)
         .style(theme::card);
-        stack![
+        dialog_over(
             page,
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(theme::backdrop)
-            )
-            .on_press(Message::CancelLaunch),
-            center(opaque(dialog)),
-        ]
-        .into()
+            dialog,
+            Some(Message::CancelLaunch),
+            self.arrived("launch"),
+        )
     }
 
     /// A page just shown fades in) from the background while rising slightly. The layers stay the

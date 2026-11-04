@@ -3,14 +3,14 @@
 
 use crate::theme::text;
 use iced::widget::{
-    Space, button, center, column, container, image, mouse_area, opaque, pin, row, scrollable,
-    space, stack, text_input, toggler,
+    Space, button, column, container, image, mouse_area, pin, row, scrollable, space, stack,
+    text_input, toggler,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::custom::ImageChange;
 
-use super::note;
 use super::panels::DRAWER_WIDTH;
+use super::{dialog_over, note};
 use crate::edit::{
     Art, ArtPicker, ContextMenu, EditDraft, EditMsg, FORM, ICON_PICTURE, MENU_WIDTH,
 };
@@ -78,18 +78,12 @@ impl App {
             .padding(Padding::new(26.0).right(12.0))
             .max_width(720)
             .style(theme::card);
-        stack![
+        dialog_over(
             page,
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(theme::backdrop)
-            )
-            .on_press(Message::Edit(EditMsg::Cancel)),
-            center(opaque(dialog)),
-        ]
-        .into()
+            dialog,
+            Some(Message::Edit(EditMsg::Cancel)),
+            self.arrived("edit"),
+        )
     }
 
     /// Beside the game page, opened from its key art.
