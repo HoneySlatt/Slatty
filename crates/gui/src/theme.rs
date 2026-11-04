@@ -40,6 +40,9 @@ pub struct Tokens {
     /// How long a new page takes to appear, and how far it rises meanwhile. Zero turns it off.
     pub transition: Duration,
     pub transition_rise: f32,
+    /// How long what the pointer enters takes to show hovered, and to go back once left. Zero
+    /// turns it off.
+    pub hover: Duration,
 }
 
 impl Default for Tokens {
@@ -67,6 +70,7 @@ impl Default for Tokens {
             cover_radius: 6.0,
             transition: Duration::from_millis(180),
             transition_rise: 8.0,
+            hover: Duration::from_millis(160),
         }
     }
 }
@@ -167,6 +171,7 @@ struct ShapeFile {
 struct MotionFile {
     transition_ms: Option<u64>,
     transition_rise: Option<f32>,
+    hover_ms: Option<u64>,
 }
 
 /// `#rrggbb`, or `#rrggbbaa` with transparency.
@@ -261,6 +266,12 @@ impl Tokens {
         if let Some(rise) = file.motion.transition_rise {
             t.transition_rise = number("transition_rise", rise)?;
         }
+        if let Some(ms) = file.motion.hover_ms {
+            if ms > MAX_TRANSITION_MS {
+                return Err(format!("`hover_ms` must be {MAX_TRANSITION_MS} or less"));
+            }
+            t.hover = Duration::from_millis(ms);
+        }
         Ok(t)
     }
 
@@ -322,6 +333,10 @@ impl Tokens {
         out += &noted(
             format!("transition_rise = {}", self.transition_rise),
             "How far a new page rises, in pixels",
+        );
+        out += &noted(
+            format!("hover_ms = {}", self.hover.as_millis()),
+            "Hover feedback; 0 turns it off",
         );
         out
     }
@@ -639,25 +654,49 @@ pub fn avatar(_: &Theme) -> container::Style {
     }
 }
 
-/// Title and buttons shown over a hovered cover.
-pub fn cover_overlay(_: &Theme) -> container::Style {
-    container::Style {
+/// Title and buttons shown over a hovered cover, `shown` from 0 (clear) to 1 (hovered).
+pub fn cover_overlay(shown: f32) -> impl Fn(&Theme) -> container::Style {
+    move |_| container::Style {
         background: Some(Background::Color(Color {
-            a: 0.82,
+            a: 0.82 * shown,
             ..tokens().background
         })),
         border: border::rounded(border::bottom(tokens().cover_radius)),
-        text_color: Some(tokens().text),
+        text_color: Some(tokens().text.scale_alpha(shown)),
         ..Default::default()
     }
 }
 
-pub fn cover_frame(_: &Theme) -> container::Style {
-    container::Style {
+pub fn cover_frame(shown: f32) -> impl Fn(&Theme) -> container::Style {
+    move |_| container::Style {
         border: round(tokens().cover_radius)
-            .color(tokens().accent)
+            .color(tokens().accent.scale_alpha(shown))
             .width(2.0),
         ..Default::default()
+    }
+}
+
+/// `style` with every colour `shown` times as opaque: buttons fading in and out with what holds
+/// them.
+pub fn faded(
+    style: fn(&Theme, button::Status) -> button::Style,
+    shown: f32,
+) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let s = style(theme, status);
+        button::Style {
+            background: s.background.map(|b| b.scale_alpha(shown)),
+            text_color: s.text_color.scale_alpha(shown),
+            border: Border {
+                color: s.border.color.scale_alpha(shown),
+                ..s.border
+            },
+            shadow: Shadow {
+                color: s.shadow.color.scale_alpha(shown),
+                ..s.shadow
+            },
+            ..s
+        }
     }
 }
 
@@ -1080,10 +1119,11 @@ mod tests {
     fn a_theme_file_overrides_only_what_it_sets() {
         let t = Tokens::from_toml(
             "[colors]\naccent = \"#ff8800\"\nscrim = \"#00000080\"\n\n[shape]\nradius = 0\n\n\
-             [motion]\ntransition_ms = 0\n",
+             [motion]\ntransition_ms = 0\nhover_ms = 0\n",
             Tokens::default(),
         )
         .unwrap();
+        assert_eq!(t.hover, Duration::ZERO);
         assert_eq!(t.accent, Color::from_rgb8(0xff, 0x88, 0x00));
         assert!((t.scrim.a - 128.0 / 255.0).abs() < 1e-6);
         assert_eq!(t.radius, 0.0);
@@ -1147,6 +1187,7 @@ mod tests {
             ("[shape]\nradius = inf\n", "radius"),
             ("[shape]\ncover_radius = nan\n", "cover_radius"),
             ("[motion]\ntransition_ms = 99999999\n", "transition_ms"),
+            ("[motion]\nhover_ms = 99999999\n", "hover_ms"),
         ] {
             let e = Tokens::from_toml(line, Tokens::default()).unwrap_err();
             assert!(e.contains(key), "{line}: {e}");
@@ -1166,8 +1207,20 @@ mod tests {
             assert_eq!(a.into_rgba8(), b.into_rgba8());
         }
         assert_eq!(
-            (t.radius, t.cover_radius, t.transition, t.transition_rise),
-            (d.radius, d.cover_radius, d.transition, d.transition_rise)
+            (
+                t.radius,
+                t.cover_radius,
+                t.transition,
+                t.transition_rise,
+                t.hover
+            ),
+            (
+                d.radius,
+                d.cover_radius,
+                d.transition,
+                d.transition_rise,
+                d.hover
+            )
         );
     }
 }

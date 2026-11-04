@@ -137,6 +137,7 @@ The interface follows Iced's state, message, update and view split:
 | `runners`, `emulators`, `settings` | Settings → Runners; Settings → Emulators and its scan; the rest of Settings |
 | `couch`, `pad` | The couch mode: where its focus is, its moves, its lists (home rows, its library, its downloads); gamepads read through gilrs on a thread of their own, a held direction repeating, and its keys (see [Couch mode](#couch-mode)) |
 | `notify` | Cards in the window, desktop notifications |
+| `motion` | Covers answering the pointer: hovered by degrees, going back once left; frames drawn only while one moves |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress |
 | `theme`, `presets`, `icons` | Design tokens and widget styles, built-in themes, Lucide icons |
 | `ui/*` | The views: top bar and layers (`mod`), building blocks (`widgets`), pages (`library`, `game`, `achievements`, `settings`, `downloads`), the list of games beside the library (`sidebar`), drawers and dialogs (`install`, `installers`, `game_settings`, `manage`, `cloud`, `edit`, `add`, `panels`), the couch mode's pages and layers (`couch`), text shown to the user (`format`), `even_grid`, `pointer` |

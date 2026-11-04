@@ -3,7 +3,7 @@
 use crate::theme::text;
 use iced::widget::{
     Column, button, checkbox, column, container, hover, image, mouse_area, pick_list, progress_bar,
-    row, scrollable, space, tooltip,
+    row, scrollable, space, stack, tooltip,
 };
 use iced::{Alignment, ContentFit, Element, Length};
 use slatty_core::installer::Progress;
@@ -20,6 +20,9 @@ use crate::maintenance::MaintenanceMsg;
 use crate::theme::{self, semibold, tokens};
 use crate::{App, Filters, Interrupted, Message, Panel, Shelf, Sort};
 use slatty_core::emulated::Emulator;
+
+/// How much a cover's art grows inside its frame while hovered: a twentieth.
+const COVER_ZOOM: f32 = 0.05;
 
 /// A choice of the system filter: every game, or the emulated games of one system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -314,12 +317,14 @@ impl App {
     }
 
     pub(super) fn card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
+        let shown = self.hovers.shown(&g.id, self.now);
         let art: Element<'_, Message> = match self.grid_cover(&g.id) {
             Some(h) => image(h)
                 .content_fit(ContentFit::Cover)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .border_radius(tokens().cover_radius)
+                .scale(1.0 + COVER_ZOOM * shown.unwrap_or(0.0))
                 .into(),
             None => container(text(&g.title).size(14).font(semibold()))
                 .padding(12)
@@ -334,7 +339,7 @@ impl App {
             .style(theme::plain);
         let installed = self.installs.contains_key(&g.id);
         let installable = self.not_installable(&g.id).is_none();
-        let action = if self.steam_game(&g.id).is_some() {
+        let (action_icon, action) = if self.steam_game(&g.id).is_some() {
             use crate::steam::SteamMsg;
             use slatty_core::steam::client::Action;
             let installed = self.steam.installed.get(&g.id);
@@ -347,66 +352,88 @@ impl App {
                 Some(false) => (Icon::Download, None),
                 None => (Icon::Download, Some(Action::Install)),
             };
-            button(icon(ic, 16.0, tokens().on_accent))
-                .padding([8, 14])
-                .on_press_maybe(action.map(|a| Message::Steam(SteamMsg::Ask(g.id.clone(), a))))
-                .style(theme::primary)
+            (
+                ic,
+                action.map(|a| Message::Steam(SteamMsg::Ask(g.id.clone(), a))),
+            )
         } else if installed {
-            button(icon(Icon::Play, 16.0, tokens().on_accent))
-                .padding([8, 14])
-                .on_press_maybe(self.can_play(&g.id).then(|| Message::Play(g.id.clone())))
-                .style(theme::primary)
+            (
+                Icon::Play,
+                self.can_play(&g.id).then(|| Message::Play(g.id.clone())),
+            )
         } else {
-            button(icon(Icon::Download, 16.0, tokens().on_accent))
-                .padding([8, 14])
-                .on_press_maybe(
-                    installable.then(|| Message::OpenDialog(g.id.clone(), Panel::Install)),
-                )
-                .style(theme::primary)
+            (
+                Icon::Download,
+                installable.then(|| Message::OpenDialog(g.id.clone(), Panel::Install)),
+            )
         };
         // Steam keeps a Steam game's settings: its page says what can be asked of Steam. A product
         // GOG offers nothing to install for has none: its page says why.
-        let settings = button(icon(Icon::SlidersHorizontal, 16.0, tokens().text))
-            .padding(8)
-            .on_press(if self.steam_game(&g.id).is_some() || !installable {
-                Message::Select(g.id.clone())
-            } else {
-                Message::OpenDialog(
-                    g.id.clone(),
-                    if installed {
-                        Panel::GameSettings
-                    } else {
-                        Panel::Install
-                    },
-                )
-            })
-            .style(theme::plain);
-        let overlay = column![
-            space().height(Length::Fill),
-            container(
-                column![
-                    // Two lines at most: a longer title would push the buttons off the cover.
-                    container(text(&g.title).size(13).font(semibold()))
-                        .max_height(2.0 * 13.0 * 1.3)
-                        .clip(true),
-                    row![settings, space().width(Length::Fill), action].align_y(Alignment::Center),
-                ]
-                .spacing(4),
+        let settings = if self.steam_game(&g.id).is_some() || !installable {
+            Message::Select(g.id.clone())
+        } else {
+            Message::OpenDialog(
+                g.id.clone(),
+                if installed {
+                    Panel::GameSettings
+                } else {
+                    Panel::Install
+                },
             )
-            .padding([8, 10])
-            .width(Length::Fill)
-            .style(theme::cover_overlay),
-        ];
-        // A right click opens the cover's menu (edit the title, sorting title, cover, background).
-        mouse_area(hover(
-            base,
+        };
+        // The title and buttons over the cover, and its frame, `shown` from 0 (clear) to 1.
+        let frame = |shown: f32| {
+            let action = button(icon(
+                action_icon,
+                16.0,
+                tokens().on_accent.scale_alpha(shown),
+            ))
+            .padding([8, 14])
+            .on_press_maybe(action.clone())
+            .style(theme::faded(theme::primary, shown));
+            let settings = button(icon(
+                Icon::SlidersHorizontal,
+                16.0,
+                tokens().text.scale_alpha(shown),
+            ))
+            .padding(8)
+            .on_press(settings.clone())
+            .style(theme::faded(theme::plain, shown));
+            let overlay = column![
+                space().height(Length::Fill),
+                container(
+                    column![
+                        // Two lines at most: a longer title would push the buttons off the cover.
+                        container(text(&g.title).size(13).font(semibold()))
+                            .max_height(2.0 * 13.0 * 1.3)
+                            .clip(true),
+                        row![settings, space().width(Length::Fill), action]
+                            .align_y(Alignment::Center),
+                    ]
+                    .spacing(4),
+                )
+                .padding([8, 10])
+                .width(Length::Fill)
+                .style(theme::cover_overlay(shown)),
+            ];
             container(overlay)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(theme::cover_frame),
-        ))
-        .on_right_press(Message::Edit(EditMsg::Menu(g.id.clone())))
-        .into()
+                .style(theme::cover_frame(shown))
+        };
+        // Shown while the pointer is over the cover, whether or not its entering was seen; then,
+        // once it left, going back over the cover.
+        let card = stack![hover(base, frame(shown.unwrap_or(1.0)))].push(
+            self.hovers
+                .leaving(&g.id, self.now)
+                .then(|| frame(shown.unwrap_or(0.0))),
+        );
+        // A right click opens the cover's menu (edit the title, sorting title, cover, background).
+        mouse_area(card)
+            .on_enter(Message::CoverHovered(g.id.clone(), true))
+            .on_exit(Message::CoverHovered(g.id.clone(), false))
+            .on_right_press(Message::Edit(EditMsg::Menu(g.id.clone())))
+            .into()
     }
 }
 

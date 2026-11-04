@@ -5,6 +5,12 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 ## Unreleased
 
+### Changed
+
+- A cover of the library answers the pointer smoothly: its title and buttons fade in, its art
+  grows slightly in its frame, and both go back the same way once the pointer leaves. The theme
+  file's `hover_ms` sets how long it takes, 0 turning it off.
+
 ### Fixed
 
 - A cloud save in a folder, named with backslashes as Windows clients upload it, stays in sync:

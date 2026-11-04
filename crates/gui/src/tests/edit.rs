@@ -154,8 +154,16 @@ fn right_clicking_a_cover_opens_a_menu_with_edit_game() {
         let _ = ui.simulate([iced::Event::Mouse(Mouse::ButtonPressed(Button::Right))]);
         ui.into_messages().collect()
     };
+    // The pointer enters the cover first.
     assert!(
-        matches!(&messages[..], [Message::Edit(EditMsg::Menu(id)), Message::Edit(EditMsg::At(..))] if id == "7"),
+        matches!(
+            &messages[..],
+            [
+                Message::CoverHovered(hovered, true),
+                Message::Edit(EditMsg::Menu(id)),
+                Message::Edit(EditMsg::At(..))
+            ] if id == "7" && hovered == "7"
+        ),
         "{messages:?}"
     );
     for m in messages {

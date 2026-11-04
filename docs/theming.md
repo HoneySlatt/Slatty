@@ -1,6 +1,6 @@
 # Theming
 
-The interface takes its colours, corner radii and page transition from a built-in theme, with your
+The interface takes its colours, corner radii and motion from a built-in theme, with your
 own file over it:
 
 ```
@@ -63,10 +63,11 @@ cover_radius = 6            # Corners of game covers
 [motion]
 transition_ms = 180         # Page transition; 0 turns it off
 transition_rise = 8         # How far a new page rises, in pixels
+hover_ms = 160              # Hover feedback: a cover's title and buttons; 0 turns it off
 ```
 
 Colours are `#rrggbb`, or `#rrggbbaa` with transparency. Radii and the rise are in pixels, and must
-be numbers (not `nan` or `inf`); a transition lasts at most 10,000 ms. Cards, drawers and dialogs
+be numbers (not `nan` or `inf`); a transition or a hover lasts at most 10,000 ms. Cards, drawers and dialogs
 keep corners of their own, which the file does not change yet.
 
 ## Example

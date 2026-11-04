@@ -13,6 +13,7 @@ mod install;
 mod library;
 mod login;
 mod maintenance;
+mod motion;
 mod notify;
 mod offline;
 mod pad;
@@ -412,6 +413,8 @@ pub struct App {
     /// frame drawn.
     pub page_shown: Animation<bool>,
     pub art_shown: Animation<bool>,
+    /// Covers of the library hovered, or going back once left.
+    pub hovers: motion::Hovers,
     pub now: Instant,
 }
 
@@ -529,6 +532,7 @@ impl Default for App {
             applied_scale: std::cell::Cell::new(1.0),
             page_shown: Animation::new(true),
             art_shown: Animation::new(true),
+            hovers: Default::default(),
             now: Instant::now(),
         }
     }
@@ -632,6 +636,8 @@ pub enum Message {
     CloseDialog,
     WindowResized(Size),
     Frame(Instant),
+    /// The pointer entered or left a game's cover in the library.
+    CoverHovered(String, bool),
     Key(keyboard::Event),
 }
 
@@ -682,6 +688,7 @@ impl Message {
                 )
                 | Message::AchievementsScrolled(_)
                 | Message::Frame(_)
+                | Message::CoverHovered(..)
                 | Message::WindowResized(_)
                 | Message::Cover(..)
                 | Message::CoversScaled(..)
@@ -848,6 +855,16 @@ impl App {
         if !message.keeps_lists() {
             self.lists.clear();
         }
+        // Other games take the covers' places, under a pointer that sends nothing until it moves.
+        if matches!(
+            message,
+            Message::Search(_)
+                | Message::ShowShelf(_)
+                | Message::SortBy(_)
+                | Message::SetFilters(_)
+        ) {
+            self.hovers.clear();
+        }
         let shown = self.location();
         let task = self.handle(message);
         // Lists made again may have moved the games the couch mode's focus was on.
@@ -860,6 +877,8 @@ impl App {
         if now != shown {
             self.now = Instant::now();
             self.page_shown = Self::fade_in(self.now);
+            // The covers hovered went with the page, and the pointer may never leave them.
+            self.hovers.clear();
             // A page shown again starts at its top, and so does the part of the grid built; but
             // the library is found where it was left when a game page goes back to it.
             let library = (Page::Library, None, None);
@@ -891,9 +910,12 @@ impl App {
             .go(true, now)
     }
 
-    /// A page or a picture is fading in: frames are drawn until it is done.
+    /// A page or a picture is fading in, or a cover answers the pointer: frames are drawn until it
+    /// is done.
     pub fn animating(&self) -> bool {
-        self.page_shown.is_animating(self.now) || self.art_shown.is_animating(self.now)
+        self.page_shown.is_animating(self.now)
+            || self.art_shown.is_animating(self.now)
+            || self.hovers.animating(self.now)
     }
 
     /// The page shown, apart from panels and dialogs over it.
@@ -1277,6 +1299,10 @@ impl App {
                 return Task::batch([self.scale_art(), self.scale_couch_covers()]);
             }
             Message::Frame(now) => self.now = now,
+            Message::CoverHovered(id, on) => {
+                self.now = Instant::now();
+                self.hovers.set(&id, on, self.now, theme::tokens().hover);
+            }
             Message::DismissNotice => self.notice = None,
             Message::Notify(msg) => return self.update_notify(msg),
             Message::CloseRequested => {

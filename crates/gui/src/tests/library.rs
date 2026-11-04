@@ -182,6 +182,79 @@ fn a_long_title_leaves_a_covers_buttons_on_it() {
 /// What changes no list (Steam's covers arriving, typing in a dialog, a right click, a dialog
 /// opened) keeps the lists made, each made again in about 2 ms at 11,000 games; a title saved
 /// does not.
+/// How many times a text shows.
+fn shown_times(ui: &mut Simulator<'_, Message>, text: &str) -> usize {
+    use iced_test::selector::Candidate;
+    let mut times = 0;
+    let _ = ui.find(|candidate: Candidate<'_>| -> Option<()> {
+        if let Candidate::Text { content, .. } = candidate
+            && content == text
+        {
+            times += 1;
+        }
+        None
+    });
+    times
+}
+
+/// The pointer entering a cover and leaving it says so; the cover then shows hovered by degrees,
+/// its title and buttons going back over it once left, and frames stop when it is done.
+#[test]
+fn a_cover_answers_the_pointer_by_degrees() {
+    let mut app = library_app();
+    app.library.retain(|g| g.id == "3");
+    let messages: Vec<Message> = {
+        let mut ui = render(&app);
+        let card = ui.find("[FAKE] Game 3").unwrap().bounds();
+        ui.point_at(card.center());
+        let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+            position: card.center(),
+        })]);
+        ui.point_at(iced::Point::new(1.0, 1.0));
+        let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+            position: iced::Point::new(1.0, 1.0),
+        })]);
+        ui.into_messages().collect()
+    };
+    let hovers: Vec<_> = messages
+        .iter()
+        .filter_map(|m| match m {
+            Message::CoverHovered(id, on) => Some((id.as_str(), *on)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(hovers, [("3", true), ("3", false)]);
+
+    settle(&mut app);
+    let _ = app.update(Message::CoverHovered("3".into(), true));
+    assert!(app.animating(), "frames while it shows hovered");
+    let _ = app.update(Message::CoverHovered("3".into(), false));
+    // Left, the title and buttons go back over the cover. The title is also on the placeholder,
+    // the cover having no picture, and in what shows under the pointer, there whether shown or not.
+    assert_eq!(shown_times(&mut render(&app), "[FAKE] Game 3"), 3);
+    settle(&mut app);
+    assert!(!app.animating(), "no frame once done");
+    assert_eq!(shown_times(&mut render(&app), "[FAKE] Game 3"), 2);
+}
+
+/// Another page, a search or another order puts other games under the pointer: what was hovered
+/// is forgotten.
+#[test]
+fn covers_hovered_are_forgotten_when_others_take_their_place() {
+    let mut app = library_app();
+    for message in [
+        Message::Search("[FAKE]".into()),
+        Message::SortBy(Sort::default()),
+        Message::ShowShelf(Shelf::default()),
+        Message::Select("4".into()),
+    ] {
+        let _ = app.update(Message::CoverHovered("3".into(), true));
+        let name = format!("{message:?}");
+        let _ = app.update(message);
+        assert_eq!(app.hovers.shown("3", app.now), None, "{name}");
+    }
+}
+
 #[test]
 fn messages_that_change_no_list_keep_the_lists() {
     use crate::add::AddMsg;
@@ -213,6 +286,8 @@ fn messages_that_change_no_list_keep_the_lists() {
         Message::OpenDialog("5".into(), Panel::Install),
         Message::CloseDialog,
         Message::DismissNotice,
+        Message::CoverHovered("4".into(), true),
+        Message::CoverHovered("4".into(), false),
     ] {
         let name = format!("{message:?}");
         assert!(kept(&mut app, message), "{name}");
