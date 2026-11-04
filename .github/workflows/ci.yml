@@ -1,0 +1,27 @@
+# Runs the automated checks of the definition of done (AGENTS.md) on each push to main and on each
+# pull request, in the same Nix shell that the agents use: scripts/check.sh, unchanged. Windows is
+# checked there by building for it from Linux (ADR-0022). Actions are pinned to commit SHAs, with the
+# release they correspond to in a comment.
+name: CI
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    # The workspace, its Windows build and the Nix package are three builds from cold.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - run: nix develop --no-update-lock-file --command scripts/check.sh

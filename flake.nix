@@ -119,6 +119,9 @@
             umu-launcher
             # Isolated games run inside it, with umu's runtime and Proton read-only.
             bubblewrap
+            # scripts/check.sh: the dependency policy, and the links between Markdown files.
+            cargo-deny
+            lychee
           ];
           buildInputs = runtimeLibs pkgs;
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (runtimeLibs pkgs);
