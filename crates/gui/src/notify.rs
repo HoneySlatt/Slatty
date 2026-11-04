@@ -191,7 +191,7 @@ impl App {
     /// The cover of a game as a file, for the desktop's notification.
     fn cover_file(&self, game_id: &str) -> Option<std::path::PathBuf> {
         match self.cover(game_id)? {
-            iced::widget::image::Handle::Path(_, path) => Some(path),
+            crate::picture::Picture::File(path) => Some(path),
             _ => None,
         }
     }

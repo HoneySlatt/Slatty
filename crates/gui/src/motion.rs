@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use iced::widget::image::Handle;
+use crate::picture::Picture;
 pub use lilt::Easing;
 
 /// Something going from hidden to shown, or back, through time: Iced's `Animation` of a `bool`,
@@ -142,14 +142,14 @@ impl Arrivals {
 /// it until it is done; to nothing (while the next downloads), the one before fades out.
 #[derive(Default)]
 pub struct Crossfade {
-    shown: Option<Handle>,
-    before: Option<Handle>,
+    shown: Option<Picture>,
+    before: Option<Picture>,
     change: Option<Animation>,
 }
 
 impl Crossfade {
     /// `art` shows from `now`: a change from what showed starts the fade, and says so.
-    pub fn show(&mut self, art: Option<Handle>, now: Instant, lasting: Duration) -> bool {
+    pub fn show(&mut self, art: Option<Picture>, now: Instant, lasting: Duration) -> bool {
         if art == self.shown {
             return false;
         }
@@ -165,7 +165,7 @@ impl Crossfade {
     }
 
     /// The pictures to draw at `now`, the lowest first, each with its opacity.
-    pub fn layers(&self, now: Instant) -> Vec<(&Handle, f32)> {
+    pub fn layers(&self, now: Instant) -> Vec<(&Picture, f32)> {
         let done = self
             .change
             .as_ref()
@@ -208,10 +208,10 @@ mod tests {
         let start = Instant::now();
         let at = |ms| start + Duration::from_millis(ms);
         let (a, b) = (
-            Handle::from_path("/[FAKE]/a.jpg"),
-            Handle::from_path("/[FAKE]/b.jpg"),
+            Picture::from_path("/[FAKE]/a.jpg"),
+            Picture::from_path("/[FAKE]/b.jpg"),
         );
-        let opacities = |fade: &Crossfade, ms| -> Vec<(Handle, f32)> {
+        let opacities = |fade: &Crossfade, ms| -> Vec<(Picture, f32)> {
             fade.layers(at(ms))
                 .into_iter()
                 .map(|(h, o)| (h.clone(), o))

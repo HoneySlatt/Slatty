@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::geometry::Point;
-use iced::widget::image;
+use crate::picture::Picture;
 
 use crate::task::{Effect, Task};
 use slatty_core::custom::{self, ImageChange};
@@ -32,7 +32,7 @@ pub struct EditDraft {
     pub background: ImageChange,
     pub icon: ImageChange,
     /// Pictures downloaded from SteamGridDB, ready to show: made once, not at every frame.
-    pub previews: std::collections::HashMap<Art, image::Handle>,
+    pub previews: std::collections::HashMap<Art, Picture>,
     /// What SteamGridDB offers for one of the pictures, once asked.
     pub picker: Option<ArtPicker>,
 }
@@ -306,8 +306,7 @@ impl App {
                 };
                 match result {
                     Ok(bytes) if custom::is_image_data(&bytes) => {
-                        d.previews
-                            .insert(art, image::Handle::from_bytes(bytes.clone()));
+                        d.previews.insert(art, Picture::from_bytes(bytes.clone()));
                         *d.image_mut(art) = ImageChange::Downloaded(bytes);
                         d.picker = None;
                     }
@@ -441,17 +440,17 @@ impl App {
     }
 
     /// The cover shown for a game: the user's, else GOG's once downloaded.
-    pub fn cover(&self, game_id: &str) -> Option<image::Handle> {
+    pub fn cover(&self, game_id: &str) -> Option<Picture> {
         match self.customs.get(game_id).and_then(|c| c.cover.as_ref()) {
-            Some(path) => Some(image::Handle::from_path(path)),
+            Some(path) => Some(Picture::from_path(path)),
             None => self.covers.get(game_id).cloned(),
         }
     }
 
     /// The key art of the game page: the user's, else GOG's once downloaded.
-    pub fn background(&self, g: &LibraryGame) -> Option<image::Handle> {
+    pub fn background(&self, g: &LibraryGame) -> Option<Picture> {
         match self.customs.get(&g.id).and_then(|c| c.background.as_ref()) {
-            Some(path) => Some(image::Handle::from_path(path)),
+            Some(path) => Some(Picture::from_path(path)),
             None => g
                 .background
                 .as_ref()

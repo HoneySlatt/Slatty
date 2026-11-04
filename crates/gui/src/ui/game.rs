@@ -143,7 +143,7 @@ impl App {
 
     /// The key art, or the cover for a game without any. Nothing while the key art downloads: the
     /// cover would show for a moment, stretched, before it.
-    pub(crate) fn hero_art(&self, g: &LibraryGame) -> Option<image::Handle> {
+    pub(crate) fn hero_art(&self, g: &LibraryGame) -> Option<crate::picture::Picture> {
         let downloading = g
             .background
             .as_ref()
@@ -159,7 +159,7 @@ impl App {
     pub(super) fn hero<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let base: Element<'_, Message> = match self.hero_art(g) {
             // Enlarged a little: much of GOG's key art ends with a light strip at the bottom.
-            Some(h) => image(h)
+            Some(h) => image(super::handle(&h))
                 .content_fit(ContentFit::Cover)
                 .scale(1.06_f32)
                 .opacity(self.art_shown.interpolate(0.0, 1.0, self.now))

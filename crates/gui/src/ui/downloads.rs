@@ -644,7 +644,7 @@ impl App {
     fn cover_art(&self, id: &str, width: f32) -> Element<'_, Message> {
         let height = width * 4.0 / 3.0;
         match self.cover(id) {
-            Some(h) => image(h)
+            Some(h) => image(super::handle(&h))
                 .content_fit(ContentFit::Cover)
                 .width(width)
                 .height(height)

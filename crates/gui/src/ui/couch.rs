@@ -213,7 +213,7 @@ impl App {
             .shown(&g.id, self.now)
             .unwrap_or(if focused { 1.0 } else { 0.0 });
         let art: Element<'a, Message> = match self.cover_at(&g.id, width) {
-            Some(h) => image(h)
+            Some(h) => image(super::handle(&h))
                 .content_fit(ContentFit::Cover)
                 .width(width)
                 .height(height)
@@ -277,8 +277,8 @@ impl App {
     }
 
     /// Key art, edge to edge, `opacity` from 0 (clear) to 1.
-    fn hero_image<'a>(art: iced::widget::image::Handle, opacity: f32) -> Element<'a, Message> {
-        image(art)
+    fn hero_image<'a>(art: &crate::picture::Picture, opacity: f32) -> Element<'a, Message> {
+        image(super::handle(art))
             .content_fit(ContentFit::Cover)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -328,12 +328,12 @@ impl App {
         let layers = self.home_art.layers(self.now);
         let art = if layers.is_empty() {
             self.hero_art(focused)
-                .map_or_else(|| Space::new().into(), |h| Self::hero_image(h, 1.0))
+                .map_or_else(|| Space::new().into(), |h| Self::hero_image(&h, 1.0))
         } else {
             Stack::with_children(
                 layers
                     .into_iter()
-                    .map(|(h, opacity)| Self::hero_image(h.clone(), opacity)),
+                    .map(|(h, opacity)| Self::hero_image(h, opacity)),
             )
             .into()
         };
@@ -574,7 +574,7 @@ impl App {
             .into();
         let art = self
             .hero_art(g)
-            .map_or_else(|| Space::new().into(), |h| Self::hero_image(h, 1.0));
+            .map_or_else(|| Space::new().into(), |h| Self::hero_image(&h, 1.0));
         self.couch_hero(g, art, 52.0, below)
     }
 
@@ -721,7 +721,7 @@ impl App {
                             .into()
                     });
                 let cover: Element<'_, Message> = match self.grid_cover(&row_data.game_id) {
-                    Some(h) => image(h)
+                    Some(h) => image(super::handle(&h))
                         .content_fit(ContentFit::Cover)
                         .width(66)
                         .height(88)

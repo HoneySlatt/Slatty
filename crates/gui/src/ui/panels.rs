@@ -278,7 +278,7 @@ impl App {
     ) -> Element<'a, Message> {
         const COVER: (f32, f32) = (94.0, 125.0);
         let cover: Element<'a, Message> = match self.cover(&g.id) {
-            Some(h) => iced::widget::image(h)
+            Some(h) => iced::widget::image(super::handle(&h))
                 .content_fit(iced::ContentFit::Cover)
                 .width(COVER.0)
                 .height(COVER.1)

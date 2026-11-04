@@ -507,9 +507,9 @@ fn the_grid_shows_covers_made_at_the_cards_size() {
     let cover = PathBuf::from("/covers/7.jpg");
     let copy = PathBuf::from("/scaled/300/7.jpg");
     app.covers
-        .insert("7".into(), iced::widget::image::Handle::from_path(&cover));
+        .insert("7".into(), crate::picture::Picture::from_path(&cover));
     let shown = |app: &App| match app.grid_cover("7") {
-        Some(iced::widget::image::Handle::Path(_, path)) => path,
+        Some(crate::picture::Picture::File(path)) => path,
         other => panic!("{other:?}"),
     };
     assert_eq!(shown(&app), cover, "the cover until its copy is made");
@@ -556,7 +556,7 @@ fn a_late_copy_of_a_replaced_cover_is_dropped() {
         PathBuf::from("/custom/7.jpg"),
     );
     app.covers
-        .insert("7".into(), iced::widget::image::Handle::from_path(&old));
+        .insert("7".into(), crate::picture::Picture::from_path(&old));
     let _ = app.update(Message::Rescaled(2.0));
     app.customs.insert(
         "7".into(),
@@ -571,7 +571,7 @@ fn a_late_copy_of_a_replaced_cover_is_dropped() {
     let _ = app.update(made(&new, "/scaled/300/new.jpg"));
     let _ = app.update(made(&old, "/scaled/300/old.jpg"));
     match app.grid_cover("7") {
-        Some(iced::widget::image::Handle::Path(_, path)) => {
+        Some(crate::picture::Picture::File(path)) => {
             assert_eq!(path, PathBuf::from("/scaled/300/new.jpg"));
         }
         other => panic!("{other:?}"),
@@ -593,7 +593,7 @@ fn copies_made_for_an_account_go_with_it() {
         },
     );
     let shown = |app: &App| match app.grid_cover("7") {
-        Some(iced::widget::image::Handle::Path(_, path)) => path,
+        Some(crate::picture::Picture::File(path)) => path,
         other => panic!("{other:?}"),
     };
     let _ = app.update(Message::Rescaled(2.0));
@@ -636,9 +636,9 @@ fn key_art_is_drawn_from_its_copy_at_the_windows_width() {
     let mut app = library_app();
     app.window = Size::new(1800.0, 1000.0);
     let art = PathBuf::from("/images/art.jpg");
-    let original = iced::widget::image::Handle::from_path(&art);
+    let original = crate::picture::Picture::from_path(&art);
     let drawn = |app: &App| match app.shown_art(original.clone()) {
-        iced::widget::image::Handle::Path(_, path) => path,
+        crate::picture::Picture::File(path) => path,
         other => panic!("{other:?}"),
     };
     // 1800 × 1.5 × 1.06 = 2862 pixels: made at 3840.

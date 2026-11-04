@@ -19,6 +19,7 @@ mod motion;
 mod notify;
 mod offline;
 mod pad;
+mod picture;
 mod play;
 mod presets;
 mod runners;
@@ -48,9 +49,9 @@ use play::{PlayMsg, PlayState};
 use settings::SettingsMsg;
 
 use geometry::{Scroll, Size};
-use iced::widget::image;
 use listen::Listen;
 use motion::{Animation, Easing};
+use picture::Picture;
 use slatty_core::account::AccountInfo;
 use slatty_core::achievements::Achievement;
 use slatty_core::db::Db;
@@ -144,9 +145,9 @@ pub const APP_ID: &str = "io.github.HoneySlatt.Slatty";
 /// for it.
 fn window_settings(fullscreen: bool) -> iced::window::Settings {
     iced::window::Settings {
-        size: Size::new(1440.0, 900.0),
+        size: iced::Size::new(1440.0, 900.0),
         fullscreen,
-        min_size: Some(Size::new(800.0, 560.0)),
+        min_size: Some(iced::Size::new(800.0, 560.0)),
         platform_specific: iced::window::settings::PlatformSpecific {
             application_id: APP_ID.into(),
             ..Default::default()
@@ -287,10 +288,10 @@ pub struct App {
     pub playtime: HashMap<String, Playtime>,
     pub overview: HashMap<String, GameOverview>,
     pub overview_busy: bool,
-    pub covers: HashMap<String, image::Handle>,
+    pub covers: HashMap<String, Picture>,
     /// The grid's covers made at the size they are drawn.
     pub scaled: scaled::ScaledCovers,
-    pub images: HashMap<String, image::Handle>,
+    pub images: HashMap<String, Picture>,
     pub images_requested: HashSet<String>,
     pub notice: Option<Notice>,
     pub play: Option<PlayState>,
@@ -1237,8 +1238,7 @@ impl App {
                 self.edit = None;
             }
             Message::Cover(id, Some(path)) => {
-                self.covers
-                    .insert(id.clone(), image::Handle::from_path(path));
+                self.covers.insert(id.clone(), Picture::from_path(path));
                 return self.scale_covers(Some(vec![id]));
             }
             Message::Cover(_, None) => {}
@@ -1274,7 +1274,7 @@ impl App {
                     self.now = Instant::now();
                     self.art_shown = Self::fade_in(self.now);
                 }
-                self.images.insert(url, image::Handle::from_path(path));
+                self.images.insert(url, Picture::from_path(path));
                 return self.scale_art();
             }
             Message::Image(url, None) => {

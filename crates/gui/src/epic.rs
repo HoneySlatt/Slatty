@@ -186,7 +186,7 @@ impl App {
                         .any(|g| store::epic_id(&g.app_name) == id)
                 {
                     self.covers
-                        .insert(id.clone(), iced::widget::image::Handle::from_path(&path));
+                        .insert(id.clone(), crate::picture::Picture::from_path(&path));
                     self.epic.covers.insert(id.clone(), path);
                     return self.scale_covers(Some(vec![id]));
                 }
@@ -198,7 +198,7 @@ impl App {
                 let ids: Vec<String> = found.keys().cloned().collect();
                 for (id, path) in found {
                     self.covers
-                        .insert(id.clone(), iced::widget::image::Handle::from_path(&path));
+                        .insert(id.clone(), crate::picture::Picture::from_path(&path));
                     self.epic.covers.insert(id, path);
                 }
                 return Task::batch([self.scale_covers(Some(ids)), self.epic_covers()]);

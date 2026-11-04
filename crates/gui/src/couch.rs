@@ -904,7 +904,7 @@ impl App {
 
     /// The key art Home shows, while it shows: that of the game with the focus, `None` while it
     /// downloads.
-    pub fn home_hero(&self) -> Option<Option<iced::widget::image::Handle>> {
+    pub fn home_hero(&self) -> Option<Option<crate::picture::Picture>> {
         let couch = self.couch.as_ref().filter(|_| self.selected.is_none())?;
         if couch.tab != Tab::Home {
             return None;

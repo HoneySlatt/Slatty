@@ -1,5 +1,19 @@
 use super::*;
 
+/// A picture downloaded in Edit game is the same image to Iced at every view, decoded once; a file
+/// is named after its path.
+#[test]
+fn a_downloaded_picture_is_one_image_at_every_view() {
+    use crate::picture::Picture;
+    use crate::ui::handle;
+    let downloaded = Picture::from_bytes(vec![1u8, 2, 3]);
+    assert_eq!(handle(&downloaded).id(), handle(&downloaded.clone()).id());
+    let other = Picture::from_bytes(vec![1u8, 2, 3]);
+    assert_ne!(handle(&downloaded).id(), handle(&other).id());
+    let file = Picture::from_path("/[FAKE]/cover.jpg");
+    assert_eq!(handle(&file).id(), handle(&file.clone()).id());
+}
+
 #[test]
 fn a_game_can_be_renamed_and_sorted_under_another_name() {
     use crate::edit::EditMsg;

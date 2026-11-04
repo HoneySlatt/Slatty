@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use crate::picture::Picture;
 use crate::task::Task;
-use iced::widget::image;
 use tokio::sync::Semaphore;
 
 use crate::{App, Message};
@@ -43,23 +43,23 @@ pub struct ScaledCovers {
     /// The window's scale, once known: nothing is made before.
     pub scale: Option<f32>,
     /// Per game: the cover it was made from, and the copy, or `None` to show that cover as it is.
-    ready: HashMap<String, (PathBuf, Option<image::Handle>)>,
+    ready: HashMap<String, (PathBuf, Option<Picture>)>,
     /// Covers being made, so that none is asked twice.
     pending: HashSet<PathBuf>,
     limit: Option<Arc<Semaphore>>,
     /// Per key art and width: its copy, or `None` to show it as it is.
-    art: HashMap<(PathBuf, u32), Option<image::Handle>>,
+    art: HashMap<(PathBuf, u32), Option<Picture>>,
     art_pending: HashSet<(PathBuf, u32)>,
     /// When the first key art copy was asked for: those shown since are kept (`trim`).
     session: Option<SystemTime>,
     /// Per game: the couch mode's cover enlarged on a large screen, with the cover it was made from
     /// and its width, or `None` to show that cover as it is (`scale_couch_covers`).
-    couch: HashMap<String, (PathBuf, u32, Option<image::Handle>)>,
+    couch: HashMap<String, (PathBuf, u32, Option<Picture>)>,
     couch_pending: HashSet<(PathBuf, u32)>,
     /// The width covers are made at, once the window's scale is known.
     width: Option<u32>,
     /// Per icon and side in pixels: its copy, or `None` when it is no icon or cannot be read.
-    pub icons: HashMap<(PathBuf, u32), Option<image::Handle>>,
+    pub icons: HashMap<(PathBuf, u32), Option<Picture>>,
     pub icons_pending: HashSet<(PathBuf, u32)>,
 }
 
@@ -75,7 +75,7 @@ impl App {
     /// further would show softer (the couch mode's covers are larger than the grid's, the more on a
     /// large screen, `ui_scale`). A cover far wider than drawn would be shrunk by sampling a few of
     /// its pixels, worse than a copy a little enlarged.
-    pub fn cover_at(&self, game_id: &str, width: f32) -> Option<image::Handle> {
+    pub fn cover_at(&self, game_id: &str, width: f32) -> Option<Picture> {
         let pixels = self.scaled.scale.map(|scale| width * scale * self.ui_scale);
         let copy_wide_enough = self
             .scaled_width()
@@ -87,7 +87,7 @@ impl App {
         let cover = self.cover(game_id)?;
         // Enlarged at the size drawn, once made (`scale_couch_covers`).
         match (self.scaled.couch.get(game_id), &cover, pixels) {
-            (Some((from, made, Some(copy))), image::Handle::Path(_, path), Some(pixels))
+            (Some((from, made, Some(copy))), Picture::File(path), Some(pixels))
                 if from == path && *made == pixels.ceil() as u32 =>
             {
                 Some(copy.clone())
@@ -116,7 +116,7 @@ impl App {
             .into_iter()
             .filter_map(|i| {
                 let id = self.library[i].id.clone();
-                let image::Handle::Path(_, from) = self.cover(&id)? else {
+                let Picture::File(from) = self.cover(&id)? else {
                     return None;
                 };
                 let made = self
@@ -175,21 +175,19 @@ impl App {
         for (id, from, copy) in made {
             self.scaled.couch_pending.remove(&(from.clone(), width));
             // Of a cover replaced since: the new one is made at the next move.
-            if !matches!(self.cover(&id), Some(image::Handle::Path(_, path)) if path == from) {
+            if !matches!(self.cover(&id), Some(Picture::File(path)) if path == from) {
                 continue;
             }
-            let copy = copy.map(image::Handle::from_path);
+            let copy = copy.map(Picture::from_path);
             self.scaled.couch.insert(id, (from, width, copy));
         }
     }
 
     /// The cover the grid shows for a game: its copy at the card's size once made.
-    pub fn grid_cover(&self, game_id: &str) -> Option<image::Handle> {
+    pub fn grid_cover(&self, game_id: &str) -> Option<Picture> {
         let cover = self.cover(game_id)?;
         match (self.scaled.ready.get(game_id), &cover) {
-            (Some((from, Some(copy))), image::Handle::Path(_, path)) if from == path => {
-                Some(copy.clone())
-            }
+            (Some((from, Some(copy))), Picture::File(path)) if from == path => Some(copy.clone()),
             _ => Some(cover),
         }
     }
@@ -214,9 +212,9 @@ impl App {
     }
 
     /// The key art drawn for `art`: its copy at the window's width once made.
-    pub fn shown_art(&self, art: image::Handle) -> image::Handle {
+    pub fn shown_art(&self, art: Picture) -> Picture {
         let copy = match (&art, self.art_width()) {
-            (image::Handle::Path(_, path), Some(width)) => self
+            (Picture::File(path), Some(width)) => self
                 .scaled
                 .art
                 .get(&(path.clone(), width))
@@ -240,7 +238,7 @@ impl App {
                 .as_ref()
                 .is_some_and(|c| c.rested.as_deref() == Some(id))
         };
-        let Some(image::Handle::Path(_, from)) = self
+        let Some(Picture::File(from)) = self
             .selected_game()
             .or_else(|| {
                 self.home_focus()
@@ -352,18 +350,14 @@ impl App {
         for (from, side, copy) in made {
             let key = (from, side);
             self.scaled.icons_pending.remove(&key);
-            self.scaled
-                .icons
-                .insert(key, copy.map(image::Handle::from_path));
+            self.scaled.icons.insert(key, copy.map(Picture::from_path));
         }
     }
 
     pub fn art_scaled(&mut self, from: PathBuf, width: u32, copy: Option<PathBuf>) {
         let key = (from, width);
         self.scaled.art_pending.remove(&key);
-        self.scaled
-            .art
-            .insert(key, copy.map(image::Handle::from_path));
+        self.scaled.art.insert(key, copy.map(Picture::from_path));
     }
 
     /// The window's scale is known, or changed.
@@ -434,7 +428,7 @@ impl App {
         let mut jobs: Vec<(String, PathBuf)> = ids
             .into_iter()
             .filter_map(|id| {
-                let image::Handle::Path(_, path) = self.cover(&id)? else {
+                let Picture::File(path) = self.cover(&id)? else {
                     return None;
                 };
                 let made = self
@@ -503,10 +497,10 @@ impl App {
         for (id, from, copy) in made {
             self.scaled.pending.remove(&from);
             // Of a cover replaced since: the new one's copy may be there already.
-            if !matches!(self.cover(&id), Some(image::Handle::Path(_, path)) if path == from) {
+            if !matches!(self.cover(&id), Some(Picture::File(path)) if path == from) {
                 continue;
             }
-            let copy = copy.map(image::Handle::from_path);
+            let copy = copy.map(Picture::from_path);
             self.scaled.ready.insert(id, (from, copy));
         }
     }

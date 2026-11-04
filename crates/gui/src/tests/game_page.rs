@@ -425,10 +425,8 @@ fn the_cover_does_not_stand_in_while_the_key_art_downloads() {
     let mut app = library_app();
     let art = "https://images.example/[FAKE]-art.jpg".to_string();
     app.library[2].background = Some(art.clone());
-    app.covers.insert(
-        "3".into(),
-        iced::widget::image::Handle::from_bytes(vec![0u8]),
-    );
+    app.covers
+        .insert("3".into(), crate::picture::Picture::from_bytes(vec![0u8]));
     let _ = app.update(Message::Select("3".into()));
     settle(&mut app);
     let game = app.library[2].clone();
@@ -444,10 +442,7 @@ fn the_cover_does_not_stand_in_while_the_key_art_downloads() {
     // Without key art (download failed), the cover stands in.
     app.images.clear();
     let _ = app.update(Message::Image(art, None));
-    assert_eq!(
-        app.hero_art(&game).map(|h| h.id()),
-        app.covers.get("3").map(|h| h.id())
-    );
+    assert_eq!(app.hero_art(&game).as_ref(), app.covers.get("3"));
 }
 
 /// GOG's key art arriving once the page shows the user's own background does not fade that one in

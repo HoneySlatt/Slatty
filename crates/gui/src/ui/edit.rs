@@ -15,6 +15,7 @@ use crate::edit::{
     Art, ArtPicker, ContextMenu, EditDraft, EditMsg, FORM, ICON_PICTURE, MENU_WIDTH,
 };
 use crate::icons::{Icon, icon};
+use crate::picture::Picture;
 use crate::theme::{self, bold, tokens};
 use crate::{App, Loadable, Message};
 
@@ -154,7 +155,7 @@ impl App {
         .spacing(8);
         let picture = |art: Art, title, (width, height): (f32, f32)| -> Element<'a, Message> {
             let content: Element<'_, Message> = match self.edit_preview(d, art) {
-                Some(h) => image(h)
+                Some(h) => image(super::handle(&h))
                     .content_fit(ContentFit::Cover)
                     .width(width)
                     .height(height)
@@ -210,7 +211,7 @@ impl App {
     }
 
     /// The picture the game would have once saved.
-    fn edit_preview(&self, d: &EditDraft, art: Art) -> Option<image::Handle> {
+    fn edit_preview(&self, d: &EditDraft, art: Art) -> Option<Picture> {
         let game = self.library.iter().find(|g| g.id == d.game_id)?;
         let change = match art {
             Art::Cover => &d.cover,
@@ -218,7 +219,7 @@ impl App {
             Art::Icon => &d.icon,
         };
         match (change, art) {
-            (ImageChange::Set(path), _) => Some(image::Handle::from_path(path)),
+            (ImageChange::Set(path), _) => Some(Picture::from_path(path)),
             (ImageChange::Downloaded(_), _) => d.previews.get(&art).cloned(),
             (ImageChange::Keep, Art::Cover) => self.cover(&game.id),
             (ImageChange::Keep, Art::Background) => self.background(game),
@@ -349,7 +350,7 @@ impl App {
             Loadable::Ready(list) => {
                 let previews = list.iter().enumerate().map(|(i, a)| {
                     let picture: Element<'_, Message> = match self.images.get(&a.thumb) {
-                        Some(h) => image(h.clone())
+                        Some(h) => image(super::handle(h))
                             .content_fit(ContentFit::Cover)
                             .width(width)
                             .height(height)

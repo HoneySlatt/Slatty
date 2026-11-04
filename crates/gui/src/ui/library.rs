@@ -319,7 +319,7 @@ impl App {
     pub(super) fn card<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let shown = self.hovers.shown(&g.id, self.now);
         let art: Element<'_, Message> = match self.grid_cover(&g.id) {
-            Some(h) => image(h)
+            Some(h) => image(super::handle(&h))
                 .content_fit(ContentFit::Cover)
                 .width(Length::Fill)
                 .height(Length::Fill)

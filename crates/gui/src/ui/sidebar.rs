@@ -94,7 +94,7 @@ impl App {
     /// shows them; a click opens its page.
     fn sidebar_row<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let shown_icon: Element<'_, Message> = match self.icon_at(g, ICON, true) {
-            Some(handle) => image(handle).width(ICON).height(ICON).into(),
+            Some(icon) => image(super::handle(&icon)).width(ICON).height(ICON).into(),
             None => Space::new().width(ICON).height(ICON).into(),
         };
         let color = match self.is_installed(&g.id) {

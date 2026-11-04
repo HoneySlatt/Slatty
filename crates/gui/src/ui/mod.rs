@@ -46,6 +46,31 @@ pub fn scroll(v: iced::widget::scrollable::Viewport) -> crate::geometry::Scroll 
     }
 }
 
+/// The picture as Iced shows it. A file's handle is named after its path, the same at every view;
+/// bytes get one handle each, kept while the state keeps them, or Iced would decode them again at
+/// every view.
+pub fn handle(picture: &crate::picture::Picture) -> iced::widget::image::Handle {
+    use crate::picture::Picture;
+    use iced::widget::image::Handle;
+    use std::sync::{Arc, Mutex};
+    type Made = Vec<(Arc<[u8]>, Handle)>;
+    static MADE: Mutex<Made> = Mutex::new(Vec::new());
+    match picture {
+        Picture::File(path) => Handle::from_path(path),
+        Picture::Bytes(bytes) => {
+            let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some((_, handle)) = made.iter().find(|(b, _)| Arc::ptr_eq(b, bytes)) {
+                return handle.clone();
+            }
+            // Those the state no longer holds go.
+            made.retain(|(b, _)| Arc::strong_count(b) > 1);
+            let handle = Handle::from_bytes(bytes.to_vec());
+            made.push((bytes.clone(), handle.clone()));
+            handle
+        }
+    }
+}
+
 /// Iced's size as the state keeps it.
 pub fn size(s: iced::Size) -> crate::geometry::Size {
     crate::geometry::Size::new(s.width, s.height)
@@ -175,7 +200,7 @@ impl App {
     fn toasts(&self) -> Element<'_, Message> {
         let cards = self.toasts.iter().map(|t| {
             let cover = t.game.as_deref().and_then(|id| self.cover(id)).map(|h| {
-                iced::widget::image(h)
+                iced::widget::image(handle(&h))
                     .content_fit(iced::ContentFit::Cover)
                     .width(42)
                     .height(56)
@@ -329,7 +354,7 @@ impl App {
             .avatar
             .as_ref()
             .and_then(|u| self.images.get(u))
-            .cloned();
+            .map(handle);
         let account = button(avatar(picture, initial, 34.0, self.account.is_some()))
             .padding(0)
             .on_press(Message::ShowPage(Page::Settings))

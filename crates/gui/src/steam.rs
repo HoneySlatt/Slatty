@@ -240,7 +240,7 @@ impl App {
             // From Steam's image servers: not once that is turned off while it came.
             SteamMsg::Cover(id, Some(path)) if self.steam.on && self.steam.images => {
                 self.covers
-                    .insert(id.clone(), iced::widget::image::Handle::from_path(&path));
+                    .insert(id.clone(), crate::picture::Picture::from_path(&path));
                 self.steam.covers.insert(id.clone(), path);
                 return self.scale_covers(Some(vec![id]));
             }
@@ -538,7 +538,7 @@ impl App {
         self.library.extend(epic);
         for (id, cover) in &self.epic.covers {
             self.covers
-                .insert(id.clone(), iced::widget::image::Handle::from_path(cover));
+                .insert(id.clone(), crate::picture::Picture::from_path(cover));
         }
         self.steam.twins.clear();
         self.steam.twin_icons.clear();
@@ -561,7 +561,7 @@ impl App {
             // Those of games shown as their GOG twin too: Steam's downloads of them show it.
             for (id, cover) in &self.steam.covers {
                 self.covers
-                    .insert(id.clone(), iced::widget::image::Handle::from_path(cover));
+                    .insert(id.clone(), crate::picture::Picture::from_path(cover));
             }
             let icons: HashMap<&str, &String> = self
                 .steam

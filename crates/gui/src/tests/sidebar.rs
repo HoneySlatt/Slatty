@@ -13,7 +13,7 @@ fn open_app() -> App {
 /// shows its own in its place.
 #[test]
 fn icons_show_whatever_their_format_and_only_when_square() {
-    use iced::widget::image::Handle;
+    use crate::picture::Picture;
     let mut app = open_app();
     let dir = root().join("sidebar-icons");
     std::fs::create_dir_all(&dir).unwrap();
@@ -30,7 +30,7 @@ fn icons_show_whatever_their_format_and_only_when_square() {
     for (game, url, path) in [(1, "key-art", &key_art), (2, "cover", &cover)] {
         let url = format!("https://images.gog.example/{url}.png");
         app.library[game].icon = Some(url.clone());
-        app.images.insert(url, Handle::from_path(path));
+        app.images.insert(url, Picture::from_path(path));
     }
     app.steam
         .twin_icons
@@ -42,7 +42,7 @@ fn icons_show_whatever_their_format_and_only_when_square() {
     let shown = |id: &str| {
         let g = app.library.iter().find(|g| g.id == id).unwrap();
         match app.icon_at(g, crate::sidebar::ICON, true) {
-            Some(Handle::Path(_, copy)) => Some(::image::image_dimensions(copy).unwrap()),
+            Some(Picture::File(copy)) => Some(::image::image_dimensions(copy).unwrap()),
             _ => None,
         }
     };

@@ -120,7 +120,7 @@ impl App {
         let cover_height = TILE_HEIGHT - 16.0;
         let cover_width = cover_height * 3.0 / 4.0;
         let cover: Element<'_, Message> = match self.cover(&g.id) {
-            Some(h) => image(h)
+            Some(h) => image(super::handle(&h))
                 .content_fit(ContentFit::Cover)
                 .width(cover_width)
                 .height(cover_height)
@@ -177,7 +177,7 @@ impl App {
         .spacing(12)
         .align_y(Alignment::Center);
         let cover: Element<'_, Message> = match self.cover(&g.id) {
-            Some(h) => image(h)
+            Some(h) => image(super::handle(&h))
                 .content_fit(ContentFit::Cover)
                 .width(84)
                 .height(112)
@@ -266,7 +266,7 @@ impl App {
 
     pub fn achievement_icon<'a>(&'a self, url: &str, size: f32) -> Element<'a, Message> {
         match self.images.get(url) {
-            Some(h) => image(h.clone())
+            Some(h) => image(super::handle(h))
                 .width(size)
                 .height(size)
                 .border_radius(tokens().cover_radius)

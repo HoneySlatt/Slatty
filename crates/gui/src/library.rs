@@ -428,7 +428,7 @@ impl App {
         for path in local {
             if std::path::Path::new(&path).is_file() {
                 self.images
-                    .insert(path.clone(), iced::widget::image::Handle::from_path(&path));
+                    .insert(path.clone(), crate::picture::Picture::from_path(&path));
             }
         }
         let Some(core) = self.core.clone() else {
@@ -556,10 +556,8 @@ impl App {
             }
             match found.get(&game.id) {
                 Some(path) => {
-                    self.covers.insert(
-                        game.id.clone(),
-                        iced::widget::image::Handle::from_path(path),
-                    );
+                    self.covers
+                        .insert(game.id.clone(), crate::picture::Picture::from_path(path));
                 }
                 None if game.cover.is_some() => missing.push(game.clone()),
                 None => {}

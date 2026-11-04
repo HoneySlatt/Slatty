@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::geometry::Scroll;
-use iced::widget::image;
+use crate::picture::Picture;
 
 use crate::task::Task;
 use slatty_core::custom::ImageChange;
@@ -56,7 +56,7 @@ impl Default for Sidebar {
 
 /// Where a game's icon stands.
 enum IconStep {
-    Shown(image::Handle),
+    Shown(Picture),
     /// Being downloaded or made.
     Waiting,
     Download(String),
@@ -211,7 +211,7 @@ impl App {
 
     /// A game's icon drawn `side` wide, once its copy is made: the one chosen in Edit game (with
     /// `chosen`), else its store's, else, for a game shown as GOG's, its Steam twin's.
-    pub fn icon_at(&self, g: &LibraryGame, side: f32, chosen: bool) -> Option<image::Handle> {
+    pub fn icon_at(&self, g: &LibraryGame, side: f32, chosen: bool) -> Option<Picture> {
         match self.icon_step(g, self.icon_pixels(side)?, chosen) {
             IconStep::Shown(handle) => Some(handle),
             _ => None,
@@ -260,7 +260,7 @@ impl App {
             return Ok((PathBuf::from(key), true));
         }
         match self.images.get(key) {
-            Some(image::Handle::Path(_, path)) => Ok((path.clone(), true)),
+            Some(Picture::File(path)) => Ok((path.clone(), true)),
             _ if self.sidebar.failed.contains(key) => Err(None),
             _ if self.images_requested.contains(key) => Err(Some(IconStep::Waiting)),
             _ => Err(Some(IconStep::Download(key.to_string()))),

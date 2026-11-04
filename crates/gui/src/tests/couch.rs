@@ -502,14 +502,14 @@ fn couch_covers_are_not_enlarged_from_the_grids_copies() {
     let cover = PathBuf::from("/covers/5.jpg");
     let copy = PathBuf::from("/scaled/150/5.jpg");
     app.covers
-        .insert("5".into(), iced::widget::image::Handle::from_path(&cover));
+        .insert("5".into(), crate::picture::Picture::from_path(&cover));
     let _ = app.update(Message::Rescaled(1.0));
     let _ = app.update(Message::CoversScaled(
         150,
         vec![("5".into(), cover.clone(), Some(copy.clone()))],
     ));
-    let path = |h: Option<iced::widget::image::Handle>| match h {
-        Some(iced::widget::image::Handle::Path(_, p)) => p,
+    let path = |h: Option<crate::picture::Picture>| match h {
+        Some(crate::picture::Picture::File(p)) => p,
         other => panic!("{other:?}"),
     };
     assert_eq!(path(app.grid_cover("5")), copy, "the desktop's grid");
@@ -553,7 +553,7 @@ fn home_draws_the_key_art_from_its_copy() {
     let g = app.home_focus().unwrap().2.clone();
     assert!(matches!(
         app.hero_art(&g),
-        Some(iced::widget::image::Handle::Path(_, p)) if p == copy
+        Some(crate::picture::Picture::File(p)) if p == copy
     ));
 }
 
@@ -578,7 +578,7 @@ fn home_fades_its_key_art_into_the_next_games() {
             .layers(app.now)
             .into_iter()
             .map(|(h, opacity)| match h {
-                iced::widget::image::Handle::Path(_, p) => (p.display().to_string(), opacity),
+                crate::picture::Picture::File(p) => (p.display().to_string(), opacity),
                 _ => unreachable!("art from a file"),
             })
             .collect::<Vec<_>>()
@@ -662,7 +662,7 @@ fn the_couch_mode_fills_a_large_screen() {
     let g = app.home_focus().unwrap().2.clone();
     assert!(matches!(
         app.hero_art(&g),
-        Some(iced::widget::image::Handle::Path(_, p)) if p == copy
+        Some(crate::picture::Picture::File(p)) if p == copy
     ));
     // Once Iced draws at that scale, it gives the window's size in the interface's units: the
     // same screen, the same scale, nothing that grows each time.
@@ -706,7 +706,7 @@ fn the_couch_mode_enlarges_its_covers_in_view_on_a_large_screen() {
     app.card_width = 225.0;
     let cover = PathBuf::from("/covers/5.jpg");
     app.covers
-        .insert("5".into(), iced::widget::image::Handle::from_path(&cover));
+        .insert("5".into(), crate::picture::Picture::from_path(&cover));
     let _ = app.update(Message::Rescaled(1.0));
     let _ = app.update(Message::WindowResized(Size::new(1920.0, 1080.0)));
     nav(&mut app, Nav::Down);
@@ -717,8 +717,8 @@ fn the_couch_mode_enlarges_its_covers_in_view_on_a_large_screen() {
     assert!(resized.units() > 0, "its enlarged copy asked for");
     let width = app.couch_cover_width();
     let pixels = (width * 2.0).ceil() as u32;
-    let path = |h: Option<iced::widget::image::Handle>| match h {
-        Some(iced::widget::image::Handle::Path(_, p)) => p,
+    let path = |h: Option<crate::picture::Picture>| match h {
+        Some(crate::picture::Picture::File(p)) => p,
         other => panic!("{other:?}"),
     };
     assert_eq!(
@@ -757,7 +757,7 @@ fn couch_key_art_copies_are_as_wide_as_the_window() {
     let g = app.home_focus().unwrap().2.clone();
     assert!(matches!(
         app.hero_art(&g),
-        Some(iced::widget::image::Handle::Path(_, p)) if p == copy
+        Some(crate::picture::Picture::File(p)) if p == copy
     ));
 }
 
@@ -831,7 +831,7 @@ fn the_couch_game_page_copies_key_art_a_step_larger() {
     let g = app.selected_game().unwrap().clone();
     assert!(matches!(
         app.hero_art(&g),
-        Some(iced::widget::image::Handle::Path(_, p)) if p == copy
+        Some(crate::picture::Picture::File(p)) if p == copy
     ));
 }
 
@@ -1422,7 +1422,7 @@ fn the_library_asks_for_the_covers_around_its_focus_found_again() {
     for g in &app.library {
         let path = format!("/covers/{}.jpg", g.id);
         app.covers
-            .insert(g.id.clone(), iced::widget::image::Handle::from_path(path));
+            .insert(g.id.clone(), crate::picture::Picture::from_path(path));
     }
     // Forgets the lists, as an install ending would.
     let _ = app.update(Message::CloseDetail);
