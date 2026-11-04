@@ -36,3 +36,4 @@ repository, which can be a little after it was taken.
 | [0020](0020-gpui-set-aside-for-slime-ui.md) | GPUI tried and set aside; Slatty is the pilot of SlimeEngine's interface framework | Accepted; amends 0015 (Iced stays until slime-ui runs Slatty) |
 | [0021](0021-interface-in-english-first.md) | The interface in English first | Accepted |
 | [0022](0022-windows-hosts.md) | Windows hosts: one code base, built from Linux, Linux's features kept Linux's | Accepted |
+| [0023](0023-a-quality-bar-close-to-what-is-measured.md) | A quality bar close to what is measured, its gaps closed in Stage 4 | Accepted |

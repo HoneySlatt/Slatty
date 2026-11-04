@@ -9,21 +9,30 @@ rules the code depends on, which apply to everyone.
 ## Development environment
 
 ```sh
-nix develop      # Rust toolchain, umu-launcher, bubblewrap, Comet, graphics libraries
+nix develop      # Rust toolchain, umu-launcher, bubblewrap, Comet, graphics libraries, udev
+                 # (gamepads), cargo-deny and lychee
 cargo build --workspace
+nix develop .#windows -c cargo check --workspace    # the Windows build, from Linux
 ```
 
 `nix develop` adds `target/debug` to `PATH`, so `slatty` and `slatty-gui` are the ones you just
-built. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the map of the code.
+built. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the map of the code. `SLATTY_LOG=warn` (or
+`debug`) prints the core's logs on stderr. [docs/testing.md](docs/testing.md) has the tests that
+need real tools, the benchmarks, and how to run Slatty on a throwaway profile.
 
 ## Before sending a change
 
 ```sh
+scripts/check.sh                          # every check below and more, as CI runs it
 cargo fmt
 cargo clippy --workspace --all-targets    # no warning
 cargo test --workspace
-cargo build --workspace                   # tests and clippy do not rebuild the binaries
+cargo build --workspace                   # last: tests and clippy do not rebuild the binaries
 ```
+
+`scripts/check.sh` says at its head what it runs. CI (`.github/workflows/ci.yml`) runs it unchanged
+on every push to `main` and every pull request. Build last: the person testing your change runs
+`target/debug/slatty-gui`.
 
 - Keep behaviour in `slatty-core`, so both front ends share it; user-visible wording lives in the
   front ends.
@@ -31,11 +40,36 @@ cargo build --workspace                   # tests and clippy do not rebuild the 
   writes or deletes user data needs one. Test data is visibly fake (`[FAKE]` titles, made-up ids).
 - Never present a feature as working against GOG on the strength of simulated tests: a line goes
   into [docs/compatibility.md](docs/compatibility.md) only after a real check.
-- Update the documentation in the same change. [AGENTS.md](AGENTS.md#documentation) says which page
-  covers what; new features go into [CHANGELOG.md](CHANGELOG.md).
+- Update the documentation in the same change ([below](#documentation)); new features go into
+  [CHANGELOG.md](CHANGELOG.md).
 
 [docs/testing.md](docs/testing.md) describes the benchmarks, the tests that need real Proton, umu or
 Comet, and the checks against GOG and Steam.
+
+## Documentation
+
+Each kind of fact has one home; other documents link to it rather than copy it. Update it in the
+same change:
+
+| When you change… | Update |
+|---|---|
+| What an item does, its contracts, its limits | The code's documentation |
+| A module or a flow | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| A decision (a framework, a platform, a format, a security choice, something tried and dropped) | A new ADR in [docs/adr/](docs/adr/README.md), from `0000-template.md`, and the index |
+| A milestone's status, the known debt | [docs/PLAN.md](docs/PLAN.md); a finished stage moves to [docs/history.md](docs/history.md) |
+| A stage reshaped, merged or dropped, a budget | [docs/ROADMAP.md](docs/ROADMAP.md), with an ADR |
+| How something is tested or measured, a test that needs real tools | [docs/testing.md](docs/testing.md) |
+| A figure measured | [docs/measurements.md](docs/measurements.md) |
+| A real check against GOG, Steam, Epic or Windows (pass or fail) | [docs/compatibility.md](docs/compatibility.md), and README's summary of it |
+| A panel, a setting, a stored file | [docs/user-guide.md](docs/user-guide.md) |
+| A command or an option | [docs/command-line.md](docs/command-line.md), and the user guide where it shows the command |
+| A GOG request or what is known about it | [docs/gog-integration.md](docs/gog-integration.md) |
+| An Epic request or what is known about it | [docs/epic-integration.md](docs/epic-integration.md) |
+| Cloud sync rules | [docs/cloud-saves.md](docs/cloud-saves.md) |
+| A theme token | [docs/theming.md](docs/theming.md) |
+| What leaves the computer, how secrets or files are protected | [SECURITY.md](SECURITY.md) |
+| A term the project coins or uses in a sense of its own | [docs/glossary.md](docs/glossary.md) |
+| Anything a user of the next version will notice | [CHANGELOG.md](CHANGELOG.md), and README's features |
 
 ## Sending a change
 

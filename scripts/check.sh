@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # Runs every automated check of the definition of done (AGENTS.md), in the order a failure is
-# cheapest to find. CI runs this script unchanged, inside the Nix development shell:
-# `nix develop --no-update-lock-file --command scripts/check.sh`. The dependency step needs network
-# access (the advisory database); the tests never do.
+# cheapest to find:
+#   formatting; clippy with warnings as errors; the tests (no network, no real game); the code
+#   documentation with warnings as errors; cargo deny (licences, advisories, sources); the links
+#   between Markdown files (lychee, offline); every crate checked for Windows in the `windows`
+#   shell; the Nix package; then the build, last.
+# CI runs this script unchanged, inside the Nix development shell (flake.nix), which provides every
+# tool it calls: `nix develop --no-update-lock-file --command scripts/check.sh`. The dependency step
+# needs network access (the advisory database); the tests never do. Tests that need real Proton,
+# Comet or bubblewrap, and the benchmarks, are ignored here: docs/testing.md says how to run them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

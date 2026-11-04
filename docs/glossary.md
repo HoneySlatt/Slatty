@@ -7,6 +7,10 @@ where it is decided or built.
 system, `linux:<version>` for a Linux build from an offline installer
 ([ADR-0007](adr/0007-linux-builds-from-offline-installers.md)).
 
+**Budget.** A figure the program must meet, such as the time before the library shows, with how it
+is measured; the budgets make up the [quality bar](ROADMAP.md#quality-bar), and what was measured
+is in [measurements.md](measurements.md).
+
 **Card.** A game's cover in the library's grid, with its title and buttons over it while hovered;
 its width is the cover size chosen in Settings.
 
@@ -27,7 +31,7 @@ prefix so that Galaxy SDK versions that look for it reach Comet
 
 **Game id.** What names a game in Slatty: GOG's product id, `steam-<app id>`, `epic-<app name>`,
 `local-<number>` for a game added by hand, `emu-<number>` for an emulated one; `store::of` tells
-which ([AGENTS.md](../AGENTS.md#files-and-data-safety)).
+which ([ARCHITECTURE.md](ARCHITECTURE.md#rules-every-part-follows)).
 
 **Home (of a game).** The home folder an isolated game sees instead of the person's, `homes/<id>`
 ([ADR-0009](adr/0009-isolation-through-umus-container.md)).
@@ -62,6 +66,9 @@ achievement counts, whether it has cloud saves, its play time; cached per accoun
 **Proton build.** A build of Proton (GE-Proton, Proton-CachyOS, UMU-Proton) that Slatty downloads
 into a folder of its own, followed through `<project>-latest`
 ([ADR-0010](adr/0010-proton-builds-downloaded-by-slatty.md)).
+
+**Quality bar.** The programs Slatty is weighed against, and its budgets
+([ROADMAP.md](ROADMAP.md#quality-bar)).
 
 **Queue.** The downloads waiting their turn, in an order the person sets by dragging, kept across
 restarts.

@@ -35,6 +35,18 @@ made-up ids, throwaway folders named after the process id):
 - **Command line:** `crates/cli/tests` start real `slatty` processes against fake games and a fake
   Steam installation.
 
+How they are written:
+
+- Throwaway folders are named after the process id and removed at the end.
+- Core tests use the in-memory CDN (`installer/tests.rs`), the in-memory cloud (`cloud/tests.rs`)
+  and fake installer sources (`installer/linux/tests.rs`).
+- Interface tests live in `crates/gui/src/tests/`, one module per area, with helpers in
+  `tests/mod.rs` (`library_app()`, `render()`, `fake_plan()`…). When the simulator cannot read a
+  widget's text (pick lists), they assert on the state. Tests of the state alone, without a view,
+  live in `crates/app`, beside the module they test.
+- Tests that spawn native games remove `steam-run` and umu from `PATH`: their sandboxes cannot see
+  the test's throwaway folder.
+
 Passing tests show the logic behaves as designed. They do not show that GOG accepts the requests;
 that is what the [checks below](#checks-against-gog) are for.
 
@@ -87,22 +99,13 @@ partly not Latin, in no particular order: how long a view takes with the lists k
 scrolling), how long making the lists again takes (after any other message), and how much longer
 laying out takes than with 14 games. It times the couch mode too: its home page and library, a
 move of the focus (a message and a view, as each press of the d-pad), its lists made again, its
-focus found again on its games after a message that forgets them, and a favorite toggled on Home
-(2026-10-13: views 5–8 µs, a move 7.5 µs, lists 3 ms, focus found again 0.45 ms, a favorite
-toggled 0.55 ms). A view must build well within a 16 ms frame. Layout times
+focus found again on its games after a message that forgets them, and a favorite toggled on Home.
+A view must build well within a 16 ms frame. Layout times
 include the test renderer's start-up, so only the difference means something; and the test lays
 out every widget anew, while the application keeps what it laid out for a row in view. Scrolling is
 measured in the application itself (below).
 
-**Unpacking**, 2026-10-10, a 1.1 GB tree of 3,275 files packed three ways, on NVMe:
-
-| Archive | Unpacking | Peak memory |
-|---|---|---|
-| `.tar.gz`, 354 MB | 1.7 s; SHA-512 0.6 s | |
-| `.tar.xz` in 44 blocks, 224 MB (`xz -T0 -6`) | 2.7 s (11.2–11.6 s on one thread) | 322 MB (15 MB on one thread) |
-| `.tar.xz` in one block, 221 MB (`xz -T1 -6`) | 10.2–10.6 s | 15 MB |
-
-**Verifying**, 2026-10-10, a 1.03 GB file: 0.37–0.44 s on four threads (1.42–1.65 s on one).
+What each benchmark found is in [measurements.md](measurements.md).
 
 ## The application at 10,000 games
 
@@ -119,23 +122,9 @@ profile:
   grid by itself; `dd if=<file> iflag=nocache count=0` drops the covers from the disk cache for a
   cold start.
 
-Reference, 2026-10-10 (Ryzen 7 5800X, Radeon RX 6900 XT, niri at 3840×2160, 240 Hz, scale 1.5),
-before covers and key art were drawn from copies made at their size (2026-10-12): the rows on
-covers have not been measured again since; the last row was, on 2026-10-12.
-
-| | Result |
-|---|---|
-| Library shown | 120–130 ms after start; the same with 30 installed games on a drive answering each access in 0.2 s (standing in for a network drive waking up), where it took 24.1 s while their folders were read before |
-| Every cover ready | 205–217 ms, read from the cache in one pass |
-| Resident memory, covers in | 135 MB (997 MB when covers were kept in memory) |
-| 200 game pages with 2560×1440 key art opened in a row | 191 MB, flat after the first 50 |
-| Scrolling, 1,200 frames | p50 4.2 ms (every frame at 240 Hz), p99 8.4 ms, none above 16.7 ms |
-| `view` while scrolling | p50 0.17 ms, p99 0.25 ms |
-| `library_at_10000_games` | view 0.13 ms, Achievements 0.16 ms, lists made again 1.8–2.0 ms |
-| Idle CPU, nothing happening | 0 ticks in 15 s |
-| Wake-ups at rest (2026-10-11, context switches of every thread in 60 s) | 120: one thread of the D-Bus library's pool, kept by the keyring's connection, wakes every 500 ms |
-| Cover copies at the card's size (2026-10-12) | 21 s (82 s of processor time, at the lowest priority) the first time for 10,000 covers made at 225 pixels, about 37 KB each; 16 ms to find them once made |
-| Start-up, scrolling and rest again (2026-10-12) | Library shown 86–91 ms after start, 125–130 ms with the program, its libraries, the profile and the shader caches dropped from the disk cache; scrolling p50 4.15 ms, p99 4.6–4.9 ms, none above 16.7 ms; `view` p50 0.17–0.19 ms, p99 0.29–0.33 ms; 116 MB resident after scrolling; at rest, 0 ticks and 120–122 wake-ups in 60 s |
+The simulator rebuilds every widget each time, so it cannot show what Iced keeps between frames:
+scrolling is judged in the application itself. The figures are in
+[measurements.md](measurements.md#the-application-at-10000-games-2026-10-10-to-2026-10-12).
 
 ## Tests that need real tools
 

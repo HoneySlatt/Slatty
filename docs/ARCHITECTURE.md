@@ -156,12 +156,34 @@ The modules below are the state's (`crates/app/src`) unless named under `ui/`, `
 | `theme`, `icons` | The tokens in Iced's colours, made again when the look changes; widget styles; the fonts as Iced draws them; Lucide icons |
 | `ui/*` | The views: top bar and layers (`mod`), building blocks (`widgets`), pages (`library`, `game`, `achievements`, `settings`, `downloads`), the list of games beside the library (`sidebar`), drawers and dialogs (`install`, `installers`, `game_settings`, `manage`, `cloud`, `edit`, `add`, `panels`), the couch mode's pages and layers (`couch`), `even_grid`, `pointer`, `slide` (a drawer or a notification card moved without being narrowed) |
 
+`slatty-gui` re-exports the state's modules under the paths the views and tests use
+(`crate::install::…`).
+
+Each feature keeps its state, messages and background tasks in its module:
+
+- `add`, `couch`, `downloads`, `edit`, `emulators`, `epic`, `install`, `maintenance`, `notify`,
+  `offline`, `runners`, `settings`, `sidebar`, `steam` and `updates` have a message enum of their
+  own and an `impl App { fn update_<feature>(…) }` block;
+- `play` has `PlayMsg` and `on_play`;
+- `library`, `cloud`, `achievements` and `scaled` handle `Message` variants through methods of
+  `App`;
+- the couch mode starts its work through the desktop window's messages: a new action there sends
+  the desktop's message rather than doing the work again.
+
+Nothing slow runs on the interface thread. Background work goes through `Task::perform`, file and
+processor work through `tokio::task::spawn_blocking`, and progress through
+`work::progress_stream`, throttled to four updates a second.
+
 Views never name a colour: every colour, radius and motion comes from `theme::tokens()`, a built-in
 theme (`presets`) with `~/.config/slatty/theme.toml` over it ([theming](theming.md)).
 
+Icons are Lucide SVGs in `crates/gui/assets/icons`, named in the `Icon` enum, which gives each its
+file (`crates/app/src/icons.rs`).
+
 Dialogs and menus are layers over the page, each over an empty layer, and the notice banner keeps
 its place: the page stays the same widget whatever opens over it, so Iced keeps its state (the
-library's scroll position).
+library's scroll position). The empty layer comes first because an Iced `stack` takes the size of
+its first layer: it fills the window.
 
 ### Start-up
 
@@ -202,8 +224,11 @@ load credentials with `Account::load_for`, which refuses when another account is
   font lacks are slow to shape).
 - **Lists are kept.** The games each tab lists (`library::Lists`) are kept until a message that
   can change them; those that cannot (scroll steps, frames, covers, progress…) are in
-  `Message::keeps_lists`. Sort keys are made once per title (`library::SortKeys`), at start off
-  the interface thread.
+  `Message::keeps_lists`. A new message that comes many times a second, or with the others just
+  after start, and changes no list belongs there. One that changes what a list shows must not be
+  there, or must clear the lists itself when it does (`App::playtimes_fetched`, only when sorted
+  by play time). Sort keys are made once per title (`library::SortKeys`), at start off the
+  interface thread.
 - **Images come from files.** Covers and images are cached as files named after their format and
   shown with `image::Handle::from_path`: the interface holds no image bytes. At start the covers
   already cached are found in one pass over their folder and shown in one message.
@@ -218,10 +243,13 @@ load credentials with `Account::load_for`, which refuses when another account is
   grid's copies and GOG's covers: those in view are enlarged the same way at the size drawn
   (`App::scale_couch_covers`), beside the key art. Key art copies take at most 2 GiB, those shown
   longest ago going first, never one shown in this session. Copies of GOG's images go into the
-  account's cache, so they go with it.
+  account's cache, so they go with it. The grid draws covers through `App::grid_cover`, the game
+  page its key art through `App::shown_art`, and covers drawn larger than the grid's (the couch
+  mode's) through `App::cover_at`: each gives the copy once it exists. A new place showing a cover
+  or key art goes through them too.
 
-`library_at_10000_games` (an ignored test) measures the views; [testing](testing.md) gives the
-references measured in the application itself.
+`library_at_10000_games` (an ignored test) measures the views; [testing](testing.md) says how the
+application itself is measured, and [measurements](measurements.md) what it found.
 
 ## Rules every part follows
 
@@ -246,8 +274,10 @@ references measured in the application itself.
   record) are ever deleted from a game folder; saves are copied before they are replaced.
 - **Network behind traits.** `galaxy::ContentSource`, `cloud::CloudTransport` and
   `installer::linux::Source` have in-memory fakes with fault injection, so tests need no network.
-- **Settings** are key/value rows, each with a getter defaulting sensibly and a setter in
-  `settings.rs`. The database changes only by appending a migration to `db::MIGRATIONS`.
+  Read-only requests go through `http::json` and `http::bytes`, which retry transient failures.
+- **Settings** are key/value rows, each with a constant key, a getter defaulting sensibly when the
+  row is missing and a setter in `settings.rs`. The database changes only by appending a migration
+  to `db::MIGRATIONS`.
 
 ## Main flows
 
@@ -529,7 +559,8 @@ use, an in-memory transport with fault injection for the tests.
 
 ### Comet
 
-Comet listens on the fixed port 127.0.0.1:9977, so only one runs at a time.
+Comet listens on the fixed port 127.0.0.1:9977, so only one runs at a time
+([Known pitfalls](#known-pitfalls)).
 
 - **Tokens.** Slatty passes them through Comet's Lutris importer: a 0600 file in a private
   folder under `$XDG_RUNTIME_DIR`, removed as soon as Comet listens, never in process arguments.
@@ -795,6 +826,33 @@ Paths follow the XDG variables; the defaults are shown.
 | Cache | `~/.cache/slatty/<user id>/` (GOG), `~/.cache/slatty/{steam,steamgriddb,scaled,art}/` | the network, or made again |
 | Logs and locks | `~/.local/state/slatty/{logs,locks}/` | made again |
 | Theme | `~/.config/slatty/theme.toml` | the user |
+
+## Known pitfalls
+
+What a newcomer breaks without knowing:
+
+- **NixOS has no `/bin/bash`**, which GOG's Linux `start.sh` scripts need: native games start
+  through `steam-run`, else umu without Proton (`runner::runtime_tool`); tests that spawn native
+  games remove both from `PATH` ([testing.md](testing.md#automated-tests)).
+- **umu's runtime cannot see `/tmp/nix-shell.*`**: tests that run Proton set `TMPDIR` inside the
+  home folder.
+- **`steam-run` mounts an empty `/tmp` of its own**: a temporary folder under `/tmp` that the
+  environment names does not exist there (`runner::steam_run_temp` gives `/tmp` instead).
+- **The environment is not always UTF-8**: `std::env::vars` panics on a single variable that is
+  not, so it is read with `vars_os` or `var_os`.
+- **umu and its container share more than they are told**: the folders, variables and Steam
+  installation listed under [Game isolation](#game-isolation), and the user's whole environment;
+  `PRESSURE_VESSEL_SHARE_HOME=1` in the user's environment wins over `PRESSURE_VESSEL_HOME`. An
+  isolated launch keeps all of them out (`runner::isolation_env`, `runner::check_shared`).
+- **Comet listens on the fixed port 127.0.0.1:9977**: another launcher's Comet (Heroic's) holding
+  it makes Slatty's fail; `slatty doctor` reports it.
+- **A rebuild can replace the running binary**: the session supervisor starts through
+  `/proc/self/exe`, not `current_exe()`.
+- **GOG's CDN serves byte ranges but not suffix ranges**, and the API's installer sizes are
+  rounded: the exact size comes from `Content-Range`. GOG's content system has no Linux builds;
+  they come from the offline installers, with the build id `linux:<version>`
+  ([gog-integration.md](gog-integration.md)).
+- **An Iced `stack` takes the size of its first layer** ([Interface](#interface)).
 
 ## Design decisions
 

@@ -10,8 +10,9 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 ## Current
 
 - **Stage 3 — Windows, without the interface** ([ADR-0022](adr/0022-windows-hosts.md)), to be
-  released as 0.3. The build environment is done; every crate checks for Windows; next: the core's
-  tests under Wine, then playing a GOG game from the command line. What Slatty depends on Linux
+  released as 0.3. The build environment is done; every crate checks for Windows. Next, first:
+  fix the cloud saves of a folder made again ([known debt](#known-debt)), which turns CI red at
+  times; then the core's tests under Wine, then playing a GOG game from the command line. What Slatty depends on Linux
   for, and the port's open questions, are in [windows-port.md](windows-port.md).
 - **Stage 5 — The interface on slime-ui, Windows included**
   ([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)): waits for SlimeEngine's Stage 6d to run
@@ -119,19 +120,19 @@ milestone.
 - **Not checked for real**: the couch mode on a Steam Deck (Stage 6) and on a television; emulated
   games in each emulator; the rest is listed in [compatibility.md](compatibility.md).
 - **The performance figures are not reproducible by a command**: [testing.md](testing.md) measures
-  start-up, scrolling and memory with a temporary probe that is not in the repository, and its rows
-  on covers predate the copies made at the size drawn.
-- **A test failed once, unidentified**: on 2026-11-04 one run of `cargo test --workspace` ended
-  with a failure whose test was not recorded; seven runs after it passed. Which test is unstable is
-  not known yet.
+  start-up, scrolling and memory with a temporary probe that is not in the repository, and the rows
+  of [measurements.md](measurements.md) on covers predate the copies made at the size drawn.
+- **A save folder made again can keep its history**: `folder_identity` (`cloud/sync.rs`) tells a
+  folder by its device and inode, and a folder deleted and made again can get the same inode back
+  (ext4 does so). The sync then trusts a history that describes the old folder, and a new save can
+  be uploaded over the cloud's without a conflict. `cloud::tests::a_save_folder_made_again_does_not_reuse_its_history`
+  fails when it happens, as on CI's ext4 on 2026-11-04 (a local run failed once that day too, its
+  test not recorded). Not fixed yet.
+- **Wake-ups at rest**: one thread of zbus's pool, kept by the keyring's connection, wakes every
+  500 ms (120 wake-ups a minute, against a budget of 0 in the
+  [quality bar](ROADMAP.md#quality-bar)). To be fixed in Stage 4.
 - **CI runs on GitHub's Linux machines only**: Windows is checked by building from Linux, not by a
   Windows runner.
 
-## Completed stages
-
-- **Stage 1 — GOG on Linux**, released as 0.1.0 on 2026-10-21: sign-in, library, installs of
-  Windows and Linux builds, updates, isolation, cloud saves, achievements, from the command line and
-  the interface ([CHANGELOG.md](../CHANGELOG.md)).
-- **Stage 2 — Beyond GOG**, released as 0.2.0 on 2026-10-27: Steam's and Epic's games, games added
-  by hand, emulated games, the list beside the library, the couch mode
-  ([CHANGELOG.md](../CHANGELOG.md)).
+Finished stages move to [`history.md`](history.md), in a few lines each, so that this file holds the
+current stage only, under about 2,000 words.

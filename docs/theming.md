@@ -91,3 +91,6 @@ The file maps onto `look::Tokens` in `crates/app/src/look.rs`, which the views d
 `theme::Tokens` in `crates/gui/src/theme.rs` (the same values in Iced's colours). Views never name
 a colour; every widget style reads the tokens in use, so a key added to both and to the file
 format reaches the whole interface. A new token also goes into this page.
+
+Controls and covers take their corners from the tokens. Cards, drawers and dialogs still have
+corners of their own in `theme.rs`, and one in `ui/widgets.rs::inner`.

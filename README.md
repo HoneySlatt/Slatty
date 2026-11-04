@@ -184,9 +184,10 @@ Report vulnerabilities privately, as [SECURITY.md](SECURITY.md#reporting-a-vulne
 - [Epic Games integration](docs/epic-integration.md): every Epic service used, its source, what is
   verified
 - [Compatibility](docs/compatibility.md): results of real tests
-- [Testing](docs/testing.md): automated tests, benchmarks and checks against GOG and Steam
-- [Roadmap](docs/ROADMAP.md) · [Plan](docs/PLAN.md) · [Changelog](CHANGELOG.md) ·
-  [Glossary](docs/glossary.md)
+- [Testing](docs/testing.md): automated tests, benchmarks and checks against GOG and Steam;
+  [Measurements](docs/measurements.md): what the benchmarks found
+- [Roadmap](docs/ROADMAP.md) · [Plan](docs/PLAN.md) · [History](docs/history.md) ·
+  [Changelog](CHANGELOG.md) · [Glossary](docs/glossary.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [AI agents](AGENTS.md)
 
 ## Credits

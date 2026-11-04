@@ -37,6 +37,42 @@ smaller items.
 5. **The core holds the behaviour.** The command line and the interface share `slatty-core`; the
    interface's state names no framework ([ADR-0019](adr/0019-the-interfaces-state-free-of-any-framework.md)).
 
+## Quality bar
+
+Set by the owner on 2026-11-05, from the figures measured with Iced.
+
+References:
+
+- **Steam**: its library and its Game Mode, the bar for the couch mode and the Steam Deck.
+- **GOG Galaxy 2.0**: one library for every store.
+- **Playnite**: libraries of thousands of games, many sources, speed.
+- **Heroic**: GOG and Epic on Linux, the closest in purpose.
+- For the interface on slime-ui (Stage 5): the most refined current interfaces, in motion,
+  materials, type and responsiveness.
+
+Budgets, on the reference machine (Ryzen 7 5800X, Radeon RX 6900 XT, 3840×2160 at 240 Hz, scale
+1.5), with the fake library of 10,000 games ([testing.md](testing.md#the-application-at-10000-games)),
+release build. The figures measured are in [measurements.md](measurements.md).
+
+| Budget | Target | Measured by | Checked in |
+|---|---|---|---|
+| Library shown after start | ≤ 95 ms warm, ≤ 135 ms cold | The probe of testing.md | By hand, when start-up changes |
+| Scrolling the grid | No frame missed at 240 Hz: p99 of the time between frames ≤ 5 ms, none above 6.25 ms (1.5 refresh intervals) | The probe, 1,200 frames | By hand, when the library or the grid changes |
+| `view` at 10,000 games | p99 ≤ 0.5 ms, library and Achievements | `library_at_10000_games` | By hand; in CI from Stage 4 |
+| Lists made again | ≤ 2.5 ms on the desktop, ≤ 3.5 ms in the couch mode | `library_at_10000_games` | As above |
+| A couch mode move | Shown in the next frame: message and view ≤ 0.1 ms | `library_at_10000_games` | As above |
+| At rest | No frame drawn, 0 CPU ticks, 0 wake-ups of Slatty's own in 60 s | `top`, `voluntary_ctxt_switches` of every thread | By hand, at each milestone that touches the interface or a background task |
+| Memory | ≤ 140 MB resident with every cover in; ≤ 200 MB after 200 game pages with key art | `VmRSS` in `/proc/<pid>/status` | By hand, when images change |
+| GPU power at rest | No more than the desktop without Slatty | `power1_average` of the card | By hand, once per stage |
+| Command line start-up | `slatty library list` at 10,000 games ≤ 10 ms warm | `hyperfine` | By hand, when the command line changes |
+| Verifying a file | 1 GB in ≤ 0.45 s on four threads | `verifying_a_large_file` | By hand, when verification changes |
+| Bad input | Never a crash on a file or answer from outside (VDF, `appinfo.vdf`, GOG manifests, installers, archives) | Tests of hostile input; `cargo fuzz` from Stage 4 | `scripts/check.sh` (tests); fuzzing by hand and briefly in CI from Stage 4 |
+
+Left for the interface on slime-ui (Stage 5), since Iced receives bug fixes only: input to visible
+response within one frame, animations at the display's rate judged at the 99th percentile,
+rendering checked against reference images at scales 1 and 2, screen readers, full keyboard use,
+reduced motion and contrast.
+
 ## 3. Decisions
 
 ### Fixed
@@ -103,7 +139,14 @@ unchanged.
 
 - packages for other distributions;
 - Steam's downloads followed more exactly while the client downloads;
-- Wine without Proton for the games Slatty installs (it exists for imported games).
+- Wine without Proton for the games Slatty installs (it exists for imported games);
+- nothing that wakes at rest: the keyring's connection open only while a secret is read or
+  written ([quality bar](#quality-bar));
+- the parsers of outside data (Steam's VDF and `appinfo.vdf`, GOG's manifests, Linux installers,
+  archives) fuzzed with `cargo fuzz`, from a nightly toolchain in the development shell, decided
+  in an ADR;
+- the budgets `library_at_10000_games` measures checked by `scripts/check.sh` in CI, with limits
+  for CI's machines written in the quality bar.
 
 **Exit.** Slatty installed and run from a package on a distribution other than NixOS, recorded in
 [compatibility.md](compatibility.md).
@@ -120,9 +163,9 @@ Windows. Starts when SlimeEngine's Stage 6d can run an application.
 - A checkpoint where the owner uses it day to day.
 - Iced removed.
 
-**Exit.** Slatty on slime-ui at least as good as on Iced on each of
-[testing.md](testing.md)'s figures (library shown, scrolling, rest under Wayland and Xwayland,
-memory); every page at parity; the window checked by a person on Windows; Iced gone from
+**Exit.** Slatty on slime-ui at least as good as on Iced on each figure of
+[measurements.md](measurements.md) (library shown, scrolling, rest under Wayland and Xwayland,
+memory), and within the [quality bar](#quality-bar); every page at parity; the window checked by a person on Windows; Iced gone from
 `Cargo.lock`.
 
 ### Stage 6 — On a Steam Deck
