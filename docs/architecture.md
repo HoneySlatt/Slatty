@@ -21,7 +21,6 @@ crates/core   slatty-core   every behaviour; no interface code
 crates/cli    slatty        command line, diagnostics; tests that spawn real processes
 crates/app    slatty-app    the interface's state, messages, update and background work, free of Iced
 crates/gui    slatty-gui    Iced interface: views, styles, what Iced runs for the state
-crates/gpui   slatty-gpui   the same state drawn with GPUI, being built; not shipped yet
 ```
 
 The core has no interface dependency and is tested on its own. Both front ends call the same core
@@ -123,19 +122,8 @@ The interface follows Iced's state, message, update and view split, in two crate
   are its own, so another interface framework could draw the same state;
 - `slatty-gui` (`crates/gui`) draws it with Iced: `main.rs` starts Iced with an `App` that wraps
   the state and dereferences to it; views live under `ui/`, one module per page or panel, as
-  `impl App` blocks; `run` hands the state's tasks and subscriptions to Iced, `theme` its look;
-- `slatty-gpui` (`crates/gpui`) is the same state drawn with GPUI, Zed's interface framework,
-  built page by page beside `slatty-gui`, which stays the interface until this one matches it in
-  look, speed and use. `main.rs` holds the state in GPUI's root entity, which hands it each
-  message and the window's events; `run` runs the state's tasks on a tokio runtime, does what
-  they ask of the window, and starts or stops what the state listens to after each message
-  (timers and the gamepads as tasks, frames, keys, the pointer and the window's events as flags
-  the root reads); `theme` gives the look's colours in GPUI's type, loads Geist and lists the
-  system's fonts for Settings. Both interfaces apply the look saved (`look::apply_saved`) before
-  their first frame. GPUI comes from a revision of Zed's repository pinned in the workspace's
-  `Cargo.toml`, with the forks Zed patches in (`[patch.crates-io]`), moved by hand; the Nix
-  package leaves it out for now. GPUI draws with the graphics card alone (Vulkan, else OpenGL):
-  where neither driver is found, the window does not open and the program says why.
+  `impl App` blocks; `run` hands the state's tasks and subscriptions to Iced, `theme` its look,
+  applied as saved (`look::apply_saved`) before the first frame.
 
 The modules below are the state's (`crates/app/src`) unless named under `ui/`, `run`, `theme`,
 `icons` or `graphics` (`crates/gui/src`).
@@ -814,6 +802,7 @@ Paths follow the XDG variables; the defaults are shown.
 |---|---|
 | Rust everywhere in the application; Proton, umu and Comet stay external | Proven tools reused rather than rewritten, with explicit boundaries |
 | Iced rather than GPUI (reviewed 2026-10-09) | Maintenance comes first: Iced has versioned releases and documentation; GPUI had no maintained release, and its ecosystem pinned weekly third-party snapshots |
+| GPUI tried (`slatty-gpui`) and set aside (2026-11-04) | Slatty will move to SlimeEngine's interface framework (slime-ui) once it can run applications |
 | No web view; the address pasted back after sign-in | A native application; GOG accepts only Galaxy's redirect address, and no local redirect is known to work |
 | Linux builds from GOG's offline installers, read file by file | GOG's content system has no Linux builds; ranged reads keep the installer off the disk |
 | Isolation through umu's own container, with bubblewrap around umu | pressure-vessel already runs every Proton game and keeps GPUs, sound and gamepads working; its options hide the home folder. Bubblewrap only makes the tools read-only. It keeps games out of files and D-Bus, not out of the system |

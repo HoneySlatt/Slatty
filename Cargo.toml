@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/cli", "crates/app", "crates/gui", "crates/gpui"]
+members = ["crates/core", "crates/cli", "crates/app", "crates/gui"]
 
 [workspace.package]
 version = "0.2.0"
@@ -23,17 +23,6 @@ tokio-util = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
-# GPUI is not published with its wgpu renderer for Linux: a revision of Zed, pinned knowingly and
-# moved by hand (docs/gpui-migration.md, kept out of the repository; gate G1).
-gpui = { git = "https://github.com/zed-industries/zed", rev = "056a44d1185a26fb24c47f2c8710b444057743eb", default-features = false }
-gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "056a44d1185a26fb24c47f2c8710b444057743eb", default-features = false, features = ["wayland", "x11"] }
-
-# Zed's own forks, which GPUI needs and a crate depending on it does not inherit: the same
-# revisions as Zed's Cargo.toml at the revision above.
-[patch.crates-io]
-async-process = { git = "https://github.com/zed-industries/async-process.git", rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d" }
-async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
-khronos-egl = { git = "https://github.com/zed-industries/khronos-egl", rev = "42214b36347b108fd9630ca6254b96dde59e04fe" }
 
 # Dependencies (hashing, decompression, image decoding, rendering) are optimised even in debug
 # builds, without debug info; slatty's own crates stay quick to rebuild and keep theirs.

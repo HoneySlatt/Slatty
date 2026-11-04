@@ -147,13 +147,7 @@ crates/core   slatty-core  all behaviour; no interface code, typed errors, progr
 crates/cli    slatty       command line, diagnostics, process-level integration tests
 crates/app    slatty-app   the interface's state, messages, update and background work, free of Iced
 crates/gui    slatty-gui   Iced interface: the views, the styles, what Iced runs for the state
-crates/gpui   slatty-gpui  the same state drawn with GPUI, being built beside slatty-gui; not shipped
 ```
-
-`slatty-gpui` takes GPUI from a revision of Zed pinned in the workspace's `Cargo.toml`: moving it
-means the same revision for `gpui` and `gpui_platform`, the forks of Zed's own `[patch.crates-io]`
-at that revision, `deny.toml`'s `allow-git` and the Nix package's `outputHashes`. A build of the
-whole workspace compiles GPUI too (about three minutes the first time).
 
 ### Core
 
@@ -203,7 +197,7 @@ and the views in `slatty-gui`:
   theme file format and docs/theming.md. Controls and covers take their corners from the tokens; cards, drawers and
   dialogs still have corners of their own in `theme.rs` (and one in `ui/widgets.rs::inner`).
 - Icons are Lucide SVGs in `crates/gui/assets/icons`, named in the `Icon` enum and given their
-  file there (`crates/app/src/icons.rs`, `Icon::ALL` too), for both interfaces.
+  file there (`crates/app/src/icons.rs`).
 - Dialogs and menus are **layers over the page** (`ui/mod.rs`), each over an empty layer, and the
   notice banner keeps its place even when empty. Do not wrap the page in a different widget
   depending on what is open: Iced would rebuild it and lose its state (the library's scroll
@@ -247,9 +241,7 @@ making those copies) runs at the lowest priority through `fsutil::in_background`
   as `library_app()`, `render()`, `fake_plan()`) drive the real `update` and `view` with Iced's
   simulator. When the simulator cannot read a widget's text (pick lists), assert on the state.
   Tests of the state alone (no view) can live in `crates/app`, beside the module they test. The
-  fake state both interfaces' tests start from is `slatty_app::testing` (feature `test-support`).
-  `slatty-gpui`'s tests (`crates/gpui/src/tests.rs`) click, type and press keys in GPUI's test
-  window, finding elements by their debug selector; they drop the state's tasks.
+  fake state the interface's tests start from is `slatty_app::testing` (feature `test-support`).
 - CLI tests in `crates/cli/tests` spawn real processes. Ignored tests need real Proton or Comet
   and are run on purpose.
 

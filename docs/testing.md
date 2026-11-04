@@ -30,9 +30,8 @@ made-up ids, throwaway folders named after the process id):
   Steam's folders, and GOG never asked about a Steam game.
 - **Interface:** the real `update` and `view` driven by Iced's simulator, one module per area under
   `crates/gui/src/tests`; the state's own pieces (motion, tasks, pictures, the theme file) in
-  `crates/app`, beside them. `slatty-gpui`'s in `crates/gpui/src/tests.rs`: clicks, typing and
-  keys in GPUI's test window, which lays out without a screen (its text has no width there). Both
-  start from the same fake state (`slatty_app::testing`) and never run the state's tasks.
+  `crates/app`, beside them. They start from a fake state (`slatty_app::testing`) and never run
+  the state's tasks.
 - **Command line:** `crates/cli/tests` start real `slatty` processes against fake games and a fake
   Steam installation.
 
