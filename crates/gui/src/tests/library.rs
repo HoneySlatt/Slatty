@@ -960,9 +960,9 @@ fn only_the_keys_the_window_answers_send_a_message() {
         text: None,
         repeat: false,
     };
-    assert!(crate::key_message(press(Key::Named(Named::Escape))).is_some());
-    assert!(crate::key_message(press(Key::Named(Named::Tab))).is_some());
-    assert!(crate::key_message(press(Key::Character("a".into()))).is_none());
+    assert!(crate::listen::key_message(press(Key::Named(Named::Escape))).is_some());
+    assert!(crate::listen::key_message(press(Key::Named(Named::Tab))).is_some());
+    assert!(crate::listen::key_message(press(Key::Character("a".into()))).is_none());
     let release = Event::KeyReleased {
         key: Key::Named(Named::Escape),
         modified_key: Key::Named(Named::Escape),
@@ -970,8 +970,8 @@ fn only_the_keys_the_window_answers_send_a_message() {
         location: Location::Standard,
         modifiers: Modifiers::empty(),
     };
-    assert!(crate::key_message(release).is_none());
-    assert!(crate::key_message(Event::ModifiersChanged(Modifiers::SHIFT)).is_none());
+    assert!(crate::listen::key_message(release).is_none());
+    assert!(crate::listen::key_message(Event::ModifiersChanged(Modifiers::SHIFT)).is_none());
 }
 
 /// At start the covers already cached come in one message; only those missing are downloaded,
@@ -1335,17 +1335,7 @@ fn a_library_of_10000_games_builds_only_the_covers_in_view() {
     assert!(render(&app).find("[FAKE] Game 1").is_err());
     // Through Escape too.
     let _ = app.update(Message::Select("3".into()));
-    let _ = app.update(Message::Key(iced::keyboard::Event::KeyPressed {
-        key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
-        modified_key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
-        physical_key: iced::keyboard::key::Physical::Unidentified(
-            iced::keyboard::key::NativeCode::Unidentified,
-        ),
-        location: iced::keyboard::Location::Standard,
-        modifiers: iced::keyboard::Modifiers::empty(),
-        text: None,
-        repeat: false,
-    }));
+    let _ = app.update(Message::Key(crate::WindowKey::Escape));
     assert_eq!(app.grid_view.map(|v| v.absolute_offset().y), Some(offset));
 
     // Another tab, then the library again: its top.

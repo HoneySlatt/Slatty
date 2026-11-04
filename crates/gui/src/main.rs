@@ -48,7 +48,6 @@ use play::{PlayMsg, PlayState};
 use settings::SettingsMsg;
 
 use geometry::{Scroll, Size};
-use iced::keyboard;
 use iced::widget::image;
 use listen::Listen;
 use motion::{Animation, Easing};
@@ -660,36 +659,18 @@ pub enum Message {
     Frame(Instant),
     /// The pointer entered or left a game's cover in the library.
     CoverHovered(String, bool),
-    Key(keyboard::Event),
+    Key(WindowKey),
 }
 
-/// The window gaining or losing the focus, as a message; its other events send none.
-fn window_message((_, event): (iced::window::Id, iced::window::Event)) -> Option<Message> {
-    match event {
-        iced::window::Event::Focused => Some(Message::Notify(notify::NotifyMsg::Focus(true))),
-        iced::window::Event::Unfocused => Some(Message::Notify(notify::NotifyMsg::Focus(false))),
-        iced::window::Event::Rescaled(scale) => Some(Message::Rescaled(scale)),
-        _ => None,
-    }
-}
-
-/// The keys the window answers itself (Tab, Shift+Tab, Escape), as a message. The others send
-/// none: every message rebuilds the page, and each key a field does not take (its release, a
-/// modifier) would.
-fn key_message(event: keyboard::Event) -> Option<Message> {
-    use keyboard::key::Named;
-    match &event {
-        keyboard::Event::KeyPressed {
-            key: keyboard::Key::Named(Named::Tab | Named::Escape),
-            ..
-        } => Some(Message::Key(event)),
-        _ => None,
-    }
-}
-
-/// The keys the couch mode answers, as a message.
-fn couch_key(event: keyboard::Event) -> Option<Message> {
-    pad::key(event).map(|k| Message::Couch(couch::CouchMsg::Key(k)))
+/// The keys the desktop window answers itself; the others go to the fields, or nowhere.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowKey {
+    /// To the next field.
+    Tab,
+    /// To the field before.
+    ShiftTab,
+    /// Back: closes what is open.
+    Escape,
 }
 
 impl Message {
@@ -1400,18 +1381,9 @@ impl App {
             // Work is left as it stands: downloads and updates resume at the next start, as after a
             // crash.
             Message::ConfirmQuit => return Task::effect(Effect::Exit),
-            Message::Key(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
-                use keyboard::key::Named;
-                match key {
-                    keyboard::Key::Named(Named::Tab) if modifiers.shift() => {
-                        return Task::effect(Effect::FocusPrevious);
-                    }
-                    keyboard::Key::Named(Named::Tab) => return Task::effect(Effect::FocusNext),
-                    keyboard::Key::Named(Named::Escape) => self.go_back(),
-                    _ => {}
-                }
-            }
-            Message::Key(_) => {}
+            Message::Key(WindowKey::ShiftTab) => return Task::effect(Effect::FocusPrevious),
+            Message::Key(WindowKey::Tab) => return Task::effect(Effect::FocusNext),
+            Message::Key(WindowKey::Escape) => self.go_back(),
         }
         Task::none()
     }

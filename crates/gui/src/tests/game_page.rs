@@ -114,20 +114,9 @@ fn uninstalled_game_offers_install_but_not_play_or_cloud_tools() {
 
 #[test]
 fn escape_closes_the_panel_then_the_game_page() {
-    use iced::keyboard::{Event, Key, Location, Modifiers, key};
     let mut app = library_app();
     open(&mut app, "3", Some(Panel::Manage));
-    let escape = || {
-        Message::Key(Event::KeyPressed {
-            key: Key::Named(key::Named::Escape),
-            modified_key: Key::Named(key::Named::Escape),
-            physical_key: key::Physical::Unidentified(key::NativeCode::Unidentified),
-            location: Location::Standard,
-            modifiers: Modifiers::empty(),
-            text: None,
-            repeat: false,
-        })
-    };
+    let escape = || Message::Key(crate::WindowKey::Escape);
     let _ = app.update(escape());
     assert_eq!((app.panel, app.selected.as_deref()), (None, Some("3")));
     let _ = app.update(escape());

@@ -93,17 +93,7 @@ fn a_cover_can_be_replaced_by_an_image_file_only() {
 
     edit(&mut app, EditMsg::Open("4".into()));
     edit(&mut app, EditMsg::Title("[FAKE] Not kept".into()));
-    let _ = app.update(Message::Key(iced::keyboard::Event::KeyPressed {
-        key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
-        modified_key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
-        physical_key: iced::keyboard::key::Physical::Unidentified(
-            iced::keyboard::key::NativeCode::Unidentified,
-        ),
-        location: iced::keyboard::Location::Standard,
-        modifiers: iced::keyboard::Modifiers::default(),
-        text: None,
-        repeat: false,
-    }));
+    let _ = app.update(Message::Key(crate::WindowKey::Escape));
     assert!(app.edit.is_none(), "Escape cancels");
     assert!(app.customs["4"].title.is_none());
     std::fs::remove_dir_all(dir).unwrap();

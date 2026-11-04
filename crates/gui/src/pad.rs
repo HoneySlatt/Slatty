@@ -6,7 +6,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use futures::{SinkExt, Stream};
-use iced::keyboard;
 
 /// A move of the couch mode. Buttons are named after the Xbox layout, which the hints show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -244,47 +243,6 @@ pub enum Key {
     Erase,
 }
 
-/// The key pressed, for the couch mode; `None` for the others, so that they send no message.
-pub fn key(event: keyboard::Event) -> Option<Key> {
-    use keyboard::key::Named;
-    let keyboard::Event::KeyPressed {
-        key,
-        modifiers,
-        text,
-        ..
-    } = event
-    else {
-        return None;
-    };
-    Some(match key {
-        keyboard::Key::Named(named) => match named {
-            Named::ArrowUp => Key::Nav(Nav::Up),
-            Named::ArrowDown => Key::Nav(Nav::Down),
-            Named::ArrowLeft => Key::Nav(Nav::Left),
-            Named::ArrowRight => Key::Nav(Nav::Right),
-            Named::Enter => Key::Nav(Nav::Confirm),
-            Named::Escape => Key::Nav(Nav::Back),
-            Named::Backspace => Key::Erase,
-            Named::PageUp => Key::Nav(Nav::PrevTab),
-            Named::PageDown => Key::Nav(Nav::NextTab),
-            Named::Tab if modifiers.shift() => Key::Nav(Nav::PrevTab),
-            Named::Tab => Key::Nav(Nav::NextTab),
-            Named::F1 => Key::Nav(Nav::Menu),
-            Named::Space => Key::Char(' '),
-            _ => return None,
-        },
-        _ if modifiers.control() || modifiers.alt() || modifiers.logo() => return None,
-        _ => match text
-            .and_then(|t| t.chars().next())
-            .filter(|c| !c.is_control())
-        {
-            Some('/') => Key::Nav(Nav::Search),
-            Some(c) => Key::Char(c),
-            None => return None,
-        },
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -406,66 +364,5 @@ mod tests {
         assert_eq!(button_nav(Button::RightTrigger), Some(Nav::NextTab));
         assert_eq!(button_nav(Button::Start), Some(Nav::Menu));
         assert_eq!(button_nav(Button::LeftTrigger2), None);
-    }
-
-    fn press(
-        k: keyboard::Key,
-        text: Option<&str>,
-        modifiers: keyboard::Modifiers,
-    ) -> keyboard::Event {
-        keyboard::Event::KeyPressed {
-            key: k.clone(),
-            modified_key: k,
-            physical_key: keyboard::key::Physical::Unidentified(
-                keyboard::key::NativeCode::Unidentified,
-            ),
-            location: keyboard::Location::Standard,
-            modifiers,
-            text: text.map(Into::into),
-            repeat: false,
-        }
-    }
-
-    #[test]
-    fn keys_move_the_focus_type_and_erase() {
-        use keyboard::key::Named;
-        let named = |n| {
-            press(
-                keyboard::Key::Named(n),
-                None,
-                keyboard::Modifiers::default(),
-            )
-        };
-        assert_eq!(key(named(Named::ArrowDown)), Some(Key::Nav(Nav::Down)));
-        assert_eq!(key(named(Named::Enter)), Some(Key::Nav(Nav::Confirm)));
-        assert_eq!(key(named(Named::Escape)), Some(Key::Nav(Nav::Back)));
-        assert_eq!(key(named(Named::Backspace)), Some(Key::Erase));
-        assert_eq!(key(named(Named::Space)), Some(Key::Char(' ')));
-        let shift_tab = press(
-            keyboard::Key::Named(Named::Tab),
-            None,
-            keyboard::Modifiers::SHIFT,
-        );
-        assert_eq!(key(shift_tab), Some(Key::Nav(Nav::PrevTab)));
-        let typed = |c: &str, m| press(keyboard::Key::Character(c.into()), Some(c), m);
-        assert_eq!(
-            key(typed("é", keyboard::Modifiers::default())),
-            Some(Key::Char('é'))
-        );
-        assert_eq!(
-            key(typed("/", keyboard::Modifiers::default())),
-            Some(Key::Nav(Nav::Search))
-        );
-        assert_eq!(
-            key(typed("c", keyboard::Modifiers::CTRL)),
-            None,
-            "a shortcut types nothing"
-        );
-        assert_eq!(
-            key(keyboard::Event::ModifiersChanged(
-                keyboard::Modifiers::SHIFT
-            )),
-            None
-        );
     }
 }
