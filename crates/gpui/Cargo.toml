@@ -22,4 +22,5 @@ slatty-app.workspace = true
 slatty-core.workspace = true
 # The state's tasks run on it, as under Iced.
 tokio.workspace = true
+tracing.workspace = true
 tracing-subscriber.workspace = true

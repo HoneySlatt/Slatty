@@ -130,7 +130,9 @@ The interface follows Iced's state, message, update and view split, in two crate
   message and the window's events; `run` runs the state's tasks on a tokio runtime, does what
   they ask of the window, and starts or stops what the state listens to after each message
   (timers and the gamepads as tasks, frames, keys, the pointer and the window's events as flags
-  the root reads). GPUI comes from a revision of Zed's repository pinned in the workspace's
+  the root reads); `theme` gives the look's colours in GPUI's type, loads Geist and lists the
+  system's fonts for Settings. Both interfaces apply the look saved (`look::apply_saved`) before
+  their first frame. GPUI comes from a revision of Zed's repository pinned in the workspace's
   `Cargo.toml`, with the forks Zed patches in (`[patch.crates-io]`), moved by hand; the Nix
   package leaves it out for now. GPUI draws with the graphics card alone (Vulkan, else OpenGL):
   where neither driver is found, the window does not open and the program says why.

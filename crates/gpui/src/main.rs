@@ -2,17 +2,20 @@
 //! built page by page beside `slatty-gui`, which stays the interface until this one matches it.
 
 mod run;
+mod theme;
 
 use futures::StreamExt;
 use futures::channel::mpsc;
 use gpui::{
     App, AppContext, Bounds, Context, FocusHandle, IntoElement, KeyDownEvent, MouseButton,
     MouseMoveEvent, MouseUpEvent, Render, Window, WindowBounds, WindowOptions, div, prelude::*, px,
-    rgba, size,
+    size,
 };
 use gpui_platform::application;
 use slatty_app::geometry::Size;
 use slatty_app::{Message, couch, look, notify, sidebar};
+use slatty_core::db::Db;
+use slatty_core::paths::Dirs;
 
 /// The size of a rem at the interface's own scale of 1, as GPUI has it.
 const REM: f32 = 16.0;
@@ -157,8 +160,9 @@ impl Render for Root {
             .flex()
             .items_center()
             .justify_center()
-            .bg(color(tokens.background))
-            .text_color(color(tokens.muted))
+            .bg(theme::color(tokens.background))
+            .text_color(theme::color(tokens.muted))
+            .font_family(theme::font_family())
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|root, event, window, cx| root.key_down(event, window, cx)))
             // Until the pages are drawn: the state started and read the library.
@@ -178,12 +182,6 @@ impl Render for Root {
         }
         page
     }
-}
-
-/// A colour of the look, as GPUI draws it.
-fn color(c: look::Color) -> gpui::Rgba {
-    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u32;
-    rgba(byte(c.r) << 24 | byte(c.g) << 16 | byte(c.b) << 8 | byte(c.a))
 }
 
 fn main() {
@@ -209,8 +207,13 @@ fn main() {
         }
     };
     let handle = tokio.handle().clone();
+    // Before the first frame, so the window never shows another look first.
+    if let Ok(dirs) = Dirs::from_system() {
+        look::apply_saved(&dirs, Db::open(&dirs.db_file()).ok().as_ref());
+    }
     slatty_app::boot::start(|| {});
     application().run(move |cx: &mut App| {
+        theme::load_fonts(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
                 None,

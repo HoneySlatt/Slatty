@@ -6587,6 +6587,7 @@ dependencies = [
  "slatty-app",
  "slatty-core",
  "tokio",
+ "tracing",
  "tracing-subscriber",
 ]
 

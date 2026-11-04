@@ -8,6 +8,8 @@ use std::sync::{Arc, LazyLock, OnceLock, RwLock};
 use std::time::Duration;
 
 use serde::Deserialize;
+use slatty_core::db::Db;
+use slatty_core::paths::Dirs;
 
 use crate::presets::Preset;
 
@@ -168,6 +170,26 @@ pub fn with_preset(path: &Path, preset: Preset) -> (Tokens, Option<String>) {
         Ok(tokens) => (tokens, None),
         Err(e) => (preset.tokens(), Some(e)),
     }
+}
+
+/// The look the person saved, its built-in theme and font read from `db`, used from the first
+/// frame, so that the window never shows another look first. A mistake in the theme file is kept
+/// for the page to show (`THEME_ERROR`).
+pub fn apply_saved(dirs: &Dirs, db: Option<&Db>) {
+    let saved = |read: fn(&Db) -> slatty_core::Result<Option<String>>| {
+        db.and_then(|db| read(db).ok().flatten())
+    };
+    if let Some(preset) =
+        saved(slatty_core::settings::interface_theme).and_then(|name| Preset::from_key(&name))
+    {
+        set_preset(preset);
+    }
+    let (tokens, mistake) = with_preset(&file(&dirs.config), preset());
+    apply(tokens);
+    if let Some(e) = mistake {
+        let _ = crate::THEME_ERROR.set(e);
+    }
+    set_font(saved(slatty_core::settings::interface_font).as_deref());
 }
 
 /// Uses `tokens` from the next frame.

@@ -61,23 +61,10 @@ fn main() -> iced::Result {
     // Before the first frame, so the window never shows another look first.
     if let Ok(dirs) = Dirs::from_system() {
         let db = Db::open(&dirs.db_file()).ok();
-        let saved = |read: fn(&Db) -> slatty_core::Result<Option<String>>| {
-            db.as_ref().and_then(|db| read(db).ok().flatten())
-        };
         vulkan_only = db
             .as_ref()
             .is_some_and(|db| slatty_core::settings::vulkan_only(db).unwrap_or(false));
-        if let Some(preset) = saved(slatty_core::settings::interface_theme)
-            .and_then(|name| presets::Preset::from_key(&name))
-        {
-            look::set_preset(preset);
-        }
-        let (tokens, mistake) = look::with_preset(&look::file(&dirs.config), look::preset());
-        look::apply(tokens);
-        if let Some(e) = mistake {
-            let _ = THEME_ERROR.set(e);
-        }
-        look::set_font(saved(slatty_core::settings::interface_font).as_deref());
+        look::apply_saved(&dirs, db.as_ref());
     }
     look::list_fonts_with(theme::font_families);
     let backends = graphics::backends(std::env::var_os("WGPU_BACKEND").as_deref(), vulkan_only);
