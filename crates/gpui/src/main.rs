@@ -1,8 +1,10 @@
 //! Slatty's interface drawn with GPUI, over the same state as the Iced one (`slatty-app`). Being
 //! built page by page beside `slatty-gui`, which stays the interface until this one matches it.
 
+mod assets;
 mod run;
 mod theme;
+mod ui;
 
 use futures::StreamExt;
 use futures::channel::mpsc;
@@ -154,19 +156,15 @@ impl Render for Root {
                 let _ = this.update(cx, |root, cx| root.message(run::frame(), window, cx));
             });
         }
-        let tokens = look::tokens();
+        let tokens = theme::tokens();
         let mut page = div()
             .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(theme::color(tokens.background))
-            .text_color(theme::color(tokens.muted))
+            .bg(tokens.background)
+            .text_color(tokens.text)
             .font_family(theme::font_family())
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|root, event, window, cx| root.key_down(event, window, cx)))
-            // Until the pages are drawn: the state started and read the library.
-            .child(format!("{} games", self.app.library.len()));
+            .child(self.view(cx));
         if self.runner.listening.pointer {
             page = page
                 .on_mouse_move(cx.listener(|root, event: &MouseMoveEvent, window, cx| {
@@ -212,31 +210,33 @@ fn main() {
         look::apply_saved(&dirs, Db::open(&dirs.db_file()).ok().as_ref());
     }
     slatty_app::boot::start(|| {});
-    application().run(move |cx: &mut App| {
-        theme::load_fonts(cx);
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                None,
-                size(px(1440.), px(900.)),
-                cx,
-            ))),
-            window_min_size: Some(size(px(800.), px(560.))),
-            app_id: Some(slatty_app::APP_ID.into()),
-            ..Default::default()
-        };
-        if let Err(e) = cx.open_window(options, |window, cx| {
-            cx.new(|cx| Root::new(handle, window, cx))
-        }) {
-            // GPUI draws with the graphics card alone, through Vulkan or OpenGL: without either
-            // driver there is no window, where Iced drew with the processor.
-            const WHY: &str = "Slatty needs a Vulkan or OpenGL driver to draw its window (Mesa \
+    application()
+        .with_assets(assets::Assets)
+        .run(move |cx: &mut App| {
+            theme::load_fonts(cx);
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                    None,
+                    size(px(1440.), px(900.)),
+                    cx,
+                ))),
+                window_min_size: Some(size(px(800.), px(560.))),
+                app_id: Some(slatty_app::APP_ID.into()),
+                ..Default::default()
+            };
+            if let Err(e) = cx.open_window(options, |window, cx| {
+                cx.new(|cx| Root::new(handle, window, cx))
+            }) {
+                // GPUI draws with the graphics card alone, through Vulkan or OpenGL: without either
+                // driver there is no window, where Iced drew with the processor.
+                const WHY: &str = "Slatty needs a Vulkan or OpenGL driver to draw its window (Mesa \
                                provides both).";
-            eprintln!("Slatty could not open its window: {e:#}. {WHY}");
-            notify::desktop("Slatty could not open its window", WHY, None);
-            // From a task, which runs once the event loop does: the loop forgets a stop asked
-            // before it starts.
-            cx.spawn(async |cx| cx.update(|cx| cx.quit())).detach();
-        }
-    });
+                eprintln!("Slatty could not open its window: {e:#}. {WHY}");
+                notify::desktop("Slatty could not open its window", WHY, None);
+                // From a task, which runs once the event loop does: the loop forgets a stop asked
+                // before it starts.
+                cx.spawn(async |cx| cx.update(|cx| cx.quit())).detach();
+            }
+        });
     drop(tokio);
 }
