@@ -19,11 +19,12 @@ pub fn icon(which: Icon, size: f32, color: Rgba) -> Svg {
         .text_color(color)
 }
 
-/// A button looking as `look` says. `id` names it for its hover and for tests, and its group, so
-/// that an icon in it can follow the hover (`icon_in`).
+/// A button looking as `look` says. `id` names it for its hover, for tests (its debug selector)
+/// and its group, so that an icon in it can follow the hover (`icon_in`).
 pub fn button(id: &'static str, look: Look) -> Stateful<Div> {
     let button = div()
         .id(id)
+        .debug_selector(|| id.into())
         .group(id)
         .flex()
         .items_center()

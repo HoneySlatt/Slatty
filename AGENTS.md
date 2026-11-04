@@ -246,7 +246,10 @@ making those copies) runs at the lowest priority through `fsutil::in_background`
 - Interface tests (`crates/gui/src/tests/`, one module per area, helpers in `tests/mod.rs` such
   as `library_app()`, `render()`, `fake_plan()`) drive the real `update` and `view` with Iced's
   simulator. When the simulator cannot read a widget's text (pick lists), assert on the state.
-  Tests of the state alone (no view) can live in `crates/app`, beside the module they test.
+  Tests of the state alone (no view) can live in `crates/app`, beside the module they test. The
+  fake state both interfaces' tests start from is `slatty_app::testing` (feature `test-support`).
+  `slatty-gpui`'s tests (`crates/gpui/src/tests.rs`) click, type and press keys in GPUI's test
+  window, finding elements by their debug selector; they drop the state's tasks.
 - CLI tests in `crates/cli/tests` spawn real processes. Ignored tests need real Proton or Comet
   and are run on purpose.
 

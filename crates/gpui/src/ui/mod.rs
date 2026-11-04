@@ -152,6 +152,7 @@ impl Root {
             cx,
         );
         let search = div()
+            .debug_selector(|| "search".into())
             .flex()
             .items_center()
             .gap(px(10.))

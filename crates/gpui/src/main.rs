@@ -3,6 +3,8 @@
 
 mod assets;
 mod run;
+#[cfg(test)]
+mod tests;
 mod theme;
 mod ui;
 
@@ -15,6 +17,7 @@ use gpui::{
 };
 use gpui_platform::application;
 use slatty_app::geometry::Size;
+use slatty_app::task::Task;
 use slatty_app::{Message, couch, look, notify, sidebar};
 use slatty_core::db::Db;
 use slatty_core::paths::Dirs;
@@ -32,7 +35,15 @@ struct Root {
 }
 
 impl Root {
-    fn new(tokio: tokio::runtime::Handle, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    /// The window over `app`, running `task` first (`App::boot`'s, as the program starts), and
+    /// the tasks after on `tokio` (none in tests: `run::Runner`).
+    fn new(
+        tokio: Option<tokio::runtime::Handle>,
+        app: slatty_app::App,
+        task: Task<Message>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let (actions, mut received) = mpsc::unbounded();
         cx.spawn_in(window, async move |root, cx| {
             while let Some(action) = received.next().await {
@@ -67,7 +78,6 @@ impl Root {
         cx.defer_in(window, |root, window, cx| root.window_changed(window, cx));
         let focus = cx.focus_handle();
         focus.focus(window, cx);
-        let (app, task) = slatty_app::App::boot();
         let mut root = Root {
             app,
             runner: run::Runner::new(tokio, actions),
@@ -226,7 +236,8 @@ fn main() {
                 ..Default::default()
             };
             if let Err(e) = cx.open_window(options, |window, cx| {
-                cx.new(|cx| Root::new(handle, window, cx))
+                let (app, task) = slatty_app::App::boot();
+                cx.new(|cx| Root::new(Some(handle), app, task, window, cx))
             }) {
                 // GPUI draws with the graphics card alone, through Vulkan or OpenGL: without either
                 // driver there is no window, where Iced drew with the processor.

@@ -16,7 +16,9 @@ use crate::Root;
 
 /// The state's tasks, run on tokio, and the window's side of them.
 pub struct Runner {
-    tokio: tokio::runtime::Handle,
+    /// `None` in the interface's tests, which never run tasks (no network, no disk), as
+    /// slatty-gui's do not: they read the state each message leaves.
+    tokio: Option<tokio::runtime::Handle>,
     /// Where the tasks send their outputs and requests, read on the window's thread (`Root::new`).
     actions: mpsc::UnboundedSender<Action<Message>>,
     pub listening: Listening,
@@ -39,7 +41,7 @@ pub struct Listening {
 
 impl Runner {
     pub fn new(
-        tokio: tokio::runtime::Handle,
+        tokio: Option<tokio::runtime::Handle>,
         actions: mpsc::UnboundedSender<Action<Message>>,
     ) -> Self {
         Runner {
@@ -51,9 +53,9 @@ impl Runner {
 
     /// Runs `task` on tokio; its outputs and requests come back to the window's thread.
     pub fn run(&self, task: Task<Message>) {
-        if let Some(stream) = task.into_stream() {
+        if let (Some(tokio), Some(stream)) = (&self.tokio, task.into_stream()) {
             let actions = self.actions.clone();
-            self.tokio.spawn(stream.for_each(move |action| {
+            tokio.spawn(stream.for_each(move |action| {
                 let _ = actions.unbounded_send(action);
                 std::future::ready(())
             }));
@@ -91,9 +93,12 @@ impl Runner {
             // The reading thread sees its channel closed and ends.
             reading.abort();
         }
-        if wants_gamepads && gamepads.is_none() {
+        if wants_gamepads
+            && gamepads.is_none()
+            && let Some(tokio) = &self.tokio
+        {
             let actions = self.actions.clone();
-            gamepads = Some(self.tokio.spawn(pad::moves().for_each(move |nav| {
+            gamepads = Some(tokio.spawn(pad::moves().for_each(move |nav| {
                 let message = Message::Couch(couch::CouchMsg::Nav(nav));
                 let _ = actions.unbounded_send(Action::Output(message));
                 std::future::ready(())
