@@ -164,7 +164,7 @@ impl Render for Root {
             .font_family(theme::font_family())
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|root, event, window, cx| root.key_down(event, window, cx)))
-            .child(self.view(cx));
+            .child(self.view(window, cx));
         if self.runner.listening.pointer {
             page = page
                 .on_mouse_move(cx.listener(|root, event: &MouseMoveEvent, window, cx| {
@@ -214,6 +214,7 @@ fn main() {
         .with_assets(assets::Assets)
         .run(move |cx: &mut App| {
             theme::load_fonts(cx);
+            ui::bind_keys(cx);
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
                     None,

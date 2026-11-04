@@ -24,3 +24,5 @@ slatty-core.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+# Moving through a field's text by what a reader sees as one character; already built for GPUI.
+unicode-segmentation = "1"

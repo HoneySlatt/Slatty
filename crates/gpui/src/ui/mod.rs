@@ -1,18 +1,48 @@
 //! The views: what the window shows of the state, page by page, as `slatty-gui`'s `ui` does.
 
+mod field;
 mod widgets;
 
-use gpui::{AnyElement, App, ClickEvent, Context, Div, IntoElement, Window, div, prelude::*, px};
+use std::rc::Rc;
+
+use gpui::{
+    AnyElement, App, ClickEvent, Context, Div, Entity, IntoElement, Window, div, prelude::*, px,
+    relative,
+};
 use slatty_app::icons::Icon;
 use slatty_app::{Message, Page, couch};
 
 use crate::Root;
 use crate::theme::{self, tokens};
+pub use field::bind_keys;
+use field::{OnInput, TextField};
 use widgets::{avatar, divider, icon, icon_tab, nav_tab, vertical_rule};
 
 impl Root {
+    /// A text field `id` showing `value`, the state's, and sending `on_input` with each change, as
+    /// Iced's `text_input(placeholder, value).on_input(on_input)`. The field is kept while drawn.
+    fn field(
+        &self,
+        id: &'static str,
+        placeholder: &'static str,
+        value: &str,
+        on_input: fn(String) -> Message,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<TextField> {
+        let root = cx.entity().downgrade();
+        let field = window.use_keyed_state(id, cx, move |_, cx| {
+            let tell: OnInput = Rc::new(move |text, window, cx| {
+                let _ = root.update(cx, |root, cx| root.message(on_input(text), window, cx));
+            });
+            TextField::new(placeholder, tell, cx)
+        });
+        field.update(cx, |field, _| field.show(value));
+        field
+    }
+
     /// What the window shows.
-    pub fn view(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    pub fn view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let app = &self.app;
         if let Some(e) = &app.fatal {
             return div()
@@ -52,7 +82,7 @@ impl Root {
             .size_full()
             .flex()
             .flex_col()
-            .child(self.top_bar(&username, cx))
+            .child(self.top_bar(&username, window, cx))
             .child(
                 // Until the pages are drawn: the state started and read the library.
                 div()
@@ -78,7 +108,7 @@ impl Root {
     }
 
     /// Logo, page tabs, search and account, above every page but the game page.
-    fn top_bar(&self, username: &str, cx: &mut Context<Self>) -> Div {
+    fn top_bar(&self, username: &str, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let t = tokens();
         let page = self.app.page;
         let mut tab = |id, which, label, to: Page| {
@@ -113,7 +143,14 @@ impl Root {
                 icon_tab("couch-tab", Icon::Gamepad, false)
                     .on_click(self.press(Message::Couch(couch::CouchMsg::Enter), cx)),
             );
-        // Not a field yet: typing comes with the text field.
+        let field = self.field(
+            "search",
+            "Search a game",
+            &self.app.search,
+            Message::Search,
+            window,
+            cx,
+        );
         let search = div()
             .flex()
             .items_center()
@@ -130,9 +167,10 @@ impl Root {
             .child(icon(Icon::Search, 18., t.muted))
             .child(
                 div()
+                    .flex_1()
                     .text_size(px(15.))
-                    .text_color(t.muted)
-                    .child("Search a game"),
+                    .line_height(relative(1.3))
+                    .child(field),
             );
         let initial = username
             .chars()
