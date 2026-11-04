@@ -32,6 +32,8 @@ pub mod settings;
 pub mod sidebar;
 pub mod steam;
 pub mod task;
+#[cfg(feature = "test-support")]
+pub mod testing;
 pub mod updates;
 pub mod work;
 

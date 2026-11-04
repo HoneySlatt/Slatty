@@ -29,6 +29,7 @@ wgpu = { version = "27", default-features = false }
 
 [dev-dependencies]
 iced_test = "0.14"
+slatty-app = { workspace = true, features = ["test-support"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 tokio = { workspace = true, features = ["sync", "macros"] }
 tokio-util = "0.7"

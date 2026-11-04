@@ -28,3 +28,7 @@ tokio-util = "0.7"
 toml = "0.9"
 # The desktop's notifications; already built for the keyring, no crate added.
 zbus = "5"
+
+[features]
+# A state with fake data for the interfaces' tests (`testing`).
+test-support = []
