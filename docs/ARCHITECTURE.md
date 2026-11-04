@@ -798,26 +798,11 @@ Paths follow the XDG variables; the defaults are shown.
 
 ## Design decisions
 
-| Decision | Why |
-|---|---|
-| Rust everywhere in the application; Proton, umu and Comet stay external | Proven tools reused rather than rewritten, with explicit boundaries |
-| Iced rather than GPUI (reviewed 2026-10-09) | Maintenance comes first: Iced has versioned releases and documentation; GPUI had no maintained release, and its ecosystem pinned weekly third-party snapshots |
-| GPUI tried (`slatty-gpui`) and set aside (2026-11-04) | Slatty will move to SlimeEngine's interface framework (slime-ui) once it can run applications |
-| No web view; the address pasted back after sign-in | A native application; GOG accepts only Galaxy's redirect address, and no local redirect is known to work |
-| Linux builds from GOG's offline installers, read file by file | GOG's content system has no Linux builds; ranged reads keep the installer off the disk |
-| Isolation through umu's own container, with bubblewrap around umu | pressure-vessel already runs every Proton game and keeps GPUs, sound and gamepads working; its options hide the home folder. Bubblewrap only makes the tools read-only. It keeps games out of files and D-Bus, not out of the system |
-| Proton builds downloaded by Slatty, not by umu | umu fetches them at a game's launch, which would wait for half a gigabyte, and replaces its "latest" in place under a running game. A folder per build, followed through a link umu resolves at launch, keeps a running game on its build and the build before at hand |
-| Comet as a supervised process beside the game, off until turned on | Its library is not meant for embedding (global state, fixed port); while it runs, any local program can get the access token from it |
-| A subreaper supervisor process for sessions | Launchers that exit early and Wine processes must not end the session too soon |
-| Content hashes, not dates, for cloud sync | Dates are unreliable across machines and Wine; hashes and per-file history show real changes |
-| Steam read from its files, played through its client | Most Steam games need the client running; reading never writes into Steam or asks its servers without a switch |
-| GOG never told of other stores' games | GOG learns nothing of what you own elsewhere |
-| Images shown from files, made at the size drawn | The interface held 880 MB of covers at 10,000 games when it kept their bytes; Iced has no smaller copies to sample from |
-| Grids that build only the rows in view | A library of 10,000 games stays within a frame |
-| A couch mode of its own rather than a gamepad on the desktop window | Pages made for a sofa and a Steam Deck (large covers, one focus, the buttons to press shown), without a focus model forced on every desktop page; gilrs reads gamepads, with SDL's mappings for the less common ones |
-| SQLite through rusqlite behind a mutex | One writer per process, simple synchronous queries, futures stay `Send` |
-| Interface in English first | Translations come later |
-| GPL-3.0-or-later | Can build on heroic-gogdl's and Heroic's code, which is GPL-3.0-only: a part derived from them is distributed under GPL-3.0, with a note naming the source |
+Why the code is built this way, and what was rejected, is recorded one decision at a time in the
+[architecture decision records](adr/README.md): the tools Slatty leaves external, the licence, the
+database, secrets and third parties, sign-in, Linux builds, sessions, isolation, Proton builds,
+Comet, cloud sync, Steam, the interface's framework and state, images and grids at 10,000 games,
+the couch mode, and Windows hosts.
 
 ## Security principles
 

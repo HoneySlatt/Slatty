@@ -1,41 +1,85 @@
 # AGENTS.md
 
-Instructions for AI coding agents (and the people driving them) working on Slatty. Read
-this file before changing anything. It does not replace [CONTRIBUTING.md](CONTRIBUTING.md), which
-applies to every change; it adds what an agent most often gets wrong in this repository.
+Instructions for AI coding agents (and the people driving them) working on Slatty. Read this file
+fully at the start of every session, before changing anything. It does not replace
+[CONTRIBUTING.md](CONTRIBUTING.md), which applies to every change; it adds what an agent most often
+gets wrong in this repository.
 
 ## The project in one paragraph
 
 Slatty is a native Linux launcher for GOG games, in Rust (edition 2024, Rust 1.90+) with an
-[Iced](https://iced.rs) 0.14 interface. It signs in to GOG, installs Windows builds from GOG's
-Galaxy content system and native Linux builds from GOG's offline installers, runs games through
-umu and Proton (or natively), syncs cloud saves, and reports achievements through Comet. The same
-library also shows the user's Steam games, read from the Steam client's files and run through it,
-and games added by hand (`local-<n>`). GOG publishes no API for this: every service was understood
-by reverse engineering. The launcher handles people's accounts, saves and disks, so **safety comes
-before features**.
+[Iced](https://iced.rs) 0.14 interface, licensed GPL-3.0-or-later. It signs in to GOG, installs
+Windows builds from GOG's Galaxy content system and native Linux builds from GOG's offline
+installers, runs games through umu and Proton (or natively), syncs cloud saves, and reports
+achievements through Comet. The same library also shows the user's Steam and Epic games, games added
+by hand (`local-<n>`) and emulated games (`emu-<n>`). GOG publishes no API for this: every service
+was understood by reverse engineering. The launcher handles people's accounts, saves and disks, so
+**safety comes before features**. Its real state: released as 0.2.0, on Linux; the Windows port is
+under way.
 
-Read before coding:
+It is developed primarily by AI agents; the owner sets its direction and validates architecture
+decisions. Anyone arriving in the repository, at any point in its life, must be able to understand
+all of it from the repository alone. Documentation is part of every deliverable, held to the same
+standard as the code.
 
-1. [docs/architecture.md](docs/architecture.md): crates, modules, main flows, design decisions.
-2. [docs/roadmap.md](docs/roadmap.md): what is done, planned and out of scope.
-3. [docs/compatibility.md](docs/compatibility.md): what was checked against real GOG services.
-4. For cloud saves, [docs/cloud-saves.md](docs/cloud-saves.md) before touching `core/src/cloud`.
+## Read before working
+
+1. [docs/PLAN.md](docs/PLAN.md): the current stage, its milestones and their status. The source of
+   truth for what to do now.
+2. [docs/ROADMAP.md](docs/ROADMAP.md): direction, stage order, exit criteria, out of scope. An
+   overview, not a commitment.
+3. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): crates, modules and main flows.
+4. [docs/adr/](docs/adr/README.md): decisions already made. Do not decide them again.
+5. [docs/compatibility.md](docs/compatibility.md): what was checked against real GOG services.
+6. For cloud saves, [docs/cloud-saves.md](docs/cloud-saves.md) before touching `core/src/cloud`.
+
+You have no memory of previous sessions. These files are the project's memory: what is not written
+there, the next session will not know.
+
+## Scope
+
+- Work only on the stage and milestone marked as current in [docs/PLAN.md](docs/PLAN.md).
+- Do not start later stages, and do not add abstractions that prepare for them.
+- If a task needs something out of scope, stop and say so.
+
+The roadmap sets direction and order; it does not say what will be built, nor how. Build something
+because the current milestone needs it, never because the roadmap mentions it. When experience
+contradicts the roadmap, propose a change; once accepted, record it in an ADR.
+
+The interface stays on Iced until it moves to slime-ui
+([ADR-0020](docs/adr/0020-gpui-set-aside-for-slime-ui.md)), and **Iced receives bug fixes only**:
+every piece of interface work (a new page or panel, the Windows interface, the couch mode's work for
+the Steam Deck, translations) waits for slime-ui. Do not start another interface framework.
 
 ## Commands
 
 Everything runs inside the Nix development shell, which provides the toolchain, umu-launcher,
-bubblewrap, Comet, `GalaxyCommunication.exe`, the graphics libraries and udev (gamepads):
+bubblewrap, Comet, `GalaxyCommunication.exe`, the graphics libraries, udev (gamepads), cargo-deny
+and lychee:
 
 ```sh
+nix develop -c scripts/check.sh                     # every check of the definition of done; what CI runs
 nix develop -c cargo build --workspace              # always last: people run target/debug/*
 nix develop -c cargo fmt
 nix develop -c cargo clippy --workspace --all-targets   # must stay warning-free
 nix develop -c cargo test --workspace               # about 15 s, no network, no real games
+nix develop .#windows -c cargo check --workspace    # the Windows build, from Linux (ADR-0022)
 ```
+
+`scripts/check.sh` runs, in order: formatting, clippy with warnings as errors, the tests, the code
+documentation with warnings as errors, `cargo deny check` (licences, advisories, sources; it needs
+network access), the links between Markdown files (lychee, offline), the Windows build, the Nix
+package, then `cargo build --workspace`. CI runs it unchanged on every push to `main` and every pull
+request (`.github/workflows/ci.yml`). Run it before reporting a milestone done.
 
 Run `cargo build --workspace` after the tests and clippy: they do not rebuild the `slatty-gui`
 binary, and the person testing your change runs `target/debug/slatty-gui`.
+
+To run the program without touching anyone's data, point `XDG_CONFIG_HOME`, `XDG_DATA_HOME`,
+`XDG_CACHE_HOME` and `XDG_STATE_HOME` at a throwaway folder of made-up games, with
+`DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent` so no keyring is reached
+([docs/testing.md](docs/testing.md#the-application-at-10000-games) describes such a profile of
+10,000 games, and how the figures there are measured).
 
 More checks, run when your change touches their area:
 
@@ -58,13 +102,29 @@ unshare -rn sh -c 'ip link set lo up && cargo test -p slatty-cli --test comet --
 TMPDIR=$HOME/.cache XDG_DATA_HOME=<data> SLATTY_TEST_PROTON=<copy of a Proton dir> \
   cargo test -p slatty-cli --test isolation -- --ignored --test-threads=1
 
-# Dependency audit and policy, after adding or updating a dependency (they download the
-# advisory database)
+# Dependency audit, after adding or updating a dependency (it downloads the advisory database;
+# scripts/check.sh runs the policy, cargo deny)
 nix shell nixpkgs#cargo-audit -c cargo audit
-nix shell nixpkgs#cargo-deny -c cargo deny check
 ```
 
 `SLATTY_LOG=warn` (or `debug`) prints the core's logs on stderr.
+
+## Definition of done
+
+A milestone is done only when all of the following hold:
+
+- `scripts/check.sh` passes.
+- The program was actually run and behaved as expected (on a throwaway profile, as above).
+- New behaviour is covered by tests where a test is practical; a bug fix starts with a failing
+  test (see "Tests").
+- [docs/PLAN.md](docs/PLAN.md) reflects the new status.
+- Every document affected by the change is updated (see "Documentation"), and was reread as a
+  newcomer would read it.
+- Any decision taken is recorded as an ADR.
+
+Never report that something works without having verified it. If you could not verify, say exactly
+what was not verified and why; a check against GOG, Steam, Epic or Windows that was not run for real
+is said so (see "Honesty about GOG").
 
 ## Things an agent must not do on its own
 
@@ -247,40 +307,125 @@ making those copies) runs at the lowest priority through `fsutil::in_background`
 
 ## Documentation
 
-The public documentation is in English and must match the code. Update it in the same change:
+### Standard
+
+The reader is a competent Rust developer who has never seen this project. From the repository
+alone, they must be able to understand what every part does and why it is built that way, then
+build, test and change it.
+
+- Documentation describes the code as it is now, not as it is intended to be. Wrong documentation
+  is worse than missing documentation.
+- No reference to past sessions or conversations the reader cannot see; every term the project
+  coins is defined where it first appears and in [docs/glossary.md](docs/glossary.md).
+- State limits and known debt plainly. Do not present a partial feature as complete.
+- Every public item has documentation that says what it does, its invariants, its errors and its
+  panics.
+- The public documentation is in English. A change that leaves a document wrong is not finished.
+
+### One home per fact
+
+A fact written in two places drifts. Each kind of fact has one home, and other documents link to it
+instead of copying it:
+
+- **The code's documentation**: what an item does, its contracts, its limits and their figures.
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: the modules and the flows across them.
+- **ADRs**: why a decision was taken and what was rejected. Only their status changes afterwards.
+- **[docs/PLAN.md](docs/PLAN.md)**: status and known debt, linking to where the facts live.
+- **[docs/testing.md](docs/testing.md)**: what was measured, and how.
+- **[docs/compatibility.md](docs/compatibility.md)**: what was checked against the real services.
+- **[CHANGELOG.md](CHANGELOG.md)**: what changed for users, once, when it changes.
+
+### What to update
+
+Update it in the same change:
 
 | When you change… | Update |
 |---|---|
 | A panel, a setting, a stored file | [docs/user-guide.md](docs/user-guide.md) |
 | A command or an option | [docs/command-line.md](docs/command-line.md), and the user guide where it shows the command |
-| A module, a flow, a design decision | [docs/architecture.md](docs/architecture.md) |
+| A module or a flow | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| A decision (a framework, a platform, a format, a security choice, something tried and dropped) | A new ADR in [docs/adr/](docs/adr/README.md), copying `0000-template.md`, and the index |
 | A GOG request or what is known about it | [docs/gog-integration.md](docs/gog-integration.md) |
+| An Epic request or what is known about it | [docs/epic-integration.md](docs/epic-integration.md) |
 | Cloud sync rules | [docs/cloud-saves.md](docs/cloud-saves.md) |
 | A theme token | [docs/theming.md](docs/theming.md) |
 | What leaves the computer, how secrets or files are protected | [SECURITY.md](SECURITY.md) |
-| A real check against GOG or Steam (pass or fail) | [docs/compatibility.md](docs/compatibility.md), and README's summary of it |
-| A finished or newly planned milestone | [docs/roadmap.md](docs/roadmap.md), README's features |
-| Anything a user of the next version will notice | [CHANGELOG.md](CHANGELOG.md) |
+| A real check against GOG, Steam, Epic or Windows (pass or fail) | [docs/compatibility.md](docs/compatibility.md), and README's summary of it |
+| A milestone's status, the known debt | [docs/PLAN.md](docs/PLAN.md) |
+| A stage reshaped, merged or dropped | [docs/ROADMAP.md](docs/ROADMAP.md), with an ADR |
+| A term the project coins or uses in a sense of its own | [docs/glossary.md](docs/glossary.md) |
+| Anything a user of the next version will notice | [CHANGELOG.md](CHANGELOG.md), and README's features |
 | A benchmark, a test that needs real tools | [docs/testing.md](docs/testing.md) |
 
-## Style
+## Code rules
 
 - Code, comments, docs and commit messages are in English.
 - Comment only what the code cannot say: a reason, a limit, a source. Doc comments describe
-  behaviour in plain sentences ("Whether…", "Starts what downloads next…").
-- Write the least code that solves the problem: no abstraction for a single use, no option nobody
-  asked for, no handling of impossible cases. Match the surrounding code.
-- Keep changes surgical. Do not reformat or refactor code you were not asked to touch; mention
-  dead code instead of deleting it.
+  behaviour in plain sentences ("Whether…", "Starts what downloads next…"). No commented-out code.
+- Write the least code that solves the problem: no abstraction without a second concrete use, no
+  option nobody asked for, no handling of impossible cases. Match the surrounding code.
+- Do not reimplement what the standard library provides without a measurement that justifies it.
+- Every `unsafe` block carries a `// SAFETY:` comment explaining why it is sound.
+- Follow the conventions the ADRs set. If no ADR covers a case, propose one instead of deciding
+  silently.
 - Edit Rust with an editor tool, not with `sed` or `perl` substitutions: Rust's `|`, `{}`, `#`
   and `'` make regex edits silently corrupt files.
+
+## Consistency rules
+
+- Before writing a helper, type or pattern, search the workspace for an existing one. Reuse or
+  extend it.
+- One way to do a given thing. If you find two, unify them or report it.
+- Keep changes surgical, local to the milestone. Do not reformat or refactor code you were not asked
+  to touch. Remove what your own change leaves unused; mention other dead code instead of deleting
+  it, or note it in [docs/PLAN.md](docs/PLAN.md)'s known debt.
+- If the code has drifted from [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) or an ADR, report it.
+  Do not silently work around it.
 
 ## Commits
 
 - Small commits, one change each, with a short imperative subject that says what changes for the
   user ("Build only the covers in view, for libraries of 10,000 games"), and a body explaining why,
   with measurements when the change is about speed.
-- `cargo fmt`, clippy and the tests pass before each commit.
+- `scripts/check.sh` passes before each commit; do not commit code that fails it.
+
+## When to stop and ask
+
+Stop and ask the owner before proceeding when:
+
+- A decision affects the architecture and no ADR covers it.
+- You want to add a dependency (see "Things an agent must not do on its own").
+- The request contradicts [docs/ROADMAP.md](docs/ROADMAP.md) or an ADR.
+- The plan turns out to be wrong, or a milestone is larger than expected.
+- You are about to delete or rewrite a significant part of the code.
+
+Propose the options with their trade-offs, in plain terms, and a recommendation for the long term,
+not the cheapest now. Put decisions one at a time. Do not work around a problem to keep going.
+
+## Reporting
+
+At the end of each milestone, report to the owner, in French:
+
+- What was done.
+- Notable design choices, why, and which alternatives were rejected.
+- What deserves to be read first.
+- Shortcuts taken and debt introduced.
+- What was not verified, and why.
+- The next step, on the owner's go.
+
+A reviewing agent checks the milestone against this file and the ADRs before it is reported done.
+
+## Working with several agents
+
+- Each agent works on one milestone at a time, as [docs/PLAN.md](docs/PLAN.md) assigns it.
+- Shared files ([docs/PLAN.md](docs/PLAN.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the
+  workspace's `Cargo.toml` and `Cargo.lock`, `flake.nix`) are edited by one agent at a time.
+- Commit your own files by their paths, never with `git add -A`, so as not to take another agent's.
+
+## Language
+
+- Everything in the repository is in English: code, comments, commits, documentation.
+- Talk to the owner in French.
 
 ## Known pitfalls
 

@@ -83,7 +83,7 @@ an offline installer whose checksums GOG does not keep, Ubuntu with AppArmor, St
 and the couch mode on a Steam Deck or on a television.
 
 Linux only, tested and packaged on x86-64; macOS and Windows hosts are not supported. See the
-[roadmap](docs/roadmap.md).
+[roadmap](docs/ROADMAP.md).
 
 ## Requirements
 
@@ -178,13 +178,15 @@ Report vulnerabilities privately, as [SECURITY.md](SECURITY.md#reporting-a-vulne
 - [Command line](docs/command-line.md): every command and option
 - [Cloud saves](docs/cloud-saves.md): how sync decides, and how your saves are protected
 - [Theming](docs/theming.md): colours, corners and motion from a file
-- [Architecture](docs/architecture.md): crates, modules, main flows and design decisions
+- [Architecture](docs/ARCHITECTURE.md): crates, modules and main flows; the design decisions in
+  [docs/adr](docs/adr/README.md)
 - [GOG integration](docs/gog-integration.md): every GOG service used, its source, what is verified
 - [Epic Games integration](docs/epic-integration.md): every Epic service used, its source, what is
   verified
 - [Compatibility](docs/compatibility.md): results of real tests
 - [Testing](docs/testing.md): automated tests, benchmarks and checks against GOG and Steam
-- [Roadmap](docs/roadmap.md) · [Changelog](CHANGELOG.md)
+- [Roadmap](docs/ROADMAP.md) · [Plan](docs/PLAN.md) · [Changelog](CHANGELOG.md) ·
+  [Glossary](docs/glossary.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [AI agents](AGENTS.md)
 
 ## Credits

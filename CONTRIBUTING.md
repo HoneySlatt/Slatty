@@ -14,7 +14,7 @@ cargo build --workspace
 ```
 
 `nix develop` adds `target/debug` to `PATH`, so `slatty` and `slatty-gui` are the ones you just
-built. [docs/architecture.md](docs/architecture.md) is the map of the code.
+built. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the map of the code.
 
 ## Before sending a change
 

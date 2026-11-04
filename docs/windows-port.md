@@ -1,24 +1,9 @@
 # Porting Slatty to Windows
 
-Slatty runs on Linux today. This page plans running it on Windows 10 and 11 (x86-64): what has to
-change, in which order, and how each step is checked. It is updated as the work goes on; the
-[roadmap](roadmap.md) lists the port as planned until it is done.
-
-## Goals and limits
-
-- One code base: the same crates build for Linux and Windows. Linux behaves exactly as before at
-  every step; its tests and benchmarks keep passing.
-- On Windows, Windows games run directly, without Proton or Wine. GOG's Windows builds, Epic's
-  games, Steam's games (through the Steam client) and games added by hand are the scope of a first
-  version; emulated games follow.
-- Safety comes first, as on Linux: tokens only in the system's secret storage (Windows Credential
-  Manager), nothing written through a link leading out of a game folder, saves never lost.
-- What only Linux has stays Linux's: umu and Proton, the isolation from your files (umu's
-  container), `steam-run`, GOG's native Linux builds and their offline installers, Proton
-  builds. On Windows the interface does not offer them.
-- Not planned for the first version: isolating Windows games from your files (Windows has no
-  equivalent of umu's container a launcher can use without administrator rights), an installer
-  signed with a code-signing certificate (Windows SmartScreen warns about unsigned programs).
+Slatty runs on Linux today. This page holds what porting it to Windows 10 and 11 (x86-64) needs to
+know: how it is built and checked, where Slatty depends on Linux, and the open questions. The
+port's goals and limits are decided in [ADR-0022](adr/0022-windows-hosts.md); its milestones and
+where each stands are Stage 3 of [PLAN.md](PLAN.md).
 
 ## How it is built and checked
 
@@ -59,35 +44,6 @@ Found by building the core for Windows (109 errors in its first build) and readi
 | Gamepads (couch mode) | gilrs through udev | gilrs through Windows' own input APIs |
 | File chooser (interface) | rfd through the desktop portal | rfd through Windows' dialogs |
 | Packaging | Nix package, desktop entry, AppStream | A zip to unpack first; an installer later |
-
-## Steps
-
-Each step is a series of small commits; the Linux build, clippy and tests pass after each, and the
-Windows target builds as far as the step reached.
-
-1. **The Windows build environment** (done):
-   the `windows` development shell in `flake.nix`, its Wine test runner, and this page.
-2. **Everything compiles for Windows.** A `platform` module in the core gathers what differs by
-   system (processes, priority, private folders, opening without following links, known folders,
-   finding programs). Linux-only modules (Proton, umu, isolation, Linux installers, Proton builds,
-   the Galaxy service in a prefix) build on Linux alone; their callers on Windows get
-   `Error::Unsupported`. Done when `slatty`, `slatty-gui` and the core build for Windows, and the
-   core's tests that do not need Linux pass under Wine. *Where it stands:* the core builds for
-   Windows; its session supervisor has a Windows version (a job object); Comet and the games
-   Steam runs are not available there yet.
-3. **Play a GOG game.** Install a Windows build (the download code is shared), start it directly,
-   follow and stop its session through a job object, record play time, run GOG's setup with the
-   person's consent for administrator rights. Cloud saves in the real folders.
-4. **Epic and Steam.** Epic's games launched directly and signed in; Steam found from the registry,
-   its games listed, played, installed and uninstalled through the client, the game running found.
-5. **Games added by hand**: programs, archives and installers on Windows.
-6. **The interface on Windows**: Linux-only settings hidden, file chooser, gamepads, a window icon,
-   paths shown the Windows way.
-7. **Achievements**: Comet on Windows, and whether the Galaxy service is needed there.
-8. **Packaging**: a zip with `slatty.exe`, `slatty-gui.exe` and the licences, built by Nix; then an
-   installer, and a release published for Windows only once the real checks pass.
-9. **Real checks on Windows 10 and 11**, then the documentation: the user guide's Windows parts,
-   SECURITY.md (where secrets and files live on Windows), compatibility.md, the README.
 
 ## Open questions
 
