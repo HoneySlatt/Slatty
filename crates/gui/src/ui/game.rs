@@ -21,19 +21,11 @@ use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
 use crate::install::{Cancelling, InstallMsg, InstallView};
 use crate::theme::{self, bold, semibold, tokens};
-use crate::{App, CloudStatus, Loadable, Message, Page, Panel};
+use crate::{App, CloudStatus, Loadable, Message, Panel};
 
 /// Height of the summary cards under the key art.
 const CARD_HEIGHT: f32 = 96.0;
 
-/// A game's main button: what it says, and what it does when it can be pressed.
-pub struct MainAction {
-    pub icon: Icon,
-    pub label: String,
-    pub message: Option<Message>,
-    /// Stop, which ends the game.
-    pub danger: bool,
-}
 /// Width of the row of cards under which play time and the last session lose their icons.
 const NARROW_CARDS: f32 = 1100.0;
 /// Window height under which a game's title is set smaller, for the key art is short.
@@ -254,111 +246,6 @@ impl App {
             .into()
     }
 
-    /// The game's main button, as the game page and the couch mode show it: Play, Install, Stop,
-    /// or where its download or update stands.
-    pub(crate) fn main_action(&self, g: &LibraryGame) -> MainAction {
-        let running = self.play.as_ref().filter(|p| p.running);
-        let this_running = running.is_some_and(|p| p.game_id == g.id);
-        let big = |icon: Icon, label: String, message: Option<Message>, danger: bool| MainAction {
-            icon,
-            label,
-            message,
-            danger,
-        };
-        if self.steam_game(&g.id).is_some() {
-            use crate::steam::SteamMsg;
-            use slatty_core::steam::client::Action;
-            let ask = |action| Some(Message::Steam(SteamMsg::Ask(g.id.clone(), action)));
-            match self.steam.installed.get(&g.id) {
-                // Steam has no way to be asked to stop a game.
-                _ if self.steam.running.contains(&g.id) => {
-                    big(Icon::Play, "Running".into(), None, false)
-                }
-                Some(installed) if installed.update.is_some_and(|u| u.started) => big(
-                    Icon::Download,
-                    self.steam_status(&g.id, installed.update.as_ref().expect("just checked")),
-                    None,
-                    false,
-                ),
-                Some(installed) if installed.ready && self.steam_starting(&g.id) => {
-                    big(Icon::Play, "Starting…".into(), ask(Action::Play), false)
-                }
-                Some(installed) if installed.ready => {
-                    big(Icon::Play, "Play".into(), ask(Action::Play), false)
-                }
-                Some(_) => big(Icon::Download, "Queued in Steam".into(), None, false),
-                None => big(
-                    Icon::Download,
-                    "Install".into(),
-                    ask(Action::Install),
-                    false,
-                ),
-            }
-        } else if self.installs.contains_key(&g.id) {
-            if this_running {
-                big(Icon::Stop, "Stop".into(), Some(Message::StopGame), true)
-            } else if self.updates.current.as_deref() == Some(g.id.as_str()) {
-                // Playable again once the update is done, or paused from Downloads.
-                let progress = self.maintenance.get(&g.id).and_then(|m| m.progress);
-                big(
-                    Icon::Download,
-                    format!(
-                        "Updating {:.0}%",
-                        progress.map(fraction).unwrap_or_default() * 100.0
-                    ),
-                    None,
-                    false,
-                )
-            } else if self.launch_reading.as_deref() == Some(g.id.as_str()) {
-                big(Icon::Play, "Starting…".into(), None, false)
-            } else {
-                big(
-                    Icon::Play,
-                    "Play".into(),
-                    self.can_play(&g.id).then(|| Message::Play(g.id.clone())),
-                    false,
-                )
-            }
-        } else {
-            match self.install_views.get(&g.id) {
-                // The download shows under these buttons; the page stays free to leave.
-                Some(InstallView::Running { .. }) => big(
-                    Icon::Pause,
-                    "Pause".into(),
-                    Some(Message::Install(InstallMsg::Pause(g.id.clone()))),
-                    false,
-                ),
-                Some(InstallView::Ready(info)) if info.resumable => big(
-                    Icon::Download,
-                    "Resume".into(),
-                    Some(
-                        if info.platform == Platform::Linux || info.proton.is_some() {
-                            Message::Install(InstallMsg::Start(g.id.clone()))
-                        } else {
-                            Message::OpenPanel(Panel::Install)
-                        },
-                    ),
-                    false,
-                ),
-                Some(InstallView::Queued(_)) => big(
-                    Icon::Clock,
-                    "Queued".into(),
-                    Some(Message::ShowPage(Page::Downloads)),
-                    false,
-                ),
-                _ if self.not_installable(&g.id).is_some() => {
-                    big(Icon::Download, "Not installable".into(), None, false)
-                }
-                _ => big(
-                    Icon::Download,
-                    "Install".into(),
-                    Some(Message::OpenPanel(Panel::Install)),
-                    false,
-                ),
-            }
-        }
-    }
-
     /// Why Install is unavailable, when GOG offers nothing to install.
     fn not_installable_line<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         match self.not_installable(&g.id) {
@@ -377,14 +264,6 @@ impl App {
             .into(),
             None => Space::new().into(),
         }
-    }
-
-    /// Why GOG offers nothing to install for a game not installed, once known.
-    pub(super) fn not_installable(&self, game_id: &str) -> Option<NotInstallable> {
-        if self.installs.contains_key(game_id) {
-            return None;
-        }
-        self.installability.get(game_id).copied().flatten()
     }
 
     /// The running download of this game, under Pause.

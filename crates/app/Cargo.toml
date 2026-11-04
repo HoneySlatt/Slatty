@@ -1,0 +1,30 @@
+[package]
+name = "slatty-app"
+description = "Slatty's interface state: what it shows, its messages and what they do, free of the interface framework"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = "0.4.45"
+# Streams and channels of the background work (`task`).
+futures = "0.3"
+# The motion's easing (`motion::Animation`), as Iced's animations have it.
+lilt = "0.8"
+# Gamepads for the couch mode, read from evdev through udev, with SDL's mappings for the less
+# common ones. Its defaults stay on: without them it refuses to build, even on Linux.
+gilrs = "0.11"
+# Only the formats GOG, Steam and SteamGridDB serve and those a custom image may be in: fewer
+# decoders face downloads.
+image = { version = "0.25", default-features = false, features = ["bmp", "gif", "jpeg", "png", "webp"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+serde.workspace = true
+slatty-core.workspace = true
+tokio = { workspace = true, features = ["sync", "macros"] }
+tokio-util = "0.7"
+toml = "0.9"
+# The desktop's notifications; already built for the keyring, no crate added.
+zbus = "5"

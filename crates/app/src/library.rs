@@ -19,6 +19,140 @@ use slatty_core::store::{self, Store};
 use crate::work::tokens_for;
 use crate::{App, Core, Message, err};
 
+/// A game's main button: what it says, and what it does when it can be pressed.
+pub struct MainAction {
+    pub icon: crate::icons::Icon,
+    pub label: String,
+    pub message: Option<Message>,
+    /// Stop, which ends the game.
+    pub danger: bool,
+}
+
+impl App {
+    /// The game whose page is open.
+    pub fn selected_game(&self) -> Option<&LibraryGame> {
+        let id = self.selected.as_ref()?;
+        self.library.iter().find(|g| &g.id == id)
+    }
+
+    /// Why GOG offers nothing to install for a game not installed, once known.
+    pub fn not_installable(&self, game_id: &str) -> Option<slatty_core::library::NotInstallable> {
+        if self.installs.contains_key(game_id) {
+            return None;
+        }
+        self.installability.get(game_id).copied().flatten()
+    }
+
+    /// The game's main button, as the game page and the couch mode show it: Play, Install, Stop,
+    /// or where its download or update stands.
+    pub fn main_action(&self, g: &LibraryGame) -> MainAction {
+        use crate::icons::Icon;
+        use crate::install::{InstallMsg, InstallView};
+        use crate::{Page, Panel};
+        use slatty_core::install::Platform;
+        let running = self.play.as_ref().filter(|p| p.running);
+        let this_running = running.is_some_and(|p| p.game_id == g.id);
+        let big = |icon: Icon, label: String, message: Option<Message>, danger: bool| MainAction {
+            icon,
+            label,
+            message,
+            danger,
+        };
+        if self.steam_game(&g.id).is_some() {
+            use crate::steam::SteamMsg;
+            use slatty_core::steam::client::Action;
+            let ask = |action| Some(Message::Steam(SteamMsg::Ask(g.id.clone(), action)));
+            match self.steam.installed.get(&g.id) {
+                // Steam has no way to be asked to stop a game.
+                _ if self.steam.running.contains(&g.id) => {
+                    big(Icon::Play, "Running".into(), None, false)
+                }
+                Some(installed) if installed.update.is_some_and(|u| u.started) => big(
+                    Icon::Download,
+                    self.steam_status(&g.id, installed.update.as_ref().expect("just checked")),
+                    None,
+                    false,
+                ),
+                Some(installed) if installed.ready && self.steam_starting(&g.id) => {
+                    big(Icon::Play, "Starting…".into(), ask(Action::Play), false)
+                }
+                Some(installed) if installed.ready => {
+                    big(Icon::Play, "Play".into(), ask(Action::Play), false)
+                }
+                Some(_) => big(Icon::Download, "Queued in Steam".into(), None, false),
+                None => big(
+                    Icon::Download,
+                    "Install".into(),
+                    ask(Action::Install),
+                    false,
+                ),
+            }
+        } else if self.installs.contains_key(&g.id) {
+            if this_running {
+                big(Icon::Stop, "Stop".into(), Some(Message::StopGame), true)
+            } else if self.updates.current.as_deref() == Some(g.id.as_str()) {
+                // Playable again once the update is done, or paused from Downloads.
+                let progress = self.maintenance.get(&g.id).and_then(|m| m.progress);
+                big(
+                    Icon::Download,
+                    format!(
+                        "Updating {:.0}%",
+                        progress.map(crate::format::fraction).unwrap_or_default() * 100.0
+                    ),
+                    None,
+                    false,
+                )
+            } else if self.launch_reading.as_deref() == Some(g.id.as_str()) {
+                big(Icon::Play, "Starting…".into(), None, false)
+            } else {
+                big(
+                    Icon::Play,
+                    "Play".into(),
+                    self.can_play(&g.id).then(|| Message::Play(g.id.clone())),
+                    false,
+                )
+            }
+        } else {
+            match self.install_views.get(&g.id) {
+                // The download shows under these buttons; the page stays free to leave.
+                Some(InstallView::Running { .. }) => big(
+                    Icon::Pause,
+                    "Pause".into(),
+                    Some(Message::Install(InstallMsg::Pause(g.id.clone()))),
+                    false,
+                ),
+                Some(InstallView::Ready(info)) if info.resumable => big(
+                    Icon::Download,
+                    "Resume".into(),
+                    Some(
+                        if info.platform == Platform::Linux || info.proton.is_some() {
+                            Message::Install(InstallMsg::Start(g.id.clone()))
+                        } else {
+                            Message::OpenPanel(Panel::Install)
+                        },
+                    ),
+                    false,
+                ),
+                Some(InstallView::Queued(_)) => big(
+                    Icon::Clock,
+                    "Queued".into(),
+                    Some(Message::ShowPage(Page::Downloads)),
+                    false,
+                ),
+                _ if self.not_installable(&g.id).is_some() => {
+                    big(Icon::Download, "Not installable".into(), None, false)
+                }
+                _ => big(
+                    Icon::Download,
+                    "Install".into(),
+                    Some(Message::OpenPanel(Panel::Install)),
+                    false,
+                ),
+            }
+        }
+    }
+}
+
 /// The cover grid of the Library tab, scrolled back to where it was after a game page.
 pub const GRID: &str = "library-grid";
 
@@ -617,13 +751,7 @@ impl App {
     }
 
     /// The games of `shelf` matching `search` and `f`, in `sort` order, as places in `library`.
-    pub(crate) fn find_games(
-        &self,
-        search: &str,
-        shelf: Shelf,
-        f: Filters,
-        sort: Sort,
-    ) -> Vec<usize> {
+    pub fn find_games(&self, search: &str, shelf: Shelf, f: Filters, sort: Sort) -> Vec<usize> {
         let needle = search.to_lowercase();
         let mut games: Vec<(usize, &LibraryGame)> = self
             .library
@@ -819,8 +947,8 @@ impl SortKeys {
         self.0.borrow_mut().clear();
     }
 
-    #[cfg(test)]
-    pub fn len(&self) -> usize {
+    /// How many titles have their key made.
+    pub fn count(&self) -> usize {
         self.0.borrow().len()
     }
 

@@ -97,7 +97,7 @@ pub fn summary(r: &InstallRecord) -> InstallSummary {
 }
 
 /// What downloads at start, from the saved order of the queue and the jobs saved.
-pub(crate) struct Waiting {
+pub struct Waiting {
     /// The queue, in its saved order (a queued install missing from it goes last); installers cut
     /// off by a close go first: they resume by themselves.
     pub queue: Vec<String>,
@@ -111,7 +111,7 @@ pub(crate) struct Waiting {
     pub offline_stopped: Vec<(String, Option<String>)>,
 }
 
-pub(crate) fn downloads_from(
+pub fn downloads_from(
     saved: Vec<String>,
     installs: Vec<InstallJob>,
     offline: &[OfflineJob],

@@ -24,7 +24,6 @@ mod widgets;
 use crate::theme::text;
 use iced::widget::{Column, Space, button, column, container, row, space, stack, text_input};
 use iced::{Alignment, Element, Length, Padding};
-use slatty_core::library::LibraryGame;
 
 use crate::edit::EditMsg;
 use crate::icons::{Icon, icon};
@@ -259,11 +258,6 @@ impl App {
             return page.into();
         }
         row![self.sidebar_view(), page.width(Length::Fill)].into()
-    }
-
-    pub(crate) fn selected_game(&self) -> Option<&LibraryGame> {
-        let id = self.selected.as_ref()?;
-        self.library.iter().find(|g| &g.id == id)
     }
 
     fn with_notice<'a>(&'a self, body: Element<'a, Message>) -> Element<'a, Message> {

@@ -453,13 +453,11 @@ fn game_settings_list_only_owned_dlc() {
 fn a_cut_off_update_resumes_by_itself_at_start_up() {
     use crate::Interrupted;
     let mut app = library_app();
-    app.installs.insert(
-        "4".into(),
-        Install {
-            game_id: "4".into(),
-            ..app.installs["3"].clone()
-        },
-    );
+    let install = Install {
+        game_id: "4".into(),
+        ..app.installs["3"].clone()
+    };
+    app.installs.insert("4".into(), install);
     app.interrupted = vec![
         ("3".into(), Interrupted::Update),
         ("4".into(), Interrupted::UpdatePaused),

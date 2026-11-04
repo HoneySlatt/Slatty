@@ -380,21 +380,6 @@ impl App {
         .into()
     }
 
-    /// Home's layout: the key art's height, the rows of covers shown (the focus's, then the next
-    /// when it fits whole: Iced would squash it to the room left), and a row's height (its title,
-    /// 22 pixels a line of 1.3, and its covers). On a small window the key art gives up room for
-    /// the row with the focus.
-    pub(crate) fn home_layout(&self) -> (f32, usize, f32) {
-        let row = 22.0 * 1.3 + 10.0 + (self.couch_card() - 2.0 * RING) * 4.0 / 3.0 + 2.0 * RING;
-        let room = self.window.height - TOP_BAR - HINTS - 8.0 - self.notice_room();
-        let hero = (self.window.height * 0.42)
-            .max(220.0)
-            .min(room - row)
-            .max(0.0);
-        let shown = if hero + 2.0 * row + GAP <= room { 2 } else { 1 };
-        (hero, shown, row)
-    }
-
     fn couch_library<'a>(&'a self, couch: &'a Couch) -> Element<'a, Message> {
         let games = self.couch_games();
         let chip =

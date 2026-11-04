@@ -204,7 +204,7 @@ fn removing_a_game_added_by_hand_tells_what_was_deleted() {
             "local-1".into(),
             Ok(report),
         )));
-        app.notice.unwrap().text
+        app.0.notice.unwrap().text
     };
     let untouched = notice(UninstallReport::default());
     assert!(untouched.contains("untouched"), "{untouched}");

@@ -400,8 +400,8 @@ fn the_achievements_tab_builds_only_the_tiles_in_view_at_10000_games() {
     app.library = (1..=10_000)
         .map(|i| fake_game(&i.to_string(), &format!("Game {i}")))
         .collect();
-    for g in &app.library {
-        app.overview.entry(g.id.clone()).or_default().achievements = Some((3, 10));
+    for g in &app.0.library {
+        app.0.overview.entry(g.id.clone()).or_default().achievements = Some((3, 10));
     }
     app.page = Page::Achievements;
     let mut ui = render(&app);

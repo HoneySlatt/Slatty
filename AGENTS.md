@@ -145,7 +145,8 @@ These act on a real person's account, disk or system. Ask the human first, every
 ```
 crates/core   slatty-core  all behaviour; no interface code, typed errors, progress callbacks
 crates/cli    slatty       command line, diagnostics, process-level integration tests
-crates/gui    slatty-gui   Iced interface
+crates/app    slatty-app   the interface's state, messages, update and background work, free of Iced
+crates/gui    slatty-gui   Iced interface: the views, the styles, what Iced runs for the state
 ```
 
 ### Core
@@ -163,9 +164,17 @@ crates/gui    slatty-gui   Iced interface
 
 ### Interface (Iced)
 
-The interface follows Iced's state / message / update / view split:
+The interface follows Iced's state / message / update / view split, the state in `slatty-app`
+and the views in `slatty-gui`:
 
-- `main.rs` holds `App` (the state), the `Message` enum and navigation. `update` only dispatches.
+- `crates/app/src/lib.rs` holds `App` (the state), the `Message` enum and navigation. `update`
+  only dispatches. The state names no Iced type: its `Task` (`task`), what it listens to
+  (`listen`), sizes, pictures, colours and keys are its own, and `slatty-gui` turns them into
+  Iced's (`run`, `ui::handle`, `ui::scroll`, `theme`). Keep it so: `slatty-app` must build without
+  Iced.
+- `crates/gui/src/main.rs` starts Iced. Its `App` wraps the state (it dereferences to it), so the
+  views are `impl App` blocks reading the state as their own; the state's modules are re-exported
+  there, under the paths the views and tests use (`crate::install::…`).
 - Each feature keeps its state, its message handling and its background tasks in its own module.
   Most have their own message enum and an `impl App { fn update_<feature>(…) }` block (`add`,
   `couch`, `downloads`, `edit`, `install`, `maintenance`, `notify`, `offline`, `runners`,
@@ -187,7 +196,8 @@ The interface follows Iced's state / message / update / view split:
   read from the theme file), into `theme::Tokens` if the views draw with it (Iced's colours), the
   theme file format and docs/theming.md. Controls and covers take their corners from the tokens; cards, drawers and
   dialogs still have corners of their own in `theme.rs` (and one in `ui/widgets.rs::inner`).
-- Icons are Lucide SVGs in `crates/gui/assets/icons`, added to the `Icon` enum in `icons.rs`.
+- Icons are Lucide SVGs in `crates/gui/assets/icons`, named in the `Icon` enum
+  (`crates/app/src/icons.rs`) and given their file in `crates/gui/src/icons.rs`.
 - Dialogs and menus are **layers over the page** (`ui/mod.rs`), each over an empty layer, and the
   notice banner keeps its place even when empty. Do not wrap the page in a different widget
   depending on what is open: Iced would rebuild it and lose its state (the library's scroll
@@ -230,6 +240,7 @@ making those copies) runs at the lowest priority through `fsutil::in_background`
 - Interface tests (`crates/gui/src/tests/`, one module per area, helpers in `tests/mod.rs` such
   as `library_app()`, `render()`, `fake_plan()`) drive the real `update` and `view` with Iced's
   simulator. When the simulator cannot read a widget's text (pick lists), assert on the state.
+  Tests of the state alone (no view) can live in `crates/app`, beside the module they test.
 - CLI tests in `crates/cli/tests` spawn real processes. Ignored tests need real Proton or Comet
   and are run on purpose.
 

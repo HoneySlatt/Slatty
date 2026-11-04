@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/cli", "crates/gui"]
+members = ["crates/core", "crates/cli", "crates/app", "crates/gui"]
 
 [workspace.package]
 version = "0.2.0"
@@ -13,6 +13,7 @@ publish = false
 
 [workspace.dependencies]
 slatty-core = { path = "crates/core" }
+slatty-app = { path = "crates/app" }
 anyhow = "1"
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }

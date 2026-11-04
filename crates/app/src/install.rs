@@ -137,7 +137,7 @@ pub enum InstallMsg {
 
 impl App {
     /// The downloads wait for GOG, or Epic for one of its games, said once as they start waiting.
-    pub(crate) fn wait_for_gog(&mut self, game_id: &str, e: String) -> Task<Message> {
+    pub fn wait_for_gog(&mut self, game_id: &str, e: String) -> Task<Message> {
         let store = if slatty_core::store::epic_app(game_id).is_some() {
             "Epic"
         } else {

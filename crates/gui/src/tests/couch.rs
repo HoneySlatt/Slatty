@@ -1419,9 +1419,10 @@ fn the_library_asks_for_the_covers_around_its_focus_found_again() {
     }
     nav(&mut app, Nav::PrevTab);
     app.library.push(fake_game("15", "[FAKE] Game 0"));
-    for g in &app.library {
+    for g in &app.0.library {
         let path = format!("/covers/{}.jpg", g.id);
-        app.covers
+        app.0
+            .covers
             .insert(g.id.clone(), crate::picture::Picture::from_path(path));
     }
     // Forgets the lists, as an install ending would.

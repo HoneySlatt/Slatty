@@ -204,7 +204,7 @@ Slatty stands on the work of others:
 - [Geist](https://vercel.com/font) (SIL Open Font License 1.1) is the interface font, built in from
   `crates/gui/assets/fonts`, where its licence is.
 - AMD's [FidelityFX Super Resolution 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR) (MIT)
-  gives the sharpening of enlarged key art (RCAS), ported in `crates/gui/src/scaled.rs` with its
+  gives the sharpening of enlarged key art (RCAS), ported in `crates/app/src/scaled.rs` with its
   notice.
 - [oxidelta](https://github.com/sockudo/oxidelta) (MIT) applies GOG's xdelta3 patches.
 - [rfd](https://github.com/PolyMeilex/rfd) (MIT) opens the desktop's file chooser.

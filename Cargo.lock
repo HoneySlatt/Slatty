@@ -4326,6 +4326,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "slatty-app"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "futures",
+ "gilrs",
+ "image",
+ "lilt",
+ "rfd",
+ "serde",
+ "slatty-core",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "zbus",
+]
+
+[[package]]
 name = "slatty-cli"
 version = "0.2.0"
 dependencies = [
@@ -4375,20 +4393,15 @@ version = "0.2.0"
 dependencies = [
  "chrono",
  "futures",
- "gilrs",
  "iced",
  "iced_test",
  "image",
- "lilt",
- "rfd",
- "serde",
+ "slatty-app",
  "slatty-core",
  "tokio",
  "tokio-util",
- "toml",
  "tracing-subscriber",
  "wgpu",
- "zbus",
 ]
 
 [[package]]

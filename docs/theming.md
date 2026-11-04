@@ -87,7 +87,7 @@ cover_radius = 0
 
 ## For developers
 
-The file maps onto `look::Tokens` in `crates/gui/src/look.rs`, which the views draw with as
+The file maps onto `look::Tokens` in `crates/app/src/look.rs`, which the views draw with as
 `theme::Tokens` in `crates/gui/src/theme.rs` (the same values in Iced's colours). Views never name
 a colour; every widget style reads the tokens in use, so a key added to both and to the file
 format reaches the whole interface. A new token also goes into this page.

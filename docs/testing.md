@@ -29,7 +29,8 @@ made-up ids, throwaway folders named after the process id):
   running games found in a fake `/proc`; the Web API against a local server; nothing written into
   Steam's folders, and GOG never asked about a Steam game.
 - **Interface:** the real `update` and `view` driven by Iced's simulator, one module per area under
-  `crates/gui/src/tests`.
+  `crates/gui/src/tests`; the state's own pieces (motion, tasks, pictures, the theme file) in
+  `crates/app`, beside them.
 - **Command line:** `crates/cli/tests` start real `slatty` processes against fake games and a fake
   Steam installation.
 

@@ -298,10 +298,7 @@ fn messages_that_change_no_list_keep_the_lists() {
 
 #[test]
 fn login_screen_offers_browser_login_without_password_field() {
-    let app = App {
-        core: Some(core()),
-        ..Default::default()
-    };
+    let app = empty_app();
     let mut ui = render(&app);
     assert!(ui.find("Sign in").is_ok());
     assert!(ui.find("Password").is_err());
@@ -1016,11 +1013,11 @@ fn the_sort_keys_made_at_start_are_all_the_first_view_needs() {
     app.sort_keys
         .fill(crate::library::sort_names(&app.library, &app.customs));
     app.apply_customs();
-    let made = app.sort_keys.len();
+    let made = app.sort_keys.count();
     for sort in [Sort::NameAsc, Sort::NameDesc] {
         app.sort = sort;
         assert!(!titles(&app).is_empty());
-        assert_eq!(app.sort_keys.len(), made, "{sort:?}");
+        assert_eq!(app.sort_keys.count(), made, "{sort:?}");
     }
     app.sort = Sort::NameAsc;
     assert_eq!(titles(&app)[..2], ["Game 3", "Game 1"], "its sort title");
@@ -1142,8 +1139,8 @@ fn library_at_10000_games() {
     println!("list of games made again: {:?}", t.elapsed() / 10);
     app.sidebar.open = false;
     // The Achievements tab, every game with achievements.
-    for g in &app.library {
-        app.overview.entry(g.id.clone()).or_default().achievements = Some((3, 10));
+    for g in &app.0.library {
+        app.0.overview.entry(g.id.clone()).or_default().achievements = Some((3, 10));
     }
     app.page = Page::Achievements;
     time(&app, "achievements tab");
@@ -1175,8 +1172,8 @@ fn library_at_10000_games() {
         use crate::pad::Nav;
         app.window = SIZE;
         app.page = Page::Library;
-        for g in app.library.iter().take(500) {
-            app.favorites.insert(g.id.clone());
+        for g in app.0.library.iter().take(500) {
+            app.0.favorites.insert(g.id.clone());
         }
         let _ = app.update(Message::Couch(CouchMsg::Enter));
         time(&app, "couch home");

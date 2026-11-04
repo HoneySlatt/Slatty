@@ -326,7 +326,7 @@ fn sessions_without_an_end_are_told_by_title_with_cloud_saves_only_where_gog_kee
     let notice = |installs: Vec<Install>, interrupted: &[&str]| {
         let mut app = App::default();
         let _ = app.update(booted(installs, interrupted));
-        app.notice.map(|n| n.text).unwrap_or_default()
+        app.0.notice.map(|n| n.text).unwrap_or_default()
     };
     let windows = library_app().installs["3"].clone();
     let linux = Install {

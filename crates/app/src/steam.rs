@@ -895,7 +895,7 @@ impl App {
 
 /// What to tell of a request to Steam's Web API that failed: a key refused is not an API that did
 /// not answer.
-pub(crate) fn web_failure(e: slatty_core::Error) -> String {
+pub fn web_failure(e: slatty_core::Error) -> String {
     match e {
         slatty_core::Error::Http {
             status: 401 | 403, ..

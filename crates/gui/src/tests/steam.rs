@@ -64,10 +64,7 @@ fn ids(app: &App) -> Vec<&str> {
 /// GOG account, GOG's sign-in one click away in Settings.
 #[test]
 fn steam_games_show_without_gog_once_chosen() {
-    let mut app = App {
-        core: Some(core()),
-        ..Default::default()
-    };
+    let mut app = empty_app();
     let db = app.core.as_ref().unwrap().db.clone();
     app.steam.found = Some("[FAKE] Player".into());
     assert!(render(&app).find("Use my Steam games without GOG").is_ok());
@@ -97,10 +94,7 @@ fn steam_games_show_without_gog_once_chosen() {
 /// avatar show the signed-in dot.
 #[test]
 fn signing_in_to_gog_from_settings_leaves_the_sign_in_page() {
-    let mut app = App {
-        core: Some(core()),
-        ..Default::default()
-    };
+    let mut app = empty_app();
     app.steam.found = Some("[FAKE] Player".into());
     app.steam.on = true;
     let _ = app.update(Message::Steam(SteamMsg::Loaded(Some(steam_library()))));
@@ -1243,8 +1237,8 @@ fn steam_games_can_always_be_turned_off() {
 #[test]
 fn steam_games_are_not_gogs_to_read() {
     let mut app = library_app();
-    for g in &app.library {
-        app.overview.insert(
+    for g in &app.0.library {
+        app.0.overview.insert(
             g.id.clone(),
             slatty_core::overview::GameOverview {
                 checked: true,

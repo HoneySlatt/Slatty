@@ -73,7 +73,7 @@ pub fn duration(seconds: i64) -> String {
 /// The day dates are told from: always 10 October 2026 in tests, so that what they show, and
 /// their snapshots, do not change from one day to the next.
 fn today() -> chrono::NaiveDate {
-    if cfg!(test) {
+    if in_tests() {
         chrono::NaiveDate::from_ymd_opt(2026, 10, 10).expect("a valid date")
     } else {
         chrono::Local::now().date_naive()
@@ -84,7 +84,7 @@ fn today() -> chrono::NaiveDate {
 /// days they show do not depend on the computer's zone.
 fn local(ts: i64) -> Option<chrono::DateTime<chrono::FixedOffset>> {
     use chrono::TimeZone;
-    if cfg!(test) {
+    if in_tests() {
         chrono::FixedOffset::east_opt(2 * 3600).and_then(|zone| zone.timestamp_opt(ts, 0).single())
     } else {
         chrono::Local
@@ -94,11 +94,27 @@ fn local(ts: i64) -> Option<chrono::DateTime<chrono::FixedOffset>> {
     }
 }
 
-/// A path as shown. In tests their throwaway folder, named differently each run, shows as
-/// `/tmp/slatty-test`, so that the snapshots showing it do not change from one run to the next.
+/// The tests' throwaway folder, named differently each run, once they named it.
+static TEST_ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Shows what tests would see change from one run to the next the same way every time, so that
+/// what they read and their snapshots do not change: paths in `root`, their throwaway folder, as in
+/// `/tmp/slatty-test`, today as 10 October 2026, and times in UTC+2. For the interface's tests;
+/// this crate's own are fixed the same way without it.
+pub fn fix_for_tests(root: std::path::PathBuf) {
+    let _ = TEST_ROOT.set(root);
+}
+
+fn in_tests() -> bool {
+    cfg!(test) || TEST_ROOT.get().is_some()
+}
+
+/// A path as shown.
 pub fn shown_path(path: &std::path::Path) -> String {
-    #[cfg(test)]
-    if let Ok(rest) = path.strip_prefix(crate::tests::root()) {
+    if let Some(rest) = TEST_ROOT
+        .get()
+        .and_then(|root| path.strip_prefix(root).ok())
+    {
         return std::path::Path::new("/tmp/slatty-test")
             .join(rest)
             .display()

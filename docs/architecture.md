@@ -19,7 +19,8 @@ the code depends on; [SECURITY.md](../SECURITY.md) the protections, from the use
 ```
 crates/core   slatty-core   every behaviour; no interface code
 crates/cli    slatty        command line, diagnostics; tests that spawn real processes
-crates/gui    slatty-gui    Iced interface
+crates/app    slatty-app    the interface's state, messages, update and background work, free of Iced
+crates/gui    slatty-gui    Iced interface: views, styles, what Iced runs for the state
 ```
 
 The core has no interface dependency and is tested on its own. Both front ends call the same core
@@ -113,11 +114,18 @@ Proton, umu or Comet are ignored by default ([testing](testing.md)).
 
 ## Interface
 
-The interface follows Iced's state, message, update and view split:
+The interface follows Iced's state, message, update and view split, in two crates:
 
-- `main.rs` holds `App` (the state), the `Message` enum and navigation; `update` only dispatches;
-- each feature keeps its state, its messages and its background tasks in a module of its own;
-- views live under `ui/`, one module per page or panel.
+- `slatty-app` (`crates/app`) is the state: `App`, the `Message` enum and navigation in `lib.rs`
+  (`update` only dispatches), each feature's state, messages and background tasks in a module of
+  its own. It names no Iced type: its tasks, what it listens to, sizes, pictures, colours and keys
+  are its own, so another interface framework could draw the same state;
+- `slatty-gui` (`crates/gui`) draws it with Iced: `main.rs` starts Iced with an `App` that wraps
+  the state and dereferences to it; views live under `ui/`, one module per page or panel, as
+  `impl App` blocks; `run` hands the state's tasks and subscriptions to Iced, `theme` its look.
+
+The modules below are the state's (`crates/app/src`) unless named under `ui/`, `run`, `theme`,
+`icons` or `graphics` (`crates/gui/src`).
 
 | Module | Responsibility |
 |---|---|
@@ -370,7 +378,7 @@ GOG offers them, files the new build no longer has deleted if Slatty installed t
 the install record rewritten. While the job exists, launching and verifying the game are refused,
 and running the change again resumes it with the pinned build.
 
-Automatic updates (`gui/src/updates.rs`) take the games Slatty installed that are not held
+Automatic updates (`app/src/updates.rs`) take the games Slatty installed that are not held
 on an older build (`maintenance::auto_update_candidates`), check them at start, at sign-in and every
 six hours, and apply them one at a time through Manage's own update, once no game runs, no install
 downloads and no cloud sync or other work on a game is busy. One being applied when a game starts
@@ -570,7 +578,7 @@ Comet listens on the fixed port 127.0.0.1:9977, so only one runs at a time.
 Every file is opened without waiting and read only when it is a regular file of bounded size
 (`steam::open`); cached images only when they are not links.
 
-In the interface (`gui/src/steam.rs`), Steam's games are read at start off the interface thread
+In the interface (`app/src/steam.rs`), Steam's games are read at start off the interface thread
 and merged into the library (`merge_steam`), which leaves out a Steam game owned on GOG too: its
 GOG game's page offers it. What Steam installed and its play times are read again when the window
 comes back to the front. After Play, and while a game runs, the client's games are looked at every
@@ -619,7 +627,7 @@ launch's, so that `launch-spec` never shows them. `umu::resolve` looks it up und
 
 Epic games are `epic-<app name>`: `paths::check_game_id` refuses them, so GOG is never asked about
 one; `paths::check_owned_id` accepts them, as Slatty installs them. Automatic updates leave them out
-(`maintenance::auto_update_candidates`). In the interface (`gui/src/epic.rs`) the cached library
+(`maintenance::auto_update_candidates`). In the interface (`app/src/epic.rs`) the cached library
 shows at start (`boot.rs` reads it) and is read again from Epic meanwhile; `merge_steam` puts its
 games in the library beside Steam's. They install through the same drawer, queue and progress
 as GOG's: `install::plan` and `install_stream` call `epic::install` for an Epic id, given the game
@@ -724,7 +732,7 @@ tells it with the games added by hand wherever GOG must not be asked about a gam
 
 ### Couch mode
 
-`gui/src/couch.rs`, `pad.rs` and `ui/couch.rs`. The couch mode is another way around the same
+`app/src/couch.rs`, `pad.rs` and `gui/src/ui/couch.rs`. The couch mode is another way around the same
 state: it reads the same library, starts games, installs and downloads through the same messages
 (`Select`, `ToggleFavorite`, `Play`, `InstallMsg`, `DownloadsMsg`, `OfflineMsg`), and its views
 are drawn in place of the desktop's while `App::couch` holds its state.

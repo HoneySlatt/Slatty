@@ -481,7 +481,7 @@ impl App {
     }
 
     /// Starts the first download of the queue, whatever waits beside it.
-    pub(crate) fn start_first(&mut self) -> Task<Message> {
+    pub fn start_first(&mut self) -> Task<Message> {
         if self.queue.is_empty() {
             return Task::none();
         }

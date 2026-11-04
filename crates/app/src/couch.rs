@@ -365,7 +365,7 @@ impl App {
     }
 
     /// Whether the player is elsewhere: the window behind another, or a game running.
-    pub(crate) fn away(&self) -> bool {
+    pub fn away(&self) -> bool {
         self.unfocused
             || self.play.as_ref().is_some_and(|p| p.running)
             || !self.steam.running.is_empty()
@@ -775,7 +775,7 @@ impl App {
 
     /// Whether the on-screen keyboard shows, over the library, and so takes the presses: open, it
     /// is hidden by a game's page or another tab.
-    pub(crate) fn typing(&self) -> bool {
+    pub fn typing(&self) -> bool {
         self.selected.is_none()
             && self
                 .couch
@@ -931,7 +931,7 @@ impl App {
     /// before the next view and the next press; not while a game's page shows, which draws no
     /// list: the games last seen are found once it closes, a favorite taken out and put back on
     /// the page included.
-    pub(crate) fn refocus_couch(&mut self) {
+    pub fn refocus_couch(&mut self) {
         if self.selected.is_some() {
             return;
         }
@@ -1239,7 +1239,7 @@ impl App {
     /// The first row of covers the library shows: the one kept, moved so that the row with the
     /// focus shows, whatever changed since the last move (the window grew, the shelf has fewer
     /// games).
-    pub(crate) fn library_top(&self, couch: &Couch, focused: Option<usize>) -> usize {
+    pub fn library_top(&self, couch: &Couch, focused: Option<usize>) -> usize {
         let (across, down, _) = self.couch_grid();
         let row = focused.unwrap_or(0) / across;
         couch.top.min(row).max((row + 1).saturating_sub(down))
@@ -1312,6 +1312,21 @@ impl App {
         ((across.floor() as usize).max(1), rows as usize, card)
     }
 
+    /// Home's layout: the key art's height, the rows of covers shown (the focus's, then the next
+    /// when it fits whole: Iced would squash it to the room left), and a row's height (its title,
+    /// 22 pixels a line of 1.3, and its covers). On a small window the key art gives up room for
+    /// the row with the focus.
+    pub fn home_layout(&self) -> (f32, usize, f32) {
+        let row = 22.0 * 1.3 + 10.0 + (self.couch_card() - 2.0 * RING) * 4.0 / 3.0 + 2.0 * RING;
+        let room = self.window.height - TOP_BAR - HINTS - 8.0 - self.notice_room();
+        let hero = (self.window.height * 0.42)
+            .max(220.0)
+            .min(room - row)
+            .max(0.0);
+        let shown = if hero + 2.0 * row + GAP <= room { 2 } else { 1 };
+        (hero, shown, row)
+    }
+
     /// The room a notice takes above the pages while it shows.
     pub fn notice_room(&self) -> f32 {
         if self.notice.is_some() { NOTICE } else { 0.0 }
@@ -1320,7 +1335,7 @@ impl App {
 
 /// The first cover a row of Home shows, of `len`, `across` at once: the one with the focus as far
 /// right as one from the end, the row full when it can be.
-pub(crate) fn home_start(at: usize, across: usize, len: usize) -> usize {
+pub fn home_start(at: usize, across: usize, len: usize) -> usize {
     at.saturating_sub(across.saturating_sub(2))
         .min(len.saturating_sub(across))
 }
