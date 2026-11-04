@@ -88,7 +88,7 @@ pub struct Toast {
     pub game: Option<String>,
     pub until: Instant,
     /// Slides in from the window's edge.
-    pub shown: iced::Animation<bool>,
+    pub shown: crate::motion::Animation,
 }
 
 #[derive(Debug, Clone)]
@@ -126,9 +126,9 @@ impl App {
                 body,
                 game: game.map(String::from),
                 until: Instant::now() + SHOWN_FOR,
-                shown: iced::Animation::new(false)
+                shown: crate::motion::Animation::new(false)
                     .duration(crate::theme::tokens().transition)
-                    .easing(iced::animation::Easing::EaseOutCubic)
+                    .easing(crate::motion::Easing::EaseOutCubic)
                     .go(true, self.now),
             });
             if self.toasts.len() > AT_ONCE {

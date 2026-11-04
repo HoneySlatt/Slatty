@@ -168,7 +168,7 @@ impl App {
             }))
             .spacing(8)
             .id(crate::library::GRID)
-            .on_scroll(Message::GridScrolled)
+            .on_scroll(|v| Message::GridScrolled(super::scroll(v)))
             .style(theme::scroller)
             .height(Length::Fill)
             .into()

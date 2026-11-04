@@ -213,7 +213,7 @@ fn a_long_title_leaves_the_progress_in_its_tile() {
             ..Default::default()
         },
     );
-    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
     snapshot(&mut ui, "achievements-long-title");
     let title = ui
         .find("[FAKE] A Game Whose Title Goes On and On: The Complete Collection of Everything")
@@ -250,7 +250,7 @@ fn a_long_achievement_description_stays_in_its_card() {
     settle(&mut app);
     for size in [Size::new(800.0, 560.0), Size::new(1440.0, 900.0)] {
         app.window = size;
-        let mut ui = Simulator::with_size(settings(), size, app.view());
+        let mut ui = Simulator::with_size(settings(), iced_size(size), app.view());
         if size.width < 1000.0 {
             snapshot(&mut ui, "achievements-long-description");
         } else {
@@ -367,7 +367,7 @@ fn a_narrow_window_lays_the_achievements_drawer_over_the_page() {
     use iced::mouse::{Button, Event as Mouse};
     let mut app = app_with_achievements();
     let click_page = |app: &App| -> Vec<Message> {
-        let mut ui = Simulator::with_size(settings(), app.window, app.view());
+        let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
         ui.point_at(iced::Point::new(100.0, 300.0));
         let _ = ui.simulate([
             iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
@@ -383,7 +383,7 @@ fn a_narrow_window_lays_the_achievements_drawer_over_the_page() {
     );
     let _ = app.update(Message::WindowResized(Size::new(800.0, 560.0)));
     {
-        let mut ui = Simulator::with_size(settings(), app.window, app.view());
+        let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
         snapshot(&mut ui, "drawer-narrow");
     }
     assert!(

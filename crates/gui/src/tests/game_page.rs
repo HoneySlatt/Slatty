@@ -52,7 +52,7 @@ fn installed_game_page_can_be_played_and_shows_no_store_text() {
 #[test]
 fn the_game_page_fits_the_smallest_window() {
     let mut app = library_app();
-    app.window = iced::Size::new(800.0, 560.0);
+    app.window = Size::new(800.0, 560.0);
     app.library[2].title =
         "[FAKE] The Very Long Title of a Game: Definitive Edition With Every Expansion".into();
     open(&mut app, "3", None);
@@ -79,7 +79,8 @@ fn the_game_page_fits_the_smallest_window() {
             .map(|t| ui.find(*t).unwrap().bounds().width)
             .collect()
     };
-    let mut ui = iced_test::simulator::Simulator::with_size(settings(), app.window, app.view());
+    let mut ui =
+        iced_test::simulator::Simulator::with_size(settings(), iced_size(app.window), app.view());
     snapshot(&mut ui, "game-narrow");
     for (t, width) in stats.iter().zip(roomy) {
         let bounds = ui.find(*t).unwrap().bounds();

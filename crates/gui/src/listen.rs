@@ -44,9 +44,8 @@ pub fn into_iced(listens: Vec<Listen>) -> Subscription<Message> {
             Listen::CloseRequests => {
                 iced::window::close_requests().map(|_| Message::CloseRequested)
             }
-            Listen::Resizes => {
-                iced::window::resize_events().map(|(_, size)| Message::WindowResized(size))
-            }
+            Listen::Resizes => iced::window::resize_events()
+                .map(|(_, size)| Message::WindowResized(crate::ui::size(size))),
             Listen::Gamepads => {
                 Subscription::run(pad::moves).map(|nav| Message::Couch(couch::CouchMsg::Nav(nav)))
             }

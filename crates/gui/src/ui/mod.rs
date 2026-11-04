@@ -36,6 +36,21 @@ pub(super) use widgets::{dark, dialog_over, inner, note, round_button};
 /// Width of a notification card.
 const TOAST_WIDTH: f32 = 360.0;
 
+/// Iced's scroll position as the state keeps it.
+pub fn scroll(v: iced::widget::scrollable::Viewport) -> crate::geometry::Scroll {
+    let (offset, shown, content) = (v.absolute_offset(), v.bounds(), v.content_bounds());
+    crate::geometry::Scroll {
+        offset: crate::geometry::Point::new(offset.x, offset.y),
+        shown: size(shown.size()),
+        content: size(content.size()),
+    }
+}
+
+/// Iced's size as the state keeps it.
+pub fn size(s: iced::Size) -> crate::geometry::Size {
+    crate::geometry::Size::new(s.width, s.height)
+}
+
 impl App {
     pub fn view(&self) -> Element<'_, Message> {
         if let Some(e) = &self.fatal {
@@ -149,7 +164,10 @@ impl App {
                     .map(|a| forget_dialog(empty(), &a.username, self.arrived("forget"))),
             )
             .push((!self.toasts.is_empty()).then(|| self.toasts()));
-        pointer::right_clicks(layers, |at| Message::Edit(EditMsg::At(at))).into()
+        pointer::right_clicks(layers, |at| {
+            Message::Edit(EditMsg::At(crate::geometry::Point::new(at.x, at.y)))
+        })
+        .into()
     }
 
     /// Notification cards, in the bottom right corner over everything else; a click opens the game

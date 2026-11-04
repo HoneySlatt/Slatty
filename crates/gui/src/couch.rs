@@ -7,7 +7,7 @@ use std::ffi::OsStr;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use iced::Size;
+use crate::geometry::Size;
 
 use crate::task::{Effect, Task};
 use slatty_core::installer::Progress;

@@ -152,7 +152,7 @@ fn a_long_title_leaves_a_covers_buttons_on_it() {
     app.card_width = crate::settings::CoverSize(75).width();
     app.library.retain(|g| g.id == "3");
     app.library[0].title = format!("[FAKE] {}", "A very long title ".repeat(11));
-    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
     // The game is the first cover of the grid; its buttons take clicks only where they are, on it.
     let grid = ui
         .find(iced_test::selector::id(crate::library::GRID))
@@ -269,7 +269,7 @@ fn messages_that_change_no_list_keep_the_lists() {
     for message in [
         Message::Steam(SteamMsg::Cover("steam-440".into(), None)),
         Message::Edit(EditMsg::Menu("4".into())),
-        Message::Edit(EditMsg::At(iced::Point::new(10.0, 10.0))),
+        Message::Edit(EditMsg::At(crate::geometry::Point::new(10.0, 10.0))),
         Message::Edit(EditMsg::Title("[FAKE] Typed".into())),
         Message::Edit(EditMsg::SortTitle("[FAKE] Typed".into())),
         Message::Edit(EditMsg::PickerQuery("[FAKE] Typed".into())),
@@ -346,7 +346,7 @@ fn filter_status_remains_readable_at_the_minimum_window_size() {
     app.window = Size::new(800.0, 560.0);
     app.filters_open = true;
     app.filters.achievements = true;
-    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
     snapshot(&mut ui, "narrow-filters");
     let status = ui.find("14 games could not be read from GOG").unwrap();
     let bounds = status.bounds();
@@ -404,7 +404,7 @@ fn the_grid_keeps_room_under_what_shows_above_it() {
         error: true,
         text: "[FAKE] Library not refreshed: GOG did not answer.".into(),
     });
-    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
     snapshot(&mut ui, "library-crowded");
     let grid = ui
         .find(iced_test::selector::id(crate::library::GRID))
@@ -1222,7 +1222,7 @@ fn library_at_10000_games() {
         let mut runs: Vec<std::time::Duration> = (0..5)
             .map(|_| {
                 let t = std::time::Instant::now();
-                let _ = Simulator::with_size(settings(), SIZE, app.view());
+                let _ = Simulator::with_size(settings(), iced_size(SIZE), app.view());
                 t.elapsed()
             })
             .collect();

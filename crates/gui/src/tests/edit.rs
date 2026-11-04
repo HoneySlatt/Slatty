@@ -182,10 +182,14 @@ fn right_clicking_a_cover_opens_a_menu_with_edit_game() {
 
     // A right click elsewhere closes the menu; near the right edge it opens inward.
     let _ = app.update(Message::Edit(EditMsg::Menu("7".into())));
-    let _ = app.update(Message::Edit(EditMsg::At(iced::Point::new(1435.0, 10.0))));
+    let _ = app.update(Message::Edit(EditMsg::At(crate::geometry::Point::new(
+        1435.0, 10.0,
+    ))));
     let menu = app.context_menu.clone().unwrap();
     assert!(menu.at.x + crate::edit::MENU_WIDTH <= app.window.width);
-    let _ = app.update(Message::Edit(EditMsg::At(iced::Point::new(50.0, 50.0))));
+    let _ = app.update(Message::Edit(EditMsg::At(crate::geometry::Point::new(
+        50.0, 50.0,
+    ))));
     assert!(app.context_menu.is_none());
 }
 

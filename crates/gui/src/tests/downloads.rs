@@ -321,7 +321,7 @@ fn downloads_keep_a_readable_width_on_a_wide_window() {
     }
     app.page = Page::Downloads;
     app.window = Size::new(3840.0, 1080.0);
-    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
     snapshot(&mut ui, "downloads-wide");
     // The share done, at the end of the progress bar.
     let done = ui.find("0%").unwrap().bounds();
@@ -365,7 +365,7 @@ fn a_long_title_stays_inside_its_download_row() {
             }),
         },
     );
-    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
     let (mut rows, mut titles) = (Vec::new(), Vec::new());
     let _ = ui.find(|candidate: Candidate<'_>| -> Option<()> {
         match candidate {

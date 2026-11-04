@@ -2,16 +2,58 @@
 //! degrees, and goes back the same way once left; a drawer or a dialog comes into place; key art
 //! fades into the next. Frames are drawn only while one of them moves.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use iced::Animation;
-use iced::animation::Easing;
-use iced::time::Instant;
 use iced::widget::image::Handle;
+pub use lilt::Easing;
+
+/// Something going from hidden to shown, or back, through time: Iced's `Animation` of a `bool`,
+/// on the same `lilt`.
+#[derive(Debug, Clone)]
+pub struct Animation(lilt::Animated<bool, Instant>);
+
+impl Animation {
+    /// Hidden or shown, until it goes the other way.
+    pub fn new(shown: bool) -> Self {
+        Animation(lilt::Animated::new(shown).duration(100.0))
+    }
+
+    pub fn duration(self, lasting: Duration) -> Self {
+        Animation(self.0.duration(lasting.as_secs_f32() * 1_000.0))
+    }
+
+    pub fn easing(self, easing: Easing) -> Self {
+        Animation(self.0.easing(easing))
+    }
+
+    /// Goes to `shown` from `at`.
+    pub fn go(mut self, shown: bool, at: Instant) -> Self {
+        self.go_mut(shown, at);
+        self
+    }
+
+    pub fn go_mut(&mut self, shown: bool, at: Instant) {
+        self.0.transition(shown, at);
+    }
+
+    pub fn is_animating(&self, at: Instant) -> bool {
+        self.0.in_progress(at)
+    }
+
+    /// Where it is at `at`, from `hidden` to `shown`.
+    pub fn interpolate(&self, hidden: f32, shown: f32, at: Instant) -> f32 {
+        self.0.animate_bool(hidden, shown, at)
+    }
+
+    /// Where it goes: shown or hidden.
+    pub fn value(&self) -> bool {
+        self.0.value
+    }
+}
 
 /// Covers hovered (or given the couch mode's focus), or left and still going back, by game id.
 #[derive(Default)]
-pub struct Hovers(Vec<(String, Animation<bool>)>);
+pub struct Hovers(Vec<(String, Animation)>);
 
 impl Hovers {
     /// The pointer entered (`on`) or left the cover of `id` at `now`; one that went back is
@@ -68,7 +110,7 @@ impl Hovers {
 /// Drawers and dialogs coming into place, each by the layer it is in: one opening over another
 /// leaves that one still.
 #[derive(Default)]
-pub struct Arrivals(Vec<(&'static str, Animation<bool>)>);
+pub struct Arrivals(Vec<(&'static str, Animation)>);
 
 impl Arrivals {
     /// What the layer `layer` shows changed to something new at `now`: it comes into place.
@@ -102,7 +144,7 @@ impl Arrivals {
 pub struct Crossfade {
     shown: Option<Handle>,
     before: Option<Handle>,
-    change: Option<Animation<bool>>,
+    change: Option<Animation>,
 }
 
 impl Crossfade {

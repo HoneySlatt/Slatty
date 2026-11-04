@@ -7,6 +7,7 @@ mod downloads;
 mod edit;
 mod emulators;
 mod epic;
+mod geometry;
 mod graphics;
 mod icons;
 mod install;
@@ -46,11 +47,11 @@ use maintenance::{MaintenanceMsg, MaintenanceView};
 use play::{PlayMsg, PlayState};
 use settings::SettingsMsg;
 
-use iced::animation::Easing;
-use iced::time::Instant;
+use geometry::{Scroll, Size};
+use iced::keyboard;
 use iced::widget::image;
-use iced::{Animation, Size, keyboard};
 use listen::Listen;
+use motion::{Animation, Easing};
 use slatty_core::account::AccountInfo;
 use slatty_core::achievements::Achievement;
 use slatty_core::db::Db;
@@ -61,6 +62,7 @@ use slatty_core::library::{LibraryCache, LibraryGame, NotInstallable};
 use slatty_core::overview::GameOverview;
 use slatty_core::paths::Dirs;
 use slatty_core::session::Playtime;
+use std::time::Instant;
 use task::{Effect, Task};
 use tokio::sync::Semaphore;
 
@@ -264,14 +266,14 @@ pub struct App {
     /// Width of the covers in the library grid, set in Settings.
     pub card_width: f32,
     /// Where the cover grid is scrolled to and how large it shows: only the rows in view are built.
-    pub grid_view: Option<iced::widget::scrollable::Viewport>,
+    pub grid_view: Option<Scroll>,
     /// Where the cover grid was left for the game page open, to find it there again.
-    pub library_scroll: Option<iced::widget::scrollable::Viewport>,
+    pub library_scroll: Option<Scroll>,
     /// The list of every game beside the library: open or closed, what it is searched for, and
     /// where it is scrolled to (only the rows in view are built).
     pub sidebar: sidebar::Sidebar,
     /// The same for the grid of the Achievements tab.
-    pub achievements_view: Option<iced::widget::scrollable::Viewport>,
+    pub achievements_view: Option<Scroll>,
     pub filters: Filters,
     pub filters_open: bool,
     /// Whether the filters are kept for the next start (Settings → Library).
@@ -422,8 +424,8 @@ pub struct App {
     applied_scale: std::cell::Cell<f32>,
     /// Fade in a new page, and the key art of a game once downloaded; `now` is the time of the
     /// frame drawn.
-    pub page_shown: Animation<bool>,
-    pub art_shown: Animation<bool>,
+    pub page_shown: Animation,
+    pub art_shown: Animation,
     /// Covers of the library hovered, or going back once left.
     pub hovers: motion::Hovers,
     /// Drawers and dialogs coming into place.
@@ -576,8 +578,8 @@ pub enum Message {
     /// Signed out; with the account's id when it was forgotten too.
     LoggedOut(Result<Option<String>, String>),
     SyncLibrary,
-    GridScrolled(iced::widget::scrollable::Viewport),
-    AchievementsScrolled(iced::widget::scrollable::Viewport),
+    GridScrolled(Scroll),
+    AchievementsScrolled(Scroll),
     Sidebar(sidebar::SidebarMsg),
     LibrarySynced(Result<LibraryCache, String>),
     Search(String),
@@ -943,7 +945,7 @@ impl App {
         task
     }
 
-    fn fade_in(now: Instant) -> Animation<bool> {
+    fn fade_in(now: Instant) -> Animation {
         Animation::new(false)
             .duration(theme::tokens().transition)
             .easing(Easing::EaseOutCubic)

@@ -214,7 +214,7 @@ fn the_side_list_of_settings_fits_the_smallest_window() {
             error: true,
             text: "[FAKE] Library not refreshed: GOG did not answer.".into(),
         });
-        let mut ui = Simulator::with_size(settings(), app.window, app.view());
+        let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
         if notice {
             snapshot(&mut ui, "settings-small-notice");
         }
@@ -263,7 +263,7 @@ fn settings_keep_a_readable_width_on_a_wide_window() {
     let mut app = library_app();
     app.page = Page::Settings;
     app.window = Size::new(3840.0, 1080.0);
-    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
     snapshot(&mut ui, "settings-wide");
     let log_out = ui.find("Log out").unwrap().bounds();
     assert!(log_out.x + log_out.width < 1700.0, "{log_out:?}");
@@ -297,7 +297,7 @@ fn the_side_list_of_settings_brings_a_part_to_the_top() {
 
     // In a narrow window each name goes above its setting.
     app.window = Size::new(940.0, 1000.0);
-    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
     assert!(ui.find("Default installation path").is_ok());
     snapshot(&mut ui, "settings-narrow");
 }
@@ -374,7 +374,7 @@ fn what_leaves_the_computer_can_be_turned_off() {
     assert!(!slatty_core::settings::umu_lookup(&db).unwrap());
     assert!(!slatty_core::settings::report_playtime(&db).unwrap());
     app.window = Size::new(1440.0, 1900.0);
-    let mut ui = Simulator::with_size(settings(), app.window, app.view());
+    let mut ui = Simulator::with_size(settings(), iced_size(app.window), app.view());
     assert!(ui.find("Play time on GOG").is_ok());
     snapshot(&mut ui, "settings-privacy");
 }
@@ -387,7 +387,7 @@ fn the_privacy_page_says_what_comet_exposes_and_every_host_reached() {
     app.window = Size::new(1440.0, 1900.0);
     let texts = texts(&mut Simulator::with_size(
         settings(),
-        app.window,
+        iced_size(app.window),
         app.view(),
     ))
     .join(" ");
@@ -410,7 +410,7 @@ fn new_windows_games_are_isolated_until_turned_off() {
     assert!(app.isolate_new_games);
     app.window = Size::new(1440.0, 1900.0);
     assert!(
-        Simulator::with_size(settings(), app.window, app.view())
+        Simulator::with_size(settings(), iced_size(app.window), app.view())
             .find("Isolate new Windows games")
             .is_ok()
     );

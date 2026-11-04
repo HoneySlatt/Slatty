@@ -4379,6 +4379,7 @@ dependencies = [
  "iced",
  "iced_test",
  "image",
+ "lilt",
  "rfd",
  "serde",
  "slatty-core",

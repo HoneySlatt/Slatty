@@ -60,7 +60,7 @@ impl App {
                 self.sidebar_row(&self.library[games[i]])
             });
             scrollable(rows)
-                .on_scroll(|v| Message::Sidebar(SidebarMsg::Scrolled(v)))
+                .on_scroll(|v| Message::Sidebar(SidebarMsg::Scrolled(super::scroll(v))))
                 .style(theme::scroller)
                 .height(Length::Fill)
                 .into()

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use iced::Size;
+use crate::geometry::Size;
 use iced_test::simulator::Simulator;
 use slatty_core::account::AccountInfo;
 use slatty_core::db::Db;
@@ -150,6 +150,11 @@ fn open(app: &mut App, game: &str, panel: Option<Panel>) {
     app.panel = panel;
 }
 
+/// The state's size as the simulator takes it.
+fn iced_size(s: Size) -> iced::Size {
+    iced::Size::new(s.width, s.height)
+}
+
 /// The simulator with the fonts the application loads.
 fn settings() -> iced::Settings {
     iced::Settings {
@@ -160,12 +165,12 @@ fn settings() -> iced::Settings {
 }
 
 fn render(app: &App) -> Simulator<'_, Message> {
-    Simulator::with_size(settings(), SIZE, app.view())
+    Simulator::with_size(settings(), iced_size(SIZE), app.view())
 }
 
 /// `render`, at the size of the app's own window: a tall one shows a whole long page.
 fn render_window(app: &App) -> Simulator<'_, Message> {
-    Simulator::with_size(settings(), app.window, app.view())
+    Simulator::with_size(settings(), iced_size(app.window), app.view())
 }
 
 /// Every text shown, in one walk of the widget tree: a `find` per text walks all of it each time.

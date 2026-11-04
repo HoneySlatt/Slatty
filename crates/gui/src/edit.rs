@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use iced::Point;
+use crate::geometry::Point;
 use iced::widget::image;
 
 use crate::task::{Effect, Task};

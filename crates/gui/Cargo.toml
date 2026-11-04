@@ -16,6 +16,8 @@ path = "src/main.rs"
 chrono = "0.4.45"
 # Streams and channels of the background work (`task`); already built for Iced, no crate added.
 futures = "0.3"
+# The motion's easing (`motion::Animation`); already built for Iced, whose animations it makes.
+lilt = "0.8"
 # Gamepads for the couch mode, read from evdev through udev, with SDL's mappings for the less
 # common ones. Its defaults stay on: without them it refuses to build, even on Linux.
 gilrs = "0.11"

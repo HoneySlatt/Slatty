@@ -101,7 +101,7 @@ impl App {
             header,
             scrollable(tiles)
                 .spacing(8)
-                .on_scroll(Message::AchievementsScrolled)
+                .on_scroll(|v| Message::AchievementsScrolled(super::scroll(v)))
                 .style(theme::scroller)
                 .height(Length::Fill)
         ]

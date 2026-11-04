@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use crate::geometry::Scroll;
 use iced::widget::image;
-use iced::widget::scrollable::Viewport;
 
 use crate::task::Task;
 use slatty_core::custom::ImageChange;
@@ -31,7 +31,7 @@ pub struct Sidebar {
     pub dragging: bool,
     pub search: String,
     /// Where the list is scrolled to and how high it shows.
-    pub view: Option<Viewport>,
+    pub view: Option<Scroll>,
     /// The room the list took when the cover grid last told its size: opened, closed or dragged
     /// since, the grid's width is another.
     pub room_when_measured: f32,
@@ -69,7 +69,7 @@ enum IconStep {
 pub enum SidebarMsg {
     Toggle,
     Search(String),
-    Scrolled(Viewport),
+    Scrolled(Scroll),
     /// Its edge pressed, moved to the window's `x`, let go.
     Grab,
     Drag(f32),
@@ -130,7 +130,7 @@ impl App {
     }
 
     /// The cover grid's last size and scroll, its width only when the list was as it is now.
-    pub fn grid_measured(&self) -> (Option<f32>, Option<Viewport>) {
+    pub fn grid_measured(&self) -> (Option<f32>, Option<Scroll>) {
         let view = self.grid_view;
         let width = view
             .filter(|_| self.sidebar.room_when_measured == self.sidebar_room())
