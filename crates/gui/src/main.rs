@@ -24,6 +24,7 @@ mod pad;
 mod picture;
 mod play;
 mod presets;
+mod run;
 mod runners;
 mod scaled;
 mod settings;
@@ -133,16 +134,16 @@ fn main() -> iced::Result {
     let mut app = iced::application(
         || {
             let (app, task) = App::boot();
-            (app, task.into_iced())
+            (app, run::task(task))
         },
-        |app: &mut App, message| app.update(message).into_iced(),
+        |app: &mut App, message| run::task(app.update(message)),
         App::view,
     );
     for font in theme::FONTS {
         app = app.font(font);
     }
     app.title("Slatty")
-        .subscription(|app: &App| listen::into_iced(app.subscription()))
+        .subscription(|app: &App| run::subscription(app.subscription()))
         .theme(App::theme)
         .scale_factor(App::scale_factor)
         .window(window_settings(couch::ask_at_start()))

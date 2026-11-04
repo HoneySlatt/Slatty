@@ -140,8 +140,9 @@ The interface follows Iced's state, message, update and view split:
 | `motion` | Covers answering the pointer or the couch mode's focus (shown by degrees, going back once left), drawers and dialogs coming into place, each by its layer, the couch mode's Home fading its key art into the next; frames drawn only while one moves |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress |
 | `format` | Text shown to the user: sizes, durations, dates, what a session or a cloud sync did |
-| `task` | Slatty's own `Task`: background work and what it asks of the window (scroll, focus, clipboard, full screen, where a part of the page is), working as Iced's and handed to it (`into_iced`), so that the state does not depend on the interface framework |
-| `listen` | What the interface listens to after each message (frames, timers, keys, the window, gamepads, the pointer), as a list of Slatty's own, handed to Iced (`into_iced`) |
+| `task` | Slatty's own `Task`: background work and what it asks of the window (scroll, focus, clipboard, full screen, where a part of the page is), working as Iced's, so that the state does not depend on the interface framework |
+| `listen` | What the interface listens to after each message (frames, timers, keys, the window, gamepads, the pointer), as a list of Slatty's own |
+| `run` | What Iced runs for the state: its tasks and their requests to the window, what it listens to, and the messages read from Iced's events (keys, the window, the pointer) |
 | `look`, `presets` | The look as the state keeps it: design tokens read from the theme file, the built-in themes, the font family chosen |
 | `theme`, `icons` | The tokens in Iced's colours, made again when the look changes; widget styles; the fonts as Iced draws them; Lucide icons |
 | `ui/*` | The views: top bar and layers (`mod`), building blocks (`widgets`), pages (`library`, `game`, `achievements`, `settings`, `downloads`), the list of games beside the library (`sidebar`), drawers and dialogs (`install`, `installers`, `game_settings`, `manage`, `cloud`, `edit`, `add`, `panels`), the couch mode's pages and layers (`couch`), `even_grid`, `pointer`, `slide` (a drawer or a notification card moved without being narrowed) |

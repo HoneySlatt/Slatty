@@ -960,9 +960,9 @@ fn only_the_keys_the_window_answers_send_a_message() {
         text: None,
         repeat: false,
     };
-    assert!(crate::listen::key_message(press(Key::Named(Named::Escape))).is_some());
-    assert!(crate::listen::key_message(press(Key::Named(Named::Tab))).is_some());
-    assert!(crate::listen::key_message(press(Key::Character("a".into()))).is_none());
+    assert!(crate::run::key_message(press(Key::Named(Named::Escape))).is_some());
+    assert!(crate::run::key_message(press(Key::Named(Named::Tab))).is_some());
+    assert!(crate::run::key_message(press(Key::Character("a".into()))).is_none());
     let release = Event::KeyReleased {
         key: Key::Named(Named::Escape),
         modified_key: Key::Named(Named::Escape),
@@ -970,8 +970,8 @@ fn only_the_keys_the_window_answers_send_a_message() {
         location: Location::Standard,
         modifiers: Modifiers::empty(),
     };
-    assert!(crate::listen::key_message(release).is_none());
-    assert!(crate::listen::key_message(Event::ModifiersChanged(Modifiers::SHIFT)).is_none());
+    assert!(crate::run::key_message(release).is_none());
+    assert!(crate::run::key_message(Event::ModifiersChanged(Modifiers::SHIFT)).is_none());
 }
 
 /// At start the covers already cached come in one message; only those missing are downloaded,

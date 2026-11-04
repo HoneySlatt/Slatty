@@ -141,20 +141,6 @@ impl App {
         column![header, self.hero(g), below].into()
     }
 
-    /// The key art, or the cover for a game without any. Nothing while the key art downloads: the
-    /// cover would show for a moment, stretched, before it.
-    pub(crate) fn hero_art(&self, g: &LibraryGame) -> Option<crate::picture::Picture> {
-        let downloading = g
-            .background
-            .as_ref()
-            .is_some_and(|u| self.images_requested.contains(u));
-        match self.background(g) {
-            Some(h) => Some(self.shown_art(h)),
-            None if downloading => None,
-            None => self.cover(&g.id),
-        }
-    }
-
     /// The game's key art, edge to edge, with its title, Play and favorite at the bottom left.
     pub(super) fn hero<'a>(&'a self, g: &'a LibraryGame) -> Element<'a, Message> {
         let base: Element<'_, Message> = match self.hero_art(g) {

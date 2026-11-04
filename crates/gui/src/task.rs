@@ -1,6 +1,6 @@
 //! Work started in the background for the interface, and what it asks of the window (scroll a
 //! list, move the focus, read the clipboard, go full screen…), as Slatty's own type: the state and
-//! its messages do not depend on the interface framework, and `into_iced` hands it to Iced.
+//! its messages do not depend on the interface framework, and the interface runs it (`run::task`).
 //!
 //! It works as Iced's `Task` does, which the tests rely on: a stream of outputs and of requests to
 //! the window, run with the others of a batch at once; `then` runs a task for each output, one
@@ -216,18 +216,9 @@ impl<T> Task<T> {
         self.units
     }
 
-    /// The task as Iced runs it.
-    pub fn into_iced(self) -> iced::Task<T>
-    where
-        T: Send + 'static,
-    {
-        match self.stream {
-            None => iced::Task::none(),
-            Some(stream) => iced::Task::run(stream, |action| action).then(|action| match action {
-                Action::Output(output) => iced::Task::done(output),
-                Action::Effect(effect) => iced_effect(effect),
-            }),
-        }
+    /// Its outputs and requests, for the interface to run; `None` for no work at all.
+    pub fn into_stream(self) -> Option<BoxStream<'static, Action<T>>> {
+        self.stream
     }
 }
 
@@ -254,58 +245,6 @@ pub fn scale_factor() -> Task<f32> {
 /// Where the tops of the parts of the page with these ids are, `None` for one not shown.
 pub fn tops(ids: Vec<&'static str>) -> Task<Vec<Option<f32>>> {
     Task::<()>::ask(|answer| Effect::Tops(ids, answer))
-}
-
-/// What Iced does for `effect`; an answer goes back on its channel.
-fn iced_effect<T: Send + 'static>(effect: Effect) -> iced::Task<T> {
-    use iced::widget::operation;
-    use iced::widget::selector::{Target, find, id};
-    // Iced's `then` takes a closure it may call more than once: each answer is sent once.
-    fn answer<A: Send + 'static, T: Send + 'static>(
-        sender: oneshot::Sender<A>,
-    ) -> impl FnMut(A) -> iced::Task<T> + Send + 'static {
-        let mut sender = Some(sender);
-        move |a| {
-            if let Some(sender) = sender.take() {
-                let _ = sender.send(a);
-            }
-            iced::Task::none()
-        }
-    }
-    match effect {
-        Effect::ScrollTo { id, x, y } => {
-            operation::scroll_to(id, operation::AbsoluteOffset { x, y })
-        }
-        Effect::SnapToEnd(id) => operation::snap_to_end(id),
-        Effect::FocusNext => operation::focus_next(),
-        Effect::FocusPrevious => operation::focus_previous(),
-        Effect::Fullscreen(on) => {
-            let mode = if on {
-                iced::window::Mode::Fullscreen
-            } else {
-                iced::window::Mode::Windowed
-            };
-            iced::window::oldest().and_then(move |window| iced::window::set_mode(window, mode))
-        }
-        Effect::Exit => iced::exit(),
-        Effect::ReadClipboard(sender) => iced::clipboard::read().then(answer(sender)),
-        Effect::ScaleFactor(sender) => iced::window::latest()
-            .and_then(iced::window::scale_factor)
-            .then(answer(sender)),
-        Effect::Tops(ids, sender) => {
-            let mut found = iced::Task::done(Vec::new());
-            for one in ids {
-                found = found.then(move |tops: Vec<Option<f32>>| {
-                    find(id(one)).map(move |target: Option<Target>| {
-                        let mut tops = tops.clone();
-                        tops.push(target.map(|t| t.bounds().y));
-                        tops
-                    })
-                });
-            }
-            found.then(answer(sender))
-        }
-    }
 }
 
 /// A stream of what `f` sends on the channel it is given, as long as it runs.

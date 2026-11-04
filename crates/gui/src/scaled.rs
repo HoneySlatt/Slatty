@@ -211,6 +211,20 @@ impl App {
         )
     }
 
+    /// The key art, or the cover for a game without any. Nothing while the key art downloads: the
+    /// cover would show for a moment, stretched, before it.
+    pub fn hero_art(&self, g: &slatty_core::library::LibraryGame) -> Option<Picture> {
+        let downloading = g
+            .background
+            .as_ref()
+            .is_some_and(|u| self.images_requested.contains(u));
+        match self.background(g) {
+            Some(h) => Some(self.shown_art(h)),
+            None if downloading => None,
+            None => self.cover(&g.id),
+        }
+    }
+
     /// The key art drawn for `art`: its copy at the window's width once made.
     pub fn shown_art(&self, art: Picture) -> Picture {
         let copy = match (&art, self.art_width()) {
