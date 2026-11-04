@@ -16,6 +16,8 @@ until 1.0, a minor version may change commands and on-disk formats.
 - In the couch mode, the focus moves from cover to cover smoothly: the ring fades in on the cover
   it reaches, whose art grows slightly, and fades out on the one it left, over the theme's
   `hover_ms`.
+- The couch mode's Home fades its key art into the next game's as the focus moves, rather than
+  changing it at once.
 
 ### Fixed
 

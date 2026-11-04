@@ -419,6 +419,8 @@ pub struct App {
     pub arrivals: motion::Arrivals,
     /// Covers of the couch mode given the focus, or going back once it left.
     pub couch_focus: motion::Hovers,
+    /// The key art of the couch mode's Home, fading into the next game's as the focus moves.
+    pub home_art: motion::Crossfade,
     pub now: Instant,
 }
 
@@ -539,6 +541,7 @@ impl Default for App {
             hovers: Default::default(),
             arrivals: Default::default(),
             couch_focus: Default::default(),
+            home_art: Default::default(),
             now: Instant::now(),
         }
     }
@@ -895,6 +898,16 @@ impl App {
                 }
             }
         }
+        // Home's key art fades into the next game's; away from Home, it is forgotten.
+        match self.home_hero() {
+            Some(art) => {
+                let now = self.now.max(Instant::now());
+                if self.home_art.show(art, now, theme::tokens().transition) {
+                    self.now = now;
+                }
+            }
+            None => self.home_art.clear(),
+        }
         // Whatever ended (a game, an install, an update) may let a waiting update start.
         let task = Task::batch([task, self.next_update(), self.wanted_icons()]);
         // The gamepad's reader sends nothing while the player is elsewhere.
@@ -944,6 +957,7 @@ impl App {
             || self.hovers.animating(self.now)
             || self.arrivals.animating(self.now)
             || self.couch_focus.animating(self.now)
+            || self.home_art.animating(self.now)
             || self.toasts.iter().any(|t| t.shown.is_animating(self.now))
     }
 

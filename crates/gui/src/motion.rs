@@ -1,12 +1,13 @@
 //! Motion answering the pointer and what opens: a cover the pointer enters shows hovered by
-//! degrees, and goes back the same way once left; a drawer or a dialog comes into place. Frames
-//! are drawn only while one of them moves.
+//! degrees, and goes back the same way once left; a drawer or a dialog comes into place; key art
+//! fades into the next. Frames are drawn only while one of them moves.
 
 use std::time::Duration;
 
 use iced::Animation;
 use iced::animation::Easing;
 use iced::time::Instant;
+use iced::widget::image::Handle;
 
 /// Covers hovered (or given the couch mode's focus), or left and still going back, by game id.
 #[derive(Default)]
@@ -95,11 +96,111 @@ impl Arrivals {
     }
 }
 
+/// A picture giving way to the next: the new one fades in over the one before, which stays under
+/// it until it is done; to nothing (while the next downloads), the one before fades out.
+#[derive(Default)]
+pub struct Crossfade {
+    shown: Option<Handle>,
+    before: Option<Handle>,
+    change: Option<Animation<bool>>,
+}
+
+impl Crossfade {
+    /// `art` shows from `now`: a change from what showed starts the fade, and says so.
+    pub fn show(&mut self, art: Option<Handle>, now: Instant, lasting: Duration) -> bool {
+        if art == self.shown {
+            return false;
+        }
+        self.before = self.shown.take();
+        self.shown = art;
+        self.change = Some(
+            Animation::new(false)
+                .duration(lasting)
+                .easing(Easing::EaseOutCubic)
+                .go(true, now),
+        );
+        true
+    }
+
+    /// The pictures to draw at `now`, the lowest first, each with its opacity.
+    pub fn layers(&self, now: Instant) -> Vec<(&Handle, f32)> {
+        let done = self
+            .change
+            .as_ref()
+            .map_or(1.0, |a| a.interpolate(0.0, 1.0, now));
+        let mut layers = Vec::with_capacity(2);
+        if let Some(before) = &self.before
+            && done < 1.0
+        {
+            let left = if self.shown.is_some() {
+                1.0
+            } else {
+                1.0 - done
+            };
+            layers.push((before, left));
+        }
+        if let Some(shown) = &self.shown {
+            layers.push((shown, done));
+        }
+        layers
+    }
+
+    pub fn animating(&self, now: Instant) -> bool {
+        self.change.as_ref().is_some_and(|a| a.is_animating(now))
+    }
+
+    /// Forgets what showed: the next picture shows at once, as the page it is on arrives.
+    pub fn clear(&mut self) {
+        *self = Crossfade::default();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const LASTING: Duration = Duration::from_millis(100);
+
+    #[test]
+    fn a_picture_fades_in_over_the_one_before_or_out_to_nothing() {
+        let start = Instant::now();
+        let at = |ms| start + Duration::from_millis(ms);
+        let (a, b) = (
+            Handle::from_path("/[FAKE]/a.jpg"),
+            Handle::from_path("/[FAKE]/b.jpg"),
+        );
+        let opacities = |fade: &Crossfade, ms| -> Vec<(Handle, f32)> {
+            fade.layers(at(ms))
+                .into_iter()
+                .map(|(h, o)| (h.clone(), o))
+                .collect()
+        };
+        let mut fade = Crossfade::default();
+        fade.show(Some(a.clone()), start, LASTING);
+        fade.show(Some(a.clone()), at(100), LASTING);
+        assert_eq!(
+            opacities(&fade, 100),
+            [(a.clone(), 1.0)],
+            "the same: no change"
+        );
+
+        fade.show(Some(b.clone()), at(200), LASTING);
+        let half = opacities(&fade, 250);
+        assert_eq!(half.len(), 2);
+        assert_eq!(
+            half[0],
+            (a.clone(), 1.0),
+            "the one before stays whole under it"
+        );
+        assert!(half[1].0 == b && half[1].1 > 0.0 && half[1].1 < 1.0);
+        assert_eq!(opacities(&fade, 300), [(b.clone(), 1.0)]);
+        assert!(fade.animating(at(250)) && !fade.animating(at(300)));
+
+        fade.show(None, at(400), LASTING);
+        let going = opacities(&fade, 450);
+        assert!(going.len() == 1 && going[0].0 == b && going[0].1 < 1.0);
+        assert!(opacities(&fade, 500).is_empty());
+    }
 
     #[test]
     fn what_opens_comes_into_place_and_leaves_the_others_still() {

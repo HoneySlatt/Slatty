@@ -534,6 +534,49 @@ fn home_draws_the_key_art_from_its_copy() {
     ));
 }
 
+/// Home's key art fades into the next game's as the focus moves, the one before under it until it
+/// is done; away from Home, it is forgotten.
+#[test]
+fn home_fades_its_key_art_into_the_next_games() {
+    let mut app = couch_app();
+    for id in ["5", "7"] {
+        app.customs.insert(
+            id.into(),
+            slatty_core::custom::Custom {
+                background: Some(PathBuf::from(format!("/custom/{id}/art.jpg"))),
+                ..Default::default()
+            },
+        );
+    }
+    nav(&mut app, Nav::Down);
+    settle(&mut app);
+    let art_of = |app: &App| {
+        app.home_art
+            .layers(app.now)
+            .into_iter()
+            .map(|(h, opacity)| match h {
+                iced::widget::image::Handle::Path(_, p) => (p.display().to_string(), opacity),
+                _ => unreachable!("art from a file"),
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(art_of(&app), [("/custom/5/art.jpg".into(), 1.0)]);
+    nav(&mut app, Nav::Right);
+    assert!(app.animating());
+    let fading = art_of(&app);
+    assert_eq!(fading.len(), 2, "{fading:?}");
+    assert_eq!(fading[0], ("/custom/5/art.jpg".into(), 1.0));
+    assert_eq!(fading[1].0, "/custom/7/art.jpg");
+    assert!(fading[1].1 < 1.0);
+    let _ = render(&app);
+    settle(&mut app);
+    assert!(!app.animating());
+    assert_eq!(art_of(&app), [("/custom/7/art.jpg".into(), 1.0)]);
+
+    let _ = app.update(Message::Couch(CouchMsg::Tab(Tab::Library)));
+    assert!(art_of(&app).is_empty());
+}
+
 /// Key art arriving while the focus passes over a game of Home makes no copy before the focus rests
 /// there, nor does another image arriving meanwhile: one copy per game passed over is the burst the
 /// rest avoids. Once rested, it is made.

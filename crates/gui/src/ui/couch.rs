@@ -3,7 +3,7 @@
 
 use crate::theme::text;
 use iced::widget::{
-    Column, Row, Space, button, column, container, image, progress_bar, row, space, stack,
+    Column, Row, Space, Stack, button, column, container, image, progress_bar, row, space, stack,
 };
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 use slatty_core::library::LibraryGame;
@@ -276,21 +276,24 @@ impl App {
         meta.into()
     }
 
-    /// The key art of `g`, edge to edge, fading into the page, with its title and `below`.
+    /// Key art, edge to edge, `opacity` from 0 (clear) to 1.
+    fn hero_image<'a>(art: iced::widget::image::Handle, opacity: f32) -> Element<'a, Message> {
+        image(art)
+            .content_fit(ContentFit::Cover)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .opacity(opacity)
+            .into()
+    }
+
+    /// `art` (the key art of `g`), fading into the page, with the game's title and `below`.
     fn couch_hero<'a>(
         &'a self,
         g: &'a LibraryGame,
+        art: Element<'a, Message>,
         title_size: f32,
         below: Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let art: Element<'a, Message> = match self.hero_art(g) {
-            Some(h) => image(h)
-                .content_fit(ContentFit::Cover)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
-            None => Space::new().width(Length::Fill).height(Length::Fill).into(),
-        };
         let fade = container(Space::new())
             .width(Length::Fill)
             .height(Length::Fill)
@@ -321,7 +324,20 @@ impl App {
             );
         };
         let (hero_height, shown, _) = self.home_layout();
-        let hero = container(self.couch_hero(focused, 44.0, Space::new().into()))
+        // The game's key art fading in over the one before; before any message, it as it is.
+        let layers = self.home_art.layers(self.now);
+        let art = if layers.is_empty() {
+            self.hero_art(focused)
+                .map_or_else(|| Space::new().into(), |h| Self::hero_image(h, 1.0))
+        } else {
+            Stack::with_children(
+                layers
+                    .into_iter()
+                    .map(|(h, opacity)| Self::hero_image(h.clone(), opacity)),
+            )
+            .into()
+        };
+        let hero = container(self.couch_hero(focused, art, 44.0, Space::new().into()))
             .height(hero_height)
             .clip(true);
         let card = self.couch_card();
@@ -556,7 +572,10 @@ impl App {
             .push(self.couch_game_status(g))
             .spacing(18)
             .into();
-        self.couch_hero(g, 52.0, below)
+        let art = self
+            .hero_art(g)
+            .map_or_else(|| Space::new().into(), |h| Self::hero_image(h, 1.0));
+        self.couch_hero(g, art, 52.0, below)
     }
 
     /// Where an install or a session of the game stands, under its buttons.

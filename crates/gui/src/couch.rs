@@ -900,6 +900,16 @@ impl App {
         Some((row, col, &self.library[games[col]]))
     }
 
+    /// The key art Home shows, while it shows: that of the game with the focus, `None` while it
+    /// downloads.
+    pub fn home_hero(&self) -> Option<Option<iced::widget::image::Handle>> {
+        let couch = self.couch.as_ref().filter(|_| self.selected.is_none())?;
+        if couch.tab != Tab::Home {
+            return None;
+        }
+        self.home_focus().map(|(_, _, g)| self.hero_art(g))
+    }
+
     /// The game whose cover has the focus, on Home or in Library.
     pub fn focused_cover(&self) -> Option<&str> {
         let couch = self.couch.as_ref().filter(|_| self.selected.is_none())?;
