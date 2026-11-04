@@ -3,9 +3,7 @@
 
 use std::fmt;
 
-use iced::{Color, color};
-
-use crate::theme::Tokens;
+use crate::look::{Color, Tokens, color};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Preset {

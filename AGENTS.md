@@ -183,8 +183,9 @@ The interface follows Iced's state / message / update / view split:
   while the window and graphics driver are set up, and nothing from game folders or Steam
   libraries: they can be on a network drive still waking up.
 - **Views never name a colour.** Every colour and motion value comes from `theme::tokens()`, and
-  widget styles are functions in `theme.rs`. A new token goes into `Tokens`, the theme file format
-  and docs/theming.md. Controls and covers take their corners from the tokens; cards, drawers and
+  widget styles are functions in `theme.rs`. A new token goes into `look::Tokens` (the state's,
+  read from the theme file), into `theme::Tokens` if the views draw with it (Iced's colours), the
+  theme file format and docs/theming.md. Controls and covers take their corners from the tokens; cards, drawers and
   dialogs still have corners of their own in `theme.rs` (and one in `ui/widgets.rs::inner`).
 - Icons are Lucide SVGs in `crates/gui/assets/icons`, added to the `Icon` enum in `icons.rs`.
 - Dialogs and menus are **layers over the page** (`ui/mod.rs`), each over an empty layer, and the

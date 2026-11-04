@@ -127,7 +127,7 @@ impl App {
                 game: game.map(String::from),
                 until: Instant::now() + SHOWN_FOR,
                 shown: crate::motion::Animation::new(false)
-                    .duration(crate::theme::tokens().transition)
+                    .duration(crate::look::tokens().transition)
                     .easing(crate::motion::Easing::EaseOutCubic)
                     .go(true, self.now),
             });

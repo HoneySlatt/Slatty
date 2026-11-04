@@ -128,7 +128,7 @@ fn the_theme_file_can_be_created_from_settings() {
     // A config folder of its own: the theme file it writes would show in other tests' snapshots.
     let core = app.core.as_mut().unwrap();
     core.dirs = Dirs::under(&core.dirs.config.join("theme-test"));
-    let path = crate::theme::file(&core.dirs.config);
+    let path = crate::look::file(&core.dirs.config);
     let _ = std::fs::remove_file(&path);
     // Tall enough to show Appearance below Installs, Runners and Emulators.
     app.window = Size::new(1440.0, 2400.0);

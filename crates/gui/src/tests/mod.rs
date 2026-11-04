@@ -24,6 +24,8 @@ pub(crate) fn root() -> PathBuf {
 }
 
 fn core() -> Core {
+    // As `main` does: the state lists the system's fonts through the interface.
+    crate::look::list_fonts_with(crate::theme::font_families);
     // Locks of its own: queueing an install or starting an update takes the game's lock for a
     // moment, which tests running at the same time on the same games would find held.
     static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);

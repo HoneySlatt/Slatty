@@ -8,7 +8,7 @@ use slatty_core::install::Platform;
 use slatty_core::secret::Secret;
 use slatty_core::{credentials, settings, steamgriddb};
 
-use crate::{App, Message, err, theme};
+use crate::{App, Message, err, look};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtonChoice(pub PathBuf);
@@ -66,7 +66,7 @@ pub enum FontChoice {
 impl fmt::Display for FontChoice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FontChoice::Default => write!(f, "{} (default)", crate::theme::DEFAULT_FAMILY),
+            FontChoice::Default => write!(f, "{} (default)", crate::look::DEFAULT_FAMILY),
             FontChoice::Family(name) => f.write_str(name),
         }
     }
@@ -402,11 +402,11 @@ impl App {
                 }
             }
             SettingsMsg::CreateTheme => {
-                let path = theme::file(&core.dirs.config);
+                let path = look::file(&core.dirs.config);
                 if !path.exists() {
                     let written = slatty_core::fsutil::write_atomic(
                         &path,
-                        theme::tokens().to_toml().as_bytes(),
+                        look::tokens().to_toml().as_bytes(),
                     );
                     if let Err(e) = written {
                         self.notify_error(e.to_string());
@@ -414,7 +414,7 @@ impl App {
                 }
             }
             SettingsMsg::EditTheme => {
-                let file = theme::file(&core.dirs.config);
+                let file = look::file(&core.dirs.config);
                 if let Err(e) = slatty_core::auth::open_with_desktop(file.as_os_str()) {
                     self.notify_error(format!("Could not open the theme file: {e}"));
                 }
@@ -595,9 +595,9 @@ impl App {
                 if let Err(e) = settings::set_interface_theme(&core.db, preset.key()) {
                     self.notify_error(e.to_string());
                 }
-                theme::set_preset(preset);
-                let (tokens, mistake) = theme::with_preset(&theme::file(&core.dirs.config), preset);
-                theme::apply(tokens);
+                look::set_preset(preset);
+                let (tokens, mistake) = look::with_preset(&look::file(&core.dirs.config), preset);
+                look::apply(tokens);
                 if let Some(e) = mistake {
                     self.notify_error(format!("Theme file not used: {e}"));
                 }
@@ -608,11 +608,11 @@ impl App {
                     FontChoice::Family(name) => Some(name.as_str()),
                 };
                 match settings::set_interface_font(&core.db, family) {
-                    Ok(()) => theme::set_font(family),
+                    Ok(()) => look::set_font(family),
                     Err(e) => self.notify_error(e.to_string()),
                 }
             }
-            SettingsMsg::ReloadTheme => match theme::load(&theme::file(&core.dirs.config)) {
+            SettingsMsg::ReloadTheme => match look::load(&look::file(&core.dirs.config)) {
                 Ok(()) => {
                     self.notice = Some(crate::Notice {
                         error: false,

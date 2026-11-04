@@ -1096,7 +1096,7 @@ impl App {
         let Some(core) = &self.core else {
             return Vec::new();
         };
-        let path = crate::theme::file(&core.dirs.config);
+        let path = crate::look::file(&core.dirs.config);
         let exists = path.exists();
         let file_actions: Element<'_, Message> = if exists {
             row![
@@ -1112,7 +1112,7 @@ impl App {
             )
         };
         let current = match theme::font().family {
-            iced::font::Family::Name(name) if name != theme::DEFAULT_FAMILY => {
+            iced::font::Family::Name(name) if name != crate::look::DEFAULT_FAMILY => {
                 FontChoice::Family(name.to_string())
             }
             _ => FontChoice::Default,
@@ -1121,7 +1121,7 @@ impl App {
             .chain(
                 self.font_families
                     .iter()
-                    .filter(|f| *f != theme::DEFAULT_FAMILY)
+                    .filter(|f| *f != crate::look::DEFAULT_FAMILY)
                     .cloned()
                     .map(FontChoice::Family),
             )
@@ -1132,7 +1132,7 @@ impl App {
                 "Theme",
                 select(pick_list(
                     crate::presets::Preset::ALL,
-                    Some(theme::preset()),
+                    Some(crate::look::preset()),
                     |p| Message::Settings(SettingsMsg::Preset(p)),
                 )),
                 None,

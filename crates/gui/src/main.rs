@@ -15,6 +15,7 @@ mod install;
 mod library;
 mod listen;
 mod login;
+mod look;
 mod maintenance;
 mod motion;
 mod notify;
@@ -91,15 +92,16 @@ fn main() -> iced::Result {
         if let Some(preset) = saved(slatty_core::settings::interface_theme)
             .and_then(|name| presets::Preset::from_key(&name))
         {
-            theme::set_preset(preset);
+            look::set_preset(preset);
         }
-        let (tokens, mistake) = theme::with_preset(&theme::file(&dirs.config), theme::preset());
-        theme::apply(tokens);
+        let (tokens, mistake) = look::with_preset(&look::file(&dirs.config), look::preset());
+        look::apply(tokens);
         if let Some(e) = mistake {
             let _ = THEME_ERROR.set(e);
         }
-        theme::set_font(saved(slatty_core::settings::interface_font).as_deref());
+        look::set_font(saved(slatty_core::settings::interface_font).as_deref());
     }
+    look::list_fonts_with(theme::font_families);
     let backends = graphics::backends(std::env::var_os("WGPU_BACKEND").as_deref(), vulkan_only);
     if backends == Some(wgpu::Backends::VULKAN) {
         // SAFETY: no other thread runs yet; `boot::start` begins the first one.
@@ -873,7 +875,7 @@ impl App {
             if now.is_some() && now != before {
                 self.now = self.now.max(Instant::now());
                 self.arrivals
-                    .open(layer, self.now, theme::tokens().transition);
+                    .open(layer, self.now, look::tokens().transition);
             }
         }
         // Lists made again may have moved the games the couch mode's focus was on.
@@ -882,7 +884,7 @@ impl App {
         let focused = self.focused_cover().map(String::from);
         if focused.as_deref() != self.couch_focus.on() {
             self.now = self.now.max(Instant::now());
-            let lasting = theme::tokens().hover;
+            let lasting = look::tokens().hover;
             let left = self.couch_focus.on().map(String::from);
             for (id, on) in [(left, false), (focused, true)] {
                 if let Some(id) = id {
@@ -894,7 +896,7 @@ impl App {
         match self.home_hero() {
             Some(art) => {
                 let now = self.now.max(Instant::now());
-                if self.home_art.show(art, now, theme::tokens().transition) {
+                if self.home_art.show(art, now, look::tokens().transition) {
                     self.now = now;
                 }
             }
@@ -941,7 +943,7 @@ impl App {
 
     fn fade_in(now: Instant) -> Animation {
         Animation::new(false)
-            .duration(theme::tokens().transition)
+            .duration(look::tokens().transition)
             .easing(Easing::EaseOutCubic)
             .go(true, now)
     }
@@ -1206,7 +1208,7 @@ impl App {
             }
             Message::ShowPage(page) => {
                 if page == Page::Settings && self.font_families.is_empty() {
-                    self.font_families = theme::font_families();
+                    self.font_families = look::font_families();
                 }
                 self.page = page;
                 self.achievements_game = None;
@@ -1372,7 +1374,7 @@ impl App {
             Message::Frame(now) => self.now = now,
             Message::CoverHovered(id, on) => {
                 self.now = self.now.max(Instant::now());
-                self.hovers.set(&id, on, self.now, theme::tokens().hover);
+                self.hovers.set(&id, on, self.now, look::tokens().hover);
             }
             Message::DismissNotice => self.notice = None,
             Message::Notify(msg) => return self.update_notify(msg),
