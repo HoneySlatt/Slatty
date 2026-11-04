@@ -900,6 +900,20 @@ impl App {
         Some((row, col, &self.library[games[col]]))
     }
 
+    /// The game whose cover has the focus, on Home or in Library.
+    pub fn focused_cover(&self) -> Option<&str> {
+        let couch = self.couch.as_ref().filter(|_| self.selected.is_none())?;
+        match couch.tab {
+            Tab::Home => self.home_focus().map(|(_, _, g)| g.id.as_str()),
+            Tab::Library if couch.on_shelves.is_none() => {
+                let games = self.couch_games();
+                let i = *games.get(couch.card.min(games.len().checked_sub(1)?))?;
+                Some(self.library[i].id.as_str())
+            }
+            _ => None,
+        }
+    }
+
     /// Lists made again may have moved the games the focus was on: it finds them where they went,
     /// and keeps its place where its game left. Run after each message, so that the focus is right
     /// before the next view and the next press; not while a game's page shows, which draws no

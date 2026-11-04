@@ -33,6 +33,29 @@ fn couch(app: &App) -> &crate::couch::Couch {
     app.couch.as_ref().expect("couch mode")
 }
 
+/// The focus moving to another cover rings it by degrees while the cover it left goes back, and
+/// frames stop once they are done.
+#[test]
+fn the_focus_moves_from_cover_to_cover_by_degrees() {
+    let mut app = couch_app();
+    settle(&mut app);
+    let first = app.focused_cover().unwrap().to_string();
+    assert_eq!(app.couch_focus.shown(&first, app.now), Some(1.0));
+    nav(&mut app, Nav::Down);
+    let next = app.focused_cover().unwrap().to_string();
+    assert_ne!(next, first);
+    assert!(app.animating());
+    assert!(app.couch_focus.shown(&next, app.now).unwrap() < 1.0);
+    assert!(app.couch_focus.leaving(&first, app.now));
+    settle(&mut app);
+    assert!(!app.animating());
+    assert_eq!(app.couch_focus.shown(&next, app.now), Some(1.0));
+    assert_eq!(app.couch_focus.shown(&first, app.now), Some(0.0));
+    // A move that keeps the focus where it is starts nothing.
+    let _ = app.update(Message::Frame(app.now));
+    assert!(!app.animating());
+}
+
 #[test]
 fn the_couch_mode_opens_from_the_top_bar_and_closes_from_its_menu() {
     let mut app = library_app();

@@ -8,7 +8,7 @@ use iced::Animation;
 use iced::animation::Easing;
 use iced::time::Instant;
 
-/// Covers hovered, or left and still going back, by game id.
+/// Covers hovered (or given the couch mode's focus), or left and still going back, by game id.
 #[derive(Default)]
 pub struct Hovers(Vec<(String, Animation<bool>)>);
 
@@ -37,6 +37,14 @@ impl Hovers {
             .iter()
             .find(|(i, _)| i == id)
             .map(|(_, a)| a.interpolate(0.0, 1.0, now))
+    }
+
+    /// The cover the pointer (or the focus) is on, if any.
+    pub fn on(&self) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(_, a)| a.value())
+            .map(|(i, _)| i.as_str())
     }
 
     /// Whether the cover of `id` was left and is still going back at `now`.

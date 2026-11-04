@@ -337,7 +337,7 @@ impl Tokens {
         );
         out += &noted(
             format!("hover_ms = {}", self.hover.as_millis()),
-            "Hover feedback; 0 turns it off",
+            "Covers hovered or focused; 0 turns it off",
         );
         out
     }
@@ -718,19 +718,16 @@ pub fn veil(amount: f32) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// A cover of the couch mode: ringed with the accent while it has the focus.
-pub fn couch_card(focused: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+/// A cover of the couch mode: ringed with the accent while it has the focus, `focused` from 0 to 1
+/// as the focus comes and goes.
+pub fn couch_card(focused: f32) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_, _| {
         let t = tokens();
         button::Style {
             background: None,
             text_color: t.text,
             border: Border {
-                color: if focused {
-                    t.accent
-                } else {
-                    Color::TRANSPARENT
-                },
+                color: t.accent.scale_alpha(focused),
                 width: 3.0,
                 radius: (t.cover_radius + 4.0).into(),
             },

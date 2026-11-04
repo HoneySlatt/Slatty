@@ -417,6 +417,8 @@ pub struct App {
     pub hovers: motion::Hovers,
     /// Drawers and dialogs coming into place.
     pub arrivals: motion::Arrivals,
+    /// Covers of the couch mode given the focus, or going back once it left.
+    pub couch_focus: motion::Hovers,
     pub now: Instant,
 }
 
@@ -536,6 +538,7 @@ impl Default for App {
             art_shown: Animation::new(true),
             hovers: Default::default(),
             arrivals: Default::default(),
+            couch_focus: Default::default(),
             now: Instant::now(),
         }
     }
@@ -880,6 +883,18 @@ impl App {
         }
         // Lists made again may have moved the games the couch mode's focus was on.
         self.refocus_couch();
+        // The cover given the couch mode's focus shows it by degrees, the one left goes back.
+        let focused = self.focused_cover().map(String::from);
+        if focused.as_deref() != self.couch_focus.on() {
+            self.now = self.now.max(Instant::now());
+            let lasting = theme::tokens().hover;
+            let left = self.couch_focus.on().map(String::from);
+            for (id, on) in [(left, false), (focused, true)] {
+                if let Some(id) = id {
+                    self.couch_focus.set(&id, on, self.now, lasting);
+                }
+            }
+        }
         // Whatever ended (a game, an install, an update) may let a waiting update start.
         let task = Task::batch([task, self.next_update(), self.wanted_icons()]);
         // The gamepad's reader sends nothing while the player is elsewhere.
@@ -928,6 +943,7 @@ impl App {
             || self.art_shown.is_animating(self.now)
             || self.hovers.animating(self.now)
             || self.arrivals.animating(self.now)
+            || self.couch_focus.animating(self.now)
             || self.toasts.iter().any(|t| t.shown.is_animating(self.now))
     }
 

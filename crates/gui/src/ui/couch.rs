@@ -21,6 +21,9 @@ use crate::library::Shelf;
 use crate::theme::{self, bold, semibold, tokens};
 use crate::{App, Message};
 
+/// How much a cover's art grows inside its ring while it has the focus: a twentieth.
+const FOCUS_ZOOM: f32 = 0.05;
+
 /// The gamepad buttons the hints name.
 #[derive(Clone, Copy)]
 enum Glyph {
@@ -204,12 +207,18 @@ impl App {
         focused: bool,
     ) -> Element<'a, Message> {
         let (width, height) = (width - 2.0 * RING, (width - 2.0 * RING) * 4.0 / 3.0);
+        // By degrees as the focus comes and goes; at once where the move was not seen.
+        let shown = self
+            .couch_focus
+            .shown(&g.id, self.now)
+            .unwrap_or(if focused { 1.0 } else { 0.0 });
         let art: Element<'a, Message> = match self.cover_at(&g.id, width) {
             Some(h) => image(h)
                 .content_fit(ContentFit::Cover)
                 .width(width)
                 .height(height)
                 .border_radius(tokens().cover_radius)
+                .scale(1.0 + FOCUS_ZOOM * shown)
                 .into(),
             None => container(text(&g.title).size(16).align_x(Alignment::Center))
                 .padding(12)
@@ -221,7 +230,7 @@ impl App {
         button(art)
             .padding(RING)
             .on_press(Message::Select(g.id.clone()))
-            .style(theme::couch_card(focused))
+            .style(theme::couch_card(shown))
             .into()
     }
 

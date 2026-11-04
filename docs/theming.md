@@ -63,7 +63,7 @@ cover_radius = 6            # Corners of game covers
 [motion]
 transition_ms = 180         # Pages, drawers, dialogs coming into place; 0 turns it off
 transition_rise = 8         # How far a new page rises, in pixels
-hover_ms = 160              # Hover feedback: a cover's title and buttons; 0 turns it off
+hover_ms = 160              # A cover hovered, or given the couch mode's focus; 0 turns it off
 ```
 
 Colours are `#rrggbb`, or `#rrggbbaa` with transparency. Radii and the rise are in pixels, and must
