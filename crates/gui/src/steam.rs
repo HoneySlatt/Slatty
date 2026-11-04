@@ -4,7 +4,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::library::LibraryGame;
 use slatty_core::steam::client::{self, Action};
 use slatty_core::steam::library::SteamLibrary;

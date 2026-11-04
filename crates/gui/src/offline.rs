@@ -5,8 +5,8 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use iced::Task;
-use iced::futures::Stream;
+use crate::task::Task;
+use futures::Stream;
 use slatty_core::account::Account;
 use slatty_core::installer::{DOWNLOADING, Progress, QUEUED};
 use slatty_core::offline::{self, Offer, OfflineJob};

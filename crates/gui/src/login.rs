@@ -1,6 +1,6 @@
 //! Signing in through the browser, signing out, and the account's avatar.
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::account::{Account, AccountInfo};
 use slatty_core::library::{self, LibraryCache};
 use slatty_core::overview;

@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::installer::{DOWNLOADING, InstallJob, PAUSED, QUEUED};
 use slatty_core::offline::OfflineJob;
 

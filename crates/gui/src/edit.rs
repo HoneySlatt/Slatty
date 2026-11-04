@@ -5,8 +5,10 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use iced::Point;
 use iced::widget::image;
-use iced::{Point, Task};
+
+use crate::task::{Effect, Task};
 use slatty_core::custom::{self, ImageChange};
 use slatty_core::library::LibraryGame;
 use slatty_core::steamgriddb;
@@ -504,5 +506,5 @@ impl App {
 
 /// Scrolls the edit form down to the SteamGridDB search, below the pictures.
 fn to_picker() -> Task<Message> {
-    iced::widget::operation::snap_to_end(FORM)
+    Task::effect(Effect::SnapToEnd(FORM))
 }

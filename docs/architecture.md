@@ -139,6 +139,7 @@ The interface follows Iced's state, message, update and view split:
 | `notify` | Cards in the window, each sliding in, desktop notifications |
 | `motion` | Covers answering the pointer or the couch mode's focus (shown by degrees, going back once left), drawers and dialogs coming into place, each by its layer, the couch mode's Home fading its key art into the next; frames drawn only while one moves |
 | `work` | Shared helpers for background work: GOG tokens, throttled progress |
+| `task` | Slatty's own `Task`: background work and what it asks of the window (scroll, focus, clipboard, full screen, where a part of the page is), working as Iced's and handed to it (`into_iced`), so that the state does not depend on the interface framework |
 | `theme`, `presets`, `icons` | Design tokens and widget styles, built-in themes, Lucide icons |
 | `ui/*` | The views: top bar and layers (`mod`), building blocks (`widgets`), pages (`library`, `game`, `achievements`, `settings`, `downloads`), the list of games beside the library (`sidebar`), drawers and dialogs (`install`, `installers`, `game_settings`, `manage`, `cloud`, `edit`, `add`, `panels`), the couch mode's pages and layers (`couch`), text shown to the user (`format`), `even_grid`, `pointer`, `slide` (a drawer or a notification card moved without being narrowed) |
 

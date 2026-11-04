@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use iced::Task;
+use crate::task::Task;
 use iced::widget::image;
 use tokio::sync::Semaphore;
 

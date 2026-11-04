@@ -4374,6 +4374,7 @@ name = "slatty-gui"
 version = "0.2.0"
 dependencies = [
  "chrono",
+ "futures",
  "gilrs",
  "iced",
  "iced_test",

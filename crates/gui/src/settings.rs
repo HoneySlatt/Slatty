@@ -3,7 +3,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::install::Platform;
 use slatty_core::secret::Secret;
 use slatty_core::{credentials, settings, steamgriddb};
@@ -168,18 +168,23 @@ impl SettingsView {
 
 /// Measures where each part of the Settings page starts.
 pub fn measure_sections() -> Task<Message> {
-    use iced::widget::selector::{find, id};
-    find(id(Section::Account.id())).then(|first| {
-        let first = first.map(|t| t.bounds().y);
-        Task::batch(Section::ALL.map(|s| {
-            find(id(s.id())).and_then(move |card| match first {
-                Some(f) => Task::done(Message::Settings(SettingsMsg::Measured(
-                    s,
-                    card.bounds().y - f,
-                ))),
-                None => Task::none(),
-            })
-        }))
+    let ids = std::iter::once(Section::Account)
+        .chain(Section::ALL)
+        .map(Section::id)
+        .collect();
+    crate::task::tops(ids).then(|tops| {
+        let first = tops[0];
+        Task::batch(
+            Section::ALL
+                .iter()
+                .zip(&tops[1..])
+                .map(|(&s, card)| match first.zip(*card) {
+                    Some((f, card)) => {
+                        Task::done(Message::Settings(SettingsMsg::Measured(s, card - f)))
+                    }
+                    None => Task::none(),
+                }),
+        )
     })
 }
 
@@ -427,30 +432,21 @@ impl App {
                 }
             }
             SettingsMsg::Show(section) => {
-                use iced::widget::selector::{find, id};
                 self.settings_view.section = section;
                 // Its offset in the page: how far its card is below the first one.
-                return find(id(section.id())).then(|card| {
-                    find(id(Section::Account.id())).map(move |first| {
-                        let top = |t: &Option<_>| {
-                            t.as_ref()
-                                .map(|t: &iced::widget::selector::Target| t.bounds().y)
-                        };
-                        Message::Settings(SettingsMsg::ScrollTo(
-                            top(&card).zip(top(&first)).map(|(c, f)| c - f),
-                        ))
-                    })
+                return crate::task::tops(vec![section.id(), Section::Account.id()]).map(|tops| {
+                    Message::Settings(SettingsMsg::ScrollTo(
+                        tops[0].zip(tops[1]).map(|(c, f)| c - f),
+                    ))
                 });
             }
             SettingsMsg::ScrollTo(Some(y)) => {
                 self.settings_view.target = Some(y);
-                return iced::widget::operation::scroll_to(
-                    SETTINGS_SCROLL,
-                    iced::widget::operation::AbsoluteOffset {
-                        x: None,
-                        y: Some(y),
-                    },
-                );
+                return Task::effect(crate::task::Effect::ScrollTo {
+                    id: SETTINGS_SCROLL,
+                    x: None,
+                    y: Some(y),
+                });
             }
             SettingsMsg::ScrollTo(None) => {}
             SettingsMsg::Scrolled { offset, max } => {

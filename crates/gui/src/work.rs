@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use iced::futures::{SinkExt, Stream};
+use futures::{SinkExt, Stream};
 use slatty_core::account::Account;
 use slatty_core::installer::Progress;
 
@@ -39,7 +39,7 @@ where
     F: FnOnce(Throttle<P>) -> Fut + Send + 'static,
     Fut: Future<Output = Message> + Send,
 {
-    iced::stream::channel(64, async move |mut output| {
+    crate::task::channel(64, async move |mut output| {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let run = work(Throttle {
             tx,

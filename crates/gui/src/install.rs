@@ -4,8 +4,8 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use iced::Task;
-use iced::futures::Stream;
+use crate::task::Task;
+use futures::Stream;
 use slatty_core::account::Account;
 use slatty_core::epic::library::EpicGame;
 use slatty_core::install::{Install, Platform};

@@ -1,7 +1,7 @@
 //! Launching a game and following its session.
 
-use iced::Task;
-use iced::futures::{SinkExt, Stream};
+use crate::task::Task;
+use futures::{SinkExt, Stream};
 use slatty_core::play::{self, PlayEvent, PlayRequest};
 use slatty_core::session;
 use tokio::sync::mpsc::UnboundedSender;
@@ -184,7 +184,7 @@ fn play_stream(
     game_id: String,
     stop: tokio::sync::mpsc::UnboundedReceiver<()>,
 ) -> impl Stream<Item = PlayMsg> {
-    iced::stream::channel(64, async move |mut output| {
+    crate::task::channel(64, async move |mut output| {
         let req = PlayRequest {
             game_id,
             cloud: true,

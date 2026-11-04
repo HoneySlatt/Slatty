@@ -1,6 +1,6 @@
 //! Cloud saves of an installed game: check, sync, and the choice that settles a conflict.
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::cloud::{
     self,
     plan::Action,

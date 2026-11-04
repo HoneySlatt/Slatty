@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::installer::{DlcChoice, Progress};
 use slatty_core::maintenance::{Change, UninstallReport};
 use tokio_util::sync::CancellationToken;

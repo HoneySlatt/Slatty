@@ -8,7 +8,9 @@ use std::rc::Rc;
 
 use iced::widget::image;
 use iced::widget::scrollable::Viewport;
-use iced::{Event, Subscription, Task, mouse};
+use iced::{Event, Subscription, mouse};
+
+use crate::task::Task;
 use slatty_core::custom::ImageChange;
 use slatty_core::library::LibraryGame;
 

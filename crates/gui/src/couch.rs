@@ -7,7 +7,9 @@ use std::ffi::OsStr;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use iced::{Size, Task};
+use iced::Size;
+
+use crate::task::{Effect, Task};
 use slatty_core::installer::Progress;
 use slatty_core::library::LibraryGame;
 
@@ -1335,10 +1337,5 @@ fn game_at<'a>(library: &'a [LibraryGame], row: &HomeRow, col: usize) -> &'a str
 }
 
 fn fullscreen(on: bool) -> Task<Message> {
-    let mode = if on {
-        iced::window::Mode::Fullscreen
-    } else {
-        iced::window::Mode::Windowed
-    };
-    iced::window::oldest().and_then(move |id| iced::window::set_mode(id, mode))
+    Task::effect(Effect::Fullscreen(on))
 }

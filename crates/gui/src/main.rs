@@ -24,6 +24,7 @@ mod scaled;
 mod settings;
 mod sidebar;
 mod steam;
+mod task;
 #[cfg(test)]
 mod tests;
 mod theme;
@@ -46,8 +47,8 @@ use settings::SettingsMsg;
 
 use iced::animation::Easing;
 use iced::time::Instant;
-use iced::widget::{image, operation};
-use iced::{Animation, Size, Subscription, Task, keyboard};
+use iced::widget::image;
+use iced::{Animation, Size, Subscription, keyboard};
 use slatty_core::account::AccountInfo;
 use slatty_core::achievements::Achievement;
 use slatty_core::db::Db;
@@ -58,6 +59,7 @@ use slatty_core::library::{LibraryCache, LibraryGame, NotInstallable};
 use slatty_core::overview::GameOverview;
 use slatty_core::paths::Dirs;
 use slatty_core::session::Playtime;
+use task::{Effect, Task};
 use tokio::sync::Semaphore;
 
 fn main() -> iced::Result {
@@ -111,7 +113,14 @@ fn main() -> iced::Result {
     std::thread::spawn(|| {
         iced::advanced::graphics::text::font_system();
     });
-    let mut app = iced::application(App::boot, App::update, App::view);
+    let mut app = iced::application(
+        || {
+            let (app, task) = App::boot();
+            (app, task.into_iced())
+        },
+        |app: &mut App, message| app.update(message).into_iced(),
+        App::view,
+    );
     for font in theme::FONTS {
         app = app.font(font);
     }
@@ -785,9 +794,7 @@ impl App {
                     async { boot::started().await.map(Box::new) },
                     Message::Booted,
                 ),
-                iced::window::latest()
-                    .and_then(iced::window::scale_factor)
-                    .map(Message::Rescaled),
+                task::scale_factor().map(Message::Rescaled),
             ]),
         )
     }
@@ -936,7 +943,12 @@ impl App {
             self.achievements_view = None;
             if let Some(view) = back {
                 let to = view.absolute_offset();
-                return Task::batch([task, operation::scroll_to(library::GRID, to)]);
+                let scroll = Task::effect(Effect::ScrollTo {
+                    id: library::GRID,
+                    x: Some(to.x),
+                    y: Some(to.y),
+                });
+                return Task::batch([task, scroll]);
             }
         }
         task
@@ -1172,7 +1184,7 @@ impl App {
             Message::Booted(Err(e)) => self.fatal = Some(e),
             Message::OpenLoginPage => self.open_login_page(),
             Message::LoginInput(v) => self.login_input = v,
-            Message::PasteLogin => return iced::clipboard::read().map(Message::Pasted),
+            Message::PasteLogin => return task::read_clipboard().map(Message::Pasted),
             Message::Pasted(Some(v)) => self.login_input = v.trim().to_string(),
             Message::Pasted(None) => self.notify_error("The clipboard is empty.".into()),
             Message::SubmitLogin => return self.submit_login(),
@@ -1383,7 +1395,7 @@ impl App {
             Message::CloseRequested => {
                 let running = self.running_work();
                 if running.is_empty() {
-                    return iced::exit();
+                    return Task::effect(Effect::Exit);
                 }
                 self.quit_confirm = Some(running);
             }
@@ -1396,14 +1408,14 @@ impl App {
             }
             // Work is left as it stands: downloads and updates resume at the next start, as after a
             // crash.
-            Message::ConfirmQuit => return iced::exit(),
+            Message::ConfirmQuit => return Task::effect(Effect::Exit),
             Message::Key(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                 use keyboard::key::Named;
                 match key {
                     keyboard::Key::Named(Named::Tab) if modifiers.shift() => {
-                        return operation::focus_previous();
+                        return Task::effect(Effect::FocusPrevious);
                     }
-                    keyboard::Key::Named(Named::Tab) => return operation::focus_next(),
+                    keyboard::Key::Named(Named::Tab) => return Task::effect(Effect::FocusNext),
                     keyboard::Key::Named(Named::Escape) => self.go_back(),
                     _ => {}
                 }

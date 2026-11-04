@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::added::{self, NewGame};
 use slatty_core::emulated::{self, Emulator};
 use slatty_core::install::Install;

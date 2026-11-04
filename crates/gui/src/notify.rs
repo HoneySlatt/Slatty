@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use iced::Task;
+use crate::task::Task;
 
 use crate::{App, Message};
 

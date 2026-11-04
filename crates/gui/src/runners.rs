@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::protons::{self, Release, Source, Stage};
 use tokio_util::sync::CancellationToken;
 

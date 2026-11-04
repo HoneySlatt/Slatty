@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::installer::InstallRecord;
 use slatty_core::maintenance::{self, Change};
 

@@ -7,8 +7,8 @@ use std::fmt;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use iced::Task;
-use iced::futures::{SinkExt, Stream, StreamExt};
+use crate::task::Task;
+use futures::{SinkExt, Stream, StreamExt};
 use slatty_core::db::Db;
 use slatty_core::emulated::Emulator;
 use slatty_core::library::{self, LibraryCache, LibraryGame};
@@ -300,7 +300,7 @@ impl App {
                     return Vec::new();
                 };
                 let (http, tokens) = (&core.http, &tokens);
-                iced::futures::stream::iter(ids)
+                futures::stream::iter(ids)
                     .map(|id| async move {
                         let minutes = slatty_core::playtime::total_minutes(http, tokens, &id).await;
                         minutes.ok().map(|m| (id, m))
@@ -692,11 +692,11 @@ impl App {
 }
 
 fn overview_stream(core: Core, user_id: String, ids: Vec<String>) -> impl Stream<Item = Message> {
-    iced::stream::channel(16, async move |mut output| {
+    crate::task::channel(16, async move |mut output| {
         let tokens = tokens_for(&core, &user_id).await;
         if let Ok(tokens) = tokens {
             let (http, tokens) = (&core.http, &tokens);
-            let mut results = iced::futures::stream::iter(ids)
+            let mut results = futures::stream::iter(ids)
                 .map(|id| async move {
                     let r = overview::fetch(http, tokens, &id).await.map_err(err);
                     (id, r)

@@ -5,7 +5,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use iced::futures::{SinkExt, Stream};
+use futures::{SinkExt, Stream};
 use iced::keyboard;
 
 /// A move of the couch mode. Buttons are named after the Xbox layout, which the hints show.
@@ -180,7 +180,7 @@ const IDLE: Duration = Duration::from_secs(1);
 
 /// The moves of every gamepad connected, now or later.
 pub fn moves() -> impl Stream<Item = Nav> {
-    iced::stream::channel(32, async |mut output| {
+    crate::task::channel(32, async |mut output| {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let started = std::thread::Builder::new()
             .name("slatty-gamepads".into())

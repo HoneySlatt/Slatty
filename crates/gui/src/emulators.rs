@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::db::Db;
 use slatty_core::emulated::{self, Emulator};
 use slatty_core::install::Install;

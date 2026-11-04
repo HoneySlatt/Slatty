@@ -1,6 +1,6 @@
 //! Achievements of a game: loading them, and manual changes once the user confirms.
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::achievements::{self, Achievement};
 use slatty_core::install::Install;
 use slatty_core::library::LibraryGame;

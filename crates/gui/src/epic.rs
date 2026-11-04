@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use iced::Task;
+use crate::task::Task;
 use slatty_core::epic::auth;
 use slatty_core::epic::library::{self, EpicGame, EpicLibrary};
 use slatty_core::store;
@@ -259,8 +259,8 @@ impl App {
         }
         let done = account.clone();
         Task::run(
-            iced::stream::channel(16, async move |mut output| {
-                use iced::futures::{SinkExt, StreamExt};
+            crate::task::channel(16, async move |mut output| {
+                use futures::{SinkExt, StreamExt};
                 use slatty_core::epic::achievements::{EpicGraphql, fetch};
                 if let Ok(tokens) = auth::fresh_as(&core.http, &core.db, &core.dirs, &account).await
                 {
@@ -270,7 +270,7 @@ impl App {
                     };
                     let locale = slatty_core::epic::launch::system_locale();
                     let (graphql, tokens, locale) = (&graphql, &tokens, &locale);
-                    let mut counted = iced::futures::stream::iter(games)
+                    let mut counted = futures::stream::iter(games)
                         .map(|(id, namespace)| async move {
                             let list = fetch(graphql, &tokens.account_id, &namespace, locale).await;
                             (
