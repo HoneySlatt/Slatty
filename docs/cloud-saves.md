@@ -91,9 +91,10 @@ not there.
   - the cloud is empty while history says it had saves (another account, a service problem);
   - the save folder's path changed since the last sync, another account synced the same folder
     since (accounts that own a game share its prefix), or the folder was deleted and made again
-    since (its device and inode changed). Its history is then ignored, and files that differ become
-    conflicts, so a new game is never uploaded over your progress. A folder moved to another disk
-    or restored from a backup counts as made again, once.
+    since (its device, inode or creation time changed: ext4 can give a new folder the inode of one
+    just deleted). Its history is then ignored, and files that differ become conflicts, so a new
+    game is never uploaded over your progress. A folder moved to another disk or restored from a
+    backup counts as made again, once.
 - **Cloud names that cannot be trusted are left out** and reported: a name containing `..` or an
   absolute path, and pairs of names that differ only by case (`Save.dat`, `save.dat`: one file on
   Windows), whose local file is then left alone too. The location's other saves still sync, and
@@ -158,6 +159,14 @@ same snapshots.
   again just before, and holds the files it does not change as that one had them; a snapshot
   another computer stores while it is read and sent is not seen, and its changes to those other
   files are not in the new one, which becomes the newest. Both stay in Epic's cloud.
+- **A folder made again with the inode of the old one is not always seen.** Its creation time
+  tells it apart, but not on a filesystem that keeps none (ext4 formatted with 128-byte inodes,
+  some network filesystems), nor when it was made again within the same tick of Linux's clock (a
+  few milliseconds), nor on Windows when a FAT32 or exFAT drive gave it the old one's index and
+  Windows its creation time (it does so for a name made again within 15 seconds), nor when the
+  folder was last synced by Slatty 0.2 or earlier, which recorded no creation time: the first sync
+  after the update trusts the folder and records it. Going back to 0.2 afterwards makes every
+  synced folder count as made again, once.
 - **Ignored marker.** Cloud entries whose hash is `aadd86936a80ee8a369579c3926f1b3c` are ignored, as
   heroic-gogdl does. Their meaning is not known: it is neither an empty file nor an empty gzip
   stream.

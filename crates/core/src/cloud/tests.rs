@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
 use super::plan::{ConflictKind, Warning};
-use super::sync::{Prefer, SyncOptions, SyncReport, SyncTarget, sync};
+use super::sync::{Prefer, SyncOptions, SyncReport, SyncTarget, folder_identity, sync};
 use super::transport::memory::MemoryCloud;
 use super::transport::{CloudTransport, IGNORED_REMOTE_HASH, RemoteEntry};
 use crate::db::Db;
@@ -56,6 +56,24 @@ impl Env {
 
     async fn sync(&self, opts: SyncOptions) -> SyncReport {
         self.sync_as("u", &self.root(), opts).await
+    }
+
+    /// Records that the save folder last synced had the device and inode the folder now has, as
+    /// when the folder was deleted and ext4 gave the inode back to the one made again.
+    fn reuse_inode(&self) {
+        let now = folder_identity(&self.root()).unwrap();
+        let conn = self.db.conn();
+        let was: String = conn
+            .query_row("SELECT identity FROM sync_roots", [], |r| r.get(0))
+            .unwrap();
+        // `device:inode`, then what else tells the folder apart, kept from the old folder.
+        let inode = |id: &str| id.splitn(3, ':').take(2).collect::<Vec<_>>().join(":");
+        let rest = &was[inode(&was).len()..];
+        conn.execute(
+            "UPDATE sync_roots SET identity = ?1",
+            [format!("{}{rest}", inode(&now))],
+        )
+        .unwrap();
     }
 
     fn remote(&self, rel: &str) -> Option<String> {
@@ -787,7 +805,9 @@ async fn history_is_not_trusted_after_another_account_synced_the_folder() {
 /// The save folder was deleted outside the launcher (a broken prefix made again), the game
 /// started offline, and saved a new game where the progress was: at the next sync the folder is
 /// not empty, so only its identity tells it is another folder. The new game is not uploaded over
-/// the progress; the file becomes a conflict.
+/// the progress; the file becomes a conflict. The new folder is given the old one's device and
+/// inode, as ext4 does at times: its creation time still tells them apart, so the test needs a
+/// temporary folder on a filesystem that keeps creation times.
 #[tokio::test]
 async fn a_save_folder_made_again_does_not_reuse_its_history() {
     let env = Env::new("made-again");
@@ -797,7 +817,10 @@ async fn a_save_folder_made_again_does_not_reuse_its_history() {
     assert_eq!(env.remote("a.sav").as_deref(), Some("progress"));
 
     std::fs::remove_dir_all(env.root()).unwrap();
+    // The clock that dates a new folder moves by ticks of up to 10 ms.
+    std::thread::sleep(std::time::Duration::from_millis(20));
     env.write("a.sav", "new game");
+    env.reuse_inode();
     let r = env.sync(SyncOptions::default()).await;
     assert_eq!(
         r.conflicts,
@@ -823,6 +846,33 @@ async fn a_save_folder_made_again_does_not_reuse_its_history() {
     env.write("a.sav", "progress, later");
     let r = env.sync(SyncOptions::default()).await;
     assert_eq!(r.uploaded, ["a.sav"]);
+}
+
+/// Slatty 0.2 recorded a folder's device and inode alone: the same folder is still trusted after
+/// the update, its change uploaded rather than a conflict, and its creation time recorded from then.
+#[tokio::test]
+async fn a_save_folder_recorded_without_its_creation_time_is_still_trusted() {
+    let env = Env::new("identity-0.2");
+    env.write("a.sav", "progress");
+    env.sync(SyncOptions::default()).await;
+    let identity = || -> String {
+        env.db
+            .conn()
+            .query_row("SELECT identity FROM sync_roots", [], |r| r.get(0))
+            .unwrap()
+    };
+    let now = identity();
+    let inode = now.splitn(3, ':').take(2).collect::<Vec<_>>().join(":");
+    env.db
+        .conn()
+        .execute("UPDATE sync_roots SET identity = ?1", [&inode])
+        .unwrap();
+
+    env.write("a.sav", "progress, later");
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(r.conflicts.is_empty());
+    assert_eq!(r.uploaded, ["a.sav"]);
+    assert_eq!(identity(), now);
 }
 
 /// A cloud whose first listing waits until `gate` is opened.

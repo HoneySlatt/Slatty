@@ -93,8 +93,8 @@ UPDATE installs SET isolated = 0 WHERE platform = 'linux' OR runner NOT LIKE '%"
     r#"
 ALTER TABLE install_jobs ADD COLUMN proton TEXT;
 "#,
-    // Which folder a save location was last synced in (device and inode): one deleted and made
-    // again since is not the folder its history describes.
+    // Which folder a save location was last synced in (`cloud::sync::folder_identity`): one deleted
+    // and made again since is not the folder its history describes.
     r#"
 ALTER TABLE sync_roots ADD COLUMN identity TEXT;
 "#,

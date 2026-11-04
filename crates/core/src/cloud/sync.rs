@@ -136,7 +136,7 @@ pub async fn sync<T: CloudTransport>(
                 || stored
                     .identity
                     .zip(folder_identity(target.root))
-                    .is_some_and(|(was, is)| was != is)
+                    .is_some_and(|(was, is)| !same_folder(&was, &is))
         }
         None => false,
     };
@@ -640,10 +640,31 @@ fn stored_root(t: &SyncTarget<'_>) -> Result<Option<StoredRoot>> {
         .optional()?)
 }
 
-/// Which folder `root` is (device and inode): a folder deleted and made again at the same path
-/// (a broken prefix made again) is another one, whose files the history does not describe.
-fn folder_identity(root: &Path) -> Option<String> {
-    crate::platform::identity(root, true).map(|i| format!("{}:{}", i.device, i.file))
+/// Which folder `root` is: a folder deleted and made again at the same path (a broken prefix made
+/// again) is another one, whose files the history does not describe. `device:inode`, then
+/// `:seconds.nanoseconds` of its creation where the filesystem keeps it: ext4 can give a new
+/// folder the inode of one just deleted.
+pub(super) fn folder_identity(root: &Path) -> Option<String> {
+    let i = crate::platform::identity(root, true)?;
+    Some(match i.created {
+        Some((s, ns)) => format!("{}:{}:{s}.{ns:09}", i.device, i.file),
+        None => format!("{}:{}", i.device, i.file),
+    })
+}
+
+/// Whether two `folder_identity`s name the same folder. A creation time is compared only when both
+/// have one: identities recorded by Slatty 0.2 and earlier have none, and stay trusted.
+fn same_folder(was: &str, is: &str) -> bool {
+    fn split(id: &str) -> (&str, Option<&str>) {
+        match id.match_indices(':').nth(1) {
+            Some((at, _)) => (&id[..at], Some(&id[at + 1..])),
+            None => (id, None),
+        }
+    }
+    match (split(was), split(is)) {
+        ((was, Some(born)), (is, Some(now))) => was == is && born == now,
+        ((was, _), (is, _)) => was == is,
+    }
 }
 
 /// Whether another account synced the same folder since this one last did (accounts that own the
