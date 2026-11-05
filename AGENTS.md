@@ -13,8 +13,7 @@ Rules for AI agents working on Slatty. Read this file fully at the start of ever
 - It handles people's accounts, saves and disks: **safety comes before features**.
 - 0.2.0 is released, on Linux; the Windows port is under way.
 
-Agents develop it; the owner sets its direction and validates its decisions. Anyone must be able to
-understand it from the repository alone. Documentation is part of every deliverable.
+Anyone must be able to understand it from the repository alone.
 
 ## Read before working
 
@@ -22,16 +21,14 @@ understand it from the repository alone. Documentation is part of every delivera
 - When planning, or when the task touches a decision: [docs/ROADMAP.md](docs/ROADMAP.md)
   (direction, stages, quality bar), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
   [docs/adr/](docs/adr/README.md). Never decide again what an ADR decided.
-- [docs/compatibility.md](docs/compatibility.md): what was checked against the real services.
 - Before touching `core/src/cloud`: [docs/cloud-saves.md](docs/cloud-saves.md).
 
-You remember nothing from earlier sessions. What is not written in these files is lost.
+You remember nothing from earlier sessions: what is not in these files is lost.
 
 ## Scope
 
 - The current milestone, or what the owner asks. A request that changes the plan goes into the PLAN.
 - No later stage, no abstraction prepared for one. Nothing is built because the roadmap mentions it.
-- Experience contradicts the roadmap: propose a change; once accepted, record it in an ADR.
 - A task needs something out of scope: stop and say so.
 - Iced receives bug fixes only; every piece of interface work waits for slime-ui
   ([ADR-0020](docs/adr/0020-gpui-set-aside-for-slime-ui.md)). No other interface framework.
@@ -46,11 +43,10 @@ nix develop -c cargo build --workspace              # last: people run target/de
 nix develop .#windows -c cargo check --workspace    # the Windows build, from Linux
 ```
 
-- `scripts/check.sh` says at its head what it runs.
 - Run the program on a throwaway profile, never on the owner's data
   ([testing.md](docs/testing.md#the-application-at-10000-games)).
-- [docs/testing.md](docs/testing.md) has the snapshots, the benchmarks, and the tests that need real
-  Proton, Comet or bubblewrap (isolation): run those of the area you change.
+- [docs/testing.md](docs/testing.md) has where tests live, their fakes, the snapshots, the
+  benchmarks, and the tests that need real Proton, Comet or bubblewrap: run those of your area.
 
 ## Definition of done
 
@@ -63,8 +59,7 @@ nix develop .#windows -c cargo check --workspace    # the Windows build, from Li
 - Every document affected is updated and reread as a newcomer would.
 - Every decision a newcomer would question is an ADR.
 
-Never report as working what was not verified. Say what was not, and why. A check against GOG,
-Steam, Epic or Windows that was not run for real is said so.
+A check against GOG, Steam, Epic or Windows that was not run for real is said so.
 
 ## Things an agent must not do on its own
 
@@ -79,8 +74,8 @@ Ask the owner first, every time:
 - **Touch real user data.** Tests use `Dirs::under(<temporary folder>)` and `Db::in_memory()`,
   never `Dirs::from_system()`. Never edit or delete under `~/.local/share/slatty`,
   `~/.cache/slatty`, `~/.config/slatty`, a game folder or a Wine prefix.
-- **Change the system.** No `sudo`, no system configuration: say what to run.
-- **Publish.** No push, remote branch, issue, pull request or release unless asked.
+- **Publish.** No tag, release or registry upload, and no pull request or comment on anyone
+  else's repository.
 - **Add a dependency.** Prefer the standard library or a crate in `Cargo.lock`; justify a new one.
   Audit after adding or updating one ([CONTRIBUTING.md](CONTRIBUTING.md#dependencies)).
 
@@ -94,7 +89,7 @@ Ask the owner first, every time:
 - Network services sit behind traits with in-memory fakes, new ones too.
 - The interface follows the module you change and [its conventions](docs/ARCHITECTURE.md#interface):
   nothing slow on its thread, views never name a colour, dialogs are layers over the page.
-- Interface text is in English, short and plain.
+- Interface text is short and plain.
 
 ### Performance
 
@@ -153,66 +148,43 @@ environment or the tests that run Proton: NixOS has no `/bin/bash`, umu cannot s
 
 ## Tests
 
-- Every behaviour change has a test; a bug fix starts with a failing one.
 - Anything that writes or deletes user data has a test.
 - Test data is visibly fake: `[FAKE]` titles, made-up ids; never real accounts, tokens or saves.
-- Where tests live, their fakes and helpers: [docs/testing.md](docs/testing.md).
 
 ## Code rules
 
-- The least code that solves the problem: no abstraction without a second use, no option nobody
-  asked for, no handling of impossible cases. Match the surrounding code.
-- No reimplementation of the standard library without a measurement.
-- Every `unsafe` block has a `// SAFETY:` comment.
+- Match the surrounding code. No reimplementation of the standard library without a measurement.
 - Comments say what the code cannot: a reason, a limit, a source. No commented-out code.
 - Doc comments describe behaviour in plain sentences ("Whether…", "Starts what downloads next…").
 - Search for an existing helper first. One way to do a thing; two found: unify or report.
-- Edit Rust with an editor tool, never `sed` or `perl`.
-- Keep changes surgical. Remove what your change leaves unused; report other dead code, or note it
-  in the PLAN's known debt.
+- Edit Rust with an editor tool, never `sed` or `perl`. Dead code you find goes to the PLAN's debt.
 - Follow [ARCHITECTURE.md](docs/ARCHITECTURE.md#rules-every-part-follows) and the ADRs; where none
   covers a case, propose an ADR. Report drift from them; do not work around it.
 
 ## Documentation
 
-- The reader is a competent Rust developer who has never seen the project.
-- It describes the code as it is now. Wrong documentation is worse than none.
+- It describes the code as it is now, for a Rust developer who has never seen the project. Wrong
+  documentation is worse than none; a change that leaves a document wrong is not finished.
 - No reference to conversations the reader cannot see.
 - Coined terms are defined where first used and in [docs/glossary.md](docs/glossary.md).
 - Limits and debt are stated plainly; a partial feature is not presented as complete.
 - Every public item says what it does, its invariants, its errors and its panics.
 - Each fact has one home; others link to it
   ([CONTRIBUTING.md](CONTRIBUTING.md#documentation) says which).
-- A change that leaves a document wrong is not finished.
 
 ## Commits
 
 - One change per commit, once `scripts/check.sh` passes, added by its paths, never `git add -A`.
-- The subject, imperative, says what changes for the user; the body says why, with measurements
-  for speed.
+- Commit, push to `main` and open issues without asking once the checks pass; done means CI green.
+- The subject, imperative, says what changes for the user; the body says why, with figures for
+  speed.
 
-## When to stop and ask
+## Stopping, reporting, several agents
 
-Before a decision no ADR covers, a new dependency, a request against the roadmap or an ADR, a plan
-that turns out wrong, a milestone larger than expected, or deleting or rewriting much of the code. Give the
-options, their trade-offs in plain terms and a recommendation for the long term, one at a time. Do
-not work around a problem to keep going.
-
-## Reporting
-
-After a reviewing agent on the strongest model has checked the milestone against this file, the
-ADRs and the quality bar, report to the owner in French: what was done; the choices, why, and the
-alternatives rejected; what to read first; the figures measured; shortcuts and debt; what was not
-verified; the next step, on the owner's go. The next milestone starts in a new session unless the
-owner says to continue.
-
-## Working with several agents
-
-- One milestone per agent, as [docs/PLAN.md](docs/PLAN.md) assigns it.
-- Shared files (PLAN.md, ARCHITECTURE.md, `Cargo.toml`, `Cargo.lock`, `flake.nix`): one agent at a
-  time.
-- Delegate broad searches and reviews to subagents; keep their conclusions.
-
-## Language
-
-Everything in the repository is in English. Talk to the owner in French.
+- Stop and ask before a decision no ADR covers, a request against the roadmap or an ADR, a plan
+  that turns out wrong or a milestone larger than expected. Never work around a problem to go on.
+- A milestone closes with a review on the strongest model against this file, the ADRs and the
+  quality bar, then a report to the owner: what was done, the choices and those rejected, what to
+  read first, the figures, the debt, what was not verified, the next step.
+- One milestone per agent, as the PLAN assigns it. Shared files (PLAN.md, ARCHITECTURE.md,
+  `Cargo.toml`, `Cargo.lock`, `flake.nix`): one agent at a time.
