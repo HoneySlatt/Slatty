@@ -23,9 +23,9 @@ In sway 1.12 without a screen, 3840×2160 at 240 Hz, scale 1.5, the window tiled
 |---|---|---|---|
 | Start, warm: library in the state / shown / every cover shown (ms) | 71 (66–82) / 530 (518–576) / 663 (651–743) | 70 (67–79) / 530 (521–545) / 665 (658–683) | Shown ≤ 95 |
 | Start, cold: the same (ms) | 156 (151–184) / 636 (619–662) / 764 (746–796) | 155 (151–169) / 627 (615–656) / 753 (744–799) | Shown ≤ 135 |
-| Memory, every cover shown: resident / video (MB) | 154 (154–154) / 301 (301–301) | 154 (154–154) / 301 (301–301) | Resident ≤ 140 |
-| Memory after scrolling the whole grid: resident / video (MB) | 155 (155–155) / 452 (452–452) | 155 (155–155) / 452 (452–452) | |
-| Memory after 200 game pages with key art: resident / video (MB) | 222 (219–256) / 387 (387–388) | 224 (219–226) / 389 (375–395) | Resident ≤ 200 |
+| Memory, every cover shown: resident / video (MB) | 154 (154–154) / 301 (301–301) | 154 (154–154) / 301 (301–301) | ≤ 140 / ≤ 256 |
+| Memory after scrolling the whole grid: resident / video (MB) | 155 (155–155) / 452 (452–452) | 155 (155–155) / 452 (452–452) | — / ≤ 256 |
+| Memory after 200 game pages with key art: resident / video (MB) | 222 (219–256) / 387 (387–388) | 224 (219–226) / 389 (375–395) | ≤ 200 / ≤ 256 |
 | At rest 60 s, Wayland: frames / CPU ticks / wake-ups | 0 (0–0) / 0 (0–1) / 120 (120–122) | 0 (0–0) / 0 (0–1) / 120 (120–121) | 0 / 0 / 0 of Slatty's own |
 | At rest 60 s, Xwayland: the same | 0 (0–0) / 0 (0–1) / 120 (120–122) | 0 (0–0) / 0 (0–1) / 120 (120–121) | As above |
 
@@ -74,7 +74,7 @@ What they say:
   even here, where no session bus exists and the keyring cannot connect.
 - **Video memory**, measured for the first time: about 300 MB once every cover shows, 452 MB after
   scrolling the whole grid (the covers' textures stay on the card), under 400 MB after the game
-  pages. It has no budget yet.
+  pages: over the budget of 256 MB the owner set once it was measured, at all three points.
 
 ## The application at 10,000 games (2026-10-10 to 2026-10-12)
 
