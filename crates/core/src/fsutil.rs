@@ -64,9 +64,7 @@ pub fn read_game_file(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
 /// Flushes everything written to the filesystem holding `path`: one call after many files is far
 /// cheaper than syncing each of them.
 pub fn sync_filesystem(path: &Path) -> Result<()> {
-    let dir =
-        std::fs::File::open(path).map_err(|e| Error::io(format!("open {}", path.display()), e))?;
-    crate::platform::sync_filesystem(&dir)
+    crate::platform::sync_filesystem(path)
         .map_err(|e| Error::io(format!("sync {}", path.display()), e))
 }
 

@@ -285,12 +285,12 @@ pub fn free_space(path: &Path) -> io::Result<u64> {
     }
 }
 
-/// Flushes what was written to the filesystem holding `dir`, an open folder. Windows has no
-/// such call for a user: each file's own flush is all there is.
-pub fn sync_filesystem(dir: &File) -> io::Result<()> {
+/// Flushes what was written to the filesystem holding the folder `dir`. Windows has no such call
+/// for a user: each file's own flush is all there is.
+pub fn sync_filesystem(dir: &Path) -> io::Result<()> {
     #[cfg(unix)]
     {
-        nix::unistd::syncfs(dir).map_err(io::Error::from)
+        nix::unistd::syncfs(File::open(dir)?).map_err(io::Error::from)
     }
     #[cfg(windows)]
     {
