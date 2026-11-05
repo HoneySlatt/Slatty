@@ -42,8 +42,16 @@ const DOWNLOAD_SUFFIX: &str = ".slatty-dl";
 /// download takes one of the right size as it is: reading and hashing them all again took 40 s
 /// of seven cores on a 70 GB game. Syncing costs about the time the disk takes to write them
 /// anyway; smaller files, many and quick to read, are checked again rather than synced, as a hard
-/// disk syncs each in about 10 ms.
+/// disk syncs each in about 10 ms; the filesystem is synced once for them (`sync_filesystem`).
 pub(crate) const SYNCED_FROM: u64 = 1 << 20;
+
+/// Whether a file of `size` bytes is synced to disk before it takes its name: from `SYNCED_FROM`
+/// on Linux, every one on Windows, which has no sync of a whole filesystem for a user. Without
+/// it a power cut could leave a file with its name but not its bytes. A resumed download still
+/// takes only the large ones on their size (`synced`).
+pub(crate) fn synced_on_write(size: u64) -> bool {
+    cfg!(windows) || size >= SYNCED_FROM
+}
 
 /// Whether `dest`, in a partial folder only its download writes, holds a file synced before it
 /// took its name (`SYNCED_FROM`) and of the size expected.
@@ -417,7 +425,7 @@ impl<S: ContentSource> Download<'_, S> {
                 }
                 on_bytes(data.len() as u64);
             }
-            if file.size() >= SYNCED_FROM {
+            if synced_on_write(file.size()) {
                 let out = out.try_clone();
                 tokio::task::spawn_blocking(move || out.and_then(|out| out.sync_all()))
                     .await
@@ -583,6 +591,8 @@ pub fn verify_file(path: &Path, file: &DepotFile) -> Result<bool> {
             .map(|first| {
                 let (f, starts, bad) = (&f, &starts, &bad);
                 s.spawn(move || {
+                    // A Windows thread starts at the usual priority, whatever its creator's.
+                    crate::platform::lowest_priority();
                     let mut buf = Vec::new();
                     let part = first..(first + per_part).min(file.chunks.len());
                     for (c, &start) in file.chunks[part.clone()].iter().zip(&starts[part]) {

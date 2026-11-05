@@ -355,7 +355,9 @@ pub fn sync_filesystem(dir: &Path) -> io::Result<()> {
     }
 }
 
-/// Lowers the calling thread's priority to the lowest, for work that may take minutes.
+/// Lowers the calling thread's priority to the lowest, for work that may take minutes. On Windows
+/// its disk and memory priorities too (background mode), and its processor priority to idle, as
+/// nice 19 does: background mode alone left it at the usual one under Wine.
 pub fn lowest_priority() {
     #[cfg(unix)]
     // SAFETY: sets the calling thread's nice value, which Linux keeps per thread.
@@ -366,9 +368,10 @@ pub fn lowest_priority() {
     // SAFETY: the pseudo handle names the calling thread.
     unsafe {
         use windows_sys::Win32::System::Threading::{
-            GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_BEGIN,
+            GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_BEGIN, THREAD_PRIORITY_IDLE,
         };
         SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
     }
 }
 

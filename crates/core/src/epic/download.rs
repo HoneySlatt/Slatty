@@ -520,7 +520,7 @@ fn write_files(
                     job.rel.display()
                 )));
             }
-            if job.size >= crate::installer::SYNCED_FROM {
+            if crate::installer::synced_on_write(job.size) {
                 out.sync_all()
                     .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
             }

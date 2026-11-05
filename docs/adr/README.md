@@ -40,3 +40,4 @@ repository, which can be a little after it was taken.
 | [0024](0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md) | Hardware tiers from a 2016 laptop, and budgets for the whole working loop | Accepted; extends 0023; amended by 0026 |
 | [0025](0025-paused-after-m3-3-until-slime-ui.md) | Slatty paused after M3.3 until slime-ui runs it; then slime-ui, Windows, packages | Accepted; amends 0020 (the work outside the interface no longer goes on meanwhile) |
 | [0026](0026-ci-runs-the-checks-in-three-parts-at-once.md) | CI runs `scripts/check.sh` in three parts at once, with a Cargo cache | Accepted; amends 0024 (how the CI's budget is reached) |
+| [0029](0029-every-installed-file-flushed-on-windows.md) | On Windows every file an install writes is flushed to the disk before it takes its name | Accepted |

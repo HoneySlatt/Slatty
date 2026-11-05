@@ -98,10 +98,12 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> Result<()> {
     })
 }
 
-/// Runs `f` on a thread of its own at the lowest priority (nice 19), and the threads it starts:
-/// reading and hashing a whole game (Verify, a resumed download, an update's check) or making the
-/// library's covers at their size keeps several cores busy for minutes, and then only takes the
-/// time the desktop and games leave. A thread of its own, as one cannot raise its priority back.
+/// Runs `f` on a thread of its own at the lowest priority (nice 19), and on Linux the threads it
+/// starts: reading and hashing a whole game (Verify, a resumed download, an update's check) or
+/// making the library's covers at their size keeps several cores busy for minutes, and then only
+/// takes the time the desktop and games leave. A thread of its own, as one cannot raise its
+/// priority back. A Windows thread does not take its creator's priority: each thread `f` starts
+/// lowers its own (`platform::lowest_priority`).
 pub async fn in_background<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
     let (tx, rx) = tokio::sync::oneshot::channel();
     std::thread::Builder::new()
@@ -131,6 +133,51 @@ mod tests {
             "the threads it starts too"
         );
         assert_eq!(nice(), before);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn background_work_runs_at_the_lowest_priority_and_leaves_the_caller_as_it_was() {
+        use windows_sys::Win32::System::Threading::{
+            GetCurrentThread, GetThreadPriority, THREAD_PRIORITY_IDLE,
+        };
+        // SAFETY: reads the calling thread's priority through its pseudo handle.
+        let priority = || unsafe { GetThreadPriority(GetCurrentThread()) };
+        let before = priority();
+        assert_eq!(in_background(priority).await, THREAD_PRIORITY_IDLE);
+        assert_eq!(priority(), before);
+    }
+
+    /// What syncing every file costs, as an install does on Windows
+    /// (`installer::synced_on_write`): 2,000 files of 16 KiB written under a temporary name and
+    /// renamed, without a sync, then with one each. A measurement, run by hand on the disk to
+    /// measure, in `SLATTY_MEASURE_DIR` or the temporary folder (docs/testing.md#benchmarks).
+    #[test]
+    #[ignore = "a measurement, run by hand"]
+    fn syncing_every_small_file() {
+        let root = std::env::var_os("SLATTY_MEASURE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join(format!("slatty-sync-cost-{}", std::process::id()));
+        let data = vec![7u8; 16 << 10];
+        for sync in [false, true] {
+            let dir = root.join(if sync { "synced" } else { "not-synced" });
+            std::fs::create_dir_all(&dir).unwrap();
+            let started = std::time::Instant::now();
+            for i in 0..2000 {
+                let path = dir.join(format!("{i}.dat"));
+                let tmp = temp_sibling(&path);
+                let mut file = std::fs::File::create(&tmp).unwrap();
+                file.write_all(&data).unwrap();
+                if sync {
+                    file.sync_all().unwrap();
+                }
+                drop(file);
+                std::fs::rename(&tmp, &path).unwrap();
+            }
+            println!("synced {sync}: {:?}", started.elapsed());
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
