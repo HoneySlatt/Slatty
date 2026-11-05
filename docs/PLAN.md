@@ -52,27 +52,29 @@ milestone.
 - **Goal.** Every crate builds for Windows, and the core's tests that do not need Linux pass under
   Wine.
 - **Delivers.** The core's `platform` module gathering what differs by system (processes, priority,
-  private folders, opening without following links, known folders, finding programs); Linux-only
-  modules
-  (Proton, umu, isolation, Linux installers, Proton builds, the Galaxy service in a prefix) built on
-  Linux alone, their callers on Windows getting `Error::Unsupported`; the session supervisor's
-  Windows version (a job object).
+  private folders, opening without following links, known folders, finding programs); the session
+  supervisor's Windows version (a job object). Keeping the Linux-only modules on Linux moved to
+  M3.3 (the owner's decision, 2026-11-05).
 - **Done when.** `slatty`, `slatty-gui` and the core build for Windows, and the core's tests that do
   not need Linux pass under Wine.
 - **How to test.** `nix develop .#windows -c cargo check --workspace --locked`;
   `nix develop .#windows -c cargo test -p slatty-core` ([testing.md](testing.md#the-windows-build)).
 - **Where it stands.** Done 2026-11-05: every crate passes `cargo check` for Windows, and the
-  core's 420 tests that do not need Linux pass under Wine. Running them found four bugs, fixed:
+  core's 421 tests that do not need Linux pass under Wine. Running them found four bugs, fixed:
   no cloud save was ever downloaded, and no install or update finished, on Windows
-  ([windows-port.md](windows-port.md#what-windows-does-differently)). Comet and the games Steam
-  runs are not available on Windows yet.
+  ([windows-port.md](windows-port.md#what-windows-does-differently)); a fifth, which the first
+  fix brought to Linux's read-only saves, was fixed after the closing review. Comet and the games
+  Steam runs are not available on Windows yet.
 
 ### M3.3 — Play a GOG game
 
 - **Goal.** A person installs and plays a GOG game on Windows, from the command line.
 - **Delivers.** A Windows build installed (the download code is shared), started directly, its
   session followed and stopped through a job object, play time recorded, GOG's setup run with the
-  person's consent for administrator rights, cloud saves in the real folders.
+  person's consent for administrator rights, cloud saves in the real folders. The Linux-only
+  modules (Proton, umu, isolation, Linux installers, Proton builds, the Galaxy service in a prefix)
+  built on Linux alone, their callers on Windows getting `Error::Unsupported`: today they build for
+  Windows, and a game set to umu fails there on a missing program.
 - **Done when.** The flow's tests pass under Wine, and a person ran it on Windows.
 - **How to test.** `nix develop .#windows -c cargo test --workspace`.
 - **By hand.** Install, play and sync a GOG game on Windows 10 or 11.
@@ -132,13 +134,28 @@ milestone.
 - **CI runs on GitHub's Linux machines only**: Windows is checked by building from Linux, not by a
   Windows runner. The core's tests under Wine are run by hand, not by `scripts/check.sh`; nor is
   Clippy for Windows, which the `windows` shell lacks.
-- **Links planted by a game are tested on Linux only**: the tests that plant symbolic links are
-  `#[cfg(unix)]`, as making one on Windows needs a right users lack. Windows' refusal of reparse
-  points (junctions, links) has no test yet; to be written with junctions in M3.3.
-- **Installs are not flushed to the disk on Windows**: on Linux the installers flush the whole
-  filesystem once, after many files (`fsutil::sync_filesystem`); Windows has no such call for a
-  user, and files smaller than `installer::SYNCED_FROM` are not flushed one by one. A power cut during an install or update on
-  Windows could leave a file published but not written. To be settled in M3.3.
+- **Links are tested on Linux only**: the tests that make symbolic links are `#[cfg(unix)]`, as
+  making one on Windows needs a right users lack. Windows' refusal of reparse points planted by a
+  game has no test yet, nor a game folder a person moved and linked back with a junction
+  (`maintenance::a_game_folder_linked_from_elsewhere_is_uninstalled`), which Windows may refuse to
+  uninstall. To be written with junctions in M3.3.
+- **Some tests of shared behaviour run on Linux only**, as their setup uses file modes or links:
+  `added::a_folder_too_wide_or_a_program_out_of_its_folder_is_refused`,
+  `installer::tests::a_restart_that_cannot_delete_the_download_keeps_it`,
+  `maintenance::a_game_whose_emptied_folder_cannot_be_removed_is_uninstalled`,
+  `epic::download::an_unreadable_file_is_repaired`,
+  `steam::local::what_steam_wrote_of_a_download_is_measured_in_its_folder`. To be made for Windows
+  (a file held open, a lock) with the milestone of each area.
+- **Windows gaps found while testing, not fixed**: `added::check_folder` reads `HOME`, which
+  Windows does not set, so the profile folder is not refused there (M3.5);
+  `platform::lowest_priority` may lower the calling thread only on Windows, not the threads
+  `fsutil::in_background` work starts, unverified (M3.3); a save Windows marks read-only is backed
+  up but not replaced, the sync reporting it (M3.3).
+- **Files are not flushed to the disk on Windows**: on Linux the installers, and games added by
+  hand, flush the whole filesystem once, after many files (`fsutil::sync_filesystem`); Windows has
+  no such call for a user, and files smaller than `installer::SYNCED_FROM` are not flushed one by
+  one. A power cut during an install or update on Windows could leave a file published but not
+  written. To be settled in M3.3.
 
 Finished stages move to [`history.md`](history.md), in a few lines each, so that this file holds the
 current stage only, under about 2,000 words.

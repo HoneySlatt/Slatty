@@ -72,9 +72,9 @@ env -u DISPLAY -u WAYLAND_DISPLAY nix develop .#windows -c cargo test -p slatty-
 
 Without a display, Wine opens no window on the desktop running the tests. Tests of what only Linux
 has (Proton, umu, isolation, Wine prefixes, file modes, pipes, symbolic links planted by a game)
-are marked `#[cfg(unix)]`; a test of shared behaviour keeps its shared part on Windows and marks
-only its Linux part. Wine is not Windows: a test passing there checks the code, not Windows'
-behaviour.
+are marked `#[cfg(unix)]`; so, for now, are some tests of shared behaviour whose setup needs Linux
+([known debt](PLAN.md#known-debt)). Where only part of a test needs Linux, that part alone is
+marked. Wine is not Windows: a test passing there checks the code, not Windows' behaviour.
 
 ## Benchmarks
 

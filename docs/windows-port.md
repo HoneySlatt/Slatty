@@ -16,6 +16,10 @@ where each stands are Stage 3 of [PLAN.md](PLAN.md).
   registry, known folders, reparse points). Wine is not Windows: a passing test there is a first
   check, never a verified behaviour. How to run them, and which tests are Linux's alone:
   [testing.md](testing.md#the-windows-build).
+- **Real checks on Windows 10 or 11**, by a person, recorded in [compatibility.md](compatibility.md)
+  as the Linux ones are. Nothing about Windows is called verified before.
+- Later, a build with Microsoft's toolchain (`x86_64-pc-windows-msvc`), the usual one on Windows,
+  if the MinGW build shows a problem it does not have.
 
 ## What Windows does differently
 
@@ -26,14 +30,11 @@ Found by running the core's tests under Wine; each broke code that works on Linu
   filesystem for a user.
 - A file still open cannot be replaced by a rename (Wine, and Windows without POSIX rename
   semantics), nor its folder deleted.
+- A read-only file cannot be replaced by a rename, where Linux needs only the folder writable.
 - A path made into a string keeps the system's separator: compare `Path`s, not strings.
 - Folders ignore case, so two names that differ only by case are one file.
 - Creation times cannot tell a file made again from the old one: Windows gives a name made again
   within 15 seconds the old one's, and Wine gives the last write's. NTFS's file index does.
-- **Real checks on Windows 10 or 11**, by a person, recorded in [compatibility.md](compatibility.md)
-  as the Linux ones are. Nothing about Windows is called verified before.
-- Later, a build with Microsoft's toolchain (`x86_64-pc-windows-msvc`), the usual one on Windows,
-  if the MinGW build shows a problem it does not have.
 
 ## Where Slatty depends on Linux today
 
