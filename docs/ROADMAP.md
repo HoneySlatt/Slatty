@@ -75,14 +75,14 @@ in [measurements.md](measurements.md).
 
 | Budget | Target | Measured by | Checked in |
 |---|---|---|---|
-| Library shown after start | ≤ 95 ms warm, ≤ 135 ms cold | The probe of testing.md | By hand, when start-up changes |
-| Scrolling the grid | No frame missed at 240 Hz: p99 of the time between frames ≤ 5 ms, none above 6.25 ms (1.5 refresh intervals) | The probe, 1,200 frames | By hand, when the library or the grid changes |
+| Library shown after start | ≤ 95 ms warm, ≤ 135 ms cold | `slatty-measure` ([testing.md](testing.md#the-application-at-10000-games)) | By hand, when start-up changes |
+| Scrolling the grid | No frame missed at 240 Hz: p99 of the time between frames ≤ 5 ms, none above 6.25 ms (1.5 refresh intervals) | `slatty-measure desktop`, 1,200 frames | By hand, when the library or the grid changes |
 | `view` at 10,000 games | p99 ≤ 0.5 ms, library and Achievements | `library_at_10000_games` | By hand; in CI from Stage 4 |
 | Lists made again | ≤ 2.5 ms on the desktop, ≤ 3.5 ms in the couch mode | `library_at_10000_games` | As above |
 | A couch mode move | Shown in the next frame: message and view ≤ 0.1 ms | `library_at_10000_games` | As above |
-| At rest | No frame drawn, 0 CPU ticks, 0 wake-ups of Slatty's own in 60 s | `top`, `voluntary_ctxt_switches` of every thread | By hand, at each milestone that touches the interface or a background task |
-| Memory | ≤ 140 MB resident with every cover in; ≤ 200 MB after 200 game pages with key art | `VmRSS` in `/proc/<pid>/status` | By hand, when images change |
-| GPU power at rest | No more than the desktop without Slatty | `power1_average` of the card | By hand, once per stage |
+| At rest | No frame drawn, 0 CPU ticks, 0 wake-ups of Slatty's own in 60 s | `slatty-measure headless`: the probe's frames, `/proc/<pid>/stat`, context switches of every thread | By hand, at each milestone that touches the interface or a background task |
+| Memory | ≤ 140 MB resident with every cover in; ≤ 200 MB after 200 game pages with key art | `slatty-measure headless`: `VmRSS` in `/proc/<pid>/status` | By hand, when images change |
+| GPU power at rest | No more than the desktop without Slatty | `slatty-measure desktop`: `power1_average` of the card | By hand, once per stage |
 | Command line start-up | `slatty library list` at 10,000 games ≤ 10 ms warm | `hyperfine` | By hand, when the command line changes |
 | Verifying a file | 1 GB in ≤ 0.45 s on four threads | `verifying_a_large_file` | By hand, when verification changes |
 | Bad input | Never a crash on a file or answer from outside (VDF, `appinfo.vdf`, GOG manifests, installers, archives) | Tests of hostile input; `cargo fuzz` from Stage 4 | `scripts/check.sh` (tests); fuzzing by hand and briefly in CI from Stage 4 |

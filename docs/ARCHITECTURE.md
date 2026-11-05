@@ -17,10 +17,11 @@ the code depends on; [SECURITY.md](../SECURITY.md) the protections, from the use
 ```
 
 ```
-crates/core   slatty-core   every behaviour; no interface code
-crates/cli    slatty        command line, diagnostics; tests that spawn real processes
-crates/app    slatty-app    the interface's state, messages, update and background work, free of Iced
-crates/gui    slatty-gui    Iced interface: views, styles, what Iced runs for the state
+crates/core     slatty-core     every behaviour; no interface code
+crates/cli      slatty          command line, diagnostics; tests that spawn real processes
+crates/app      slatty-app      the interface's state, messages, update and background work, free of Iced
+crates/gui      slatty-gui      Iced interface: views, styles, what Iced runs for the state
+crates/measure  slatty-measure  measures the interface at 10,000 games on a fake profile; Linux only, not packaged
 ```
 
 The core has no interface dependency and is tested on its own. Both front ends call the same core
@@ -123,7 +124,10 @@ The interface follows Iced's state, message, update and view split, in two crate
 - `slatty-gui` (`crates/gui`) draws it with Iced: `main.rs` starts Iced with an `App` that wraps
   the state and dereferences to it; views live under `ui/`, one module per page or panel, as
   `impl App` blocks; `run` hands the state's tasks and subscriptions to Iced, `theme` its look,
-  applied as saved (`look::apply_saved`) before the first frame.
+  applied as saved (`look::apply_saved`) before the first frame. `probe`, built only with the
+  `probe` feature, wraps `update` and `view` and listens to frames, to write the log
+  `slatty-measure` reads and to scroll and open pages by itself
+  ([testing.md](testing.md#the-probe)).
 
 The modules below are the state's (`crates/app/src`) unless named under `ui/`, `run`, `theme`,
 `icons` or `graphics` (`crates/gui/src`).

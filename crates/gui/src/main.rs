@@ -1,5 +1,7 @@
 mod graphics;
 pub mod icons;
+#[cfg(feature = "probe")]
+mod probe;
 mod run;
 #[cfg(test)]
 mod tests;
@@ -95,19 +97,33 @@ fn main() -> iced::Result {
     std::thread::spawn(|| {
         iced::advanced::graphics::text::font_system();
     });
+    #[cfg(feature = "probe")]
+    probe::start();
+    #[cfg(not(feature = "probe"))]
+    let (update, view) = (
+        |app: &mut App, message| run::task(app.update(message)),
+        App::view,
+    );
+    #[cfg(feature = "probe")]
+    let (update, view) = (probe::update, probe::view);
     let mut app = iced::application(
         || {
             let (app, task) = slatty_app::App::boot();
             (App(app), run::task(task))
         },
-        |app: &mut App, message| run::task(app.update(message)),
-        App::view,
+        update,
+        view,
     );
     for font in theme::FONTS {
         app = app.font(font);
     }
     app.title("Slatty")
-        .subscription(|app: &App| run::subscription(app.subscription()))
+        .subscription(|app: &App| {
+            let subscription = run::subscription(app.subscription());
+            #[cfg(feature = "probe")]
+            let subscription = iced::Subscription::batch([subscription, probe::subscription()]);
+            subscription
+        })
         .theme(App::theme)
         .scale_factor(|app: &App| app.scale_factor())
         .window(window_settings(couch::ask_at_start()))

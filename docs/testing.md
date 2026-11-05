@@ -130,22 +130,110 @@ What each benchmark found is in [measurements.md](measurements.md).
 
 ## The application at 10,000 games
 
-Start-up, memory and scrolling are measured in the release build itself, never with a real
-profile:
+Start-up, rest, memory and scrolling are measured in the release build itself, on a fake profile,
+by one command, `slatty-measure` (`crates/measure`):
 
-- an isolated profile (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_STATE_HOME` in a
-  throwaway folder) holding a fake account in `state.db`, a `library.json` of 10,000 `[FAKE]` games,
-  and a cached JPEG cover for each (342×482, about 86 KB, like GOG's);
-- no keyring and no network: `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent` and
-  `HTTPS_PROXY`, `HTTP_PROXY` and `ALL_PROXY` pointing at a closed port;
-- a temporary probe, never committed, that logs when the library and its covers are in, the
-  resident memory, how long each `view` takes, and the time between frames while it scrolls the
-  grid by itself; `dd if=<file> iflag=nocache count=0` drops the covers from the disk cache for a
-  cold start.
+```sh
+# Start, rest, memory and video memory, in a compositor without a screen: nothing shows.
+# About 45 minutes.
+nix develop -c cargo run --release -p slatty-measure -- headless target/measure
+# Start, scrolling and the graphics card's power, on your own display: a window opens and closes
+# by itself, again and again, for about five minutes; leave the computer alone meanwhile, its
+# screen kept on (a screen turned off by an idle daemon sends the window no frame).
+nix develop -c cargo run --release -p slatty-measure -- desktop target/measure
+```
 
-The simulator rebuilds every widget each time, so it cannot show what Iced keeps between frames:
-scrolling is judged in the application itself. The figures are in
-[measurements.md](measurements.md#the-application-at-10000-games-2026-10-10-to-2026-10-12).
+An agent runs `desktop` only with the owner's agreement, each time
+([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)).
+
+The command:
+
+- makes the **fake profile** in the folder when it is missing or empty, and refuses any other
+  folder it did not make (`cargo run --release -p slatty-measure -- profile <folder>` makes it
+  alone): a `[FAKE]` account
+  signed in, a `library.json` of 10,000 `[FAKE]` games (long titles, accented, partly not Latin,
+  in no particular order, one in five with a Linux build), a cached JPEG cover for each (342×482,
+  about 87 KB, as GOG's) and key art (2560×1440, about 1.2 MB) for 200 of them. 1.1 GB, made in
+  about 12 s, identical on every machine. The folder holds a file that marks it as made by the
+  command (`slatty-measure-profile`, the layout's version), a home folder for the program
+  (`home/`), the runtime folders (`runtime/`) and the runs (`runs/`); delete it to start afresh;
+- builds `slatty-gui` in release with its [probe](#the-probe), into `target/probe`, so that the
+  release build in `target/release` stays without it;
+- starts it with nothing of yours: an environment emptied but for `PATH`, `LD_LIBRARY_PATH` and
+  `LANG`; its home and XDG folders in the profile; a session bus that does not exist
+  (`DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent`: no keyring, no notifications); every request
+  through a closed port (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`);
+- for `headless`, starts sway without a screen (`WLR_BACKENDS=headless`, from the development
+  shell) with one output of 3840×2160 at 240 Hz and scale 1.5, as the high tier's display, the
+  window tiled on it, and Xwayland;
+- stops the program by its own process, never through the compositor;
+- reads the probe's log and `/proc`, and prints the figures: each the median and range of its runs
+  (10, or `--runs`), with the machine, the commit and the window's size; percentiles within a run
+  are by nearest rank. It writes them, and every run's logs, under `<folder>/runs/<time>/`.
+
+Each series begins with a start that is not counted: the first start on a profile makes a copy of
+every cover at the size drawn (about 20 s), and the drivers fill their caches; `headless`'s opens
+the 200 game pages too, which make their key art's copies (about 3 s each, the first time). Then:
+
+- **`headless`**: start, warm (the run before left everything in the disk cache) and cold (the
+  profile's files, the program and every library it maps dropped from the disk cache, as
+  `dd if=<file> iflag=nocache count=0` does; the libraries the desktop itself maps stay, as after a
+  real start of the computer); memory, resident (`VmRSS`) and video (`drm-memory-vram`, or
+  `drm-total-vram`, in the process's `/proc/<pid>/fdinfo`, which amdgpu fills), 3 s after every
+  cover shows, after the probe scrolled the whole grid, after it opened 200 game pages with key art;
+  rest, 10 s after every cover shows, for 60 s: frames drawn, processor ticks (`/proc/<pid>/stat`)
+  and wake-ups of every thread (context switches in `/proc/<pid>/task/*/status`, voluntary and not),
+  under Wayland, then Xwayland, which another start not counted comes before: there the window has
+  another scale, and the covers' copies another size.
+- **`desktop`**, on the session's Wayland display: start, warm; scrolling, the probe moving the grid
+  16 logical pixels a frame (24 at scale 1.5) for 1,200 frames: the time between frames drawn
+  (median, p99, max, frames over 4.17, 6.25 and 16.7 ms) and `view`'s time; the card's power
+  (`power1_average`, else `power1_input`, of the first card that reports one) read every second for
+  60 s without Slatty, 60 s with it at rest, and 60 s without again.
+
+Limits:
+
+- Frames are timed when they are drawn, before the compositor shows them.
+- `shown` includes the time the window waits for the compositor and the graphics card, which
+  is most of it ([measurements.md](measurements.md)). `library` in the log, when the state holds
+  the library, does not depend on it.
+- The scroll moves through rows never shown before in that run, whose covers the interface reads
+  as they come into view, as a person scrolling a library opened a moment ago.
+- A thread that ends during the 60 s of rest takes its wake-ups with it.
+- Input to visible response is not measured: Iced does not report it.
+
+The simulator of the interface's tests rebuilds every widget each time, so it cannot show what Iced
+keeps between frames: scrolling is judged in the application itself. The figures are in
+[measurements.md](measurements.md).
+
+### The probe
+
+`slatty-gui`'s `probe` feature (`crates/gui/src/probe.rs`), off by default, so that a normal build
+pays nothing for it; `scripts/check.sh` lints it, so that it keeps building. With `SLATTY_PROBE`
+naming a file, it writes there one event a line, `<time> <event> [values]`, the time in
+nanoseconds since the Unix epoch:
+
+| Event | When |
+|---|---|
+| `start` | The probe began, before the window opens |
+| `window <width> <height> <scale>` | The window's size, in its units, or its scale changed |
+| `library` | The state holds the library |
+| `shown` | The first frame drawn with the library in |
+| `covers` | The first frame drawn with every cover made at the size drawn |
+| `frame` | A frame drawn |
+| `view <nanoseconds>` | A view built, and how long it took |
+| `begin <step>`, `end <step>` | The step of `SLATTY_PROBE_STEP` began, or ended |
+| `no-art <game id>` | A game page whose key art did not show within 5 s |
+
+`SLATTY_PROBE_STEP` asks for one step, which begins a second after `covers`: `scroll` moves the
+library's grid 16 logical pixels a frame for 1,200 frames; `grid` moves it a screen a frame, down to
+its end; `pages` opens the pages of 200 games with key art, one after the other, each until two
+frames are drawn after its key art's copy arrives, or 5 s passed. The probe acts through the
+interface's own messages and Iced's scroll operation: no input enters the session. During a step it
+keeps its lines until the step ends, so that writing them does not weigh on the frames measured.
+
+The format names no framework: an interface on another one that writes the same log is measured by
+the same command ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)).
 
 ## Tests that need real tools
 

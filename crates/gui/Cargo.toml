@@ -27,6 +27,11 @@ tracing-subscriber.workspace = true
 # The graphics backends to start with; already built for Iced, the same version, no crate added.
 wgpu = { version = "27", default-features = false }
 
+[features]
+# The measuring probe that `slatty-measure` reads (src/probe.rs, docs/testing.md); off by default, so
+# that a normal build pays nothing for it.
+probe = []
+
 [dev-dependencies]
 iced_test = "0.14"
 slatty-app = { workspace = true, features = ["test-support"] }

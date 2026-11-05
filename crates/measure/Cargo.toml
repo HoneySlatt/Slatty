@@ -1,0 +1,21 @@
+[package]
+name = "slatty-measure"
+description = "Measures Slatty's interface at 10,000 games, on a fake profile it makes itself"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "slatty-measure"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+# The covers and key art of the fake profile; already built for the interface, no crate added.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# The fake profile is written by Slatty's own code, so that it follows its formats.
+slatty-core.workspace = true

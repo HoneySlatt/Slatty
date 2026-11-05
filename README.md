@@ -48,8 +48,8 @@ hardware, and what was not yet, is in [docs/compatibility.md](docs/compatibility
 
 ## Requirements
 
-- Linux with Wayland or X11, on x86-64. Development happens on NixOS under Wayland; X11 has not
-  been tried yet.
+- Linux with Wayland or X11, on x86-64. Development happens on NixOS under Wayland; X11 has only
+  been run under Xwayland, by the measurements ([testing.md](docs/testing.md#the-application-at-10000-games)).
 - Hardware: aimed to run from a 2016 laptop (two-core Core i5-6200U, Intel HD 520, 4 GB, a hard
   disk) to a 4K 240 Hz desktop. Only the desktop is measured so far
   ([quality bar](docs/ROADMAP.md#quality-bar)).

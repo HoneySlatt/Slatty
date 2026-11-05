@@ -56,6 +56,13 @@
           version = (pkgs.lib.importTOML ./Cargo.toml).workspace.package.version;
           src = pkgs.lib.cleanSource ./.;
           cargoLock.lockFile = ./Cargo.lock;
+          # slatty-measure measures the interface for its developers: not packaged.
+          cargoBuildFlags = [
+            "-p"
+            "slatty-cli"
+            "-p"
+            "slatty-gui"
+          ];
           nativeBuildInputs = [
             pkgs.makeWrapper
             pkgs.pkg-config
@@ -122,6 +129,9 @@
             # scripts/check.sh: the dependency policy, and the links between Markdown files.
             cargo-deny
             lychee
+            # slatty-measure: a compositor without a screen, with Xwayland (docs/testing.md).
+            sway
+            xwayland
           ];
           buildInputs = runtimeLibs pkgs;
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (runtimeLibs pkgs);

@@ -63,6 +63,11 @@ achievement counts, whether it has cloud saves, its play time; cached per accoun
 
 **Prefix.** The Wine folder a Windows game runs in, with its own `C:` drive, registry and saves.
 
+**Probe.** Code built into the interface only for measuring it (the `probe` feature of
+`slatty-gui`): it logs when the library and its covers show, each frame and each view, and
+scrolls or opens pages by itself, for `slatty-measure`
+([testing.md](testing.md#the-probe)).
+
 **Proton build.** A build of Proton (GE-Proton, Proton-CachyOS, UMU-Proton) that Slatty downloads
 into a folder of its own, followed through `<project>-latest`
 ([ADR-0010](adr/0010-proton-builds-downloaded-by-slatty.md)).

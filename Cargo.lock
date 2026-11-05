@@ -4405,6 +4405,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "slatty-measure"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "image",
+ "slatty-core",
+]
+
+[[package]]
 name = "slotmap"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

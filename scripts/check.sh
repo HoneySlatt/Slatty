@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Runs every automated check of the definition of done (AGENTS.md), in three parts, each in the
 # order a failure is cheapest to find:
-#   linux    formatting; clippy with warnings as errors; the tests (no network, no real game); the
-#            code documentation with warnings as errors; cargo deny (licences, advisories, sources);
-#            the links between Markdown files (lychee, offline); then the build, last.
+#   linux    formatting; clippy with warnings as errors, the interface's probe included; the
+#            tests (no network, no real game); the code documentation with warnings as errors;
+#            cargo deny (licences, advisories, sources); the links between Markdown files
+#            (lychee, offline); then the build, last.
 #   windows  every crate checked for Windows in the `windows` shell, then the core's and the
 #            command line's tests under Wine (ADR-0022, ADR-0024).
 #   package  the Nix package.
@@ -27,6 +28,8 @@ linux() {
 
   step "lints"
   cargo clippy --workspace --all-targets --locked -- -D warnings
+  # The measuring probe, off by default (docs/testing.md): linted so that it keeps building.
+  cargo clippy -p slatty-gui --all-targets --features probe --locked -- -D warnings
 
   step "tests"
   cargo test --workspace --locked
