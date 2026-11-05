@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
-use std::os::unix::fs::{FileExt, PermissionsExt};
+use std::io::{Seek, SeekFrom, Write};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -172,6 +173,7 @@ impl Drop for Env {
 
 const PLENTY: u64 = 1 << 40;
 
+#[cfg(unix)]
 #[tokio::test]
 async fn downloading_cannot_truncate_a_temporary_symlink_target() {
     let env = Env::new("temporary-link");
@@ -202,6 +204,7 @@ async fn a_manifest_with_an_impossible_chunk_size_is_refused() {
 
 /// A game writes its folder: an empty folder of the build, under one the game replaced with a
 /// link out of it, is never made there by a repair.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_repair_never_makes_folders_through_a_folder_the_game_replaced() {
     let mut env = Env::new("planted-dirs");
@@ -244,6 +247,7 @@ async fn installs_verified_files_and_publishes_atomically() {
     assert_eq!(std::fs::read(t.join("empty.txt")).unwrap(), b"");
     assert!(t.join("saves").is_dir());
     assert!(!t.join("support.ico").exists());
+    #[cfg(unix)]
     assert_eq!(
         std::fs::metadata(t.join("Game.exe"))
             .unwrap()
@@ -1453,6 +1457,7 @@ fn a_download_resumed_on_a_replaced_installer_starts_again() {
 
 /// Starting an install again keeps its job while its partial folder cannot be deleted whole: the
 /// new install would otherwise adopt what is left of it.
+#[cfg(unix)]
 #[test]
 fn a_restart_that_cannot_delete_the_download_keeps_it() {
     let root = std::env::temp_dir().join(format!("slatty-restart-{}", std::process::id()));
@@ -1701,10 +1706,12 @@ fn a_large_file_is_verified_in_parts() {
     };
     assert!(verify_file(&path, &file).unwrap());
     for at in [0, size / 2, size - 1] {
-        let f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
-        f.write_all_at(b"x", at).unwrap();
+        let mut f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+        f.seek(SeekFrom::Start(at)).unwrap();
+        f.write_all(b"x").unwrap();
         assert!(!verify_file(&path, &file).unwrap(), "damaged at {at}");
-        f.write_all_at(&[0], at).unwrap();
+        f.seek(SeekFrom::Start(at)).unwrap();
+        f.write_all(&[0]).unwrap();
     }
     std::fs::remove_dir_all(dir).unwrap();
 }

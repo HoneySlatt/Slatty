@@ -231,6 +231,8 @@ mod tests {
         assert_eq!(parse(&default, "c").unwrap().unwrap()[0].name, "__default");
     }
 
+    // Folders are told apart by case on Linux only.
+    #[cfg(unix)]
     #[test]
     fn resolves_inside_prefix_case_insensitively() {
         let root = std::env::temp_dir().join(format!("slatty-loc-{}", std::process::id()));
@@ -251,6 +253,7 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_isolated_games_saves_are_not_synced_through_a_link_out_of_its_prefix() {
         let root = std::env::temp_dir().join(format!("slatty-loc-link-{}", std::process::id()));

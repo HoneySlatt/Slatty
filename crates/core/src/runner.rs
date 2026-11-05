@@ -1106,6 +1106,7 @@ mod tests {
     /// Valve's Proton builds apply SteamPipe's fixups to their own folder at their first launch
     /// after a Steam update, under `dist.lock`: done before an isolated launch, outside the
     /// sandbox, where the build is read-only. A build Proton never set up is refused.
+    #[cfg(unix)]
     #[test]
     fn valve_builds_are_set_up_before_an_isolated_launch() {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -1149,6 +1150,7 @@ mod tests {
 
     /// A game set to a `<project>-latest` build closed at once when isolated: bubblewrap cannot
     /// mount over a link ("Can't mount on symlink destination"). The build it leads to is mounted.
+    #[cfg(unix)]
     #[test]
     fn a_latest_link_is_mounted_where_it_leads() {
         let dir = std::env::temp_dir().join(format!("slatty-bind-{}", std::process::id()));
@@ -1165,6 +1167,7 @@ mod tests {
 
     /// An isolated launch where bubblewrap cannot hold the game is refused with the reason, never
     /// run without isolation; `false` stands in for a bubblewrap AppArmor stops.
+    #[cfg(unix)]
     #[test]
     fn isolation_refuses_a_bubblewrap_that_cannot_hold_the_game() {
         assert!(matches!(sandbox(None), Err(Error::NotFound(_))));
@@ -1204,6 +1207,7 @@ mod tests {
         env.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_isolated_game_gets_a_home_of_its_own_and_only_its_folder() {
         let root = std::env::temp_dir().join(format!("slatty-isolated-{}", std::process::id()));
@@ -1281,6 +1285,7 @@ mod tests {
 
     /// The daily refresh hands umu a runtime tool of its own, which needs nothing from GitHub:
     /// umu reached through `UMU_NO_PROTON` asks GitHub for its Proton releases first.
+    #[cfg(unix)]
     #[test]
     fn runtimes_are_refreshed_through_a_tool_naming_them() {
         let root = std::env::temp_dir().join(format!("slatty-rt-tool-{}", std::process::id()));
@@ -1327,6 +1332,7 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn valve_builds_get_steam_client_library_links_in_the_game_home() {
         assert!(valve_proton(Path::new(
@@ -1382,6 +1388,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_program_umu_could_find_on_disk_or_a_linked_working_directory_is_refused() {
         let dir = std::env::temp_dir().join(format!("slatty-shared-{}", std::process::id()));
@@ -1423,6 +1430,7 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn programs_are_named_so_that_umu_shares_nothing_more() {
         assert_eq!(
@@ -1480,6 +1488,7 @@ mod tests {
     /// The `.ref` locks pressure-vessel takes in a runtime are made in its real platform folders
     /// alone: never in `var`, which an isolated game writes, through a link it put there (the file
     /// would be made where the link leads, outside any sandbox), nor shared when one is a link.
+    #[cfg(unix)]
     #[test]
     fn the_runtimes_locks_are_made_in_its_own_folders_only() {
         let root = std::env::temp_dir().join(format!("slatty-ref-locks-{}", std::process::id()));
@@ -1502,6 +1511,7 @@ mod tests {
     /// An isolated game starts in its folder or in its prefix (a launcher an installer put on C:),
     /// both shared with it; never through a link leading elsewhere, as Wine's own `z:` in the
     /// prefix does.
+    #[cfg(unix)]
     #[test]
     fn an_isolated_game_starts_in_its_folder_or_its_prefix_only() {
         let root = std::env::temp_dir().join(format!("slatty-cwd-prefix-{}", std::process::id()));
@@ -1569,6 +1579,7 @@ mod tests {
     /// from outside the container: a link the game put there to the user's Steam installation would
     /// have it shared as the user's own (the client's settings and tokens). Such links go before
     /// each isolated launch; Slatty's own `sdk64` and `sdk32` folders stay.
+    #[cfg(unix)]
     #[test]
     fn links_a_game_put_in_its_steam_folder_go_before_it_starts() {
         let root = std::env::temp_dir().join(format!("slatty-home-steam-{}", std::process::id()));
@@ -1606,6 +1617,7 @@ mod tests {
     /// An isolated game following `<project>-latest` gets the build the link leads to as the
     /// launch is made, for umu as for the read-only mount: a newer build linked in between (a
     /// download finishing while the cloud syncs) would otherwise run writable in the container.
+    #[cfg(unix)]
     #[test]
     fn an_isolated_game_runs_the_build_its_link_led_to() {
         let dir = std::env::temp_dir().join(format!("slatty-latest-{}", std::process::id()));
@@ -1689,6 +1701,7 @@ mod tests {
     /// binds it read-only: the game could change it and have its code run outside its container at
     /// the next launch. Such a launch is refused (`refresh_runtimes` installs the runtime before,
     /// outside), and the runtime each isolated launch needs is known before it starts.
+    #[cfg(unix)]
     #[test]
     fn an_isolated_launch_needs_its_runtime_installed_before() {
         let dir = std::env::temp_dir().join(format!("slatty-runtime-{}", std::process::id()));
@@ -1762,6 +1775,7 @@ mod tests {
         install.isolated = false;
         assert!(run(&install).is_ok());
     }
+    #[cfg(unix)]
     #[test]
     fn a_native_script_starts_through_an_interpreter_that_exists() {
         let dir = std::env::temp_dir().join(format!("slatty-native-{}", std::process::id()));
@@ -1817,6 +1831,7 @@ mod tests {
 
     /// The user's environment may hold names and values that are not UTF-8: the launch still
     /// starts, and a temporary folder so named under `/tmp` is replaced as any other.
+    #[cfg(unix)]
     #[test]
     fn steam_run_takes_an_environment_that_is_not_utf8() {
         use std::os::unix::ffi::OsStringExt;
@@ -1834,6 +1849,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn controller_compatibility_preserves_other_proton_options() {
         for (before, after) in [
@@ -1848,6 +1864,7 @@ mod tests {
         assert!(sdl_config(OsString::from_vec(b"\xff".to_vec())).is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn controller_compatibility_applies_only_to_the_selected_proton_game() {
         let dir = std::env::temp_dir().join(format!("slatty-controller-{}", std::process::id()));
@@ -1926,6 +1943,7 @@ mod tests {
 
     /// Proton's fixes for a game target the game: DOOM's adds `+r_renderAPI 1` to every program
     /// run with its id, which made DirectX's setup and `reg add` refuse their command line.
+    #[cfg(unix)]
     #[test]
     fn protons_fixes_apply_to_the_game_only() {
         let dir = std::env::temp_dir().join(format!("slatty-fixes-{}", std::process::id()));

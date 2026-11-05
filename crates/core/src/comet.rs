@@ -396,13 +396,16 @@ pub fn uses_galaxy(dirs: &Dirs, install: &crate::install::Install) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
 
     use super::*;
+    #[cfg(unix)]
     use crate::secret::Secret;
 
     /// The account's tokens are written for Comet only once its log is open: a log that cannot be
     /// opened (a full disk, a logs folder that cannot be made) leaves no token file behind.
+    #[cfg(unix)]
     #[tokio::test]
     async fn no_token_file_is_left_when_comets_log_cannot_be_opened() {
         if !crate::doctor::comet_port_free() {
@@ -439,6 +442,7 @@ mod tests {
 
     /// The tokens go through `$XDG_RUNTIME_DIR`, which some sessions point at a folder others can
     /// write: there, anyone could plant the handoff's folders beforehand and swap what Comet reads.
+    #[cfg(unix)]
     #[test]
     fn a_runtime_folder_others_can_open_is_refused() {
         use std::os::unix::fs::PermissionsExt;
@@ -459,6 +463,7 @@ mod tests {
 
     /// Comet holds the account's tokens and listens for any program while it runs: it must not
     /// outlive a launcher killed during a session (a crash, the system out of memory).
+    #[cfg(unix)]
     #[test]
     fn comet_does_not_outlive_the_launcher() {
         let (tx, rx) = std::sync::mpsc::channel();
@@ -496,6 +501,7 @@ mod tests {
     }
 
     /// Comet's port taken by another user is not Comet: the game would talk to them.
+    #[cfg(unix)]
     #[test]
     fn only_a_listener_of_this_user_is_taken_for_comet() {
         use std::os::unix::fs::MetadataExt;
@@ -514,6 +520,7 @@ mod tests {
 
     /// A launcher killed while Comet started left the tokens in its handoff folder: the next
     /// Comet start removes those of processes no longer running.
+    #[cfg(unix)]
     #[test]
     fn handoffs_left_by_a_killed_launcher_are_removed() {
         use std::os::unix::fs::PermissionsExt;
@@ -535,6 +542,7 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn token_file_is_private() {
         let dir = std::env::temp_dir().join(format!("slatty-comet-{}", std::process::id()));
@@ -616,6 +624,8 @@ mod tests {
         assert!(unlocks.new_ones().is_empty(), "said once");
         unlock(4);
         assert_eq!(names(unlocks.new_ones()), ["[FAKE] d"]);
+        // Windows deletes no database still open.
+        drop((comet, unlocks));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -662,6 +672,7 @@ mod tests {
                 name: "[FAKE] c".into()
             }]
         );
+        drop((comet, unlocks));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -688,6 +699,7 @@ mod tests {
         )
         .unwrap();
         assert!(unlocks.new_ones().is_empty());
+        drop((db, unlocks));
         std::fs::remove_dir_all(root).unwrap();
     }
 

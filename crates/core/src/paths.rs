@@ -107,6 +107,7 @@ pub fn check_user_id(user_id: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
 
     use super::*;
@@ -122,6 +123,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn slatty_files_are_readable_by_the_user_only() {
         let root = std::env::temp_dir().join(format!("slatty-private-{}", std::process::id()));

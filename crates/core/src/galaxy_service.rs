@@ -139,6 +139,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn an_isolated_games_prefix_is_not_written_through_a_link_out_of_it() {
         let root = std::env::temp_dir().join(format!("slatty-galaxy-link-{}", std::process::id()));
@@ -171,6 +172,7 @@ mod tests {
 
     /// The registration runs programs in the prefix (through umu, as the game) before the copy: a
     /// link planted meanwhile is refused at the copy too.
+    #[cfg(unix)]
     #[test]
     fn the_copy_is_never_made_through_a_link_planted_during_the_registration() {
         let root = std::env::temp_dir().join(format!("slatty-galaxy-late-{}", std::process::id()));

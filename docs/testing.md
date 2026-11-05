@@ -67,10 +67,14 @@ own, into `target/windows`; its tests run through Wine, in a Wine prefix under `
 
 ```sh
 nix develop .#windows -c cargo check --workspace
-nix develop .#windows -c cargo test -p slatty-core
+env -u DISPLAY -u WAYLAND_DISPLAY nix develop .#windows -c cargo test -p slatty-core
 ```
 
-Wine is not Windows: a test passing there checks the code, not Windows' behaviour.
+Without a display, Wine opens no window on the desktop running the tests. Tests of what only Linux
+has (Proton, umu, isolation, Wine prefixes, file modes, pipes, symbolic links planted by a game)
+are marked `#[cfg(unix)]`; a test of shared behaviour keeps its shared part on Windows and marks
+only its Linux part. Wine is not Windows: a test passing there checks the code, not Windows'
+behaviour.
 
 ## Benchmarks
 

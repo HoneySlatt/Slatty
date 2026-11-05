@@ -90,6 +90,7 @@ mod tests {
 
     /// A program another thread starts gets a copy of every open file until it runs (fork, then
     /// exec), the lock's among them: dropped meanwhile, the lock must still be free at once.
+    #[cfg(unix)]
     #[test]
     fn a_lock_dropped_while_another_thread_starts_a_program_is_free() {
         use std::os::unix::process::CommandExt;

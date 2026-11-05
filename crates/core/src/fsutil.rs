@@ -118,6 +118,7 @@ pub async fn in_background<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'st
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn background_work_runs_at_the_lowest_priority_and_leaves_the_caller_as_it_was() {
         // SAFETY: reads the calling thread's nice value.

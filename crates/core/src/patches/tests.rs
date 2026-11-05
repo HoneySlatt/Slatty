@@ -111,13 +111,15 @@ impl Env {
             sfc_ref: None,
             product_id: "1".into(),
         };
+        // Named as a manifest's paths are, with the system's separator.
+        let level1 = crate::installer::safe_relative("Data/level1").unwrap();
         let set = FileSet {
-            files: vec![(PathBuf::from("Data/level1"), file)],
+            files: vec![(level1.clone(), file)],
             ..Default::default()
         };
         let old_set = FileSet {
             files: vec![(
-                PathBuf::from("Data/level1"),
+                level1,
                 DepotFile {
                     chunks: store.chunks(&old),
                     ..set.files[0].1.clone()
@@ -247,6 +249,7 @@ async fn a_wrong_result_leaves_the_file_untouched() {
 
 /// A game writes its own folder: links it plants at the names a patch is staged under, or in
 /// place of a folder a patched file goes into, never lead the patch out of the game folder.
+#[cfg(unix)]
 #[tokio::test]
 async fn links_planted_by_the_game_never_lead_a_patch_out_of_its_folder() {
     let mut env = Env::new("planted");
@@ -285,6 +288,7 @@ async fn links_planted_by_the_game_never_lead_a_patch_out_of_its_folder() {
 
 /// A pipe a game left where a patched file was would make reading it wait for a writer forever,
 /// holding the game's lock.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_pipe_in_place_of_a_patched_file_is_passed_over() {
     use std::os::unix::fs::OpenOptionsExt;

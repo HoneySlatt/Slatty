@@ -1180,9 +1180,10 @@ mod tests {
                 .is_err()
         );
         let record = InstallRecord::load(&dirs, "epic-Fake").unwrap().unwrap();
-        let paths: Vec<&str> = record.files.iter().map(|f| f.path.as_str()).collect();
+        // With the system's separator.
+        let paths: Vec<&Path> = record.files.iter().map(|f| Path::new(&f.path)).collect();
         for path in ["Game.exe", "Data/a.pak", "Data/b.pak", "Data/c.pak"] {
-            assert!(paths.contains(&path), "{path}: {paths:?}");
+            assert!(paths.contains(&Path::new(path)), "{path}: {paths:?}");
         }
         std::fs::remove_dir_all(&root).unwrap();
     }

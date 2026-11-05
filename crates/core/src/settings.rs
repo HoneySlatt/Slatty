@@ -752,6 +752,7 @@ mod tests {
         assert!(!vulkan_only(&db).unwrap());
     }
 
+    #[cfg(unix)]
     fn build(dir: &Path) {
         std::fs::create_dir_all(dir).unwrap();
         std::fs::write(dir.join("proton"), b"").unwrap();
@@ -781,6 +782,7 @@ mod tests {
     }
 
     /// Steam's list of library folders is read at every start: a pipe in its place holds nothing.
+    #[cfg(unix)]
     #[test]
     fn a_pipe_as_steams_library_list_holds_nothing_up() {
         let steam = std::env::temp_dir().join(format!("slatty-fifo-list-{}", std::process::id()));
@@ -804,6 +806,7 @@ mod tests {
     /// Times finding the Proton builds with 2,000 games installed by Steam, its main folder found
     /// as itself and through `~/.steam/steam`: `cargo test --release -p slatty-core
     /// finding_proton_builds_in_a_large_library -- --ignored --nocapture`.
+    #[cfg(unix)]
     #[test]
     #[ignore]
     fn finding_proton_builds_in_a_large_library() {
@@ -834,6 +837,7 @@ mod tests {
         std::fs::remove_dir_all(home).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn proton_builds_come_from_steam_libraries_and_umu_once_each() {
         let home = std::env::temp_dir().join(format!("slatty-protons-{}", std::process::id()));

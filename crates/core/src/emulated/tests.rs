@@ -244,6 +244,7 @@ fn a_scan_finds_each_game_once() {
     );
     f.file("ps1/notes.txt", b"");
     // A link back to a folder already seen.
+    #[cfg(unix)]
     std::os::unix::fs::symlink(&f.roms, f.roms.join("ps1/loop")).unwrap();
     let found = f.scan(Emulator::DuckStation);
     let mut titles: Vec<&str> = found.iter().map(|g| g.title.as_str()).collect();

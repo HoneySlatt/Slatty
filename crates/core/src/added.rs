@@ -1166,9 +1166,7 @@ mod tests {
         std::fs::write(game.join("bin/game"), b"\x7fELF\x02\x01\x01").unwrap();
         std::fs::write(game.join("start.sh"), b"#!/bin/sh\nexec ./bin/game\n").unwrap();
         for program in ["bin/game", "start.sh"] {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(game.join(program), std::fs::Permissions::from_mode(0o755))
-                .unwrap();
+            crate::platform::set_mode(&game.join(program), 0o755).unwrap();
         }
         let proton = root.join("proton");
         std::fs::create_dir_all(&proton).unwrap();
@@ -1260,6 +1258,7 @@ mod tests {
     }
 
     /// The game starts as the user said, with GOG left out: no store for umu to look it up in.
+    #[cfg(unix)]
     #[test]
     fn a_game_added_by_hand_starts_its_program_with_its_arguments() {
         let f = fake("start");
@@ -1325,6 +1324,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_folder_too_wide_or_a_program_out_of_its_folder_is_refused() {
         let f = fake("folders");
@@ -1485,6 +1485,7 @@ mod tests {
         remove(&f.db, &f.dirs, "local-1", false).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_game_moved_out_of_its_folder_through_a_link_is_not_started() {
         let f = fake("link");
@@ -1501,6 +1502,7 @@ mod tests {
     /// folder): the game's folder is D:'s, shared when isolated, and the launcher starts from the
     /// prefix. Moved, the game is found again and D: follows it. With nothing on D:, the program's
     /// folder in the prefix stays the game's, as before.
+    #[cfg(unix)]
     #[test]
     fn a_launcher_on_c_runs_the_game_installed_on_d() {
         let f = fake("launcher-on-c");
@@ -1700,6 +1702,7 @@ mod tests {
 
     /// The data folder reached through a link (moved to another disk): the game an installer put
     /// in its prefix is still copied before the prefix is deleted with it.
+    #[cfg(unix)]
     #[test]
     fn the_game_in_its_prefix_is_copied_when_the_data_folder_is_a_link() {
         let mut f = fake("linked-data");
@@ -1949,6 +1952,7 @@ mod tests {
     /// A Linux program without an execute bit (an AppImage a browser saved) would not start: it is
     /// refused, saying how to allow it, as is such a script not isolated (then started itself, not
     /// through its interpreter). One Slatty unpacked for the game is made executable.
+    #[cfg(unix)]
     #[tokio::test]
     async fn a_linux_program_that_may_not_run_is_refused_unless_unpacked_for_it() {
         use std::os::unix::fs::PermissionsExt;
@@ -2081,6 +2085,7 @@ mod tests {
 
     /// The game's folder is drive D: in its prefix, where the installer is told to install; a D:
     /// Wine left there goes, the other drives stay.
+    #[cfg(unix)]
     #[test]
     fn the_game_folder_is_drive_d_in_its_prefix() {
         let f = fake("drive-d");
@@ -2166,6 +2171,7 @@ mod tests {
     /// A tarball holding a file whose name is not UTF-8, which the list of what was unpacked
     /// cannot hold, is refused whole: neither its folder nor a list is left, so it can be tried
     /// again.
+    #[cfg(unix)]
     #[tokio::test]
     async fn an_archive_whose_files_cannot_be_listed_leaves_nothing() {
         use std::os::unix::ffi::OsStrExt;

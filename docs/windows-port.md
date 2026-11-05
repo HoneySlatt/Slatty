@@ -8,12 +8,28 @@ where each stands are Stage 3 of [PLAN.md](PLAN.md).
 ## How it is built and checked
 
 - **Cross-compilation from Linux**, in the Nix development shell `nix develop .#windows`: Rust's
-  `x86_64-pc-windows-gnu` target with the MinGW-w64 toolchain, from the Nix cache. `cargo check`,
-  `cargo clippy` and `cargo build` run there for the Windows target, in `target/windows`.
+  `x86_64-pc-windows-gnu` target with the MinGW-w64 toolchain, from the Nix cache. `cargo check`
+  and `cargo build` run there for the Windows target, in `target/windows`; `cargo clippy` does not
+  yet (the shell has no Clippy for that target).
 - **Tests of the Windows code under Wine**: `cargo test` for the Windows target runs its test
   binaries through Wine, which implements the Windows API the code calls (processes, job objects,
   registry, known folders, reparse points). Wine is not Windows: a passing test there is a first
-  check, never a verified behaviour.
+  check, never a verified behaviour. How to run them, and which tests are Linux's alone:
+  [testing.md](testing.md#the-windows-build).
+
+## What Windows does differently
+
+Found by running the core's tests under Wine; each broke code that works on Linux.
+
+- A file is flushed to the disk only through a handle that may write it.
+- A folder cannot be opened as a file (`File::open`), and Windows has no flush of a whole
+  filesystem for a user.
+- A file still open cannot be replaced by a rename (Wine, and Windows without POSIX rename
+  semantics), nor its folder deleted.
+- A path made into a string keeps the system's separator: compare `Path`s, not strings.
+- Folders ignore case, so two names that differ only by case are one file.
+- Creation times cannot tell a file made again from the old one: Windows gives a name made again
+  within 15 seconds the old one's, and Wine gives the last write's. NTFS's file index does.
 - **Real checks on Windows 10 or 11**, by a person, recorded in [compatibility.md](compatibility.md)
   as the Linux ones are. Nothing about Windows is called verified before.
 - Later, a build with Microsoft's toolchain (`x86_64-pc-windows-msvc`), the usual one on Windows,

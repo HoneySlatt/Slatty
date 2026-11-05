@@ -260,6 +260,7 @@ mod tests {
     }
 
     /// `xdg-open` itself would open a page on the desktop running the tests: `true` stands in.
+    #[cfg(unix)]
     #[test]
     fn an_opener_is_not_left_a_zombie() {
         let pid = spawn_reaped(&mut std::process::Command::new("true")).unwrap();

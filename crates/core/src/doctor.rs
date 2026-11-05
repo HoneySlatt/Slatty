@@ -217,11 +217,20 @@ mod tests {
                 "{relative:?}"
             );
         }
+        #[cfg(unix)]
         assert!(find_in("/nonexistent:/bin".as_ref(), "sh").is_some_and(|p| p.is_absolute()));
+        #[cfg(windows)]
+        {
+            let system =
+                std::path::Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32");
+            let path = std::env::join_paths([Path::new(r"C:\nonexistent"), &system]).unwrap();
+            assert!(find_in(&path, "cmd.exe").is_some_and(|p| p.is_absolute()));
+        }
     }
 
     /// `true` and `false` stand in for a bubblewrap that starts a sandbox and one that cannot (no
     /// user namespaces allowed, as some systems keep them).
+    #[cfg(unix)]
     #[test]
     fn bubblewrap_is_found_and_tried() {
         assert!(!bubblewrap(None).ok);
@@ -232,6 +241,7 @@ mod tests {
     /// Ubuntu 23.10 and later let only programs with an AppArmor profile start a sandbox; Ubuntu's
     /// profile for bubblewrap may still forbid one inside another, which an isolated game needs.
     /// Each case says why, rather than the game failing as it starts.
+    #[cfg(unix)]
     #[test]
     fn a_sandbox_that_cannot_start_says_why() {
         let dir = std::env::temp_dir().join(format!("slatty-bwrap-{}", std::process::id()));

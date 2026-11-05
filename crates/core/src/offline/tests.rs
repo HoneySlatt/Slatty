@@ -687,6 +687,7 @@ async fn a_pause_while_a_file_already_there_is_read_leaves_it() {
     assert!(fake.opened.lock().unwrap().is_empty());
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn a_link_in_place_of_the_staged_file_is_not_followed() {
     let dir = temp("link");

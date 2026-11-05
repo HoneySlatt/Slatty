@@ -198,10 +198,11 @@ mod tests {
         let root = std::env::temp_dir().join(format!("slatty-gi-{}", std::process::id()));
         std::fs::create_dir_all(root.join("Bin/X64")).unwrap();
         std::fs::write(root.join("Bin/X64/Game.EXE"), b"").unwrap();
-        assert_eq!(
-            resolve_relative(&root, "bin\\x64\\game.exe").unwrap(),
-            root.join("Bin/X64/Game.EXE")
-        );
+        let found = resolve_relative(&root, "bin\\x64\\game.exe").unwrap();
+        assert!(found.is_file());
+        // Windows' folders ignore case: there the name as written is the file.
+        #[cfg(unix)]
+        assert_eq!(found, root.join("Bin/X64/Game.EXE"));
         assert!(resolve_relative(&root, "..\\outside").is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -227,6 +228,7 @@ mod tests {
 
     /// A game writes its own folder: a pipe named like an info file would block the launcher on
     /// reading it, at every start.
+    #[cfg(unix)]
     #[test]
     fn only_files_are_read_as_info_files() {
         let root = std::env::temp_dir().join(format!("slatty-gi3-{}", std::process::id()));

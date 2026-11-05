@@ -591,6 +591,7 @@ async fn case_duplicates_in_the_cloud_skip_only_that_pair() {
     assert_eq!(env.remote("Save.dat").as_deref(), Some("upper"));
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn a_download_cannot_follow_a_directory_symlink_outside_saves() {
     let env = Env::new("symlink-download");
@@ -628,6 +629,7 @@ async fn a_download_refuses_a_local_change_after_the_scan() {
 
 /// A game writes its save folder: a pipe left where a save goes would make reading it wait forever
 /// for a writer, holding the game's lock.
+#[cfg(unix)]
 #[test]
 fn a_pipe_in_place_of_a_save_is_never_waited_on() {
     use std::os::unix::fs::OpenOptionsExt;

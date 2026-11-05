@@ -297,14 +297,20 @@ mod tests {
         assert!(matches!(task(&dirs, &install), Err(Error::NotFound(_))));
         kept_install().save(&dirs, b"[FAKE] manifest").unwrap();
         let (exe, args, cwd) = task(&dirs, &install).unwrap();
-        assert_eq!(exe, game.join("binaries/win64/Game.exe"));
+        assert!(exe.is_file() && cwd.is_dir());
+        // Windows' folders ignore case: there the manifest's names are the files.
+        #[cfg(unix)]
+        {
+            assert_eq!(exe, game.join("binaries/win64/Game.exe"));
+            assert_eq!(cwd, game.join("binaries/win64"));
+        }
         assert_eq!(args, ["-fake", "two words", "-extra"]);
-        assert_eq!(cwd, game.join("binaries/win64"));
         std::fs::remove_dir_all(&root).unwrap();
     }
 
     /// The ownership token is the user's alone to read, and a link the game left in its place is
     /// replaced, never written through.
+    #[cfg(unix)]
     #[test]
     fn the_ownership_token_is_private_and_never_written_through_a_link() {
         use std::os::unix::fs::PermissionsExt;

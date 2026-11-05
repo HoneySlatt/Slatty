@@ -134,6 +134,7 @@ mod tests {
         std::fs::write(root.join(".x.slatty-tmp-1"), b"tmp").unwrap();
         // A game's own save, whatever its name holds.
         std::fs::write(root.join("keep.slatty-tmp-x.sav"), b"save").unwrap();
+        #[cfg(unix)]
         std::os::unix::fs::symlink("/etc/hostname", root.join("link")).unwrap();
         let s = scan(&root).unwrap();
         let f = &s.files["slot1/save.dat"];
@@ -142,6 +143,7 @@ mod tests {
         let mut names: Vec<&str> = s.files.keys().map(String::as_str).collect();
         names.sort();
         assert_eq!(names, ["keep.slatty-tmp-x.sav", "slot1/save.dat"]);
+        #[cfg(unix)]
         assert_eq!(s.skipped, vec!["link (symbolic link)"]);
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -153,6 +155,8 @@ mod tests {
         assert!(!s.root_exists && s.files.is_empty() && !root.exists());
     }
 
+    // Windows' folders cannot hold both names.
+    #[cfg(unix)]
     #[test]
     fn refuses_case_only_duplicates() {
         let root = std::env::temp_dir().join(format!("slatty-scan-case-{}", std::process::id()));

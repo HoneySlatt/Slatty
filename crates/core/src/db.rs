@@ -229,6 +229,7 @@ mod tests {
     /// The interface reads its settings before anything else, which made the data folder at the
     /// first start, readable by others until the folders were made private: the database was
     /// created in it before that.
+    #[cfg(unix)]
     #[test]
     fn the_folder_of_a_new_database_is_the_users_only() {
         use std::os::unix::fs::PermissionsExt;

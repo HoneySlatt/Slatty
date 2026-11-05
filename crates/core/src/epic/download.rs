@@ -829,19 +829,22 @@ pub(crate) mod tests {
         manifest.files[0].name = "../escape.exe".into();
         assert!(BuildFiles::of(&manifest).is_err());
 
-        let root = root("link");
-        let outside = root.join("outside");
-        std::fs::create_dir_all(&outside).unwrap();
-        let (manifest, cdn) = build(&sample(), 1024);
-        let partial = root.join(".Game.part");
-        std::fs::create_dir_all(&partial).unwrap();
-        std::os::unix::fs::symlink(&outside, partial.join("Data")).unwrap();
-        let e = install(&manifest, &cdn, &partial, &root.join("Game"))
-            .await
-            .unwrap_err();
-        assert!(matches!(e, Error::Refused(_)), "{e}");
-        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
-        std::fs::remove_dir_all(&root).unwrap();
+        #[cfg(unix)]
+        {
+            let root = root("link");
+            let outside = root.join("outside");
+            std::fs::create_dir_all(&outside).unwrap();
+            let (manifest, cdn) = build(&sample(), 1024);
+            let partial = root.join(".Game.part");
+            std::fs::create_dir_all(&partial).unwrap();
+            std::os::unix::fs::symlink(&outside, partial.join("Data")).unwrap();
+            let e = install(&manifest, &cdn, &partial, &root.join("Game"))
+                .await
+                .unwrap_err();
+            assert!(matches!(e, Error::Refused(_)), "{e}");
+            assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+            std::fs::remove_dir_all(&root).unwrap();
+        }
     }
 
     /// Past the cache's limit, a chunk used again much later is downloaded again rather than
@@ -876,6 +879,7 @@ pub(crate) mod tests {
 
     /// A file that cannot be read is one to repair, not a reason to stop: Verify lists it, Repair
     /// writes it again.
+    #[cfg(unix)]
     #[tokio::test]
     async fn an_unreadable_file_is_repaired() {
         use std::os::unix::fs::PermissionsExt;

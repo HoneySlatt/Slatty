@@ -927,6 +927,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn uninstall_refuses_an_escaping_parent_before_deleting_any_file() {
         let env = Env::new("escaping-uninstall", true);
@@ -940,6 +941,7 @@ mod tests {
         assert!(Install::get(&env.db, "1").unwrap().is_some());
     }
 
+    #[cfg(unix)]
     #[test]
     fn obsolete_files_cannot_be_deleted_through_an_escaping_parent() {
         let env = Env::new("escaping-obsolete", true);
@@ -980,6 +982,7 @@ mod tests {
     /// A game folder moved to another disk and linked back: uninstalling it deletes its files
     /// there, then the folder emptied and the link, instead of failing on the link for good with
     /// the game still registered.
+    #[cfg(unix)]
     #[test]
     fn a_game_folder_linked_from_elsewhere_is_uninstalled() {
         let env = Env::new("linked-folder", true);
@@ -998,6 +1001,7 @@ mod tests {
     /// A game's folder emptied of its files but that cannot be removed (a mount point, a parent
     /// that cannot be written) stays: the game is uninstalled all the same, rather than left
     /// installed without its files, every attempt failing the same way.
+    #[cfg(unix)]
     #[test]
     fn a_game_whose_emptied_folder_cannot_be_removed_is_uninstalled() {
         use std::os::unix::fs::PermissionsExt;
@@ -1060,6 +1064,7 @@ mod tests {
 
     /// The prefix's user folder is a link out of the prefix (a game writes its prefix): the
     /// backup would copy where it leads, and the uninstall stops before deleting anything.
+    #[cfg(unix)]
     #[test]
     fn a_prefix_whose_user_folder_leads_out_of_it_is_not_backed_up_nor_deleted() {
         let env = Env::new("prefix-link", true);

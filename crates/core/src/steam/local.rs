@@ -386,12 +386,14 @@ pub(crate) mod tests {
                 }"#,
             );
             let other = home.join("other-library");
+            // Steam escapes the backslashes of Windows' paths.
+            let quoted = |path: &Path| path.display().to_string().replace('\\', "\\\\");
             write(
                 "steamapps/libraryfolders.vdf",
                 &format!(
                     r#""libraryfolders" {{ "0" {{ "path" "{}" }} "1" {{ "path" "{}" }} }}"#,
-                    root.display(),
-                    other.display()
+                    quoted(&root),
+                    quoted(&other)
                 ),
             );
             write(
@@ -555,6 +557,7 @@ pub(crate) mod tests {
     /// manifest being said to stay as it was until the end: the files' sizes, and the room they
     /// take, small for a file made whole and empty until written; nothing through a link.
     /// Not checked against a real download.
+    #[cfg(unix)]
     #[test]
     fn what_steam_wrote_of_a_download_is_measured_in_its_folder() {
         use std::io::{Seek, Write};
@@ -601,6 +604,7 @@ pub(crate) mod tests {
 
     /// Steam found through its `~/.steam/steam` link names its main library by its real path: read
     /// once, not twice.
+    #[cfg(unix)]
     #[test]
     fn the_main_library_found_through_a_link_is_read_once() {
         let fake = FakeSteam::new("link");

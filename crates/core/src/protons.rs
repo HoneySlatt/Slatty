@@ -1066,5 +1066,6 @@ pub(crate) fn unpack_tar(
     Ok(())
 }
 
-#[cfg(test)]
+// Proton builds are Linux's alone.
+#[cfg(all(test, unix))]
 mod tests;

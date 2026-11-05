@@ -1078,5 +1078,6 @@ impl Inflate {
     }
 }
 
-#[cfg(test)]
+// Linux builds are installed on Linux alone.
+#[cfg(all(test, unix))]
 mod tests;

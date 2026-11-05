@@ -344,8 +344,8 @@ mod tests {
 
         let library = read(&fake.steam, false).unwrap();
         assert_eq!(
-            library.games[0].icon.as_deref(),
-            Some(icon.display().to_string().as_str()),
+            library.games[0].icon.as_deref().map(Path::new),
+            Some(icon.as_path()),
             "the icon the client keeps"
         );
         assert_eq!(library.games[1].icon, None, "none kept: none");
@@ -561,6 +561,7 @@ mod tests {
         std::fs::write(dir.join("outside.jpg"), b"jpg").unwrap();
         // A link named as an image, leading to another file (the client's settings, say).
         std::fs::write(dir.join("config.vdf"), b"[FAKE] settings").unwrap();
+        #[cfg(unix)]
         std::os::unix::fs::symlink(dir.join("config.vdf"), dir.join("app/abc/logo.png")).unwrap();
         let common = crate::steam::vdf::parse(
             r#""library_assets_full" {
@@ -576,6 +577,7 @@ mod tests {
             Some(folder.join("abc/library_capsule.jpg"))
         );
         assert_eq!(cached_asset(&folder, &common, "library_hero"), None);
+        #[cfg(unix)]
         assert_eq!(
             cached_asset(&folder, &common, "library_logo"),
             None,
@@ -585,6 +587,7 @@ mod tests {
     }
 
     /// A pipe in place of one of the client's files holds nothing up.
+    #[cfg(unix)]
     #[test]
     fn a_pipe_among_steams_files_is_passed_over() {
         let fake = FakeSteam::new("fifo");
