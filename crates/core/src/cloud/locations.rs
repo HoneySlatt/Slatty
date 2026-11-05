@@ -9,6 +9,7 @@ use crate::error::{Error, Result};
 use crate::gameinfo::resolve_relative;
 use crate::http;
 use crate::install::{Install, Platform};
+#[cfg(unix)]
 use crate::runner::Runner;
 use crate::secret::Secret;
 
@@ -55,7 +56,8 @@ pub fn root_of(location: &SaveLocation, install: &Install) -> Result<PathBuf> {
     resolve(&location.location, install)
 }
 
-/// Maps a GOG location template to a folder inside the game's Wine prefix.
+/// Maps a GOG location template to a folder: inside the game's Wine prefix on Linux, among the
+/// user's own folders on Windows.
 pub fn resolve(template: &str, install: &Install) -> Result<PathBuf> {
     if install.platform != Platform::Windows {
         return Err(Error::Unsupported(
@@ -97,6 +99,28 @@ pub fn resolve(template: &str, install: &Install) -> Result<PathBuf> {
     Ok(root)
 }
 
+/// The user folder a location's variable names: in the game's Wine prefix on Linux, the user's own
+/// on Windows, where the game runs directly.
+#[cfg(windows)]
+fn user_folder(_: &Install, var: &str) -> Result<PathBuf> {
+    use crate::platform::UserFolder;
+    let folder = match var {
+        "SAVED_GAMES" => UserFolder::SavedGames,
+        "DOCUMENTS" => UserFolder::Documents,
+        "APPLICATION_DATA_LOCAL" => UserFolder::LocalAppData,
+        "APPLICATION_DATA_LOCAL_LOW" => UserFolder::LocalAppDataLow,
+        "APPLICATION_DATA_ROAMING" => UserFolder::RoamingAppData,
+        other => {
+            return Err(Error::Unsupported(format!(
+                "unknown save location variable <?{other}?>"
+            )));
+        }
+    };
+    crate::platform::user_folder(folder)
+        .map_err(|e| Error::io(format!("find the folder of <?{var}?>"), e))
+}
+
+#[cfg(unix)]
 fn user_folder(install: &Install, var: &str) -> Result<PathBuf> {
     let prefix = install
         .runner
@@ -293,6 +317,45 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// On Windows a game runs directly: its saves are in the user's own folders, wherever Windows
+    /// puts them, and the game's folder for those it keeps beside itself.
+    #[cfg(windows)]
+    #[test]
+    fn saves_are_in_the_users_own_folders_on_windows() {
+        let root = std::env::temp_dir().join(format!("slatty-loc-windows-{}", std::process::id()));
+        let mut i = install(&root);
+        i.runner = Runner::Native;
+        let env = |var: &str| PathBuf::from(std::env::var_os(var).unwrap());
+        assert_eq!(
+            resolve("<?APPLICATION_DATA_LOCAL?>/[FAKE] Studio/Game", &i).unwrap(),
+            env("LOCALAPPDATA").join("[FAKE] Studio").join("Game")
+        );
+        assert_eq!(
+            resolve("<?APPLICATION_DATA_ROAMING?>/[FAKE] Game", &i).unwrap(),
+            env("APPDATA").join("[FAKE] Game")
+        );
+        for template in [
+            "<?SAVED_GAMES?>/G",
+            "<?DOCUMENTS?>/G",
+            "<?APPLICATION_DATA_LOCAL_LOW?>/G",
+        ] {
+            let folder = resolve(template, &i).unwrap();
+            assert!(
+                folder.is_absolute() && folder.starts_with(env("USERPROFILE")),
+                "{template}: {}",
+                folder.display()
+            );
+        }
+        assert_eq!(
+            resolve("<?INSTALL?>/saves", &i).unwrap(),
+            root.join("game").join("saves")
+        );
+        assert!(resolve("<?APPLICATION_SUPPORT?>/x", &i).is_err());
+        assert!(resolve("<?SAVED_GAMES?>/../../escape", &i).is_err());
+        assert!(!root.exists(), "nothing is created");
+    }
+
+    #[cfg(unix)]
     #[test]
     fn before_the_first_launch_saves_go_where_proton_will_put_them() {
         let root = std::env::temp_dir().join(format!("slatty-loc-empty-{}", std::process::id()));

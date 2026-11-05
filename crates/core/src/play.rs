@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use reqwest::Client;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -86,6 +86,9 @@ pub enum PlayEvent {
     SetupWarning(String),
     /// Setup could not run now (offline, error); it is retried at the next launch.
     SetupSkipped(String),
+    /// A setup is pending, which on Windows runs only once the person agreed
+    /// (`PlayRequest::setup_agreed`): it waits for the next launch, or `slatty setup`.
+    SetupNotAgreed,
     CloudChecked(CloudSummary),
     /// Cloud not checked; the reason is shown and local saves are kept.
     CloudSkipped(String),
@@ -133,6 +136,10 @@ pub struct PlayRequest {
     pub comet: bool,
     /// Executable that understands `session::SUPERVISE_ARG`.
     pub supervisor: PathBuf,
+    /// Whether the person agreed to GOG's setup running now, on Windows, where it can ask for
+    /// administrator rights (`setup::run`); without it a pending setup waits. Linux runs the setup
+    /// in the game's prefix without asking.
+    pub setup_agreed: bool,
 }
 
 /// Full play flow: cloud check, Comet, supervised session (unlocks told as they come), cloud
@@ -207,7 +214,10 @@ pub async fn play(
         }
     }
 
-    if crate::setup::pending(dirs, &install.game_id)? {
+    let setup = crate::setup::pending(dirs, &install.game_id)?;
+    if setup && cfg!(windows) && !req.setup_agreed {
+        emit(PlayEvent::SetupNotAgreed);
+    } else if setup {
         let result = async {
             let tokens = tokens(db, dirs, http, user_id.as_deref()).await?;
             let forward = |e: SetupEvent| {
@@ -341,7 +351,7 @@ pub async fn play(
     if install.isolated {
         emit(PlayEvent::Isolated);
     }
-    let started = Instant::now();
+    let started = crate::platform::Awake::now();
     let unlocks = comet.as_mut().and_then(|(_, _, unlocks)| unlocks.as_mut());
     let outcome = run_session(
         db,
@@ -454,8 +464,8 @@ async fn run_session(
         other => return Err(Error::parse("session supervisor", format!("{other:?}"))),
     }
     let id = session::record_start(db, &req.game_id, user_id)?;
-    // Monotonic: suspend is not play time, and the wall clock can be set meanwhile.
-    let played = Instant::now();
+    // Suspend is not play time, and the wall clock can be set meanwhile.
+    let played = crate::platform::Awake::now();
     let mut stop_open = true;
     let mut look = tokio::time::interval(UNLOCKS_EVERY);
     let outcome = loop {
@@ -562,6 +572,7 @@ async fn start_comet(
     install: &Install,
     user_id: Option<&str>,
 ) -> Result<(Comet, Option<Vec<Achievement>>, Option<comet::Unlocks>)> {
+    Comet::check_system()?;
     let bin =
         find_in_path("comet").ok_or_else(|| Error::NotFound("`comet` is not in PATH".into()))?;
     let mut account = Account::load_for(db, dirs, user_id.ok_or(Error::NotLoggedIn)?).await?;
@@ -671,6 +682,7 @@ mod tests {
             cloud: false,
             comet: false,
             supervisor: root.join("[FAKE] supervisor"),
+            setup_agreed: false,
         };
         let http = crate::http::client().unwrap();
         let refused = play(&db, &dirs, &http, request, |_| {}, stop)

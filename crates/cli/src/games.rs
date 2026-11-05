@@ -29,7 +29,8 @@ pub struct ImportArgs {
     /// GOG product id of the game, needed for a native Linux build
     #[arg(long)]
     game_id: Option<String>,
-    /// How the game runs: native (a Linux build), umu (Proton) or wine
+    /// How the game runs: native (a Linux build, or on Windows a Windows build), umu (Proton) or
+    /// wine
     #[arg(long, value_enum)]
     runner: Option<RunnerKind>,
     /// Proton directory (contains the `proton` script)

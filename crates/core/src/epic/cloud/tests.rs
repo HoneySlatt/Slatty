@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::cloud::sync::{Prefer, SyncReport};
+#[cfg(unix)]
 use crate::install::Platform;
+#[cfg(unix)]
 use crate::runner::Runner;
 
 /// Epic's storage in memory: files by key, under the prefix Epic's keys begin with, each with the
@@ -308,6 +310,7 @@ fn snapshots_are_named_after_every_one_stored() {
     assert!(now.as_str() > "2026.01.01-00.00.00" && now.len() == future.len());
 }
 
+#[cfg(unix)]
 fn install(root: &std::path::Path, isolated: bool) -> Install {
     Install {
         umu_id: None,
@@ -326,6 +329,7 @@ fn install(root: &std::path::Path, isolated: bool) -> Install {
 
 /// Epic's templates resolve inside the prefix or the game folder, the account id in place of
 /// `{EpicID}`; a variable Slatty does not know is refused, never left as a folder name.
+#[cfg(unix)]
 #[test]
 fn epic_save_folders_resolve_in_the_prefix() {
     let root = std::env::temp_dir().join(format!("slatty-epic-saves-{}", std::process::id()));

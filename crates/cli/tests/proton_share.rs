@@ -1,3 +1,6 @@
+// Linux's alone (ADR-0022).
+#![cfg(unix)]
+
 use std::path::Path;
 use std::process::{Command, Output};
 

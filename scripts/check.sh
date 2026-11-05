@@ -4,8 +4,8 @@
 #   linux    formatting; clippy with warnings as errors; the tests (no network, no real game); the
 #            code documentation with warnings as errors; cargo deny (licences, advisories, sources);
 #            the links between Markdown files (lychee, offline); then the build, last.
-#   windows  every crate checked for Windows in the `windows` shell, then the core's tests under
-#            Wine (ADR-0022, ADR-0024).
+#   windows  every crate checked for Windows in the `windows` shell, then the core's and the
+#            command line's tests under Wine (ADR-0022, ADR-0024).
 #   package  the Nix package.
 # Before any part, it checks that CI runs every part. With no argument it runs every part in turn:
 # what to run before a commit. `scripts/check.sh windows` runs one part. CI runs each part in a job
@@ -50,9 +50,10 @@ windows() {
   nix develop .#windows --no-update-lock-file --command cargo check --workspace --locked
 
   # Without a display, Wine opens no window on the desktop running the tests (docs/testing.md).
-  step "Windows: the core's tests under Wine"
+  step "Windows: the core's and the command line's tests under Wine"
   env -u DISPLAY -u WAYLAND_DISPLAY \
-    nix develop .#windows --no-update-lock-file --command cargo test -p slatty-core --locked
+    nix develop .#windows --no-update-lock-file --command \
+    cargo test -p slatty-core -p slatty-cli --locked
 }
 
 package() {

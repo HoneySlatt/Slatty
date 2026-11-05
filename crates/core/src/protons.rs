@@ -426,8 +426,10 @@ fn prune(
     Ok(())
 }
 
-/// Refuses unless Proton downloads are turned on: GitHub is contacted only then.
+/// Refuses unless Proton downloads are turned on: GitHub is contacted only then. Proton builds
+/// are Linux's alone.
 pub fn check_allowed(db: &Db) -> Result<()> {
+    crate::platform::linux_only("Proton builds")?;
     if crate::settings::proton_downloads(db)? {
         Ok(())
     } else {
@@ -519,6 +521,7 @@ pub async fn install(
     progress: impl Fn(Stage) + Send + Sync + 'static,
     cancel: &CancellationToken,
 ) -> Result<PathBuf> {
+    crate::platform::linux_only("Proton builds")?;
     let _lock = lock(dirs)?;
     install_locked(http, dirs, release, progress, cancel).await
 }

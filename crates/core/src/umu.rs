@@ -89,6 +89,10 @@ pub async fn resolve(db: &Db, http: &Client, install: &mut Install) {
     let Runner::Umu { proton, .. } = &install.runner else {
         return;
     };
+    // umu is Linux's alone; the launch refuses such a game on Windows.
+    if crate::platform::linux_only("umu").is_err() {
+        return;
+    }
     // umu's database knows games by their store's id: GOG's product id, Epic's app name (store
     // `egs`). One added by hand has none to look up.
     if install.umu_id.is_some() {
@@ -143,7 +147,9 @@ mod tests {
     }
 
     /// The Proton builds made for umu (UMU-Proton, GE-Proton, Proton-CachyOS) carry umu's
-    /// database in their protonfixes: the id is read there, and nothing leaves the computer.
+    /// database in their protonfixes: the id is read there, and nothing leaves the computer. umu is
+    /// Linux's alone.
+    #[cfg(unix)]
     #[tokio::test]
     async fn the_id_is_read_from_the_proton_builds_own_copy_of_the_database() {
         let proton = std::env::temp_dir().join(format!("slatty-umu-csv-{}", std::process::id()));

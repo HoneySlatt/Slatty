@@ -51,6 +51,10 @@ pub struct SuperviseRequest {
     pub log: PathBuf,
     /// Lock held until no process of the session is left (`lock::session`).
     pub busy: Option<PathBuf>,
+    /// On Windows, whether a program that needs administrator rights is started through Windows'
+    /// prompt for them (`SessionHandle::start_elevating`). Unused on Linux.
+    #[serde(default)]
+    pub elevate: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -126,7 +130,7 @@ pub fn supervise_main() -> i32 {
     #[cfg(unix)]
     return supervise(&request.spec, stdout, stderr, emit);
     #[cfg(windows)]
-    return windows::supervise(&request.spec, stdout, stderr, emit);
+    return windows::supervise(&request.spec, request.elevate, stdout, stderr, emit);
 }
 
 /// Starts the game and follows its processes until none is left, as a subreaper; SIGTERM or
@@ -275,6 +279,29 @@ impl SessionHandle {
         log: &Path,
         busy: Option<&Path>,
     ) -> Result<SessionHandle> {
+        Self::launch(supervisor, spec, log, busy, false).await
+    }
+
+    /// `start`, for GOG's setup: on Windows a program that needs administrator rights is started
+    /// through Windows' prompt for them (UAC), once the person agreed. Such a program runs outside
+    /// the session's job object, which cannot hold it: the session follows it alone, its output is
+    /// not logged, and it cannot be stopped. On Linux, `start`.
+    pub async fn start_elevating(
+        supervisor: &Path,
+        spec: &LaunchSpec,
+        log: &Path,
+        busy: Option<&Path>,
+    ) -> Result<SessionHandle> {
+        Self::launch(supervisor, spec, log, busy, true).await
+    }
+
+    async fn launch(
+        supervisor: &Path,
+        spec: &LaunchSpec,
+        log: &Path,
+        busy: Option<&Path>,
+        elevate: bool,
+    ) -> Result<SessionHandle> {
         if let Some(parent) = log.parent() {
             crate::paths::ensure_dir(parent)?;
         }
@@ -301,6 +328,7 @@ impl SessionHandle {
             spec: spec.clone(),
             log: log.to_path_buf(),
             busy: busy.map(Path::to_path_buf),
+            elevate,
         })
         .map_err(|e| Error::parse("supervise request", e))?;
         let mut stdin = child.stdin.take().expect("stdin is piped");
@@ -381,9 +409,9 @@ pub fn record_start(db: &Db, game_id: &str, user_id: Option<&str>) -> Result<i64
     Ok(conn.last_insert_rowid())
 }
 
-/// Records how a session ended, `played` after its start: measured on a monotonic clock, it leaves
-/// out suspend and is not moved by the wall clock being set meanwhile, which would otherwise reach
-/// GOG and the local play time.
+/// Records how a session ended, `played` after its start: measured on a clock that stops while
+/// the computer sleeps (`platform::Awake`), it leaves out suspend and is not moved by the wall
+/// clock being set meanwhile, which would otherwise reach GOG and the local play time.
 pub fn record_end(
     db: &Db,
     id: i64,

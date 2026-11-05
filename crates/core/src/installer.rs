@@ -38,7 +38,7 @@ pub struct InstallRequest {
     /// An interrupted install resumes on its own platform whatever this says.
     pub platform: Platform,
     pub root: PathBuf,
-    /// Unused for a Linux build.
+    /// Unused for a Linux build, and on Windows.
     pub proton: PathBuf,
     pub dlcs: DlcSelection,
     pub restart: bool,
@@ -84,6 +84,14 @@ pub async fn install(
         )));
     }
     let previous = InstallJob::load(db, &req.game_id)?;
+    // Refused before a restart deletes anything.
+    let linux_build = match previous.as_ref().filter(|_| !req.restart) {
+        Some(j) => linux::is_linux_build(&j.build_id),
+        None => req.platform == Platform::Linux,
+    };
+    if linux_build {
+        crate::platform::linux_only("GOG's Linux builds")?;
+    }
     if req.restart
         && let Some(job) = &previous
     {
@@ -167,7 +175,7 @@ pub async fn install(
         directory: directory.clone(),
         state: DOWNLOADING.into(),
         dlcs: plan.selected_dlcs(),
-        proton: (plan.platform == Platform::Windows).then(|| req.proton.clone()),
+        proton: (plan.platform == Platform::Windows && cfg!(unix)).then(|| req.proton.clone()),
     };
     job.save(db)?;
 
@@ -239,8 +247,10 @@ pub async fn install(
         }
         .save(dirs, &req.game_id)?;
 
+        // On Windows a Windows build runs directly.
         let runner = match plan.platform {
             Platform::Linux => Runner::Native,
+            Platform::Windows if cfg!(windows) => Runner::Native,
             Platform::Windows => Runner::Umu {
                 proton: req.proton,
                 prefix: dirs.data.join("prefixes").join(&req.game_id),

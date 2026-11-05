@@ -1,3 +1,6 @@
+// Games added by hand on Windows come with M3.5 (docs/PLAN.md).
+#![cfg(unix)]
+
 use std::path::Path;
 use std::process::{Command, Output};
 

@@ -67,15 +67,26 @@ own, into `target/windows`; its tests run through Wine, in a Wine prefix under `
 
 ```sh
 nix develop .#windows -c cargo check --workspace
-env -u DISPLAY -u WAYLAND_DISPLAY nix develop .#windows -c cargo test -p slatty-core
+env -u DISPLAY -u WAYLAND_DISPLAY nix develop .#windows -c cargo test -p slatty-core -p slatty-cli
 ```
 
 `scripts/check.sh` runs both, in its `windows` part. Without a display, Wine opens no window on the
 desktop running the tests. Tests of what only Linux
-has (Proton, umu, isolation, Wine prefixes, file modes, pipes, symbolic links planted by a game)
-are marked `#[cfg(unix)]`; so, for now, are some tests of shared behaviour whose setup needs Linux
+has (Proton, umu, isolation, Wine prefixes, file modes, pipes, symbolic links to files planted by
+a game) are marked `#[cfg(unix)]`, and so are the command line's test files that run Linux
+programs; so, for now, are some tests of shared behaviour whose setup needs Linux
 ([known debt](PLAN.md#known-debt)). Where only part of a test needs Linux, that part alone is
-marked. Wine is not Windows: a test passing there checks the code, not Windows' behaviour.
+marked. A link to a folder is a junction on Windows (`platform::link_folder`), which any user can
+make. Wine is not Windows: a test passing there checks the code, not Windows' behaviour.
+
+The command line's `play_windows.rs` plays a fake GOG game through the real supervisor: the game is
+the test program itself, copied into a fake game folder, where its ignored test `fake_game` does
+what the folder's `fake-game.txt` says (exit with a code, sleep until stopped, start itself and
+exit).
+
+A test program built for Windows also runs on Windows itself, without Rust: copy it from
+`target/windows/x86_64-pc-windows-gnu/debug/deps/` (or `release/deps/` with `--release`) and run it
+there, for instance `slatty_core-<hash>.exe --ignored --nocapture syncing_every_small_file`.
 
 ## Benchmarks
 
@@ -97,6 +108,11 @@ SLATTY_BENCH_FILE=<file> cargo test --release -p slatty-core verifying_a_large_f
 
 # A download that keeps arriving for minutes is not cut off (local server, over two minutes)
 cargo test -p slatty-core a_long_download_is_not_cut_off -- --ignored
+
+# What syncing each of 2,000 files of 16 KiB costs, as installs do on Windows (ADR-0029), on the
+# disk SLATTY_MEASURE_DIR names (else the temporary folder); on Windows, its test program built
+# with --release, as above
+SLATTY_MEASURE_DIR=<folder> cargo test --release -p slatty-core syncing_every_small_file -- --ignored --nocapture
 ```
 
 **`library_at_10000_games`** builds both pages with 10,000 games whose titles are long, accented and
@@ -188,6 +204,51 @@ Settings → Privacy for steps 4 and 6 (the command line has no switch for it).
    report it without a second notification, and it must appear on the GOG profile.
 7. **Maintenance:** `slatty verify <id>`. Damage a file, then `slatty verify <id> --repair`. Finally
    `slatty uninstall <id>`: files added to the game folder must remain.
+
+## Checks on Windows
+
+M3.3's check by hand ([PLAN.md](PLAN.md#m33--play-a-gog-game)), on Windows 10 or 11, with a GOG
+account: it installs a game, plays it (play time is sent to GOG) and syncs its saves. Choose a small
+GOG game with cloud saves; one whose setup installs a redistributable (Visual C++, DirectX) checks
+the administrator prompt too. Back up its saves first if the account has played it. Record each
+result in [compatibility.md](compatibility.md), successful or not, with the Windows version.
+
+Build on Linux, then copy `target/windows/x86_64-pc-windows-gnu/release/slatty.exe` into a folder
+of the Windows machine (it needs no other file), and run it from PowerShell in that folder:
+
+```sh
+nix develop .#windows -c cargo build --release -p slatty-cli
+# For step 9, also the core's test program; its path is printed (slatty_core-<hash>.exe)
+nix develop .#windows -c cargo test --release -p slatty-core --no-run
+```
+
+1. **Start:** `.\slatty.exe --version`. Note whether SmartScreen warns.
+2. **Sign-in:** `.\slatty.exe auth login`, signing in in the browser, then `.\slatty.exe auth
+   status`. In Credential Manager (Windows Credentials), Slatty's entry is there.
+3. **Library:** `.\slatty.exe library sync`, then `.\slatty.exe library list`.
+4. **Install:** `.\slatty.exe install <id> --info`, then `.\slatty.exe install <id>` (into
+   `%USERPROFILE%\Games\GOG` unless `--dir` says otherwise). Press Ctrl+C during the download
+   and run it again: it resumes and completes, the game folder appearing only at the end.
+5. **First launch:** `.\slatty.exe launch <id>`. It asks whether to run GOG's setup: answer `y`.
+   Note whether Windows' administrator prompt comes to the front or waits in the taskbar; accept
+   it. The game starts; play a minute and save.
+6. **The session:** quit the game from its own menu: the command says the session ended after the
+   minutes played, and that the cloud saves were uploaded and play time sent. Launch again and
+   press Ctrl+C once: the game's window is asked to close; a second Ctrl+C ends it. Put the
+   computer to sleep for a few minutes during a session: they are not counted.
+7. **Setup refused:** `.\slatty.exe setup <id> --force`, and refuse Windows' prompt: it says the
+   setup did not finish, and the next launch asks again. `.\slatty.exe launch <id> --no-setup`
+   starts the game without asking.
+8. **Saves:** `.\slatty.exe cloud status <id>` names the save folder in your own folders (Saved
+   Games, Documents or AppData), and nothing is left to do. Change the save from another computer
+   or Galaxy, then `.\slatty.exe cloud sync <id>`: it is downloaded, the previous copy backed up.
+9. **Flushing every file:** `slatty_core-<hash>.exe --ignored --nocapture syncing_every_small_file`,
+   with `SLATTY_MEASURE_DIR` set to a folder of the disk games go on; the two times go to
+   [measurements.md](measurements.md).
+10. **Maintenance:** `.\slatty.exe verify <id>`; damage a file and `.\slatty.exe verify <id>
+    --repair`; then `.\slatty.exe uninstall <id>`: files added to the game folder stay.
+11. **Refusals:** `.\slatty.exe isolation <id> --on` and `.\slatty.exe proton list` say they are
+    not available on Windows.
 
 ## Checks against Steam
 

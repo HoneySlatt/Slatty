@@ -60,7 +60,7 @@ plays it, `slatty uninstall epic-<app name>` uninstalls it.
 | `--info` | Shows the version, sizes, languages, DLC and redistributables (for an Epic game: its build, sizes, folder, the program it starts, its prerequisite, and the folder Epic keeps its cloud saves from, if any), and downloads nothing |
 | `--platform windows\|linux` | Which build to install. Default: the setting, Windows until changed |
 | `--dir <folder>` | The folder that receives the game's folder. Remembered as the default |
-| `--proton <folder>` | The Proton build a Windows game runs with. Remembered as the default. Without one, the command lists the builds it found |
+| `--proton <folder>` | The Proton build a Windows game runs with, on Linux; on Windows a Windows game runs directly. Remembered as the default. Without one, the command lists the builds it found |
 | `--language <code>` | A language the build offers (`fr-FR`), as `--info` lists them. Default: English |
 | `--no-dlc` | The base game only. By default every DLC you own is installed |
 | `--dlc <id>…` | Only these DLC |
@@ -103,10 +103,11 @@ one there at another size is never replaced.
 | `slatty launch <id>` | Starts the game and follows it until its last process ends. Ctrl+C asks the game to quit, a second Ctrl+C forces it. An Epic game (`epic-<app name>`) is signed in to your Epic account for the launch. When cloud saves need attention first (a conflict), the game does not start and the command fails |
 | `slatty launch <id> --no-cloud` | Without syncing cloud saves before and after |
 | `slatty launch <id> --no-comet` | Without Comet: no achievements reported during this session |
+| `slatty launch <id> --setup` / `--no-setup` | On Windows: runs GOG's pending setup without asking, or leaves it pending. Without either, the launch asks first, as the setup may ask Windows for administrator rights; with no terminal to ask on, the setup waits |
 | `slatty launch-spec <id>` | Prints the exact command, folder and environment a launch would use, including controller compatibility saved in Game settings; for an Epic game, without the sign-in arguments a launch adds |
 | `slatty isolation <id>` | Whether the game runs isolated from your files |
 | `slatty isolation <id> --on` / `--off` | Changes it from the next launch on |
-| `slatty setup <id>` | Runs GOG's post-install setup again. `--dry-run` shows what it would do; `--force` runs it even if it already ran for this build |
+| `slatty setup <id>` | Runs GOG's post-install setup again; on Windows, it may ask Windows for administrator rights. `--dry-run` shows what it would do; `--force` runs it even if it already ran for this build |
 
 ## Cloud saves
 

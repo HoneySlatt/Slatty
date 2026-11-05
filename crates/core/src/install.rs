@@ -96,6 +96,7 @@ impl Install {
 /// Runs a game with another Proton build from its next launch on; its prefix is kept. A session
 /// already running keeps the build it started with.
 pub fn set_proton(db: &Db, game_id: &str, proton: &Path) -> Result<Install> {
+    crate::platform::linux_only("Proton")?;
     let mut install = Install::get(db, game_id)?
         .ok_or_else(|| Error::NotFound(format!("{game_id} is not installed")))?;
     let Runner::Umu {
@@ -133,6 +134,9 @@ pub fn set_isolated(db: &Db, game_id: &str, isolated: bool) -> Result<Install> {
             "{} runs in an emulator, which Slatty does not isolate",
             install.title
         )));
+    }
+    if isolated {
+        crate::platform::linux_only("isolation")?;
     }
     install.isolated = isolated;
     install.save(db)?;
@@ -185,6 +189,7 @@ fn found_in(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Install
         .canonicalize()
         .map_err(|e| Error::io(format!("open {}", dir.display()), e))?;
     if path.join("start.sh").is_file() && path.join("gameinfo").is_file() {
+        crate::platform::linux_only("Linux games")?;
         let id =
             game_id.ok_or_else(|| Error::Refused("native Linux installs need --game-id".into()))?;
         if runner != Runner::Native {
@@ -215,10 +220,15 @@ fn found_in(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Install
         });
     }
     let info = gameinfo::read(&path, game_id)?;
-    if runner == Runner::Native {
-        return Err(Error::Refused(
-            "Windows builds need a Wine or Proton runner".into(),
-        ));
+    // On Windows a Windows build runs directly, and only so.
+    match (cfg!(windows), runner == Runner::Native) {
+        (false, true) => {
+            return Err(Error::Refused(
+                "Windows builds need a Wine or Proton runner".into(),
+            ));
+        }
+        (true, false) => crate::platform::linux_only("Wine and Proton")?,
+        _ => {}
     }
     Ok(Install {
         umu_id: None,
@@ -283,6 +293,37 @@ mod tests {
         root
     }
 
+    /// On Windows a Windows build found in a folder runs directly, and Proton and isolation,
+    /// Linux's alone, are refused (ADR-0027).
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_a_game_runs_directly_without_proton_or_isolation() {
+        let root = fixture("windows");
+        let install = from_dir(&root.join("Game"), None, Runner::Native).unwrap();
+        assert!(!install.isolated);
+        let proton = Runner::Umu {
+            proton: root.join("proton"),
+            prefix: root.join("prefix"),
+        };
+        assert!(matches!(
+            from_dir(&root.join("Game"), None, proton),
+            Err(Error::Unsupported(_))
+        ));
+        let db = Db::in_memory().unwrap();
+        import(&db, install).unwrap();
+        assert!(matches!(
+            set_isolated(&db, "42", true),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(matches!(
+            set_proton(&db, "42", &root.join("proton")),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(!Install::get(&db, "42").unwrap().unwrap().isolated);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
     #[test]
     fn imports_windows_dir_and_roundtrips_through_db() {
         let root = fixture("dir");
@@ -303,6 +344,7 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn isolation_is_on_for_proton_games_and_can_be_changed() {
         let root = fixture("isolation");
@@ -348,6 +390,7 @@ mod tests {
 
     /// A Windows game imported from another tool is a new game too: Isolate new Windows games
     /// turned off, it starts with access to the user's files.
+    #[cfg(unix)]
     #[test]
     fn imported_games_follow_the_isolation_setting() {
         let root = fixture("import-isolated");
@@ -364,6 +407,7 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn proton_can_be_changed_and_the_prefix_is_kept() {
         let root = fixture("proton");
@@ -395,6 +439,7 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn imports_from_heroic_records() {
         let root = fixture("heroic");
@@ -423,6 +468,7 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn refuses_native_runner_for_windows_build() {
         let root = fixture("native");

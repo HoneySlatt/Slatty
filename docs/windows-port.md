@@ -14,7 +14,8 @@ where each stands are Stage 3 of [PLAN.md](PLAN.md).
 - **Tests of the Windows code under Wine**: `cargo test` for the Windows target runs its test
   binaries through Wine, which implements the Windows API the code calls (processes, job objects,
   registry, known folders, reparse points). Wine is not Windows: a passing test there is a first
-  check, never a verified behaviour. The core's tests run in `scripts/check.sh`, and so in CI.
+  check, never a verified behaviour. The core's and the command line's tests run in
+  `scripts/check.sh`, and so in CI.
   How to run them, and which tests are Linux's alone: [testing.md](testing.md#the-windows-build).
 - **Real checks on Windows 10 or 11**, by a person, recorded in [compatibility.md](compatibility.md)
   as the Linux ones are. Nothing about Windows is called verified before.
@@ -35,6 +36,18 @@ Found by running the core's tests under Wine; each broke code that works on Linu
 - Folders ignore case, so two names that differ only by case are one file.
 - Creation times cannot tell a file made again from the old one: Windows gives a name made again
   within 15 seconds the old one's, and Wine gives the last write's. NTFS's file index does.
+- A link to a folder is usually a junction, which any user can make (`mklink /J`), where a
+  symbolic link needs a right users lack. A junction is deleted as a folder (`remove_dir`), never
+  as a file: `platform::remove_file_or_link`.
+- A thread starts at the usual priority, not its creator's: each thread of work in the background
+  lowers its own (`platform::lowest_priority`).
+- The clock behind Rust's `Instant` (`QueryPerformanceCounter`) counts the time the computer
+  sleeps; play time is measured on the unbiased interrupt time, which does not
+  (`platform::Awake`).
+- `HOME` is not set: the home folder is the profile's (`directories`).
+- A program whose manifest asks for administrator rights does not start at all
+  (`ERROR_ELEVATION_REQUIRED`) unless started through Windows' prompt for them; an elevated
+  process cannot join a job object of a process without those rights.
 
 ## Where Slatty depends on Linux today
 
@@ -42,15 +55,15 @@ Found by building the core for Windows (109 errors in its first build) and readi
 
 | Area | Linux today | Windows |
 |---|---|---|
-| Running a game (`runner`, `play`) | umu and Proton, Wine, or a native Linux program; `steam-run` on NixOS | The game's `.exe`, started directly (`Runner::Native` on a Windows host) |
+| Running a game (`runner`, `play`) | umu and Proton, Wine, or a native Linux program; `steam-run` on NixOS | The game's `.exe`, started directly (`Runner::Native` on a Windows host); what only Linux has refused where it starts (`platform::linux_only`, [ADR-0027](adr/0027-linux-features-refused-on-windows-not-compiled-out.md)) |
 | Following a session (`session`) | A supervisor process: subreaper, process groups, signals, `/proc`, `PR_SET_PDEATHSIG` | The same supervisor process, holding the game in a job object: the job's processes are the session's, they end with it, and it is stopped by closing the game's windows, then ending the job |
 | Isolation (`runner`) | bubblewrap through umu's container | None: not offered |
 | Data folders (`paths`) | XDG folders, made 0700 | `%APPDATA%\slatty` and `%LOCALAPPDATA%\slatty`, private to the user by the profile's own permissions |
-| Files (`fsutil`, `installer`) | `O_NOFOLLOW`, symbolic links, `setpriority` | Reparse points (symbolic links and junctions) refused the same way, `FILE_FLAG_OPEN_REPARSE_POINT`, background thread priority; names Windows reserves (`CON`, `aux.txt`…) refused |
+| Files (`fsutil`, `installer`) | `O_NOFOLLOW`, symbolic links, `setpriority`; large files flushed one by one, the filesystem once | Reparse points (symbolic links and junctions) refused the same way, `FILE_FLAG_OPEN_REPARSE_POINT`, background thread priority; names Windows reserves (`CON`, `aux.txt`…) refused; every installed file flushed ([ADR-0029](adr/0029-every-installed-file-flushed-on-windows.md)) |
 | Locks (`lock`) | `File::try_lock` | The same, on Windows' file locks |
 | Secrets (`credentials`) | Secret Service through `keyring` | Windows Credential Manager through `keyring` |
-| Saves (`cloud::locations`, `gameinfo`) | GOG's and Epic's folder templates resolved in the game's Wine prefix | The same templates resolved in the user's real folders (Known Folders: Saved Games, Documents, AppData…) |
-| GOG's post-install setup (`setup`) | GOG's script interpreter and redistributables run through Proton | Run directly; redistributables need administrator rights: Windows asks (UAC), once the person agreed in Slatty |
+| Saves (`cloud::locations`, `gameinfo`) | GOG's and Epic's folder templates resolved in the game's Wine prefix | GOG's templates resolved in the user's real folders (`platform::user_folder`: Saved Games, Documents, AppData…); a save left read-only made writable to be replaced |
+| GOG's post-install setup (`setup`) | GOG's script interpreter and redistributables run through Proton | Run directly, once the person agreed at launch; a program that needs administrator rights is started through Windows' prompt (UAC) ([ADR-0028](adr/0028-windows-asks-before-gogs-setup-at-launch.md)) |
 | Achievements (`comet`, `galaxy_service`) | Comet, a Linux program; the dummy `GalaxyCommunication` service registered in the prefix | Comet's Windows build, if it has one that works; registering a Windows service needs administrator rights: studied separately |
 | Steam (`steam`) | `~/.steam`, `/proc` for the games running, `steam://` through `xdg-open` | Steam's folder from the registry (`HKCU\Software\Valve\Steam`), the game running from the registry or the process list, `steam://` through the shell |
 | Epic (`epic::launch`) | Through Proton, the ownership token in the prefix | Directly, with the same arguments, as legendary does on Windows |
@@ -67,6 +80,9 @@ Found by building the core for Windows (109 errors in its first build) and readi
 - Does Comet's Windows build talk to games' Galaxy SDK without GOG Galaxy's own service installed?
 - Can a game's session be stopped cleanly on Windows the way it is on Linux (closing its windows
   first), for every kind of game, and launchers that start the game and exit?
+- Does Windows' prompt for administrator rights come to the front when the setup asks for it from
+  the command line, or does it wait, flashing, in the taskbar?
+- What does flushing every installed file cost on Windows, on an SSD and on a hard disk?
 - Which redistributables GOG's games ask for are already present on a usual Windows, so that the
   administrator prompt is rare?
 - Code signing: an unsigned `.exe` makes Windows SmartScreen warn the first times it starts.

@@ -3,23 +3,33 @@
 //! launcher that starts the game and exits included, and the session ends once the supervisor is
 //! the job's last process. Windows has no signals: the launcher asks for a stop through an event
 //! named after the supervisor. A first stop asks the game's windows to close, a second one ends
-//! its processes.
+//! its processes. A program of GOG's setup that needs administrator rights is started through
+//! Windows' prompt for them, outside the job, which cannot hold it.
 
 use std::collections::HashSet;
 use std::process::Stdio;
 use std::time::Duration;
 
-use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, HWND, LPARAM, WAIT_OBJECT_0};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, ERROR_ELEVATION_REQUIRED, HANDLE, HWND, LPARAM, WAIT_OBJECT_0,
+};
+use windows_sys::Win32::System::Com::{
+    COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
+};
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
     JobObjectBasicAccountingInformation, JobObjectBasicProcessIdList, QueryInformationJobObject,
 };
 use windows_sys::Win32::System::Threading::{
-    CreateEventW, EVENT_MODIFY_STATE, GetCurrentProcess, OpenEventW, OpenProcess,
-    PROCESS_TERMINATE, SetEvent, TerminateProcess, WaitForSingleObject,
+    CreateEventW, EVENT_MODIFY_STATE, GetCurrentProcess, GetExitCodeProcess, GetProcessId,
+    OpenEventW, OpenProcess, PROCESS_TERMINATE, SetEvent, TerminateProcess, WaitForSingleObject,
+};
+use windows_sys::Win32::UI::Shell::{
+    SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+    ShellExecuteExW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, WM_CLOSE,
+    EnumWindows, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, SW_SHOWNORMAL, WM_CLOSE,
 };
 use windows_sys::core::BOOL;
 
@@ -60,8 +70,138 @@ pub(super) fn request_stop(pid: u32) {
     }
 }
 
+/// The session's first process: started by the supervisor, in its job, or started with
+/// administrator rights through Windows' prompt for them, which no job of the supervisor's can
+/// hold.
+enum Main {
+    Child(std::process::Child),
+    Elevated(Owned),
+}
+
+impl Main {
+    fn id(&self) -> u32 {
+        match self {
+            Main::Child(child) => child.id(),
+            // SAFETY: the handle is open.
+            Main::Elevated(process) => unsafe { GetProcessId(process.0) },
+        }
+    }
+
+    /// Its exit code once it ended; `Some(None)` when it ended without one.
+    fn ended(&mut self) -> Option<Option<i32>> {
+        match self {
+            Main::Child(child) => child.try_wait().ok().flatten().map(|s| s.code()),
+            // SAFETY: the handle is open; the code is written to a valid u32.
+            Main::Elevated(process) => unsafe {
+                if WaitForSingleObject(process.0, 0) != WAIT_OBJECT_0 {
+                    return None;
+                }
+                let mut code = 0;
+                Some((GetExitCodeProcess(process.0, &mut code) != 0).then_some(code as i32))
+            },
+        }
+    }
+}
+
+/// Starts `spec`; with `elevate`, again through Windows' prompt for administrator rights when it
+/// needs them (its manifest asks for them, `ERROR_ELEVATION_REQUIRED`).
+fn start(spec: &LaunchSpec, elevate: bool, stdout: Stdio, stderr: Stdio) -> std::io::Result<Main> {
+    let started = std::process::Command::new(&spec.program)
+        .args(&spec.args)
+        .current_dir(&spec.cwd)
+        .envs(spec.env.iter().map(|(k, v)| (k, v)))
+        .stdin(Stdio::null())
+        .stdout(stdout)
+        .stderr(stderr)
+        .spawn();
+    match started {
+        Err(e) if elevate && e.raw_os_error() == Some(ERROR_ELEVATION_REQUIRED as i32) => {
+            start_elevated(spec).map(Main::Elevated)
+        }
+        started => started.map(Main::Child),
+    }
+}
+
+/// Starts `spec` with administrator rights, Windows asking the person first (UAC). Refused there,
+/// it fails with `ERROR_CANCELLED`.
+fn start_elevated(spec: &LaunchSpec) -> std::io::Result<Owned> {
+    let wide_path = |p: &std::path::Path| -> Vec<u16> {
+        use std::os::windows::ffi::OsStrExt;
+        p.as_os_str().encode_wide().chain([0]).collect()
+    };
+    let (verb, file, dir) = (
+        wide("runas"),
+        wide_path(&spec.program),
+        wide_path(&spec.cwd),
+    );
+    let parameters = wide(&command_line(&spec.args));
+    // SAFETY: every string ends with a nul and outlives the call; the structure is as large as
+    // told. COM is set up for the shell, as `ShellExecuteExW`'s documentation asks.
+    unsafe {
+        CoInitializeEx(
+            std::ptr::null(),
+            (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32,
+        );
+        let mut info: SHELLEXECUTEINFOW = std::mem::zeroed();
+        info.cbSize = size_of::<SHELLEXECUTEINFOW>() as u32;
+        info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        info.lpVerb = verb.as_ptr();
+        info.lpFile = file.as_ptr();
+        info.lpParameters = parameters.as_ptr();
+        info.lpDirectory = dir.as_ptr();
+        info.nShow = SW_SHOWNORMAL;
+        let started = ShellExecuteExW(&mut info);
+        let error = last_error();
+        // Done with COM: with `SEE_MASK_NOASYNC` the shell finished before returning.
+        CoUninitialize();
+        if started == 0 {
+            return Err(error);
+        }
+        if info.hProcess.is_null() {
+            return Err(std::io::Error::other("Windows started no process"));
+        }
+        Ok(Owned(info.hProcess))
+    }
+}
+
+/// `args` as one command line, quoted as Windows programs read it back (the C runtime's rules,
+/// which the standard library also follows to start a process).
+fn command_line(args: &[String]) -> String {
+    let mut line = String::new();
+    for arg in args {
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        if !arg.is_empty() && !arg.contains([' ', '\t', '\n', '\u{b}', '"']) {
+            line.push_str(arg);
+            continue;
+        }
+        line.push('"');
+        let mut backslashes = 0;
+        for c in arg.chars() {
+            match c {
+                '\\' => backslashes += 1,
+                '"' => {
+                    line.extend(std::iter::repeat_n('\\', backslashes * 2 + 1));
+                    line.push('"');
+                    backslashes = 0;
+                }
+                c => {
+                    line.extend(std::iter::repeat_n('\\', backslashes));
+                    line.push(c);
+                    backslashes = 0;
+                }
+            }
+        }
+        line.extend(std::iter::repeat_n('\\', backslashes * 2));
+        line.push('"');
+    }
+    line
+}
+
 pub(super) fn supervise(
     spec: &LaunchSpec,
+    elevate: bool,
     stdout: Stdio,
     stderr: Stdio,
     mut emit: impl FnMut(&SupervisorEvent),
@@ -92,16 +232,8 @@ pub(super) fn supervise(
         }
         (stop, job)
     };
-    let mut child = match std::process::Command::new(&spec.program)
-        .args(&spec.args)
-        .current_dir(&spec.cwd)
-        .envs(spec.env.iter().map(|(k, v)| (k, v)))
-        .stdin(Stdio::null())
-        .stdout(stdout)
-        .stderr(stderr)
-        .spawn()
-    {
-        Ok(child) => child,
+    let mut main = match start(spec, elevate, stdout, stderr) {
+        Ok(main) => main,
         Err(e) => {
             emit(&SupervisorEvent::Failed {
                 message: format!("starting {}: {e}", spec.program.display()),
@@ -109,14 +241,14 @@ pub(super) fn supervise(
             return 1;
         }
     };
-    emit(&SupervisorEvent::Started { pid: child.id() });
+    emit(&SupervisorEvent::Started { pid: main.id() });
     let mut main_code = None;
     let mut main_running = true;
     let mut stops = 0;
     loop {
-        if main_running && let Ok(Some(status)) = child.try_wait() {
+        if main_running && let Some(code) = main.ended() {
             main_running = false;
-            main_code = status.code();
+            main_code = code;
             emit(&SupervisorEvent::MainExited { code: main_code });
         }
         if !main_running && active_processes(&job) <= 1 {
@@ -225,5 +357,48 @@ fn end_processes(processes: &HashSet<u32>) {
                 TerminateProcess(process.0, 1);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Arguments reach an elevated program as Windows' own parser reads them back
+    /// (`CommandLineToArgvW`, the C runtime's rules): a game folder with spaces stays one argument,
+    /// quotes and backslashes are kept.
+    #[test]
+    fn arguments_are_read_back_as_they_were_given() {
+        use windows_sys::Win32::Foundation::LocalFree;
+        use windows_sys::Win32::UI::Shell::CommandLineToArgvW;
+        let args = [
+            r"/DIR=C:\Games\[FAKE] Game",
+            "/VERYSILENT",
+            r#"say "hi""#,
+            "",
+            r"C:\My Dir\",
+            r"x\",
+            r#"a\"b"#,
+            "tab\there",
+        ]
+        .map(String::from);
+        // The first word is the program's name, which Windows reads by other rules.
+        let line = wide(&format!("program {}", command_line(&args)));
+        let mut count = 0;
+        // SAFETY: the line ends with a nul; Windows allocates the list, freed once read.
+        let read: Vec<String> = unsafe {
+            let list = CommandLineToArgvW(line.as_ptr(), &mut count);
+            assert!(!list.is_null());
+            let read = (1..count as usize)
+                .map(|i| {
+                    let word = *list.add(i);
+                    let len = (0..).take_while(|&j| *word.add(j) != 0).count();
+                    String::from_utf16(std::slice::from_raw_parts(word, len)).unwrap()
+                })
+                .collect();
+            LocalFree(list.cast());
+            read
+        };
+        assert_eq!(read, args);
     }
 }

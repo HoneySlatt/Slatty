@@ -1,3 +1,6 @@
+// Linux games, played through their script; Windows' are in `play_windows.rs`.
+#![cfg(unix)]
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -51,6 +54,7 @@ fn request() -> PlayRequest {
         cloud: false,
         comet: false,
         supervisor: env!("CARGO_BIN_EXE_slatty").into(),
+        setup_agreed: true,
     }
 }
 
@@ -225,6 +229,7 @@ async fn a_game_added_by_hand_plays_as_its_user_said() {
         cloud: true,
         comet: true,
         supervisor: env!("CARGO_BIN_EXE_slatty").into(),
+        setup_agreed: true,
     };
     play::play(
         &db,

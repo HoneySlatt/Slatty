@@ -80,6 +80,7 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
     let added = crate::store::is_local(&install.game_id);
     match (&install.platform, &install.runner) {
         (Platform::Linux, Runner::Native) => {
+            crate::platform::linux_only("Linux games")?;
             // GOG's builds start through their script; a game added by hand, through the program
             // or script the user picked.
             let (script, extra, cwd) = if added {
@@ -164,6 +165,17 @@ pub fn launch_spec(dirs: &Dirs, install: &Install, choice: Option<&str>) -> Resu
             } else {
                 windows_task(install, choice)?
             };
+            windows_spec(dirs, install, prepend(exe, args), cwd, true)
+        }
+        // On Windows a Windows build starts directly. Epic's games and games added by hand do
+        // not yet (PLAN.md, M3.4 and M3.5).
+        (Platform::Windows, Runner::Native) if cfg!(windows) => {
+            if added || crate::store::epic_app(&install.game_id).is_some() {
+                return Err(Error::Unsupported(
+                    "only GOG's games are played on Windows yet".into(),
+                ));
+            }
+            let (exe, args, cwd) = windows_task(install, choice)?;
             windows_spec(dirs, install, prepend(exe, args), cwd, true)
         }
         (platform, runner) => Err(Error::Unsupported(format!(
@@ -333,7 +345,8 @@ fn share_read_only(env: &mut [(String, String)], folder: &Path) -> Result<()> {
 }
 
 /// Proton's fixes for the game apply to the game only: some add arguments to whatever runs with
-/// its id (DOOM's `+r_renderAPI 1`), which other programs refuse.
+/// its id (DOOM's `+r_renderAPI 1`), which other programs refuse. On Windows the program, the
+/// first of `args`, runs directly.
 fn windows_spec(
     dirs: &Dirs,
     install: &Install,
@@ -341,6 +354,9 @@ fn windows_spec(
     cwd: PathBuf,
     game: bool,
 ) -> Result<LaunchSpec> {
+    if install.runner != Runner::Native {
+        crate::platform::linux_only("Proton and Wine")?;
+    }
     match &install.runner {
         Runner::Umu { proton, prefix } => {
             if !proton.join("proton").is_file() {
@@ -398,6 +414,19 @@ fn windows_spec(
             cwd,
             env: vec![("WINEPREFIX".into(), prefix.display().to_string())],
         }),
+        Runner::Native if cfg!(windows) => {
+            let mut args = args.into_iter();
+            let program = args
+                .next()
+                .map(PathBuf::from)
+                .ok_or_else(|| Error::Unsupported("a command without a program".into()))?;
+            Ok(LaunchSpec {
+                program,
+                args: args.collect(),
+                cwd,
+                env: Vec::new(),
+            })
+        }
         Runner::Native => Err(Error::Unsupported("Windows command without Wine".into())),
     }
 }
@@ -961,6 +990,10 @@ fn runtime_tool(dirs: &Dirs, name: &str) -> Option<Result<PathBuf>> {
 /// A failure leaves the runtimes as they are: the game starts with them, or not at all without the
 /// one it needs.
 pub async fn refresh_runtimes(db: &crate::db::Db, dirs: &Dirs, needed: Option<&str>) {
+    // umu is Linux's alone; the launch refuses an isolated game on Windows.
+    if crate::platform::linux_only("umu").is_err() {
+        return;
+    }
     const DAY: i64 = 24 * 60 * 60;
     let now = chrono::Utc::now().timestamp();
     let checked = crate::settings::umu_runtimes_checked_at(db).ok().flatten();
@@ -1078,6 +1111,66 @@ fn path_list(paths: &[PathBuf]) -> Result<String> {
 mod tests {
     use super::*;
     use crate::install::Platform;
+
+    /// On Windows a GOG Windows build starts its program directly, as its `goggame-<id>.info`
+    /// says; what only Linux has (a Linux game, Wine, Proton) is refused before anything starts
+    /// (ADR-0027), as are the stores and games Windows does not play yet.
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_a_windows_build_starts_directly_and_nothing_else_does() {
+        let root = std::env::temp_dir().join(format!("slatty-runner-win-{}", std::process::id()));
+        let game = root.join("[FAKE] Game");
+        std::fs::create_dir_all(game.join("bin")).unwrap();
+        std::fs::write(game.join("bin/Game.exe"), "").unwrap();
+        std::fs::write(
+            game.join("goggame-1.info"),
+            r#"{"gameId": "1", "name": "[FAKE] Game", "playTasks": [{"type": "FileTask",
+               "isPrimary": true, "path": "bin\\Game.exe", "workingDir": "bin",
+               "arguments": "-windowed \"a b\""}]}"#,
+        )
+        .unwrap();
+        let dirs = Dirs::under(&root.join("app"));
+        let mut install = Install {
+            umu_id: None,
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: game.clone(),
+            client_id: None,
+            runner: Runner::Native,
+            isolated: false,
+        };
+        let spec = launch_spec(&dirs, &install, None).unwrap();
+        assert_eq!(spec.program, game.join("bin").join("Game.exe"));
+        assert_eq!(spec.args, ["-windowed", "a b"]);
+        assert_eq!(spec.cwd, game.join("bin"));
+        assert!(spec.env.is_empty());
+        assert_eq!(prefix_init_spec(&dirs, &install).unwrap(), None);
+
+        for refused in [
+            Runner::Umu {
+                proton: root.join("proton"),
+                prefix: root.join("prefix"),
+            },
+            Runner::Wine {
+                wine: root.join("wine"),
+                prefix: root.join("prefix"),
+            },
+        ] {
+            install.runner = refused;
+            let result = launch_spec(&dirs, &install, None);
+            assert!(matches!(result, Err(Error::Unsupported(_))), "{result:?}");
+        }
+        install.runner = Runner::Native;
+        install.platform = Platform::Linux;
+        let result = launch_spec(&dirs, &install, None);
+        assert!(matches!(result, Err(Error::Unsupported(_))), "{result:?}");
+        install.platform = Platform::Windows;
+        install.game_id = "epic-Fake".into();
+        let result = launch_spec(&dirs, &install, None);
+        assert!(matches!(result, Err(Error::Unsupported(_))), "{result:?}");
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     /// umu takes `true` for a program in its working directory when one of that name is there:
     /// started from a game's folder, the refresh would run a `true` the game wrote there, not
@@ -1654,6 +1747,7 @@ mod tests {
     /// builds made to run on the host) without its container: the game would see the whole disk
     /// through Z: while shown isolated. Such a build is refused for an isolated game, before
     /// anything starts; one naming the sniper runtime is not.
+    #[cfg(unix)]
     #[test]
     fn a_proton_build_umu_runs_outside_its_container_is_refused_isolated() {
         let dir = std::env::temp_dir().join(format!("slatty-host-proton-{}", std::process::id()));
@@ -1754,6 +1848,7 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn wine_alone_refuses_to_run_a_game_meant_to_be_isolated() {
         let dirs = Dirs::under(Path::new("/nonexistent"));

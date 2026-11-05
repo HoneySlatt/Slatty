@@ -1,5 +1,3 @@
-use std::io::{BufRead, Write};
-
 use anyhow::{Result, bail};
 use clap::Args;
 use slatty_core::account::Account;
@@ -93,7 +91,7 @@ pub async fn run(ctx: &Ctx, args: AchievementsArgs) -> Result<()> {
             shown(&a.name)
         );
     }
-    if !args.yes && !confirm()? {
+    if !args.yes && !crate::confirm("Apply?")? {
         println!("Cancelled.");
         return Ok(());
     }
@@ -151,14 +149,6 @@ async fn epic(ctx: &Ctx, args: &AchievementsArgs) -> Result<()> {
         epic::achievements::fetch(&graphql, &tokens.account_id, &game.namespace, &locale).await?;
     print_list(&game.title, &list);
     Ok(())
-}
-
-fn confirm() -> Result<bool> {
-    eprint!("Apply? [y/N] ");
-    std::io::stderr().flush()?;
-    let mut line = String::new();
-    std::io::stdin().lock().read_line(&mut line)?;
-    Ok(matches!(line.trim(), "y" | "Y" | "yes" | "o" | "oui"))
 }
 
 fn print_list(title: &str, list: &[Achievement]) {

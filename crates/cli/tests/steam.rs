@@ -1,3 +1,6 @@
+// Steam's games on Windows come with M3.4 (docs/PLAN.md).
+#![cfg(unix)]
+
 use std::path::Path;
 use std::process::{Command, Output};
 

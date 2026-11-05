@@ -49,7 +49,7 @@ const FORGOTTEN_EMULATED: &str = "forgotten_emulated";
 pub fn library_root(db: &Db) -> Result<PathBuf> {
     Ok(match db.setting(LIBRARY_ROOT)? {
         Some(p) => PathBuf::from(p),
-        None => home().join("Games/GOG"),
+        None => home().join("Games").join("GOG"),
     })
 }
 
@@ -639,15 +639,35 @@ fn steam_libraries(steam: &Path) -> Vec<PathBuf> {
     libraries
 }
 
+/// The user's home folder: `HOME` on Linux; on Windows, which sets no `HOME`, the profile folder.
 fn home() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_default()
+    #[cfg(windows)]
+    {
+        directories::BaseDirs::new()
+            .map(|d| d.home_dir().to_path_buf())
+            .unwrap_or_default()
+    }
+    #[cfg(unix)]
+    {
+        std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Games go into the home folder's `Games/GOG` until chosen, on Windows too, which sets no
+    /// `HOME`: never into a folder relative to wherever Slatty was started.
+    #[test]
+    fn games_go_into_the_home_folder_until_chosen() {
+        let db = Db::in_memory().unwrap();
+        let root = library_root(&db).unwrap();
+        assert!(root.is_absolute(), "{}", root.display());
+        assert!(root.ends_with("Games/GOG"));
+    }
 
     #[test]
     fn controller_compatibility_is_opt_in_for_each_owned_game() {

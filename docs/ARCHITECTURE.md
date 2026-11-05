@@ -396,6 +396,11 @@ the build not set up, so setup runs again at the next launch, up to `setup::SETU
 Programs run in a game's prefix get `PROTONFIXES_DISABLE=1`: a game's fixes can add arguments to
 whatever runs with its id, which setup programs refuse.
 
+On Windows the commands run directly, given the game's folders as Windows names them. A launch
+runs them only once the person agreed (`PlayRequest::setup_agreed`, asked by `slatty launch`); a
+program that needs administrator rights is started through Windows' prompt for them, outside the
+session's job object ([ADR-0028](adr/0028-windows-asks-before-gogs-setup-at-launch.md)).
+
 ### Updates, language, DLC and build changes
 
 `maintenance::reconfigure` handles four changes the same way: a newer build (`Change::Update`),
@@ -450,6 +455,13 @@ and content changes refuse a game whose folder is missing or empty (its drive no
 GOG is never asked anything about a game added by hand, and Linux builds skip setup, cloud saves and
 Comet.
 
+**On Windows**, a GOG Windows build is installed with `Runner::Native` and starts its program
+directly, as its `goggame-<id>.info` says: no prefix, no umu, no Comet yet (M3.6). Its saves are in
+the user's own folders (`platform::user_folder`). Proton, Wine, isolation and Linux games are
+refused where they start (`platform::linux_only`,
+[ADR-0027](adr/0027-linux-features-refused-on-windows-not-compiled-out.md)); Epic's games and games
+added by hand are not played there yet.
+
 `runner::game_launch_spec` applies the saved launch choice and the per-game
 `controller_compatibility:<id>` setting, off when absent. Both `play` and `slatty launch-spec`
 use it. For Windows games through Proton, it adds `sdlinput` to `PROTON_ADD_CONFIG` while
@@ -482,9 +494,14 @@ reports events as JSON lines. Processes that detach (launchers that exit early, 
 re-parented to it, so the session ends only when no descendant is left. umu's `waitforexitandrun`
 already waits for Windows processes; the supervisor is the safety net for everything else.
 
-The session's length is measured on a monotonic clock, without the time the computer was
-suspended. A session without a recorded end (a crash) is reported at the next launch, and the
-upload after it is skipped.
+On Windows the supervisor is started again through `current_exe` and puts itself in a job object
+before it starts the game, so that every process the game starts is in the job; the session ends
+when the supervisor is the job's last process. A stop is asked through an event named after the
+supervisor: the game's windows are asked to close, then its processes ended (`session::windows`).
+
+The session's length is measured on a clock that stops while the computer sleeps
+(`platform::Awake`; Windows' `Instant` does not). A session without a recorded end (a crash) is
+reported at the next launch, and the upload after it is skipped.
 
 ### Game isolation
 

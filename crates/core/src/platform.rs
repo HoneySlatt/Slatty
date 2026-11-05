@@ -5,6 +5,18 @@ use std::fs::{DirBuilder, File, Metadata, OpenOptions};
 use std::io;
 use std::path::Path;
 
+/// Refuses on Windows what Linux alone has: umu and Proton, Wine, isolation, Linux games, Proton
+/// builds, the Galaxy service in a prefix (ADR-0027). Their code builds for Windows too, but each
+/// way into it asks this first. `Error::Unsupported` on Windows, naming `what`; nothing on Linux.
+pub fn linux_only(what: &str) -> crate::Result<()> {
+    if cfg!(windows) {
+        return Err(crate::Error::Unsupported(format!(
+            "not available on Windows: {what}"
+        )));
+    }
+    Ok(())
+}
+
 /// Opens without waiting: on Linux a pipe in a game's folder would hold its reader until a writer
 /// comes, for ever. Windows' files never wait.
 pub fn without_waiting(opts: &mut OpenOptions) -> &mut OpenOptions {
@@ -328,6 +340,29 @@ pub fn identity(path: &Path, follow: bool) -> Option<Identity> {
     }
 }
 
+/// A folder of the user's that Windows knows, where games keep their saves.
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserFolder {
+    /// `Saved Games`.
+    SavedGames,
+    /// `Documents`.
+    Documents,
+    /// `AppData\Local`.
+    LocalAppData,
+    /// `AppData\LocalLow`, for programs run with low rights (browsers' plug-ins, some games).
+    LocalAppDataLow,
+    /// `AppData\Roaming`.
+    RoamingAppData,
+}
+
+/// Where `folder` is for the user running Slatty: wherever the person, or their organisation,
+/// moved it (`SHGetKnownFolderPath`), not where it usually is.
+#[cfg(windows)]
+pub fn user_folder(folder: UserFolder) -> io::Result<std::path::PathBuf> {
+    windows::user_folder(folder)
+}
+
 /// The bytes available to the user on the filesystem holding `path`.
 pub fn free_space(path: &Path) -> io::Result<u64> {
     #[cfg(unix)]
@@ -352,6 +387,52 @@ pub fn sync_filesystem(dir: &Path) -> io::Result<()> {
     {
         let _ = dir;
         Ok(())
+    }
+}
+
+/// A moment on a clock that stops while the computer sleeps, for play time: a night asleep with
+/// a game open is not play, nor is the wall clock set meanwhile. Linux's `Instant` is such a clock
+/// (`CLOCK_MONOTONIC`); Windows' counts sleep (`QueryPerformanceCounter`, as Microsoft's
+/// "Acquiring high-resolution time stamps" says), its unbiased interrupt time does not.
+#[derive(Debug, Clone, Copy)]
+pub struct Awake {
+    #[cfg(unix)]
+    at: std::time::Instant,
+    /// In 100 ns since the computer started, sleep left out.
+    #[cfg(windows)]
+    at: u64,
+}
+
+impl Awake {
+    /// This moment.
+    pub fn now() -> Self {
+        #[cfg(unix)]
+        {
+            Self {
+                at: std::time::Instant::now(),
+            }
+        }
+        #[cfg(windows)]
+        {
+            let mut at = 0;
+            // SAFETY: writes the time to a valid u64; it cannot fail since Windows 7.
+            unsafe {
+                windows_sys::Win32::System::WindowsProgramming::QueryUnbiasedInterruptTime(&mut at)
+            };
+            Self { at }
+        }
+    }
+
+    /// The time awake since `self`. On Windows its resolution is the system's timer, about 16 ms.
+    pub fn elapsed(&self) -> std::time::Duration {
+        #[cfg(unix)]
+        {
+            self.at.elapsed()
+        }
+        #[cfg(windows)]
+        {
+            std::time::Duration::from_nanos(Self::now().at.saturating_sub(self.at) * 100)
+        }
     }
 }
 
@@ -430,6 +511,37 @@ mod windows {
         }
     }
 
+    pub fn user_folder(folder: super::UserFolder) -> io::Result<std::path::PathBuf> {
+        use std::os::windows::ffi::OsStringExt;
+        use windows_sys::Win32::System::Com::CoTaskMemFree;
+        use windows_sys::Win32::UI::Shell::{
+            FOLDERID_Documents, FOLDERID_LocalAppData, FOLDERID_LocalAppDataLow,
+            FOLDERID_RoamingAppData, FOLDERID_SavedGames, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
+        };
+        let id = match folder {
+            super::UserFolder::SavedGames => &FOLDERID_SavedGames,
+            super::UserFolder::Documents => &FOLDERID_Documents,
+            super::UserFolder::LocalAppData => &FOLDERID_LocalAppData,
+            super::UserFolder::LocalAppDataLow => &FOLDERID_LocalAppDataLow,
+            super::UserFolder::RoamingAppData => &FOLDERID_RoamingAppData,
+        };
+        let mut path = std::ptr::null_mut();
+        // SAFETY: Windows writes a nul-terminated string it allocated to `path`, freed here once
+        // copied, also after a failure, as its documentation asks.
+        unsafe {
+            let result =
+                SHGetKnownFolderPath(id, KF_FLAG_DEFAULT as u32, std::ptr::null_mut(), &mut path);
+            let found = (result >= 0 && !path.is_null()).then(|| {
+                let len = (0..).take_while(|&i| *path.add(i) != 0).count();
+                std::ffi::OsString::from_wide(std::slice::from_raw_parts(path, len))
+            });
+            CoTaskMemFree(path.cast());
+            found.map(std::path::PathBuf::from).ok_or_else(|| {
+                io::Error::other(format!("Windows does not know the folder {folder:?}"))
+            })
+        }
+    }
+
     pub fn free_space(path: &Path) -> io::Result<u64> {
         let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
         let mut available = 0u64;
@@ -446,5 +558,111 @@ mod windows {
             return Err(io::Error::last_os_error());
         }
         Ok(available)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The clock of play time moves with the time awake, at the timer's resolution.
+    #[test]
+    fn the_awake_clock_follows_the_time_awake() {
+        let start = Awake::now();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed >= std::time::Duration::from_millis(150)
+                && elapsed < std::time::Duration::from_secs(5),
+            "{elapsed:?}"
+        );
+    }
+
+    /// The ways into what Linux alone has that no other test of Windows reaches refuse there,
+    /// before anything is read, written or asked of the network (ADR-0027): a GOG Linux build's
+    /// install (`--restart` included, which would delete its download), a Proton build's download,
+    /// the Galaxy service in a prefix. The others are tested where they are: `runner`, `install`,
+    /// and the command line's `play_windows.rs`.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn on_windows_what_linux_alone_has_is_refused_before_anything() {
+        use crate::Error;
+        use crate::install::{Install, Platform};
+        let root = std::env::temp_dir().join(format!("slatty-linux-only-{}", std::process::id()));
+        let dirs = crate::paths::Dirs::under(&root);
+        let db = crate::db::Db::in_memory().unwrap();
+        let http = crate::http::client().unwrap();
+        let tokens = crate::auth::Tokens {
+            user_id: "1".into(),
+            access_token: crate::secret::Secret::new("[FAKE]"),
+            refresh_token: crate::secret::Secret::new("[FAKE]"),
+            expires_at: i64::MAX,
+        };
+        let unsupported = |r: &Error| matches!(r, Error::Unsupported(_));
+        let partial = crate::installer::partial_dir(&root.join("games"), "[FAKE] Game");
+        std::fs::create_dir_all(&partial).unwrap();
+        crate::installer::InstallJob {
+            game_id: "1".into(),
+            build_id: "linux:1.0".into(),
+            language: "en-US".into(),
+            root: root.join("games"),
+            directory: "[FAKE] Game".into(),
+            state: crate::installer::PAUSED.into(),
+            dlcs: Vec::new(),
+            proton: None,
+        }
+        .save(&db)
+        .unwrap();
+        for (platform, restart) in [(Platform::Linux, false), (Platform::Linux, true)] {
+            let request = crate::installer::InstallRequest {
+                game_id: "1".into(),
+                language: None,
+                build: None,
+                platform,
+                root: root.join("games"),
+                proton: std::path::PathBuf::new(),
+                dlcs: crate::installer::DlcSelection::AllOwned,
+                restart,
+            };
+            let cancel = tokio_util::sync::CancellationToken::new();
+            let result =
+                crate::installer::install(&db, &dirs, &http, &tokens, request, |_| {}, cancel)
+                    .await;
+            assert!(result.as_ref().is_err_and(unsupported), "{result:?}");
+        }
+        assert!(
+            partial.is_dir(),
+            "the Linux build's download is left as it was"
+        );
+
+        crate::settings::set_proton_downloads(&db, true).unwrap();
+        assert!(crate::protons::check_allowed(&db).is_err_and(|e| unsupported(&e)));
+        let release = crate::protons::Release {
+            source: crate::protons::Source::GeProton,
+            version: "[FAKE]".into(),
+            name: "[FAKE]".into(),
+            size: 1,
+            url: "https://[FAKE]/a.tar.gz".into(),
+            archive: "a.tar.gz".into(),
+            checksum_url: "https://[FAKE]/a.sha512sum".into(),
+        };
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let result = crate::protons::install(&http, &dirs, &release, |_| {}, &cancel).await;
+        assert!(result.as_ref().is_err_and(unsupported), "{result:?}");
+
+        let install = Install {
+            umu_id: None,
+            game_id: "1".into(),
+            title: "[FAKE] Game".into(),
+            platform: Platform::Windows,
+            path: root.join("games/[FAKE] Game"),
+            client_id: None,
+            runner: crate::runner::Runner::Native,
+            isolated: false,
+        };
+        let exe = root.join("GalaxyCommunication.exe");
+        let result = crate::galaxy_service::ensure(&dirs, &install, &exe, &exe).await;
+        assert!(result.as_ref().is_err_and(unsupported), "{result:?}");
+        let _ = std::fs::remove_dir_all(root);
     }
 }

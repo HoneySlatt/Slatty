@@ -27,7 +27,7 @@ pub struct InstallArgs {
     /// Folder that receives the game folder (remembered as the default)
     #[arg(long)]
     dir: Option<PathBuf>,
-    /// Proton build used to run a Windows build (remembered as the default)
+    /// Proton build used to run a Windows build (remembered as the default; Linux only)
     #[arg(long)]
     proton: Option<PathBuf>,
     /// Show what would be installed without downloading
@@ -66,6 +66,10 @@ impl InstallArgs {
 }
 
 pub async fn run(ctx: &Ctx, args: InstallArgs) -> Result<()> {
+    // Refused before anything is asked of GOG.
+    if args.proton.is_some() {
+        slatty_core::platform::linux_only("Proton")?;
+    }
     if args.cancel {
         match installer::discard(&ctx.db, &ctx.dirs, &args.game_id)? {
             Some(partial) => println!(
@@ -331,7 +335,7 @@ fn print_events() -> impl Fn(InstallEvent) + Send + Sync {
 }
 
 /// The folder the game's folder goes into and the Proton build it runs with, remembered as the
-/// defaults when given.
+/// defaults when given. On Windows a Windows build runs directly, without Proton.
 fn folders(
     ctx: &Ctx,
     dir: Option<PathBuf>,
@@ -346,7 +350,7 @@ fn folders(
         }
         None => settings::library_root(&ctx.db)?,
     };
-    let proton = if platform == Platform::Linux {
+    let proton = if platform == Platform::Linux || cfg!(windows) {
         PathBuf::new()
     } else {
         let proton = match proton {

@@ -249,6 +249,9 @@ pub fn describe_play_event(e: &PlayEvent) -> String {
         PlayEvent::SetupSkipped(why) => {
             format!("Setup not run ({why}); it will be retried at the next launch.")
         }
+        PlayEvent::SetupNotAgreed => {
+            "Setup not run: it may ask Windows for administrator rights.".into()
+        }
         PlayEvent::CloudChecked(s) => describe_cloud("Cloud checked", s),
         PlayEvent::CloudSkipped(why) => {
             format!("Cloud not checked ({why}); local saves are kept.")

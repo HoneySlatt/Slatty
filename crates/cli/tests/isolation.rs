@@ -9,6 +9,9 @@
 //! Each leak closed here is shown first: the same launch without the measure, or not isolated,
 //! sees what the isolated one must not.
 
+// Linux's alone (ADR-0022).
+#![cfg(unix)]
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 

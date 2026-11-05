@@ -209,3 +209,13 @@ pub fn local_time(ts: i64) -> String {
         })
         .unwrap_or_else(|| ts.to_string())
 }
+
+/// Asks `question`, read from standard input; only a yes (in English or French) agrees.
+pub fn confirm(question: &str) -> Result<bool> {
+    use std::io::{BufRead, Write};
+    eprint!("{question} [y/N] ");
+    std::io::stderr().flush()?;
+    let mut line = String::new();
+    std::io::stdin().lock().read_line(&mut line)?;
+    Ok(matches!(line.trim(), "y" | "Y" | "yes" | "o" | "oui"))
+}

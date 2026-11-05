@@ -1,3 +1,6 @@
+// Comet on Windows comes with M3.6 (docs/PLAN.md).
+#![cfg(unix)]
+
 use slatty_core::auth::Tokens;
 use slatty_core::comet::Comet;
 use slatty_core::paths::Dirs;

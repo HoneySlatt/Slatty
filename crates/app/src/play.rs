@@ -190,6 +190,8 @@ fn play_stream(
             cloud: true,
             comet: true,
             supervisor: session::supervisor_exe(),
+            // Asked on Windows alone, where the interface does not run yet (PLAN.md, Stage 5).
+            setup_agreed: false,
         };
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let run = async {

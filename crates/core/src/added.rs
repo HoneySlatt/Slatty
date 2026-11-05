@@ -2112,6 +2112,7 @@ mod tests {
     /// would start outside its container) leaves nothing behind: neither a prefix nor the mark of a
     /// game waiting to be added, which no one could discard, the caller never told its id. umu is
     /// not run: the day's refresh of its runtimes counts as done.
+    #[cfg(unix)]
     #[tokio::test]
     async fn an_installer_refused_before_it_starts_leaves_nothing() {
         let f = fake("installer-refused");

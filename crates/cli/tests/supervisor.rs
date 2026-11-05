@@ -1,3 +1,6 @@
+// The supervisor on Linux, with shell scripts; on Windows `play_windows.rs` follows it.
+#![cfg(unix)]
+
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 

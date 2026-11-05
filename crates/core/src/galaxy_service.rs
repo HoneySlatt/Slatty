@@ -53,6 +53,7 @@ pub fn commands() -> Vec<Vec<String>> {
 /// Registers the service in the game's prefix unless it is already there.
 /// Returns false when nothing had to be done.
 pub async fn ensure(dirs: &Dirs, install: &Install, exe: &Path, supervisor: &Path) -> Result<bool> {
+    crate::platform::linux_only("the Galaxy service in a Wine prefix")?;
     let prefix = install
         .runner
         .prefix()

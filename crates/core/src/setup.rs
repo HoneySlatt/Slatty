@@ -84,6 +84,26 @@ pub fn wine_path(p: &Path) -> String {
     format!("Z:{}", p.display().to_string().replace('/', "\\"))
 }
 
+/// The path a setup program is given for `p`: through Wine on Linux; on Windows the path itself,
+/// with Windows' own separators and without the `\\?\` that a canonical path starts with, which
+/// installers do not read.
+fn setup_path(p: &Path) -> String {
+    #[cfg(unix)]
+    {
+        wine_path(p)
+    }
+    #[cfg(windows)]
+    {
+        let path = p.display().to_string().replace('/', "\\");
+        if let Some(share) = path.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{share}")
+        } else {
+            path.strip_prefix(r"\\?\")
+                .map_or(path.clone(), str::to_string)
+        }
+    }
+}
+
 /// English name of a language code (`fr-FR` → `French`), as Galaxy passes it to installers.
 pub fn language_name(code: &str) -> &'static str {
     match code
@@ -155,7 +175,7 @@ pub fn commands(
     let common = |product_id: &str| {
         vec![
             "/VERYSILENT".to_string(),
-            format!("/DIR={}", wine_path(paths.game)),
+            format!("/DIR={}", setup_path(paths.game)),
             format!("/Language={language}"),
             format!("/LANG={language}"),
             format!("/ProductId={product_id}"),
@@ -169,7 +189,7 @@ pub fn commands(
     for product in products {
         if meta.script_interpreter {
             let mut args = common(&product.product_id);
-            args.push(format!("/supportDir={}", wine_path(paths.support)));
+            args.push(format!("/supportDir={}", setup_path(paths.support)));
             args.extend([
                 "/nodesktopshorctut".to_string(),
                 "/nodesktopshortcut".to_string(),
@@ -275,7 +295,8 @@ pub async fn preview(
 }
 
 fn slatty_record(dirs: &Dirs, install: &Install) -> Result<InstallRecord> {
-    if install.runner.prefix().is_none() {
+    // On Windows the setup runs directly.
+    if install.runner.prefix().is_none() && cfg!(unix) {
         return Err(Error::Unsupported("setup needs a Wine prefix".into()));
     }
     InstallRecord::load(dirs, &install.game_id)?.ok_or_else(|| {
@@ -309,8 +330,9 @@ async fn resolve(
 }
 
 /// Downloads what the setup needs, runs every command under the session supervisor, and marks
-/// the build as set up. Only for games installed by slatty with a Wine prefix. Holds the game, so
-/// that no update changes its files and record meanwhile.
+/// the build as set up. Only for games installed by slatty, with a Wine prefix on Linux. Holds the
+/// game, so that no update changes its files and record meanwhile. On Windows a step can ask
+/// Windows for administrator rights (its prompt, UAC): call it only once the person agreed.
 pub async fn run(
     dirs: &Dirs,
     http: &Client,
@@ -373,7 +395,7 @@ pub(crate) async fn run_held(
         args.extend(command.args.iter().cloned());
         let spec = runner::windows_command(dirs, install, args, install.path.clone())?;
         let busy = crate::lock::session(dirs, &install.game_id);
-        let outcome = SessionHandle::start(supervisor, &spec, &log, Some(&busy))
+        let outcome = SessionHandle::start_elevating(supervisor, &spec, &log, Some(&busy))
             .await?
             .wait()
             .await?;
@@ -574,12 +596,17 @@ mod tests {
         );
         assert!(cmds[0].args.contains(&"/ProductId=1".to_string()));
         assert!(cmds[1].args.contains(&"/ProductId=2".to_string()));
-        assert!(cmds[0].args.contains(&"/DIR=Z:\\games\\Game".to_string()));
-        assert!(
-            cmds[0]
-                .args
-                .contains(&"/supportDir=Z:\\data\\support\\1".to_string())
-        );
+        #[cfg(unix)]
+        {
+            assert!(cmds[0].args.contains(&"/DIR=Z:\\games\\Game".to_string()));
+            assert!(
+                cmds[0]
+                    .args
+                    .contains(&"/supportDir=Z:\\data\\support\\1".to_string())
+            );
+        }
+        #[cfg(windows)]
+        assert!(cmds[0].args.contains(&"/DIR=\\games\\Game".to_string()));
         assert!(cmds[0].args.contains(&"/Language=French".to_string()));
         assert_eq!(cmds[2].args, ["/install", "/quiet", "/norestart"]);
     }
@@ -656,5 +683,25 @@ mod tests {
         assert_eq!(language_name("zh-Hans"), "Chinese");
         assert_eq!(language_name("pt-BR"), "Portuguese");
         assert_eq!(wine_path(Path::new("/a/b c")), "Z:\\a\\b c");
+    }
+
+    /// On Windows a setup program is given the game's folder as Windows names it, even when it
+    /// came from a canonical path.
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_setup_programs_get_plain_paths() {
+        assert_eq!(
+            setup_path(Path::new(r"\\?\C:\Games\[FAKE] Game")),
+            r"C:\Games\[FAKE] Game"
+        );
+        assert_eq!(
+            setup_path(Path::new(r"\\?\UNC\nas\games\G")),
+            r"\\nas\games\G"
+        );
+        assert_eq!(setup_path(Path::new(r"D:\G")), r"D:\G");
+        assert_eq!(
+            setup_path(Path::new(r"C:\Users\[FAKE]\Games/GOG")),
+            r"C:\Users\[FAKE]\Games\GOG"
+        );
     }
 }

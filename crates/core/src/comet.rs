@@ -29,13 +29,20 @@ pub struct Comet {
 }
 
 impl Comet {
-    /// Comet is not started on Windows yet: how its tokens would reach it there safely is to be
-    /// decided (docs/windows-port.md, step 7).
+    /// Refuses where Comet is not started: on Windows yet, as how its tokens would reach it there
+    /// safely is to be decided (PLAN.md, M3.6). Asked before anything is prepared for it.
+    pub fn check_system() -> Result<()> {
+        #[cfg(windows)]
+        return Err(Error::Unsupported(
+            "achievements through Comet are not available on Windows yet".into(),
+        ));
+        #[cfg(unix)]
+        Ok(())
+    }
+
     #[cfg(windows)]
     pub async fn start(_: &Path, _: &Tokens, _: &str, _: &Dirs) -> Result<Comet> {
-        Err(Error::Unsupported(
-            "achievements through Comet are not available on Windows yet".into(),
-        ))
+        Err(Self::check_system().expect_err("Comet is refused on Windows"))
     }
 
     /// Tokens reach Comet through its Lutris importer: a 0600 file in a private runtime

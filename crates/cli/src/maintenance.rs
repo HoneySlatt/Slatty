@@ -1,4 +1,3 @@
-use std::io::{BufRead, Write};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -47,7 +46,7 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
         (false, Some(p)) => println!("The Wine prefix {} (local saves) is kept.", p.display()),
         _ => {}
     }
-    if !args.yes && !confirm()? {
+    if !args.yes && !crate::confirm("Proceed?")? {
         println!("Cancelled.");
         return Ok(());
     }
@@ -135,14 +134,6 @@ pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn confirm() -> Result<bool> {
-    eprint!("Proceed? [y/N] ");
-    std::io::stderr().flush()?;
-    let mut line = String::new();
-    std::io::stdin().lock().read_line(&mut line)?;
-    Ok(matches!(line.trim(), "y" | "Y" | "yes" | "o" | "oui"))
 }
 
 #[derive(Args)]
@@ -463,6 +454,10 @@ pub async fn setup(ctx: &Ctx, args: SetupArgs) -> Result<()> {
             slatty_core::runner::container(&install),
         )
         .await;
+    }
+    // Asking for the setup is agreeing to it.
+    if cfg!(windows) {
+        println!("Windows may ask for administrator rights for GOG's setup.");
     }
     let ran = slatty_core::setup::run(
         &ctx.dirs,

@@ -1,3 +1,6 @@
+// Its checks are Linux's: umu, the Secret Service over D-Bus.
+#![cfg(unix)]
+
 use std::process::Command;
 
 /// `slatty doctor` fails when a check fails, so that a script sees it without reading the lines:

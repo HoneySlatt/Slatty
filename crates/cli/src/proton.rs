@@ -78,6 +78,7 @@ fn sync_shared(ctx: &Ctx) {
 }
 
 pub async fn run(ctx: &Ctx, cmd: ProtonCommand) -> Result<()> {
+    slatty_core::platform::linux_only("Proton builds")?;
     protons::link_newest(&ctx.dirs)?;
     sync_shared(ctx);
     match cmd {

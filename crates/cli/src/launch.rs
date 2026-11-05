@@ -15,6 +15,15 @@ pub struct LaunchArgs {
     /// Do not start Comet (no achievements for this session)
     #[arg(long)]
     no_comet: bool,
+    /// Run GOG's setup if it is pending, without asking: it may ask Windows for administrator
+    /// rights
+    #[cfg(windows)]
+    #[arg(long, conflicts_with = "no_setup")]
+    setup: bool,
+    /// Do not run GOG's setup now, nor ask; it stays pending
+    #[cfg(windows)]
+    #[arg(long)]
+    no_setup: bool,
 }
 
 pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
@@ -35,6 +44,7 @@ pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
     });
     let game_id = args.game_id.clone();
     let req = PlayRequest {
+        setup_agreed: setup_agreed(ctx, &args)?,
         game_id: args.game_id,
         cloud: !args.no_cloud,
         comet: !args.no_comet,
@@ -56,6 +66,29 @@ pub async fn run(ctx: &Ctx, args: LaunchArgs) -> Result<()> {
     ended(&game_id, blocked.into_inner())
 }
 
+/// Whether GOG's setup may run in this launch, on Windows, where it may ask for administrator
+/// rights: as `--setup` or `--no-setup` say, else as the person answers when it is pending. With
+/// no terminal to ask on, it waits. Linux runs it without asking.
+#[cfg(windows)]
+fn setup_agreed(ctx: &Ctx, args: &LaunchArgs) -> Result<bool> {
+    use std::io::IsTerminal;
+    if args.setup || args.no_setup {
+        return Ok(args.setup);
+    }
+    if !slatty_core::setup::pending(&ctx.dirs, &args.game_id)? || !std::io::stdin().is_terminal() {
+        return Ok(false);
+    }
+    println!(
+        "GOG's setup for this game has not run yet: it installs what the game needs, and Windows may ask for administrator rights."
+    );
+    crate::confirm("Run it now?")
+}
+
+#[cfg(unix)]
+fn setup_agreed(_: &Ctx, _: &LaunchArgs) -> Result<bool> {
+    Ok(true)
+}
+
 /// Fails when cloud saves kept the game from starting, so that a script sees no session happened.
 fn ended(game_id: &str, blocked: bool) -> Result<()> {
     if blocked {
@@ -72,6 +105,9 @@ fn print_event(game_id: &str, event: PlayEvent) {
         PlayEvent::PreparingPrefix => println!("First launch: creating the Wine prefix…"),
         PlayEvent::SetupStep(step) => println!("Setup: {}…", shown(step)),
         PlayEvent::SetupWarning(w) => println!("Setup warning: {}", shown(w)),
+        PlayEvent::SetupNotAgreed => println!(
+            "GOG's setup was not run; the game may miss what it installs. `slatty launch {game_id} --setup` or `slatty setup {game_id}` runs it."
+        ),
         PlayEvent::SetupSkipped(why) => println!(
             "Setup not run ({}); it will be retried at the next launch.",
             shown(why)
