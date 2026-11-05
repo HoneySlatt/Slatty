@@ -37,6 +37,6 @@ repository, which can be a little after it was taken.
 | [0021](0021-interface-in-english-first.md) | The interface in English first | Accepted |
 | [0022](0022-windows-hosts.md) | Windows hosts: one code base, built from Linux, Linux's features kept Linux's | Accepted |
 | [0023](0023-a-quality-bar-close-to-what-is-measured.md) | A quality bar close to what is measured, its gaps closed in Stage 4 | Accepted |
-| [0024](0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md) | Hardware tiers from a 2016 laptop, and budgets for the whole working loop | Accepted; extends 0023; amended by 0025 |
-| [0025](0025-ci-runs-the-checks-in-three-parts-at-once.md) | CI runs `scripts/check.sh` in three parts at once, with a Cargo cache | Accepted; amends 0024 (how the CI's budget is reached) |
+| [0024](0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md) | Hardware tiers from a 2016 laptop, and budgets for the whole working loop | Accepted; extends 0023; amended by 0026 |
 | [0025](0025-paused-after-m3-3-until-slime-ui.md) | Slatty paused after M3.3 until slime-ui runs it; then slime-ui, Windows, packages | Accepted; amends 0020 (the work outside the interface no longer goes on meanwhile) |
+| [0026](0026-ci-runs-the-checks-in-three-parts-at-once.md) | CI runs `scripts/check.sh` in three parts at once, with a Cargo cache | Accepted; amends 0024 (how the CI's budget is reached) |

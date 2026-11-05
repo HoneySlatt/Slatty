@@ -1,4 +1,4 @@
-# 0025. CI runs `scripts/check.sh` in three parts at once, with a Cargo cache
+# 0026. CI runs `scripts/check.sh` in three parts at once, with a Cargo cache
 
 - Status: Accepted; amends 0024 (how the CI's budget is reached)
 - Date: 2026-11-05
@@ -34,8 +34,8 @@ those parts.
 **CI runs each part in a job of its own, at the same time**, each `scripts/check.sh <part>` in the
 same Nix shell. A run takes as long as its slowest part. One part failing does not stop the others.
 
-**A test keeps CI complete**: the `linux` part checks that the CI's matrix names every part the
-script has, so that a part added to the script cannot be left out of CI.
+**A check keeps CI complete**: before any part, the script checks that the CI's matrix names every
+part it has, so that a part added to the script, or taken out of the matrix, fails every job.
 
 **One Cargo cache per build part** (`linux`, `windows`), through GitHub's own `actions/cache`: the
 downloaded crates and `target/`. Its key is the dependencies (`Cargo.lock`) and the toolchain
@@ -45,6 +45,9 @@ cache smaller.
 
 ## Alternatives considered
 
+- **A cache of the Nix store** (ADR-0024's plan): it would keep the development shells, which Nix's
+  public cache already serves in about 40 seconds, and the dependencies' sources of the package,
+  not its build. Dropped.
 - **A cache alone, one job** (ADR-0024's plan): CI stays `scripts/check.sh` in one piece, but the
   package's 10 minutes stay, a warm run comes close to the budget, and a lost cache puts it far
   over. Rejected.
@@ -64,6 +67,9 @@ cache smaller.
 
 - A run needs three machines instead of one; GitHub provides them freely to a public repository.
 - CI is still `scripts/check.sh`, cut into its parts: the jobs and the script cannot drift apart
-  without the `linux` part failing.
-- A change to `Cargo.lock` or `flake.lock` means one run with cold builds, about 16 minutes.
+  without every job failing.
+- A change to `Cargo.lock` or `flake.lock` means one run with cold builds, about 16 minutes. The
+  caches of the old key stay until GitHub drops them, after 7 days unused or when the repository's
+  10 GB are full; a pull request that changes a lock file keeps caches of its own. Several such
+  changes in a week could push `main`'s caches out, for one cold run each.
 - The figures are in [measurements.md](../measurements.md#ci-in-three-parts-2026-11-05).

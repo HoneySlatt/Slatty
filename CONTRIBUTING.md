@@ -38,7 +38,7 @@ cargo build --workspace                   # last: tests and clippy do not rebuil
 
 `scripts/check.sh` says at its head what it runs, in three parts: Linux, Windows (built from Linux,
 the core's tests under Wine) and the Nix package. CI (`.github/workflows/ci.yml`) runs it unchanged,
-each part in a job of its own, at the same time ([ADR-0025](docs/adr/0025-ci-runs-the-checks-in-three-parts-at-once.md)),
+each part in a job of its own, at the same time ([ADR-0026](docs/adr/0026-ci-runs-the-checks-in-three-parts-at-once.md)),
 on every push to `main` and every pull request, and every Monday at 06:41 UTC even without a push,
 so that new advisories against the dependencies and changes to the CI's environment show while
 the project is at rest; a push cancels the run in progress. GitHub turns the weekly run off after

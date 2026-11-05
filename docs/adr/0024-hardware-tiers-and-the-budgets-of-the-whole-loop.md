@@ -1,6 +1,6 @@
 # 0024. Hardware tiers from a 2016 laptop, and budgets for the whole working loop
 
-- Status: Accepted; extends 0023; amended by 0025
+- Status: Accepted; extends 0023; amended by 0026
 - Date: 2026-11-05
 
 ## Context

@@ -1,7 +1,7 @@
 # Runs the automated checks of the definition of done (AGENTS.md) on each push to main, on each
 # pull request and once a week, in the same Nix shell that the agents use: scripts/check.sh,
 # unchanged, one of its parts per job, the three jobs at the same time, so that a run stays within
-# its 20 minutes (ADR-0025). Windows is checked there by building for it from Linux and running the
+# its 20 minutes (ADR-0026). Windows is checked there by building for it from Linux and running the
 # core's tests under Wine (ADR-0022). Actions are pinned to commit SHAs, with the release they
 # correspond to in a comment.
 name: CI
@@ -38,7 +38,7 @@ jobs:
         part: [linux, windows, package]
     env:
       # Incremental builds help a change made again and again, not a build from a cache: off, the
-      # cache is smaller and builds no slower.
+      # cache is smaller.
       CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
