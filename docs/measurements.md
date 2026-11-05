@@ -76,10 +76,14 @@ On GitHub's `ubuntu-24.04`, from the times in the logs:
 | Run | Linux | Windows | Nix package | Whole run |
 |---|---|---|---|---|
 | 41960332302 (86478df), cold, no cache yet | Failed at the link step after 12 min 14 s: Clippy 4 min 35 s, tests 6 min 39 s | 12 min 06 s: `cargo check` 6 min 59 s, Wine's tests 4 min 14 s | 14 min 36 s (`nix build` 13 min 54 s) | 14 min 37 s |
+| 41962586465 (bba8aaf), Linux cold, Windows warm | 18 min 55 s: Clippy 6 min 47 s, tests 9 min 56 s, build 0 min 59 s | 1 min 53 s: `cargo check` 23 s, Wine's tests 42 s | 10 min 18 s (`nix build` 9 min 28 s) | 18 min 55 s |
+| The same, run again, both caches warm | 3 min 50 s: Clippy 22 s, tests 1 min 28 s, build 47 s | 2 min 04 s: `cargo check` 26 s, Wine's tests 42 s | 9 min 13 s (`nix build` 8 min 35 s) | 9 min 13 s |
 
-The Nix package's time varies from run to run, with the same dependencies: `nix build` took
-9 min 20 s and 9 min 53 s in the two runs before, as one job. The Windows part's cache, saved by the cold run,
-holds 524 MiB.
+Times vary with the machine GitHub gives, for the same dependencies: `nix build` took from
+8 min 35 s to 13 min 54 s in these runs (9 min 20 s and 9 min 53 s in the two before, as one job),
+and the Linux part from cold 12 min 14 s without its build in one run, 18 min 55 s with it in the
+next. Warm, the Nix package alone sets the run's time. The caches hold 524 MiB (Windows) and
+895 MiB (Linux), compressed; restoring either takes 20 to 30 seconds.
 
 ## A CI run, every build cold (2026-11-05)
 

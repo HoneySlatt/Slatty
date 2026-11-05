@@ -140,28 +140,24 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
 - **Wake-ups at rest**: one thread of zbus's pool, kept by the keyring's connection, wakes every
   500 ms (120 wake-ups a minute, against a budget of 0 in the
   [quality bar](ROADMAP.md#quality-bar)). To be fixed in Stage 4.
-- **CI is over its budget**: 30 min 44 s on 2026-11-05, against 20
-  ([quality bar](ROADMAP.md#quality-bar)), every build starting cold; each step's time is in
-  [measurements.md](measurements.md#a-ci-run-every-build-cold-2026-11-05). Next, and started:
-  the owner chose a cache first, then the Windows build in a job of its own if needed. What the
-  figures showed since, to put to the owner before building: a Cargo cache cannot reach the Nix
-  package's 10 minutes, which rebuilds every crate in Nix's sandbox (`buildRustPackage`), and a
-  cache of `target/` for both systems may not fit GitHub's 10 GB per repository. Jobs in parallel,
-  each running a part of `scripts/check.sh` (Linux, Windows, the package), would take about
-  16 minutes cold with no cache; a Cargo cache would then shorten the Linux and Windows jobs.
+- **The Nix package sets the CI's pace**: CI runs `scripts/check.sh` in three parts at once, with
+  a Cargo cache ([ADR-0026](adr/0026-ci-runs-the-checks-in-three-parts-at-once.md)), and a warm
+  run took 9 min 13 s, within its 20 minutes, the package's 9 minutes being all of it, as no Cargo
+  cache reaches its build. A run whose Linux cache is cold, after a change to `Cargo.lock` or
+  `flake.lock`, took 18 min 55 s once: close to the budget. Building the package with crane is the
+  step left if runs come closer ([measurements.md](measurements.md#ci-in-three-parts-2026-11-05)).
 - **The download and no-change sync budgets are not measured** (set 2026-11-05): their benchmarks
   are to be written.
 - **Video memory has no budget**: the owner decided on 2026-11-05 to measure it first (at rest,
   after scrolling the whole grid, after 200 game pages), then set it. The measurement needs the
   fake profile and the probe in the repository, and a headless compositor, so that no window opens
-  on the desktop; after the CI's cache.
+  on the desktop.
 - **A crash leaves no report** ([quality bar](ROADMAP.md#quality-bar)): to be built in the core and
-  the command line after the CI's cache; the interface's notice waits for slime-ui (Stage 5), as
-  Iced receives bug fixes only.
-- **CI runs on GitHub's Linux machines only**: Windows is checked by building from Linux, not by a
-  Windows runner. The core's tests under Wine are run by hand; the owner decided on 2026-11-05 that
-  `scripts/check.sh` runs them, done with the CI's cache so that it stays within budget. Clippy for
-  Windows is not run either, as the `windows` shell lacks it.
+  the command line; the interface's notice waits for slime-ui (Stage 5), as Iced receives bug fixes
+  only.
+- **CI runs on GitHub's Linux machines only**: Windows is checked by building from Linux and by
+  the core's tests under Wine, in `scripts/check.sh`'s `windows` part, not by a Windows runner.
+  Clippy for Windows is not run, as the `windows` shell lacks it.
 - **Links are tested on Linux only**: the tests that make symbolic links are `#[cfg(unix)]`, as
   making one on Windows needs a right users lack. Windows' refusal of reparse points planted by a
   game has no test yet, nor a game folder a person moved and linked back with a junction
