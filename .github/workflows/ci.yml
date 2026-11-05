@@ -1,7 +1,8 @@
 # Runs the automated checks of the definition of done (AGENTS.md) on each push to main, on each
 # pull request and once a week, in the same Nix shell that the agents use: scripts/check.sh,
-# unchanged, one of its parts per job, the three jobs at the same time, so that a run stays within
-# its 20 minutes (ADR-0026). Windows is checked there by building for it from Linux and running the
+# unchanged, one of its parts per job, the jobs at the same time, so that a run stays within its
+# 20 minutes (ADR-0026). A push that changes only Markdown files since the last run that passed
+# checks the links alone (ADR-0033). Windows is checked there by building for it from Linux and running the
 # core's tests under Wine (ADR-0022). Actions are pinned to commit SHAs, with the release they
 # correspond to in a comment.
 name: CI
@@ -25,8 +26,52 @@ permissions:
   contents: read
 
 jobs:
+  # Whether the code is checked. Only for a push, against the last run on main that passed: a run
+  # cancelled by the next push, or one that failed, then counts nothing as checked. A pull request,
+  # the weekly run, and a push with no such run to compare with check everything.
+  scope:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      code: ${{ steps.changed.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          code=true
+          if [ "$EVENT" = push ]; then
+            passed=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main \
+              --status success --limit 20 --json headSha,event \
+              --jq '[.[] | select(.event == "push" or .event == "schedule")][0].headSha // empty')
+            # Only the commit's tree is needed; one no longer on the branch is not fetched.
+            # A step that fails leaves the code checked; so does a commit with no change, whose
+            # list holds one empty line.
+            if [ -n "$passed" ] && git fetch --no-tags --depth=1 origin "$passed" &&
+              changed=$(git diff --name-only --no-renames "$passed" HEAD) &&
+              ! grep -qv '\.md$' <<< "$changed"; then
+              code=false
+            fi
+          fi
+          echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
+  # The links between Markdown files, in every run.
+  docs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - run: nix develop --no-update-lock-file --command scripts/check.sh docs
+
   check:
     name: check (${{ matrix.part }})
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ubuntu-24.04
     # A part built from cold, cache lost.
     timeout-minutes: 40
@@ -34,7 +79,8 @@ jobs:
       # One part failing does not stop the others: each tells its own failures.
       fail-fast: false
       matrix:
-        # Every part of scripts/check.sh, which checks that this line names them all.
+        # Every part of scripts/check.sh that builds the code, which checks that this line names
+        # them all.
         part: [linux, windows, package]
     env:
       # Incremental builds help a change made again and again, not a build from a cache: off, the

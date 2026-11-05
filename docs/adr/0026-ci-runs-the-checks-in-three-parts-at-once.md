@@ -1,6 +1,8 @@
 # 0026. CI runs `scripts/check.sh` in three parts at once, with a Cargo cache
 
-- Status: Accepted; amends 0024 (how the CI's budget is reached)
+- Status: Accepted; amends 0024 (how the CI's budget is reached); amended by
+  [0033](0033-a-push-of-markdown-alone-checks-only-the-links.md) (the links a fourth part, which
+  a push of Markdown alone runs by itself)
 - Date: 2026-11-05
 
 ## Context

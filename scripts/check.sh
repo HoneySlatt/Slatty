@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Runs every automated check of the definition of done (AGENTS.md), in three parts, each in the
+# Runs every automated check of the definition of done (AGENTS.md), in four parts, each in the
 # order a failure is cheapest to find:
 #   linux    formatting; clippy with warnings as errors, the interface's probe included; the
 #            tests (no network, no real game); the code documentation with warnings as errors;
-#            cargo deny (licences, advisories, sources); the links between Markdown files
-#            (lychee, offline); then the build, last.
+#            cargo deny (licences, advisories, sources); then the build, last.
 #   windows  every crate checked for Windows in the `windows` shell, then the core's and the
 #            command line's tests under Wine (ADR-0022, ADR-0024).
 #   package  the Nix package.
+#   docs     the links between Markdown files (lychee, offline); a push to main that changes only
+#            Markdown files runs this part alone in CI (ADR-0033).
 # Before any part, it checks that CI runs every part. With no argument it runs every part in turn:
 # what to run before a commit. `scripts/check.sh windows` runs one part. CI runs each part in a job
 # of its own, at the same time (.github/workflows/ci.yml, ADR-0026), inside the Nix development
@@ -18,7 +19,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-parts=(linux windows package)
+# The parts that build the code, one job each in CI's matrix; `docs` has a job of its own.
+code_parts=(linux windows package)
+parts=("${code_parts[@]}" docs)
 
 step() { printf '\n==> %s\n' "$*"; }
 
@@ -39,9 +42,6 @@ linux() {
 
   step "dependencies: licences, advisories, sources"
   cargo deny --locked check
-
-  step "links between Markdown files"
-  git ls-files -z '*.md' | xargs -0 lychee --offline --include-fragments --no-progress
 
   # Last: tests and lints do not rebuild the binaries people run from target/debug.
   step "build"
@@ -64,6 +64,11 @@ package() {
   nix build .#slatty --no-link --no-update-lock-file
 }
 
+docs() {
+  step "links between Markdown files"
+  git ls-files -z '*.md' | xargs -0 lychee --offline --include-fragments --no-progress
+}
+
 if [[ $# -eq 0 ]]; then
   set -- "${parts[@]}"
 fi
@@ -75,13 +80,18 @@ for part in "$@"; do
   fi
 done
 
-# CI lists the parts itself, for its jobs; a part missing there would never run in CI. Checked in
-# every part, so that it still runs in CI whichever part is left out. It reads the line, not the
-# YAML: a copy of the line elsewhere in the file would satisfy it.
+# CI lists the code parts itself, for its matrix, and runs `docs` in a job of its own; a part
+# missing there would never run in CI. Checked in every part, so that it still runs in CI whichever
+# part is left out. It reads lines, not the YAML: a copy of a line elsewhere in the file would
+# satisfy it.
 step "CI runs every part"
-matrix="part: [$(printf '%s, ' "${parts[@]}" | sed 's/, $//')]"
+matrix="part: [$(printf '%s, ' "${code_parts[@]}" | sed 's/, $//')]"
 if ! grep -qF "$matrix" .github/workflows/ci.yml; then
   echo "the matrix of .github/workflows/ci.yml must be: $matrix" >&2
+  exit 1
+fi
+if ! grep -qF "scripts/check.sh docs" .github/workflows/ci.yml; then
+  echo ".github/workflows/ci.yml must run \`scripts/check.sh docs\` in a job of its own" >&2
   exit 1
 fi
 

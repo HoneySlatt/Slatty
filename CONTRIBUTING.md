@@ -29,19 +29,21 @@ X11, Vulkan and libudev development files, umu-launcher and Comet on `PATH`, and
 
 ```sh
 scripts/check.sh                          # every check below and more, as CI runs it
-scripts/check.sh linux                    # one of its parts: linux, windows or package
+scripts/check.sh linux                    # one of its parts: linux, windows, package or docs
 cargo fmt
 cargo clippy --workspace --all-targets    # no warning
 cargo test --workspace
 cargo build --workspace                   # last: tests and clippy do not rebuild the binaries
 ```
 
-`scripts/check.sh` says at its head what it runs, in three parts: Linux, Windows (built from Linux,
-the core's tests under Wine) and the Nix package. CI (`.github/workflows/ci.yml`) runs it unchanged,
-each part in a job of its own, at the same time ([ADR-0026](docs/adr/0026-ci-runs-the-checks-in-three-parts-at-once.md)),
-on every push to `main` and every pull request, and every Monday at 06:41 UTC even without a push,
-so that new advisories against the dependencies and changes to the CI's environment show while
-the project is at rest; a push cancels the run in progress. GitHub turns the weekly run off after
+`scripts/check.sh` says at its head what it runs, in four parts: Linux, Windows (built from Linux,
+the core's tests under Wine), the Nix package and the links between documents. CI
+(`.github/workflows/ci.yml`) runs it unchanged, each part in a job of its own, at the same time
+([ADR-0026](docs/adr/0026-ci-runs-the-checks-in-three-parts-at-once.md)); a push that changes only
+Markdown files runs the links alone ([ADR-0033](docs/adr/0033-a-push-of-markdown-alone-checks-only-the-links.md)).
+It runs on every push to `main` and every pull request, and every Monday at 06:41 UTC even without
+a push, so that new advisories against the dependencies and changes to the CI's environment show
+while the project is at rest; a push cancels the run in progress. GitHub turns the weekly run off after
 60 days without activity on a public repository: a click in the Actions tab turns it back on.
 Build last: the person testing your change runs `target/debug/slatty-gui`.
 
