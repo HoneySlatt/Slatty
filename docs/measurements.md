@@ -9,6 +9,22 @@ the machine, the build, the command, and the figures with their spread. How each
 Every figure here was taken with the Iced interface. Those before 2026-11-05 predate the method's
 budgets.
 
+## Flushing every installed file on Windows (2026-11-05)
+
+Command: `syncing_every_small_file` ([testing.md](testing.md#benchmarks)), 2,000 files of 16 KiB
+written under a temporary name and renamed, without a flush, then with one each, as an install does
+on Windows ([ADR-0029](adr/0029-every-installed-file-flushed-on-windows.md)). Machine: Windows 11
+Pro 26H2 in a KVM virtual machine on the high tier's computer, release build of 1f2d667; one run
+each.
+
+| Disk | Not flushed | Flushed | Each flush |
+|---|---|---|---|
+| C:, NTFS on a VirtIO disk | 2.37 s | 4.55 s | about 1.1 ms |
+| A network share (SMB 3 to the host) | 9.39 s | 17.21 s | about 3.9 ms |
+
+Flushing every file nearly doubles the time of writing small ones, on both. A virtual disk is not a
+physical one: on real hardware a flush may cost more or less.
+
 ## The application at 10,000 games, by `slatty-measure` (2026-11-05)
 
 Command: `slatty-measure headless` and `slatty-measure desktop`, each run twice, 10 runs a series
@@ -58,7 +74,8 @@ What they say:
 - **Scrolling misses its budget by far.** In the runs' logs, each row of covers that comes into
   view costs a frame of about 30 ms and another of about 11 ms: 91 to 272 frames over 16.7 ms in
   1,200. Why is not established: Iced 0.14 decodes a cover on a thread of its own, then copies it
-  into its texture atlas on the interface's thread, which a profile would have to show. Between them the median frame takes 5.1 ms, not the 4.17 ms of 240 Hz, and
+  into its texture atlas on the interface's thread, which a profile would have to show. Between
+  them the median frame takes 5.1 ms, not the 4.17 ms of 240 Hz, and
   some runs were slow throughout (p50 up to 13 ms, 1,182 frames over 6.25 ms); why is not known.
   October's p99 of 4.6–4.9 ms was taken by a probe that is not kept, which may have scrolled
   through rows already read.

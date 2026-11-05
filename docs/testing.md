@@ -319,7 +319,8 @@ nix develop .#windows -c cargo test --release -p slatty-core --no-run
    and run it again: it resumes and completes, the game folder appearing only at the end.
 5. **First launch:** `.\slatty.exe launch <id>`. It asks whether to run GOG's setup: answer `y`.
    Note whether Windows' administrator prompt comes to the front or waits in the taskbar; accept
-   it. The game starts; play a minute and save.
+   it. The game starts; play two minutes and save (a session under a minute sends
+   no play time).
 6. **The session:** quit the game from its own menu: the command says the session ended after the
    minutes played, and that the cloud saves were uploaded and play time sent. Launch again and
    press Ctrl+C once: the game's window is asked to close; a second Ctrl+C ends it. Put the

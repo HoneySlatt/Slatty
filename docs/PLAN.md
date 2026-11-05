@@ -10,8 +10,9 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 ## Current
 
 - **Stage 3 — Windows** ([ADR-0022](adr/0022-windows-hosts.md)). A GOG game installs and plays
-  on Windows from the command line ([M3.3](#m33--play-a-gog-game)): built and tested under Wine,
-  its check by the owner on Windows 10 or 11 still to run. What Slatty depends on Linux for, and
+  on Windows from the command line ([M3.3](#m33--play-a-gog-game)): checked by the owner on
+  Windows 11 on 2026-11-05, one failure left to understand (a launch's sync downloaded every save
+  just after a sync found them unchanged). What Slatty depends on Linux for, and
   the port's open questions, are in [windows-port.md](windows-port.md).
 - **The pause has begun** (2026-11-05,
   [ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)): no milestone starts until Slatty's
@@ -21,8 +22,8 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 - **[M5.0](#m50--iceds-figures-measured-again) is done** (2026-11-05): Iced's figures measured
   again by `slatty-measure` ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)),
   the reference uwui's port must match.
-- **At the resumption**, in order: M3.3's check on Windows if it has not run, its results in
-  [compatibility.md](compatibility.md); then Stage 5. Read first the Known debt below and
+- **At the resumption**, in order: M3.3's failure on Windows if it is still open
+  ([compatibility.md](compatibility.md#windows)); then Stage 5. Read first the Known debt below and
   [windows-port.md](windows-port.md#open-questions).
 - **Then Stage 5 — The interface on uwui** (formerly slime-ui;
   [ADR-0030](adr/0030-ported-second-onto-uwui.md)), released as 0.3 once its exit holds: Iced
@@ -36,7 +37,7 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 |---|---|---|
 | [M3.1](#m31--the-windows-build-environment) | Slatty can be built for Windows from Linux | Done |
 | [M3.2](#m32--everything-builds-for-windows) | Every crate builds for Windows, and the core's tests pass under Wine | Done |
-| [M3.3](#m33--play-a-gog-game) | A person plays a GOG game on Windows from the command line | Built; its check on Windows waits |
+| [M3.3](#m33--play-a-gog-game) | A person plays a GOG game on Windows from the command line | Checked on Windows; one failure open |
 | [M5.0](#m50--iceds-figures-measured-again) | Iced's figures measured again by a command, the reference for uwui's port | Done |
 | [M3.4](#m34--epic-and-steam) | A person plays Epic's and Steam's games on Windows | After Stage 5 |
 | [M3.5](#m35--games-added-by-hand) | A person adds a game from no store on Windows | After Stage 5 |
@@ -95,7 +96,16 @@ every milestone.
   `scripts/check.sh`'s `windows` part.
 - **By hand.** Install, play and sync a GOG game on Windows 10 or 11: the steps are in
   [testing.md](testing.md#checks-on-windows).
-- **Where it stands.** Built 2026-11-05; the check on Windows has not run. Under Wine the core's
+- **Where it stands.** Built 2026-11-05, checked by the owner on Windows 11 the same day
+  ([compatibility.md](compatibility.md#windows)): install, pause and resume, the setup and its
+  administrator prompt, a session quit and stopped, cloud saves, verify, repair and uninstall, and
+  the refusals work. Fixed since, not checked again on Windows: `doctor` failing on Comet's port,
+  held by GOG Galaxy; `setup` saying it was done after a step failed; `verify` succeeding with
+  files damaged; exit codes shown as `Some(2)`; a last progress line of 0 files of 0. Open: a
+  launch right after `slatty cloud sync` downloaded all 10 of Hollow Knight's saves, which that
+  sync had found unchanged; Slatty's log of it is needed to find why. Not checked: play time sent
+  (the session lasted under a minute, which is not sent) and a session across the computer's sleep.
+  Under Wine the core's
   428 tests and the command line's pass, `play_windows.rs` playing a fake GOG game through the real
   supervisor (started, followed past its launcher, stopped, its setup waiting for consent, Proton
   refused). The owner decided three questions: Linux's features refused where they start
@@ -105,9 +115,7 @@ every milestone.
   Found and fixed on the way: play time counted the computer's sleep on Windows; uninstalling a
   folder linked back with a junction left the junction; a read-only save, or a read-only file of
   the game, could not be replaced or deleted; the default games folder was relative to where
-  Slatty started, as Windows sets no `HOME`. Not verified anywhere but on Windows itself: the
-  administrator prompt, a real game's session and stop, saves in the real folders, the cost of
-  flushing every file. Comet stays off on Windows (M3.6).
+  Slatty started, as Windows sets no `HOME`. Comet stays off on Windows (M3.6).
 
 ### M3.4 — Epic and Steam
 
@@ -261,13 +269,13 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
   [ADR-0029](adr/0029-every-installed-file-flushed-on-windows.md)).
 - **Windows behaviour checked under Wine only**: `platform::lowest_priority`'s background mode (its
   disk priority shows nowhere under Wine; its processor priority does), and a thread that work in
-  the background starts lowers itself only if it calls it (`installer::verify_file`'s do); the
-  cost of flushing every installed file
-  ([ADR-0029](adr/0029-every-installed-file-flushed-on-windows.md),
-  `fsutil::tests::syncing_every_small_file`); a setup program started with administrator rights,
-  whose output is not logged, which cannot be stopped and whose own programs are not followed
-  ([ADR-0028](adr/0028-windows-asks-before-gogs-setup-at-launch.md)). To be checked on Windows
-  with M3.3's check by hand.
+  the background starts lowers itself only if it calls it (`installer::verify_file`'s do); a
+  setup program started with administrator rights, whose output is not logged, which cannot be
+  stopped and whose own programs are not followed
+  ([ADR-0028](adr/0028-windows-asks-before-gogs-setup-at-launch.md)): M3.3's check on Windows saw
+  its prompt come to the front, not these. Flushing every installed file was measured there, in a
+  virtual machine only
+  ([measurements.md](measurements.md#flushing-every-installed-file-on-windows-2026-11-05)).
 
 ## Ideas
 

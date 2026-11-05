@@ -79,6 +79,32 @@ Checked with the user's own Epic Games account.
 | 2026-10-11 | Isolation of the tools and of the user's processes: umu-launcher 1.4.4, sniper runtime, UMU-Proton 10.0-4, bubblewrap, offline | Fixed | Probes with a control each, in copies of umu's data and of the Proton build: an isolated game could write into umu's runtime, into the Proton build and into umu's own `umu-sniper` tool (all shared writable), and signal or read the command line of the user's other processes. With the runtime, the Proton build and Slatty's own runtime tool bound read-only, and `PRESSURE_VESSEL_SHARE_PID=0`, each was refused; umu's shim beside its runtimes was never reachable. Prefix creation, the Galaxy service and a session with detached Windows processes still worked. pressure-vessel then copies the runtime instead of linking it: an isolated launch took 2.3 s instead of 1.4 s on btrfs. No real game yet |
 | 2026-10-11 | umu's runtime refresh, umu-launcher 1.4.4, offline with debug logging | OK | Through umu's `UMU_NO_PROTON`, umu first sent a request to `api.github.com`; through Slatty's own runtime tool, only to `repo.steampowered.com`, and `true` ran in the sniper runtime (exit 0) |
 
+## Windows
+
+M3.3's check by hand ([testing.md](testing.md#checks-on-windows)), from the command line, build
+1f2d667, on Windows 11 Pro 26H2 (build 26300) in a KVM virtual machine, its system disk VirtIO
+(NTFS), GOG Galaxy running beside it. The game: Hollow Knight (1308320804), 1.2 GB to download,
+5.3 GB on disk, whose setup runs only GOG's script interpreter (no redistributable), installed
+into `%USERPROFILE%\Games\GOG`.
+
+| Date | Feature | Result | Notes |
+|---|---|---|---|
+| 2026-11-05 | Start | OK | No SmartScreen warning from PowerShell, though the program carried the mark of a download (`Zone.Identifier`); started from Explorer not tried |
+| 2026-11-05 | Sign-in | OK | In the browser; the tokens in Credential Manager (`gog:<user id>.slatty`) |
+| 2026-11-05 | Library | OK | 48 games synced and listed |
+| 2026-11-05 | Install, paused and resumed | OK | Paused by Ctrl+C at 72 % ("Paused. Verified files are kept"), resumed to the end; only the partial folder existed until then. A last line of 0 files of 0 ended the progress: fixed since (`installer::tests::an_empty_set_reports_no_progress`) |
+| 2026-11-05 | `slatty doctor` | Fixed | Failed on Comet's port, held by Galaxy's `GalaxyCommunication.exe`, though Comet does not run on Windows yet (M3.6): the port is no longer checked there (`doctor::tests::windows_does_not_check_comets_port`, under Wine) |
+| 2026-11-05 | First launch, GOG's setup | OK | Agreed to at the prompt; Windows' administrator prompt came to the front |
+| 2026-11-05 | Session, quit from the game | OK | Its length told, 7 saves uploaded. Play time was not sent, as designed: the session lasted 51 s, and sessions under a minute are not sent. Sending one longer is not checked yet |
+| 2026-11-05 | Session, stopped with Ctrl+C | OK | The game asked to close, and the session ended cleanly |
+| 2026-11-05 | Session across the computer's sleep | Not checked | The machine slept during a session; whether that time was left out was not read |
+| 2026-11-05 | Setup refused (`setup --force`) | Fixed | After the refused prompt the setup said that a step failed, then "Setup done (1 step(s))": it now ends on "the setup did not finish", with a failing exit status. Not checked again on Windows. `launch --no-setup` started the game without asking |
+| 2026-11-05 | Exit codes in messages | Fixed | Shown as `Some(2)`; now `code 2` (`session::tests::an_exit_code_reads_as_a_number`). Not checked again on Windows |
+| 2026-11-05 | Cloud saves: status, sync, a change made elsewhere | OK | The folder found in `%USERPROFILE%\AppData\LocalLow\Team Cherry\Hollow Knight`; a sync with nothing to do (10 files unchanged); a change made elsewhere downloaded |
+| 2026-11-05 | Cloud saves, a launch right after a sync | Fails | The launch's sync downloaded all 10 files (0 uploaded, 10 downloaded) just after `slatty cloud sync` found them unchanged. Why is not known yet; whether the local copies were backed up first, as Slatty does before replacing a save, was not checked |
+| 2026-11-05 | Verify, repair, uninstall | OK | A damaged `System.Console.dll` found and repaired; files added to the folder kept by the uninstall. `verify` ended with a success status with files damaged: it now fails then, not checked again on Windows |
+| 2026-11-05 | Linux's features refused | OK | `isolation --on` and `proton list`: "not available on Windows", exit status 1 |
+
 ## Games
 
 | Date | Game (id) | Version | Setup | Feature | Result | Notes |
