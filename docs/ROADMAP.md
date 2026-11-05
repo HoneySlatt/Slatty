@@ -124,7 +124,7 @@ reduced motion and contrast.
 | Topic | Decision |
 |---|---|
 | Language | Rust for the whole application; Proton, umu and Comet stay external tools ([ADR-0001](adr/0001-rust-with-proton-umu-and-comet-outside.md)) |
-| Licence | GPL-3.0-or-later ([ADR-0002](adr/0002-gpl-3-0-or-later.md)) |
+| Licence | GPL-3.0-or-later; uwui, a dependency, is MIT OR Apache-2.0 ([ADR-0002](adr/0002-gpl-3-0-or-later.md), [ADR-0032](adr/0032-gpl-kept-on-a-permissive-framework.md)) |
 | Storage | SQLite through rusqlite; migrations only appended ([ADR-0003](adr/0003-sqlite-through-rusqlite-behind-a-mutex.md)) |
 | Secrets and privacy | Tokens only in the system keyring; every third party off until turned on; no telemetry ([ADR-0004](adr/0004-tokens-only-in-the-system-keyring.md), [ADR-0005](adr/0005-every-third-party-off-until-turned-on.md)) |
 | Running Windows games on Linux | umu and Proton builds Slatty downloads; isolation through umu's container ([ADR-0009](adr/0009-isolation-through-umus-container.md), [ADR-0010](adr/0010-proton-builds-downloaded-by-slatty.md)) |

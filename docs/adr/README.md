@@ -45,3 +45,4 @@ repository, which can be a little after it was taken.
 | [0029](0029-every-installed-file-flushed-on-windows.md) | On Windows every file an install writes is flushed to the disk before it takes its name | Accepted |
 | [0030](0030-ported-second-onto-uwui.md) | Slatty ported onto uwui second, after the music player | Accepted; amends 0020 (no longer the pilot) and 0025 (the pause lasts until Slatty's turn; 0.3 once Stage 5's exit holds) |
 | [0031](0031-iceds-figures-measured-again-during-the-pause.md) | Iced's figures measured again, by a command, during the pause | Accepted; amends 0020 (the bar is Iced's figures measured again) and 0025 (one milestone during the pause) |
+| [0032](0032-gpl-kept-on-a-permissive-framework.md) | GPL-3.0-or-later kept, on a framework under MIT OR Apache-2.0 | Accepted |
