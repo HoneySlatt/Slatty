@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
 use super::plan::{ConflictKind, Warning};
-use super::sync::{Prefer, SyncOptions, SyncReport, SyncTarget, folder_identity, sync};
+#[cfg(unix)]
+use super::sync::folder_identity;
+use super::sync::{Prefer, SyncOptions, SyncReport, SyncTarget, sync};
 use super::transport::memory::MemoryCloud;
 use super::transport::{CloudTransport, IGNORED_REMOTE_HASH, RemoteEntry};
 use crate::db::Db;
@@ -60,6 +62,7 @@ impl Env {
 
     /// Records that the save folder last synced had the device and inode the folder now has, as
     /// when the folder was deleted and ext4 gave the inode back to the one made again.
+    #[cfg(unix)]
     fn reuse_inode(&self) {
         let now = folder_identity(&self.root()).unwrap();
         let conn = self.db.conn();
@@ -830,11 +833,10 @@ async fn history_is_not_trusted_after_another_account_synced_the_folder() {
 /// The save folder was deleted outside the launcher (a broken prefix made again), the game
 /// started offline, and saved a new game where the progress was: at the next sync the folder is
 /// not empty, so only its identity tells it is another folder. The new game is not uploaded over
-/// the progress; the file becomes a conflict. The new folder is given the old one's device and
-/// inode, as ext4 does at times: its creation time still tells them apart, so the test needs a
-/// temporary folder on a filesystem that keeps creation times. Windows' are not used: there NTFS
-/// gives a folder made again another index.
-#[cfg(unix)]
+/// the progress; the file becomes a conflict. On Linux the new folder is given the old one's
+/// device and inode, as ext4 does at times: its creation time still tells them apart, so the test
+/// needs a temporary folder on a filesystem that keeps creation times. Windows' are not used: there
+/// the folder's index alone tells it, which NTFS changes for a folder made again.
 #[tokio::test]
 async fn a_save_folder_made_again_does_not_reuse_its_history() {
     let env = Env::new("made-again");
@@ -847,6 +849,7 @@ async fn a_save_folder_made_again_does_not_reuse_its_history() {
     // The clock that dates a new folder moves by ticks of up to 10 ms.
     std::thread::sleep(std::time::Duration::from_millis(20));
     env.write("a.sav", "new game");
+    #[cfg(unix)]
     env.reuse_inode();
     let r = env.sync(SyncOptions::default()).await;
     assert_eq!(
