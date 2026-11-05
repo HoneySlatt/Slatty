@@ -1,7 +1,8 @@
 # 0020. GPUI tried and set aside; Slatty is the pilot of SlimeEngine's interface framework
 
 - Status: Accepted; amends [0015](0015-iced-for-the-interface.md) (Iced stays until slime-ui runs
-  Slatty)
+  Slatty); amended by [0025](0025-paused-after-m3-3-until-slime-ui.md) (Slatty paused after M3.3
+  until slime-ui runs it)
 - Date: 2026-11-04
 
 ## Context

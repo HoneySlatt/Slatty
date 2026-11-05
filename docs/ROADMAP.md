@@ -18,9 +18,10 @@ waits, that keeps every save, that tells no company more than the person allowed
 easy to use from a sofa with a gamepad, or on a Steam Deck, as at a desk.
 
 It runs on Linux today. Its interface moves to SlimeEngine's interface framework, of which Slatty
-is the first application; every piece of interface work waits for that move. Meanwhile, what lies
-outside the interface goes on: Windows for the core and the command line, packages, the core's
-smaller items.
+is the first application; every piece of interface work waits for that move. Slatty pauses once a
+GOG game plays on Windows from the command line, until that framework can run it; then its
+interface moves first, Windows and packages after
+([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)).
 
 ## 2. Principles
 
@@ -139,6 +140,10 @@ Each is decided by an ADR at the stage where it becomes necessary, not earlier.
 
 ## 4. Stages
 
+The stages are listed by number but run in this order: Stages 1 and 2; Stage 3 up to M3.3; a
+pause until SlimeEngine's Stage 6d can run an application; Stage 5; the rest of Stage 3; Stages 4,
+6 and 7 ([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)).
+
 ### Stage 1 — GOG on Linux → 0.1.0 (done, 2026-10-21)
 
 **Goal.** Sign in to GOG, see the library, install, update, run, isolate and sync the saves of GOG's
@@ -156,11 +161,12 @@ games, and a couch mode for a gamepad.
 tried on a Steam Deck (Stage 6), nor emulated games played in each emulator
 ([PLAN.md](PLAN.md#known-debt)).
 
-### Stage 3 — Windows, without the interface → 0.3
+### Stage 3 — Windows → 0.4
 
-**Goal.** Slatty's core and command line on Windows 10 and 11: GOG's, Epic's and Steam's games and
-games added by hand, played directly, with the same safety as on Linux
-([ADR-0022](adr/0022-windows-hosts.md)). The window comes with Stage 5.
+**Goal.** Slatty on Windows 10 and 11: GOG's, Epic's and Steam's games and games added by hand,
+played directly, with the same safety as on Linux ([ADR-0022](adr/0022-windows-hosts.md)). Up to
+M3.3 from the command line; the rest after Stage 5, which brings the window, planned again then
+([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)).
 
 - Everything builds for Windows; the core's tests pass under Wine.
 - GOG games installed, played, followed and synced on Windows; Epic and Steam; games added by hand;
@@ -168,10 +174,10 @@ games added by hand, played directly, with the same safety as on Linux
 - A zip with the command line and the licences.
 
 **Exit.** A person installed, played and synced a GOG game, an Epic game and a Steam game on a real
-Windows 10 or 11 from the command line, recorded in [compatibility.md](compatibility.md); Linux
+Windows 10 or 11, recorded in [compatibility.md](compatibility.md); Linux
 unchanged.
 
-### Stage 4 — Packages and smaller work, outside the interface → 0.4
+### Stage 4 — Packages and smaller work, outside the interface → 0.5
 
 **Goal.** Slatty installable outside NixOS, and the core's smaller items waiting:
 
@@ -190,11 +196,12 @@ unchanged.
 **Exit.** Slatty installed and run from a package on a distribution other than NixOS, recorded in
 [compatibility.md](compatibility.md).
 
-### Stage 5 — The interface on slime-ui, Windows included → after SlimeEngine 0.8
+### Stage 5 — The interface on slime-ui, Windows included → 0.3, after SlimeEngine 0.8
 
 **Goal.** Slatty's interface drawn by SlimeEngine's interface framework, as the pilot of
 SlimeEngine's Stage 6d ([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)), on Linux and on
-Windows. Starts when SlimeEngine's Stage 6d can run an application.
+Windows. Starts when SlimeEngine's Stage 6d can run an application. 0.3 is released for Linux;
+Windows' first release is Stage 3's, 0.4.
 
 - Every page and the couch mode on slime-ui, over the same state; the interface's tests ported.
 - The interface on Windows: Linux-only settings hidden, the file chooser, gamepads, a window icon,
@@ -236,8 +243,8 @@ subscribes to those topics on GOG for the account ([SECURITY.md](../SECURITY.md#
 |---|---|---|
 | 0.1.0 | 1 | GOG on Linux (released 2026-10-21) |
 | 0.2.0 | 2 | Beyond GOG (released 2026-10-27) |
-| 0.3 | 3 | Windows, without the interface |
-| 0.4 | 4 | Packages and smaller work |
-| 0.5 | 5 | The interface on slime-ui, Windows included |
+| 0.3 | 5 | The interface on slime-ui, Windows' window included |
+| 0.4 | 3 | Windows |
+| 0.5 | 4 | Packages and smaller work |
 | 0.6 | 6 | On a Steam Deck |
 | 0.7 | 7 | Translations |

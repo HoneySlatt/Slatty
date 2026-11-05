@@ -9,14 +9,17 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 
 ## Current
 
-- **Stage 3 — Windows, without the interface** ([ADR-0022](adr/0022-windows-hosts.md)), to be
-  released as 0.3. Every crate builds for Windows and the core's tests pass under Wine. Next:
-  playing a GOG game from the command line ([M3.3](#m33--play-a-gog-game)). What Slatty depends
-  on Linux for, and the port's open questions, are in [windows-port.md](windows-port.md).
-- **Stage 5 — The interface on slime-ui, Windows included**
-  ([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)): waits for SlimeEngine's Stage 6d to run
-  applications. Until then every piece of interface work waits; Iced receives bug fixes only, and
-  `slatty-app` stays free of any framework.
+- **Stage 3 — Windows** ([ADR-0022](adr/0022-windows-hosts.md)). Every crate builds for Windows
+  and the core's tests pass under Wine. Next, and the last milestone before the pause: playing a
+  GOG game from the command line ([M3.3](#m33--play-a-gog-game)). What Slatty depends on Linux
+  for, and the port's open questions, are in [windows-port.md](windows-port.md).
+- **Then a pause** ([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)): no milestone starts
+  until SlimeEngine's Stage 6d can run an application. CI's weekly run goes on.
+- **Then Stage 5 — The interface on slime-ui**
+  ([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)), released as 0.3: Iced replaced wholly.
+  What slime-ui lacks and serves its other clients is built in slime-ui, in SlimeEngine. Until
+  then Iced receives bug fixes only, and `slatty-app` stays free of any framework.
+- **Then the rest of Stage 3** (M3.4 to M3.8), with the window, released as 0.4; then Stage 4.
 
 ## Status
 
@@ -25,19 +28,20 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 | [M3.1](#m31--the-windows-build-environment) | Slatty can be built for Windows from Linux | Done |
 | [M3.2](#m32--everything-builds-for-windows) | Every crate builds for Windows, and the core's tests pass under Wine | Done |
 | [M3.3](#m33--play-a-gog-game) | A person plays a GOG game on Windows from the command line | Planned |
-| [M3.4](#m34--epic-and-steam) | A person plays Epic's and Steam's games on Windows | Planned |
-| [M3.5](#m35--games-added-by-hand) | A person adds a game from no store on Windows | Planned |
-| [M3.6](#m36--achievements) | Achievements through Comet on Windows | Planned |
-| [M3.7](#m37--packaging) | A zip a person can download and run | Planned |
-| [M3.8](#m38--real-checks) | Checked by a person on Windows 10 and 11, and documented | Planned |
+| [M3.4](#m34--epic-and-steam) | A person plays Epic's and Steam's games on Windows | After Stage 5 |
+| [M3.5](#m35--games-added-by-hand) | A person adds a game from no store on Windows | After Stage 5 |
+| [M3.6](#m36--achievements) | Achievements through Comet on Windows | After Stage 5 |
+| [M3.7](#m37--packaging) | A zip a person can download and run | After Stage 5 |
+| [M3.8](#m38--real-checks) | Checked by a person on Windows 10 and 11, and documented | After Stage 5 |
 
-## Stage 3 — Windows, without the interface
+## Stage 3 — Windows
 
-Slatty's core and command line on Windows 10 and 11 (x86-64), from the same code base, built and
-tested from Linux; Windows games played directly, without Proton; what only Linux has stays Linux's
-([ADR-0022](adr/0022-windows-hosts.md)). The window comes with Stage 5, on slime-ui
-([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)). Linux behaves exactly as before at every
-milestone.
+Slatty on Windows 10 and 11 (x86-64), from the same code base, built and tested from Linux; Windows
+games played directly, without Proton; what only Linux has stays Linux's
+([ADR-0022](adr/0022-windows-hosts.md)). Up to M3.3 from the command line; M3.4 to M3.8 come after
+Stage 5, which brings the window on slime-ui, and are planned again then
+([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)). Linux behaves exactly as before at
+every milestone.
 
 ### M3.1 — The Windows build environment
 
@@ -113,9 +117,9 @@ milestone.
 - **Delivers.** The checks recorded in [compatibility.md](compatibility.md); the command line's and
   the user guide's Windows parts; SECURITY.md (where secrets and files live on Windows); the README.
 - **Done when.** The stage's exit in
-  [ROADMAP.md](ROADMAP.md#stage-3--windows-without-the-interface--03) holds.
+  [ROADMAP.md](ROADMAP.md#stage-3--windows--04) holds.
 
-The stage closes with a stage audit, every dimension of the project's method, before 0.3 is
+The stage closes with a stage audit, every dimension of the project's method, before 0.4 is
 released: mutation testing (`cargo mutants`) first on cloud sync, installs and uninstalls
 ([ADR-0024](adr/0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md)). Audits are recorded in
 [audits/](audits/).

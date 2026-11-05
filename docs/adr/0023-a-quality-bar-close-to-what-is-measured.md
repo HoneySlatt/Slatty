@@ -56,7 +56,7 @@ Stage 5, not on Iced.
 
 - Tight budgets leave little room for noise: a figure just above its budget is measured again
   before it counts as missed.
-- Stage 4 gains three items ([ROADMAP.md](../ROADMAP.md#stage-4--packages-and-smaller-work-outside-the-interface--04)).
+- Stage 4 gains three items ([ROADMAP.md](../ROADMAP.md#stage-4--packages-and-smaller-work-outside-the-interface--05)).
 - Start-up, scrolling, rest and memory stay measured by hand, with a probe not kept in the
   repository ([PLAN.md](../PLAN.md#known-debt)).
 - The worst frame while scrolling was only checked against 16.7 ms so far; whether none goes above
