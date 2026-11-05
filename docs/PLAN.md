@@ -22,14 +22,15 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 - **[M5.0](#m50--iceds-figures-measured-again) is done** (2026-11-05): Iced's figures measured
   again by `slatty-measure` ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)),
   the reference uwui's port must match.
-- **At the resumption**, in order: M3.3's failure on Windows if it is still open
-  ([compatibility.md](compatibility.md#windows)); then Stage 5. Read first the Known debt below and
+- **At the resumption**: Stage 5. Read first the Known debt below and
   [windows-port.md](windows-port.md#open-questions).
 - **Then Stage 5 — The interface on uwui** (formerly slime-ui;
   [ADR-0030](adr/0030-ported-second-onto-uwui.md)), released as 0.3 once its exit holds: Iced
   replaced wholly. What uwui lacks and serves its other clients is built in uwui. Until then Iced
   receives bug fixes only, and `slatty-app` stays free of any framework.
 - **Then the rest of Stage 3** (M3.4 to M3.8), with the window, released as 0.4; then Stage 4.
+  M3.3's checks left open on Windows come first: the owner chose on 2026-11-06 to run them with
+  the window rather than during the pause, as no Windows build is published before M3.7.
 
 ## Status
 
@@ -103,9 +104,10 @@ every milestone.
   held by GOG Galaxy; `setup` saying it was done after a step failed; `verify` succeeding with
   files damaged; exit codes shown as `Some(2)`; a last progress line of 0 files of 0. Open: a
   launch right after `slatty cloud sync` downloaded all 10 of Hollow Knight's saves, which that
-  sync had found unchanged; Slatty's log of it is needed to find why. Not checked: play time sent
-  (the session lasted under a minute, which is not sent) and a session across the computer's sleep.
-  Under Wine the core's
+  sync had found unchanged. Slatty logs no sync: the backups it made then, kept in the virtual
+  machine under `%APPDATA%\slatty\data\backups`, are what can show why. Not checked: play time sent
+  (the session lasted under a minute, which is not sent), a session across the computer's sleep,
+  and the fixes on Windows itself. These wait for the window (Stage 5). Under Wine the core's
   428 tests and the command line's pass, `play_windows.rs` playing a fake GOG game through the real
   supervisor (started, followed past its launcher, stopped, its setup waiting for consent, Proton
   refused). The owner decided three questions: Linux's features refused where they start
