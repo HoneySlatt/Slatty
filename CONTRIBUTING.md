@@ -31,8 +31,11 @@ cargo build --workspace                   # last: tests and clippy do not rebuil
 ```
 
 `scripts/check.sh` says at its head what it runs. CI (`.github/workflows/ci.yml`) runs it unchanged
-on every push to `main` and every pull request. Build last: the person testing your change runs
-`target/debug/slatty-gui`.
+on every push to `main` and every pull request, and every Monday at 06:41 UTC even without a push,
+so that new advisories against the dependencies and changes to the CI's environment show while
+the project is at rest; a push cancels the run in progress. GitHub turns the weekly run off after
+60 days without activity on a public repository: a click in the Actions tab turns it back on.
+Build last: the person testing your change runs `target/debug/slatty-gui`.
 
 - Keep behaviour in `slatty-core`, so both front ends share it; user-visible wording lives in the
   front ends.

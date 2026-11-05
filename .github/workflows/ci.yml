@@ -1,5 +1,5 @@
-# Runs the automated checks of the definition of done (AGENTS.md) on each push to main and on each
-# pull request, in the same Nix shell that the agents use: scripts/check.sh, unchanged. Windows is
+# Runs the automated checks of the definition of done (AGENTS.md) on each push to main, on each
+# pull request and once a week, in the same Nix shell that the agents use: scripts/check.sh, unchanged. Windows is
 # checked there by building for it from Linux (ADR-0022). Actions are pinned to commit SHAs, with the
 # release they correspond to in a comment.
 name: CI
@@ -12,6 +12,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly, even without a push: a project at rest still learns of new advisories against its
+  # dependencies (cargo deny) and of changes to the CI's environment. Mondays at 06:41 UTC, off the
+  # hour that every scheduled workflow picks. GitHub turns this off after 60 days without activity
+  # on a public repository; a click in the Actions tab turns it back on.
+  schedule:
+    - cron: "41 6 * * 1"
 
 permissions:
   contents: read
