@@ -6,7 +6,75 @@ the machine, the build, the command, and the figures with their spread. How each
 [testing.md](testing.md#benchmarks), the fake profile of 10,000 games in
 [testing.md](testing.md#the-application-at-10000-games).
 
-Every figure here was taken with the Iced interface, before the method's budgets existed.
+Every figure here was taken with the Iced interface. Those before 2026-11-05 predate the method's
+budgets.
+
+## The application at 10,000 games, by `slatty-measure` (2026-11-05)
+
+Command: `slatty-measure headless` and `slatty-measure desktop`, each run twice, 10 runs a series
+([testing.md](testing.md#the-application-at-10000-games)). Machine: Ryzen 7 5800X, Radeon RX 6900
+XT, NVMe, Linux 7.3. Build: release, of the tree later committed as 5d8583d (`slatty-gui`
+unchanged). Each figure is the median of its series, and its range.
+
+In sway 1.12 without a screen, 3840×2160 at 240 Hz, scale 1.5, the window tiled at 2556×1413
+(3834×2120 pixels):
+
+| | First series | Second series | Budget |
+|---|---|---|---|
+| Start, warm: library in the state / shown / every cover shown (ms) | 71 (66–82) / 530 (518–576) / 663 (651–743) | 70 (67–79) / 530 (521–545) / 665 (658–683) | Shown ≤ 95 |
+| Start, cold: the same (ms) | 156 (151–184) / 636 (619–662) / 764 (746–796) | 155 (151–169) / 627 (615–656) / 753 (744–799) | Shown ≤ 135 |
+| Memory, every cover shown: resident / video (MB) | 154 (154–154) / 301 (301–301) | 154 (154–154) / 301 (301–301) | Resident ≤ 140 |
+| Memory after scrolling the whole grid: resident / video (MB) | 155 (155–155) / 452 (452–452) | 155 (155–155) / 452 (452–452) | |
+| Memory after 200 game pages with key art: resident / video (MB) | 222 (219–256) / 387 (387–388) | 224 (219–226) / 389 (375–395) | Resident ≤ 200 |
+| At rest 60 s, Wayland: frames / CPU ticks / wake-ups | 0 (0–0) / 0 (0–1) / 120 (120–122) | 0 (0–0) / 0 (0–1) / 120 (120–121) | 0 / 0 / 0 of Slatty's own |
+| At rest 60 s, Xwayland: the same | 0 (0–0) / 0 (0–1) / 120 (120–122) | 0 (0–0) / 0 (0–1) / 120 (120–121) | As above |
+
+On the owner's display, under Umbriel (the owner's own Wayland compositor), 3840×2160 at 240 Hz,
+scale 1.5, variable refresh rate on, the window tiled beside the others at 1267×1388 (1901×2082
+pixels):
+
+| | First series | Second series | Budget |
+|---|---|---|---|
+| Start, warm: library in the state / shown / every cover shown (ms) | 88 (82–98) / 461 (451–549) / 518 (504–604) | 90 (81–321) / 724 (698–923) / 785 (755–1380) | Shown ≤ 95 |
+| Scrolling, 1,200 frames: time between frames, p50 / p99 / max (ms) | 5.12 (4.29–13.11) / 36.78 (19.22–111.88) / 42.60 (21.68–247.54) | 5.13 (4.86–7.50) / 51.12 (36.47–65.08) / 71.17 (38.94–138.13) | p99 ≤ 5, max ≤ 6.25 |
+| Frames over 4.17 / 6.25 / 16.7 ms | 1199 (921–1199) / 272 (197–1182) / 94 (91–272) | 1199 (1192–1199) / 428 (237–789) / 118 (93–186) | 0 over 6.25 |
+| `view` while scrolling, p50 / p99 (ms) | 0.630 (0.502–1.403) / 0.860 (0.594–4.931) | 0.620 (0.579–0.796) / 1.722 (0.740–3.263) | None here; p99 ≤ 0.5 in the benchmark |
+| The card's power at rest (W): without / with Slatty / without | 35 (35–40) / 35 (35–36) / 35 (34–36) | 36 (35–57) / 35 (35–36) / 36 (35–46) | No more than without |
+
+What they say:
+
+- **Every second series' median falls within the first's range but three.** Video memory after the
+  game pages, 389 MB against 387–388 MB: what the card keeps of the key art just opened varies
+  from run to run (375–395 MB in the second series). On the desktop, `shown` and every cover shown,
+  724 and 785 ms against 451–549 and 504–604 ms, while the library reached the state as fast in
+  both: the wait for the first frame below varied between the two series.
+- **Start-up misses its budget, after the library is in.** The library is in the state 70 ms after
+  start in sway, 88–90 ms on Umbriel, as fast as October's library shown, but the first frame
+  shows 370 to 630 ms later. Of that, about 230 ms is sway's answer to the first frame Slatty
+  sends, seen in its Wayland traffic (`WAYLAND_DEBUG=1`); sway answers a plain Vulkan program
+  (`vkcube`) at once. The rest is not explained, nor whether Umbriel, whose figures show the same
+  gap, waits the same way. October's 86–91 ms were measured on niri. Cold, the library also takes
+  155 ms to reach the state, past the 135 ms budget before any frame.
+- **Scrolling misses its budget by far.** In the runs' logs, each row of covers that comes into
+  view costs a frame of about 30 ms and another of about 11 ms: 91 to 272 frames over 16.7 ms in
+  1,200. Why is not established: Iced 0.14 decodes a cover on a thread of its own, then copies it
+  into its texture atlas on the interface's thread, which a profile would have to show. Between them the median frame takes 5.1 ms, not the 4.17 ms of 240 Hz, and
+  some runs were slow throughout (p50 up to 13 ms, 1,182 frames over 6.25 ms); why is not known.
+  October's p99 of 4.6–4.9 ms was taken by a probe that is not kept, which may have scrolled
+  through rows already read.
+- **`view` takes 0.62 ms at the median while scrolling**, against 0.17 ms in October; why is not
+  known. The benchmark's budget (p99 ≤ 0.5 ms, `library_at_10000_games`) does not apply to it as
+  such, but the gap is to be understood.
+- **The card's power at rest** holds: 35 W with Slatty, as without.
+- **Memory is over its budgets**: 154 MB resident with every cover in (budget 140, October 135),
+  224 MB after 200 game pages (budget 200, October 191).
+- **Rest** holds but for the known wake-ups, 120 a minute ([PLAN](PLAN.md#known-debt)). Counted by
+  hand per thread (`/proc/<pid>/task/*/status`, 30 s at rest, in sway without a screen), they are
+  all one thread, `blocking-1`, of the pool of zbus (the D-Bus library), every 500 ms. It wakes so
+  even here, where no session bus exists and the keyring cannot connect.
+- **Video memory**, measured for the first time: about 300 MB once every cover shows, 452 MB after
+  scrolling the whole grid (the covers' textures stay on the card), under 400 MB after the game
+  pages. It has no budget yet.
 
 ## The application at 10,000 games (2026-10-10 to 2026-10-12)
 
@@ -28,7 +96,7 @@ The rows from 2026-10-10 predate covers and key art drawn from copies made at th
 | `view` while scrolling | p50 0.17 ms, p99 0.25 ms |
 | `library_at_10000_games` | view 0.13 ms, Achievements 0.16 ms, lists made again 1.8–2.0 ms |
 | Idle CPU, nothing happening | 0 ticks in 15 s |
-| Wake-ups at rest (2026-10-11, context switches of every thread in 60 s) | 120: one thread of the D-Bus library's pool, kept by the keyring's connection, wakes every 500 ms |
+| Wake-ups at rest (2026-10-11, context switches of every thread in 60 s) | 120: one thread of the D-Bus library's pool, thought kept by the keyring's connection (not so: see 2026-11-05), wakes every 500 ms |
 | Cover copies at the card's size (2026-10-12) | 21 s (82 s of processor time, at the lowest priority) the first time for 10,000 covers made at 225 pixels, about 37 KB each; 16 ms to find them once made |
 | Start-up, scrolling and rest again (2026-10-12) | Library shown 86–91 ms after start, 125–130 ms with the program, its libraries, the profile and the shader caches dropped from the disk cache; scrolling p50 4.15 ms, p99 4.6–4.9 ms, none above 16.7 ms; `view` p50 0.17–0.19 ms, p99 0.29–0.33 ms; 116 MB resident after scrolling; at rest, 0 ticks and 120–122 wake-ups in 60 s |
 

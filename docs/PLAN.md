@@ -18,9 +18,9 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
   turn in SlimeEngine's Stage 6d ([ADR-0030](adr/0030-ported-second-onto-uwui.md)). CI's weekly
   run goes on. Only M3.3's check by hand on Windows, its fixes, and
   [M5.0](#m50--iceds-figures-measured-again) may come meanwhile.
-- **Next: [M5.0](#m50--iceds-figures-measured-again)**, Iced's figures measured again by a command
-  ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)). A window opens on the
-  owner's desktop only with their agreement.
+- **[M5.0](#m50--iceds-figures-measured-again) is built**: Iced's figures measured again by
+  `slatty-measure` ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)). Three
+  of its figures fell outside their range when run again; the owner judges whether it is done.
 - **At the resumption**, in order: M3.3's check on Windows if it has not run, its results in
   [compatibility.md](compatibility.md); then Stage 5. Read first the Known debt below and
   [windows-port.md](windows-port.md#open-questions).
@@ -37,7 +37,7 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 | [M3.1](#m31--the-windows-build-environment) | Slatty can be built for Windows from Linux | Done |
 | [M3.2](#m32--everything-builds-for-windows) | Every crate builds for Windows, and the core's tests pass under Wine | Done |
 | [M3.3](#m33--play-a-gog-game) | A person plays a GOG game on Windows from the command line | Built; its check on Windows waits |
-| [M5.0](#m50--iceds-figures-measured-again) | Iced's figures measured again by a command, the reference for uwui's port | Planned; during the pause |
+| [M5.0](#m50--iceds-figures-measured-again) | Iced's figures measured again by a command, the reference for uwui's port | Built; three figures outside their range, the owner judges |
 | [M3.4](#m34--epic-and-steam) | A person plays Epic's and Steam's games on Windows | After Stage 5 |
 | [M3.5](#m35--games-added-by-hand) | A person adds a game from no store on Windows | After Stage 5 |
 | [M3.6](#m36--achievements) | Achievements through Comet on Windows | After Stage 5 |
@@ -160,7 +160,7 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
 - **Delivers.**
   - A generator of the fake profile of 10,000 games
     ([testing.md](testing.md#the-application-at-10000-games)), its covers made with `image`
-    (already in `slatty-app`), about 860 MB, in a throwaway folder it refuses if not empty.
+    (already in `slatty-app`), 1.1 GB, in a throwaway folder it refuses if not empty.
   - The probe in `slatty-gui`, behind a feature off by default, built by `scripts/check.sh`'s lints
     so that it keeps compiling during the pause. It writes a log whose format does not name Iced,
     so that uwui's port writes the same.
@@ -188,6 +188,13 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
   restated.
 - **Not measured.** Input to visible response, which Iced does not report; the lowest tier, which no
   machine stands for.
+- **Where it stands.** Built 2026-11-05: `slatty-measure` (`crates/measure`), the probe, sway and
+  Xwayland in the development shell. Each command ran twice, 10 runs a series; the figures are in
+  [measurements.md](measurements.md#the-application-at-10000-games-by-slatty-measure-2026-11-05).
+  Every second series' median falls within the first's range but three: video memory after the
+  game pages, and on the desktop the first frame and every cover shown, the wait for the first
+  frame having varied. Measuring found the start-up wait, the stalls of scrolling, and memory over
+  its budgets, written in the debt below; Iced receiving bug fixes only, none was fixed here.
 
 ## Known debt
 
@@ -199,13 +206,23 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
 - **The lowest hardware tier and the Steam Deck are not measured**
   ([quality bar](ROADMAP.md#quality-bar)), nor Intel's and NVIDIA's GPUs: the budgets are measured
   on the high tier alone.
-- **The performance figures are not reproducible by a command**: [testing.md](testing.md) measures
-  start-up, scrolling and memory with a temporary probe that is not in the repository, and the rows
-  of [measurements.md](measurements.md) on covers predate the copies made at the size drawn.
-  [M5.0](#m50--iceds-figures-measured-again) pays it.
-- **Wake-ups at rest**: one thread of zbus's pool, kept by the keyring's connection, wakes every
-  500 ms (120 wake-ups a minute, against a budget of 0 in the
-  [quality bar](ROADMAP.md#quality-bar)). To be fixed in Stage 4.
+- **Wake-ups at rest**: one thread of zbus's pool (`blocking-1`) wakes every 500 ms (120 wake-ups
+  a minute, against a budget of 0 in the [quality bar](ROADMAP.md#quality-bar)). It was thought
+  kept by the keyring's connection, but it wakes so with no session bus at all (M5.0): what keeps
+  it is to be found. To be fixed in Stage 4.
+- **Start-up misses its budget**
+  ([M5.0](measurements.md#the-application-at-10000-games-by-slatty-measure-2026-11-05)): the first
+  frame shows 370–630 ms after the library is in the state, of which about 230 ms is the
+  compositor's answer to it; the rest is not explained. A cold start also takes 155 ms to put the
+  library in the state, past the 135 ms budget. To be understood before uwui's port is measured
+  against it.
+- **Scrolling stalls on each new row of covers**
+  ([M5.0](measurements.md#the-application-at-10000-games-by-slatty-measure-2026-11-05)): a
+  frame of about 30 ms each time, for a reason not yet found, and the median frame misses 240 Hz
+  too. For uwui's port.
+- **Memory over its budgets**
+  ([M5.0](measurements.md#the-application-at-10000-games-by-slatty-measure-2026-11-05)), with
+  every cover in and after 200 game pages. For uwui's port.
 - **The Nix package sets the CI's pace**: CI runs `scripts/check.sh` in three parts at once, with
   a Cargo cache ([ADR-0026](adr/0026-ci-runs-the-checks-in-three-parts-at-once.md)), and a warm
   run took 9 min 13 s, within its 20 minutes, the package's 9 minutes being all of it, as no Cargo
@@ -214,9 +231,9 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
   step left if runs come closer ([measurements.md](measurements.md#ci-in-three-parts-2026-11-05)).
 - **The download and no-change sync budgets are not measured** (set 2026-11-05): their benchmarks
   are to be written.
-- **Video memory has no budget**: the owner decided on 2026-11-05 to measure it first (at rest,
-  after scrolling the whole grid, after 200 game pages), then set it;
-  [M5.0](#m50--iceds-figures-measured-again) measures it.
+- **Video memory has no budget**: M5.0 measured it
+  ([measurements.md](measurements.md#the-application-at-10000-games-by-slatty-measure-2026-11-05));
+  the owner sets the budget.
 - **A crash leaves no report** ([quality bar](ROADMAP.md#quality-bar)): to be built in the core and
   the command line; the interface's notice waits for uwui (Stage 5), as Iced receives bug fixes
   only.
