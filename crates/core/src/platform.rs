@@ -228,8 +228,8 @@ fn since_1970(ticks: i64) -> (i64, i64) {
 }
 
 /// What tells a file from another put in its place: the device and inode on Linux, the volume and
-/// file index on Windows; when it was made, which tells it from an older file whose inode it got
-/// back; and its last change of content and of any kind (Linux's change time, Windows' change
+/// file index on Windows; on Linux, when it was made, which tells it from an older file whose inode
+/// it got back; and its last change of content and of any kind (Linux's change time, Windows' change
 /// time), which writes move and no program sets back. `None` when nothing is at `path`; a link
 /// there is followed with `follow`, else described.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -237,7 +237,9 @@ pub struct Identity {
     pub device: u64,
     pub file: u64,
     /// `None` where the filesystem keeps no creation time (ext4 with 128-byte inodes, some network
-    /// filesystems).
+    /// filesystems), and on Windows. There the file index already changes for a file made again
+    /// (NTFS's holds a sequence number), and the creation time can lie: Windows gives a name made
+    /// again within 15 seconds the old one's, and Wine gives the last write's.
     pub created: Option<(i64, i64)>,
     pub modified: (i64, i64),
     pub changed: (i64, i64),
@@ -362,7 +364,7 @@ mod windows {
             Some(Identity {
                 device: info.dwVolumeSerialNumber as u64,
                 file: (info.nFileIndexHigh as u64) << 32 | info.nFileIndexLow as u64,
-                created: Some(since_1970(basic.CreationTime)),
+                created: None,
                 modified: since_1970(basic.LastWriteTime),
                 changed: since_1970(basic.ChangeTime),
             })

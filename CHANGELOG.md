@@ -21,8 +21,8 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 ### Fixed
 
-- A save folder deleted and made again is told from the old one by its creation time too, not
-  only by its disk and inode, which ext4 can give back: the sync no longer trusts the old folder's
+- On Linux, a save folder deleted and made again is told from the old one by its creation time
+  too, not only by its disk and inode, which ext4 can give back: the sync no longer trusts the old folder's
   history, under which a new game could be uploaded over the cloud's progress without a conflict.
   Folders last synced by an earlier version are still recognised; going back to 0.2 afterwards
   makes each one count as made again, once.

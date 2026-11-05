@@ -811,7 +811,9 @@ async fn history_is_not_trusted_after_another_account_synced_the_folder() {
 /// not empty, so only its identity tells it is another folder. The new game is not uploaded over
 /// the progress; the file becomes a conflict. The new folder is given the old one's device and
 /// inode, as ext4 does at times: its creation time still tells them apart, so the test needs a
-/// temporary folder on a filesystem that keeps creation times.
+/// temporary folder on a filesystem that keeps creation times. Windows' are not used: there NTFS
+/// gives a folder made again another index.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_save_folder_made_again_does_not_reuse_its_history() {
     let env = Env::new("made-again");

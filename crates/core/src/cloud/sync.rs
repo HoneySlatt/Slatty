@@ -648,8 +648,8 @@ fn stored_root(t: &SyncTarget<'_>) -> Result<Option<StoredRoot>> {
 
 /// Which folder `root` is: a folder deleted and made again at the same path (a broken prefix made
 /// again) is another one, whose files the history does not describe. `device:inode`, then
-/// `:seconds.nanoseconds` of its creation where the filesystem keeps it: ext4 can give a new
-/// folder the inode of one just deleted.
+/// `:seconds.nanoseconds` of its creation on Linux, where the filesystem keeps it: ext4 can give a
+/// new folder the inode of one just deleted.
 pub(super) fn folder_identity(root: &Path) -> Option<String> {
     let i = crate::platform::identity(root, true)?;
     Some(match i.created {

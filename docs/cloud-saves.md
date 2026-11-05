@@ -159,14 +159,15 @@ same snapshots.
   again just before, and holds the files it does not change as that one had them; a snapshot
   another computer stores while it is read and sent is not seen, and its changes to those other
   files are not in the new one, which becomes the newest. Both stay in Epic's cloud.
-- **A folder made again with the inode of the old one is not always seen.** Its creation time
-  tells it apart, but not on a filesystem that keeps none (ext4 formatted with 128-byte inodes,
-  some network filesystems), nor when it was made again within the same tick of Linux's clock (a
-  few milliseconds), nor on Windows when a FAT32 or exFAT drive gave it the old one's index and
-  Windows its creation time (it does so for a name made again within 15 seconds), nor when the
-  folder was last synced by Slatty 0.2 or earlier, which recorded no creation time: the first sync
-  after the update trusts the folder and records it. Going back to 0.2 afterwards makes every
-  synced folder count as made again, once.
+- **A folder made again with the inode of the old one is not always seen.** On Linux its creation
+  time tells it apart, but not on a filesystem that keeps none (ext4 formatted with 128-byte
+  inodes, some network filesystems), nor when it was made again within the same tick of the
+  clock (a few milliseconds), nor when the folder was last synced by Slatty 0.2 or earlier, which
+  recorded no creation time: the first sync after the update trusts the folder and records it.
+  Going back to 0.2 afterwards makes every synced folder count as made again, once. Windows'
+  creation times are not used (Windows gives a name made again within 15 seconds the old one's,
+  and Wine the last write's): there the folder's index alone tells it, which NTFS changes for a
+  folder made again, but FAT32 and exFAT drives may give back.
 - **Ignored marker.** Cloud entries whose hash is `aadd86936a80ee8a369579c3926f1b3c` are ignored, as
   heroic-gogdl does. Their meaning is not known: it is neither an empty file nor an empty gzip
   stream.
