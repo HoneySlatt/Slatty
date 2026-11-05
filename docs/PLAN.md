@@ -9,12 +9,17 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 
 ## Current
 
-- **Stage 3 — Windows** ([ADR-0022](adr/0022-windows-hosts.md)). Every crate builds for Windows
-  and the core's tests pass under Wine. Next, and the last milestone before the pause: playing a
-  GOG game from the command line ([M3.3](#m33--play-a-gog-game)). What Slatty depends on Linux
-  for, and the port's open questions, are in [windows-port.md](windows-port.md).
-- **Then a pause** ([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)): no milestone starts
-  until SlimeEngine's Stage 6d can run an application. CI's weekly run goes on.
+- **Stage 3 — Windows** ([ADR-0022](adr/0022-windows-hosts.md)). A GOG game installs and plays
+  on Windows from the command line ([M3.3](#m33--play-a-gog-game)): built and tested under Wine,
+  its check by the owner on Windows 10 or 11 still to run. What Slatty depends on Linux for, and
+  the port's open questions, are in [windows-port.md](windows-port.md).
+- **The pause has begun** (2026-11-05,
+  [ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)): no milestone starts until
+  SlimeEngine's Stage 6d can run an application. CI's weekly run goes on. Only M3.3's check by
+  hand on Windows, and the fixes it calls for, may come meanwhile.
+- **At the resumption**, in order: M3.3's check on Windows if it has not run, its results in
+  [compatibility.md](compatibility.md); then Stage 5. Read first the Known debt below and
+  [windows-port.md](windows-port.md#open-questions).
 - **Then Stage 5 — The interface on slime-ui**
   ([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)), released as 0.3: Iced replaced wholly.
   What slime-ui lacks and serves its other clients is built in slime-ui, in SlimeEngine. Until
@@ -27,7 +32,7 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 |---|---|---|
 | [M3.1](#m31--the-windows-build-environment) | Slatty can be built for Windows from Linux | Done |
 | [M3.2](#m32--everything-builds-for-windows) | Every crate builds for Windows, and the core's tests pass under Wine | Done |
-| [M3.3](#m33--play-a-gog-game) | A person plays a GOG game on Windows from the command line | Planned |
+| [M3.3](#m33--play-a-gog-game) | A person plays a GOG game on Windows from the command line | Built; its check on Windows waits |
 | [M3.4](#m34--epic-and-steam) | A person plays Epic's and Steam's games on Windows | After Stage 5 |
 | [M3.5](#m35--games-added-by-hand) | A person adds a game from no store on Windows | After Stage 5 |
 | [M3.6](#m36--achievements) | Achievements through Comet on Windows | After Stage 5 |
@@ -76,12 +81,28 @@ every milestone.
 - **Delivers.** A Windows build installed (the download code is shared), started directly, its
   session followed and stopped through a job object, play time recorded, GOG's setup run with the
   person's consent for administrator rights, cloud saves in the real folders. The Linux-only
-  modules (Proton, umu, isolation, Linux installers, Proton builds, the Galaxy service in a prefix)
-  built on Linux alone, their callers on Windows getting `Error::Unsupported`: today they build for
-  Windows, and a game set to umu fails there on a missing program.
+  features (Proton, umu, isolation, Linux installers, Proton builds, the Galaxy service in a prefix)
+  refused on Windows where they start, with `Error::Unsupported`
+  ([ADR-0027](adr/0027-linux-features-refused-on-windows-not-compiled-out.md), the owner's choice
+  over compiling them out).
 - **Done when.** The flow's tests pass under Wine, and a person ran it on Windows.
-- **How to test.** `nix develop .#windows -c cargo test --workspace`.
-- **By hand.** Install, play and sync a GOG game on Windows 10 or 11.
+- **How to test.** `nix develop .#windows -c cargo test -p slatty-core -p slatty-cli`, in
+  `scripts/check.sh`'s `windows` part.
+- **By hand.** Install, play and sync a GOG game on Windows 10 or 11: the steps are in
+  [testing.md](testing.md#checks-on-windows).
+- **Where it stands.** Built 2026-11-05; the check on Windows has not run. Under Wine the core's
+  428 tests and the command line's pass, `play_windows.rs` playing a fake GOG game through the real
+  supervisor (started, followed past its launcher, stopped, its setup waiting for consent, Proton
+  refused). The owner decided three questions: Linux's features refused where they start
+  ([ADR-0027](adr/0027-linux-features-refused-on-windows-not-compiled-out.md)), GOG's setup asked
+  for at launch ([ADR-0028](adr/0028-windows-asks-before-gogs-setup-at-launch.md)), every
+  installed file flushed ([ADR-0029](adr/0029-every-installed-file-flushed-on-windows.md)).
+  Found and fixed on the way: play time counted the computer's sleep on Windows; uninstalling a
+  folder linked back with a junction left the junction; a read-only save, or a read-only file of
+  the game, could not be replaced or deleted; the default games folder was relative to where
+  Slatty started, as Windows sets no `HOME`. Not verified anywhere but on Windows itself: the
+  administrator prompt, a real game's session and stop, saves in the real folders, the cost of
+  flushing every file. Comet stays off on Windows (M3.6).
 
 ### M3.4 — Epic and Steam
 
@@ -156,13 +177,13 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
   the command line; the interface's notice waits for slime-ui (Stage 5), as Iced receives bug fixes
   only.
 - **CI runs on GitHub's Linux machines only**: Windows is checked by building from Linux and by
-  the core's tests under Wine, in `scripts/check.sh`'s `windows` part, not by a Windows runner.
+  the core's and the command line's tests under Wine, in `scripts/check.sh`'s `windows` part, not
+  by a Windows runner.
   Clippy for Windows is not run, as the `windows` shell lacks it.
-- **Links are tested on Linux only**: the tests that make symbolic links are `#[cfg(unix)]`, as
-  making one on Windows needs a right users lack. Windows' refusal of reparse points planted by a
-  game has no test yet, nor a game folder a person moved and linked back with a junction
-  (`maintenance::a_game_folder_linked_from_elsewhere_is_uninstalled`), which Windows may refuse to
-  uninstall. To be written with junctions in M3.3.
+- **Links to files are tested on Linux only**: making a symbolic link on Windows needs a right
+  users lack, so the tests of a link to a file planted by a game
+  (`installer::tests::downloading_cannot_truncate_a_temporary_symlink_target`) are `#[cfg(unix)]`.
+  Links to folders are tested on both, as junctions on Windows (`platform::link_folder`).
 - **Some tests of shared behaviour run on Linux only**, as their setup uses file modes or links:
   `added::a_folder_too_wide_or_a_program_out_of_its_folder_is_refused`,
   `installer::tests::a_restart_that_cannot_delete_the_download_keeps_it`,
@@ -171,15 +192,20 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
   `steam::local::what_steam_wrote_of_a_download_is_measured_in_its_folder`. To be made for Windows
   (a file held open, a lock) with the milestone of each area.
 - **Windows gaps found while testing, not fixed**: `added::check_folder` reads `HOME`, which
-  Windows does not set, so the profile folder is not refused there (M3.5);
-  `platform::lowest_priority` may lower the calling thread only on Windows, not the threads
-  `fsutil::in_background` work starts, unverified (M3.3); a save Windows marks read-only is backed
-  up but not replaced, the sync reporting it (M3.3).
-- **Files are not flushed to the disk on Windows**: on Linux the installers, and games added by
-  hand, flush the whole filesystem once, after many files (`fsutil::sync_filesystem`); Windows has
-  no such call for a user, and files smaller than `installer::SYNCED_FROM` are not flushed one by
-  one. A power cut during an install or update on Windows could leave a file published but not
-  written. To be settled in M3.3.
+  Windows does not set, so the profile folder is not refused there (M3.5); `import --from-heroic`
+  looks for Heroic's folder from `HOME` or `XDG_CONFIG_HOME` too, so on Windows it reads a folder
+  relative to where Slatty started (it only reads, and finds nothing); games added by hand are not
+  flushed to the disk on Windows, which has no `fsutil::sync_filesystem` (M3.5, as installs do in
+  [ADR-0029](adr/0029-every-installed-file-flushed-on-windows.md)).
+- **Windows behaviour checked under Wine only**: `platform::lowest_priority`'s background mode (its
+  disk priority shows nowhere under Wine; its processor priority does), and a thread that work in
+  the background starts lowers itself only if it calls it (`installer::verify_file`'s do); the
+  cost of flushing every installed file
+  ([ADR-0029](adr/0029-every-installed-file-flushed-on-windows.md),
+  `fsutil::tests::syncing_every_small_file`); a setup program started with administrator rights,
+  whose output is not logged, which cannot be stopped and whose own programs are not followed
+  ([ADR-0028](adr/0028-windows-asks-before-gogs-setup-at-launch.md)). To be checked on Windows
+  with M3.3's check by hand.
 
 ## Ideas
 
