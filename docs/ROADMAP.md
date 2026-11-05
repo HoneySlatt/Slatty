@@ -50,9 +50,22 @@ References:
 - For the interface on slime-ui (Stage 5): the most refined current interfaces, in motion,
   materials, type and responsiveness.
 
-Budgets, on the reference machine (Ryzen 7 5800X, Radeon RX 6900 XT, 3840×2160 at 240 Hz, scale
-1.5), with the fake library of 10,000 games ([testing.md](testing.md#the-application-at-10000-games)),
-release build. The figures measured are in [measurements.md](measurements.md).
+Hardware: aiming at the top never narrows who can run Slatty. On the lowest tier it holds its frame
+rate, answers at once and every feature works, at 10,000 games; only detail is lost (blur, shadows,
+rich animation). A tier, or a GPU maker, never measured is said so, never assumed. Tiers set by the
+owner on 2026-11-05:
+
+| Tier | Reference machine | Display | Measured |
+|---|---|---|---|
+| Lowest | A 2016 laptop: Core i5-6200U (2 cores, 4 threads), Intel HD 520, 4 GB of memory, a 5,400 rpm hard disk; Linux and Windows 10. Chosen as the lowest GPU with Vulkan on both systems | 1920×1080 at 60 Hz, scale 1 | No |
+| Middle | Steam Deck (Stage 6): Zen 2, 4 cores; RDNA 2; 16 GB; its own storage | 1280×800 at 60 Hz | No; its budgets are set at Stage 6, the lowest tier's apply until then |
+| High | Ryzen 7 5800X, Radeon RX 6900 XT, NVMe | 3840×2160 at 240 Hz, scale 1.5 | Yes, the budgets below |
+
+GPU makers: AMD measured; Intel and NVIDIA not.
+
+Budgets on the high tier, with the fake library of 10,000 games
+([testing.md](testing.md#the-application-at-10000-games)), release build. The figures measured are
+in [measurements.md](measurements.md).
 
 | Budget | Target | Measured by | Checked in |
 |---|---|---|---|
@@ -67,6 +80,20 @@ release build. The figures measured are in [measurements.md](measurements.md).
 | Command line start-up | `slatty library list` at 10,000 games ≤ 10 ms warm | `hyperfine` | By hand, when the command line changes |
 | Verifying a file | 1 GB in ≤ 0.45 s on four threads | `verifying_a_large_file` | By hand, when verification changes |
 | Bad input | Never a crash on a file or answer from outside (VDF, `appinfo.vdf`, GOG manifests, installers, archives) | Tests of hostile input; `cargo fuzz` from Stage 4 | `scripts/check.sh` (tests); fuzzing by hand and briefly in CI from Stage 4 |
+
+Budgets on the lowest tier, with the same library and build. None is measured yet: no such machine
+has run Slatty.
+
+| Budget | Target |
+|---|---|
+| Library shown after start | ≤ 250 ms warm, ≤ 1.5 s cold (hard disk) |
+| Scrolling the grid | No frame missed at 60 Hz: p99 of the time between frames ≤ 16.7 ms, none above 25 ms |
+| `view` at 10,000 games | p99 ≤ 2 ms, library and Achievements |
+| Lists made again | ≤ 8 ms |
+| A couch mode move | Shown in the next frame |
+| At rest, memory | As on the high tier |
+| Command line start-up | `slatty library list` at 10,000 games ≤ 30 ms warm |
+| Verifying a file | Bound by the disk: at most 10 % over reading the file alone |
 
 Left for the interface on slime-ui (Stage 5), since Iced receives bug fixes only: input to visible
 response within one frame, animations at the display's rate judged at the 99th percentile,

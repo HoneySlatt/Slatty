@@ -120,6 +120,9 @@ milestone.
   ([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)) and with zbus 6.
 - **Not checked for real**: the couch mode on a Steam Deck (Stage 6) and on a television; emulated
   games in each emulator; the rest is listed in [compatibility.md](compatibility.md).
+- **The lowest hardware tier and the Steam Deck are not measured**
+  ([quality bar](ROADMAP.md#quality-bar)), nor Intel's and NVIDIA's GPUs: the budgets are measured
+  on the high tier alone.
 - **The performance figures are not reproducible by a command**: [testing.md](testing.md) measures
   start-up, scrolling and memory with a temporary probe that is not in the repository, and the rows
   of [measurements.md](measurements.md) on covers predate the copies made at the size drawn.
