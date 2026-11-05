@@ -136,9 +136,15 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
 - **Wake-ups at rest**: one thread of zbus's pool, kept by the keyring's connection, wakes every
   500 ms (120 wake-ups a minute, against a budget of 0 in the
   [quality bar](ROADMAP.md#quality-bar)). To be fixed in Stage 4.
-- **CI is over its budget**: a run took over 30 minutes on 2026-11-05, against 20
-  ([quality bar](ROADMAP.md#quality-bar)), every build starting cold. A cache of the Nix store and
-  of Cargo's builds comes next, then, if needed, the Windows build in a job of its own.
+- **CI is over its budget**: 30 min 44 s on 2026-11-05, against 20
+  ([quality bar](ROADMAP.md#quality-bar)), every build starting cold; each step's time is in
+  [measurements.md](measurements.md#a-ci-run-every-build-cold-2026-11-05). Next, and started:
+  the owner chose a cache first, then the Windows build in a job of its own if needed. What the
+  figures showed since, to put to the owner before building: a Cargo cache cannot reach the Nix
+  package's 10 minutes, which rebuilds every crate in Nix's sandbox (`buildRustPackage`), and a
+  cache of `target/` for both systems may not fit GitHub's 10 GB per repository. Jobs in parallel,
+  each running a part of `scripts/check.sh` (Linux, Windows, the package), would take about
+  16 minutes cold with no cache; a Cargo cache would then shorten the Linux and Windows jobs.
 - **The download and no-change sync budgets are not measured** (set 2026-11-05): their benchmarks
   are to be written.
 - **Video memory has no budget**: the owner decided on 2026-11-05 to measure it first (at rest,

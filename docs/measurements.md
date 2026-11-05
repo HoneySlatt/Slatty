@@ -51,3 +51,19 @@ Command: `unpacking_a_large_build`, a 1.1 GB tree of 3,275 files packed three wa
 | `.tar.gz`, 354 MB | 1.7 s; SHA-512 0.6 s | |
 | `.tar.xz` in 44 blocks, 224 MB (`xz -T0 -6`) | 2.7 s (11.2–11.6 s on one thread) | 322 MB (15 MB on one thread) |
 | `.tar.xz` in one block, 221 MB (`xz -T1 -6`) | 10.2–10.6 s | 15 MB |
+
+## A CI run, every build cold (2026-11-05)
+
+Run 41952293608 on GitHub's `ubuntu-24.04` (commit 2614db7), from the times in its log: 30 min 44 s
+in all, against a budget of 20 ([quality bar](ROADMAP.md#quality-bar)). The run before took
+40 min 33 s.
+
+| Step of `scripts/check.sh` | Time |
+|---|---|
+| The Nix shell made ready | 0 min 39 s |
+| Lints (Clippy) | 5 min 21 s |
+| Tests | 8 min 05 s |
+| Code documentation, dependencies, links | 0 min 22 s |
+| The Windows build (`cargo check`) | 5 min 00 s |
+| The Nix package (`nix build`, every crate built again in Nix's sandbox) | 9 min 53 s |
+| The build | 1 min 10 s |
