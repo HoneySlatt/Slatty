@@ -106,14 +106,18 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<String>) {
         if e.path().is_dir() {
             collect(root, &e.path(), out);
         } else {
+            // Below the backup's time, with `/` on every system.
             let rel = e
                 .path()
                 .strip_prefix(root)
                 .unwrap()
-                .to_string_lossy()
-                .into_owned();
+                .components()
+                .skip(1)
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
             let content = std::fs::read_to_string(e.path()).unwrap();
-            out.push(format!("{}={content}", rel.split_once('/').unwrap().1));
+            out.push(format!("{rel}={content}"));
         }
     }
 }
