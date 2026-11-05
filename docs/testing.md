@@ -70,7 +70,8 @@ nix develop .#windows -c cargo check --workspace
 env -u DISPLAY -u WAYLAND_DISPLAY nix develop .#windows -c cargo test -p slatty-core
 ```
 
-Without a display, Wine opens no window on the desktop running the tests. Tests of what only Linux
+`scripts/check.sh` runs both, in its `windows` part. Without a display, Wine opens no window on the
+desktop running the tests. Tests of what only Linux
 has (Proton, umu, isolation, Wine prefixes, file modes, pipes, symbolic links planted by a game)
 are marked `#[cfg(unix)]`; so, for now, are some tests of shared behaviour whose setup needs Linux
 ([known debt](PLAN.md#known-debt)). Where only part of a test needs Linux, that part alone is

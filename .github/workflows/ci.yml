@@ -1,7 +1,9 @@
 # Runs the automated checks of the definition of done (AGENTS.md) on each push to main, on each
-# pull request and once a week, in the same Nix shell that the agents use: scripts/check.sh, unchanged. Windows is
-# checked there by building for it from Linux (ADR-0022). Actions are pinned to commit SHAs, with the
-# release they correspond to in a comment.
+# pull request and once a week, in the same Nix shell that the agents use: scripts/check.sh,
+# unchanged, one of its parts per job, the three jobs at the same time, so that a run stays within
+# its 20 minutes (ADR-0025). Windows is checked there by building for it from Linux and running the
+# core's tests under Wine (ADR-0022). Actions are pinned to commit SHAs, with the release they
+# correspond to in a comment.
 name: CI
 
 concurrency:
@@ -24,10 +26,35 @@ permissions:
 
 jobs:
   check:
+    name: check (${{ matrix.part }})
     runs-on: ubuntu-24.04
-    # The workspace, its Windows build and the Nix package are three builds from cold.
-    timeout-minutes: 90
+    # A part built from cold, cache lost.
+    timeout-minutes: 40
+    strategy:
+      # One part failing does not stop the others: each tells its own failures.
+      fail-fast: false
+      matrix:
+        # Every part of scripts/check.sh, which checks that this line names them all.
+        part: [linux, windows, package]
+    env:
+      # Incremental builds help a change made again and again, not a build from a cache: off, the
+      # cache is smaller and builds no slower.
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
-      - run: nix develop --no-update-lock-file --command scripts/check.sh
+      # Cargo's downloads and builds, one cache per part. The Nix package builds every crate again
+      # in Nix's sandbox, which no Cargo cache reaches. The key changes with the dependencies
+      # (Cargo.lock) and the toolchain (flake.lock); in between, only Slatty's own crates are built.
+      # No fallback to an older key: a cache would keep the builds of every past version and grow
+      # past GitHub's 10 GB a repository, so a dependency changed means one run from cold.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: matrix.part != 'package'
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: cargo-${{ matrix.part }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
+      - run: nix develop --no-update-lock-file --command scripts/check.sh ${{ matrix.part }}

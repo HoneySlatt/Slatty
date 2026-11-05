@@ -14,7 +14,8 @@ where each stands are Stage 3 of [PLAN.md](PLAN.md).
 - **Tests of the Windows code under Wine**: `cargo test` for the Windows target runs its test
   binaries through Wine, which implements the Windows API the code calls (processes, job objects,
   registry, known folders, reparse points). Wine is not Windows: a passing test there is a first
-  check, never a verified behaviour. How to run them, and which tests are Linux's alone:
+  check, never a verified behaviour. The core's run in `scripts/check.sh`, and so in CI. How to
+  run them, and which tests are Linux's alone:
   [testing.md](testing.md#the-windows-build).
 - **Real checks on Windows 10 or 11**, by a person, recorded in [compatibility.md](compatibility.md)
   as the Linux ones are. Nothing about Windows is called verified before.

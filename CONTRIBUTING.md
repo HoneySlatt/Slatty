@@ -29,13 +29,16 @@ X11, Vulkan and libudev development files, umu-launcher and Comet on `PATH`, and
 
 ```sh
 scripts/check.sh                          # every check below and more, as CI runs it
+scripts/check.sh linux                    # one of its parts: linux, windows or package
 cargo fmt
 cargo clippy --workspace --all-targets    # no warning
 cargo test --workspace
 cargo build --workspace                   # last: tests and clippy do not rebuild the binaries
 ```
 
-`scripts/check.sh` says at its head what it runs. CI (`.github/workflows/ci.yml`) runs it unchanged
+`scripts/check.sh` says at its head what it runs, in three parts: Linux, Windows (built from Linux,
+the core's tests under Wine) and the Nix package. CI (`.github/workflows/ci.yml`) runs it unchanged,
+each part in a job of its own, at the same time ([ADR-0025](docs/adr/0025-ci-runs-the-checks-in-three-parts-at-once.md)),
 on every push to `main` and every pull request, and every Monday at 06:41 UTC even without a push,
 so that new advisories against the dependencies and changes to the CI's environment show while
 the project is at rest; a push cancels the run in progress. GitHub turns the weekly run off after
