@@ -2,7 +2,9 @@
 
 - Status: Accepted; amends [0015](0015-iced-for-the-interface.md) (Iced stays until slime-ui runs
   Slatty); amended by [0025](0025-paused-after-m3-3-until-slime-ui.md) (Slatty paused after M3.3
-  until slime-ui runs it)
+  until slime-ui runs it), [0030](0030-ported-second-onto-uwui.md) (Slatty ported second, onto
+  the framework now named uwui) and [0031](0031-iceds-figures-measured-again-during-the-pause.md)
+  (the bar is Iced's figures measured again)
 - Date: 2026-11-04
 
 ## Context

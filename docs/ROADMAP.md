@@ -17,11 +17,13 @@ library of 10,000 games that scrolls at every frame of a fast display, that cost
 waits, that keeps every save, that tells no company more than the person allowed, and that is as
 easy to use from a sofa with a gamepad, or on a Steam Deck, as at a desk.
 
-It runs on Linux today. Its interface moves to SlimeEngine's interface framework, of which Slatty
-is the first application; every piece of interface work waits for that move. Slatty pauses once a
-GOG game plays on Windows from the command line, until that framework can run it; then its
-interface moves first, Windows and packages after
-([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)).
+It runs on Linux today. Its interface moves to uwui (formerly slime-ui), the owner's interface
+framework, built in SlimeEngine. Slatty is the second of four programs ported onto it before its API
+is declared stable ([Stage 5](#stage-5--the-interface-on-uwui-windows-included--03)). Every piece
+of interface work waits for that move. Slatty pauses once a GOG game plays on Windows from the
+command line, until its turn comes; then its interface moves first, Windows and packages after
+([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md),
+[ADR-0030](adr/0030-ported-second-onto-uwui.md)).
 
 ## 2. Principles
 
@@ -48,13 +50,16 @@ References:
 - **GOG Galaxy 2.0**: one library for every store.
 - **Playnite**: libraries of thousands of games, many sources, speed.
 - **Heroic**: GOG and Epic on Linux, the closest in purpose.
-- For the interface on slime-ui (Stage 5): the most refined current interfaces, in motion,
+- For the interface on uwui (Stage 5): the most refined current interfaces, in motion,
   materials, type and responsiveness.
 
 Hardware: aiming at the top never narrows who can run Slatty. On the lowest tier it holds its frame
 rate, answers at once and every feature works, at 10,000 games; only detail is lost (blur, shadows,
 rich animation). A tier, or a GPU maker, never measured is said so, never assumed. Tiers set by the
-owner on 2026-11-05 ([ADR-0024](adr/0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md)):
+owner on 2026-11-05 ([ADR-0024](adr/0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md)).
+The lowest is the same class of machine as uwui's lower desktop tier for applications (the same
+GPU, cores, memory and display); Slatty's adds a hard disk
+([ADR-0030](adr/0030-ported-second-onto-uwui.md)):
 
 | Tier | Reference machine | Display | Measured |
 |---|---|---|---|
@@ -107,7 +112,7 @@ has run Slatty.
 | Command line start-up | `slatty library list` at 10,000 games ≤ 30 ms warm |
 | Verifying a file | Bound by the disk: at most 10 % over reading the file alone |
 
-Left for the interface on slime-ui (Stage 5), since Iced receives bug fixes only: input to visible
+Left for the interface on uwui (Stage 5), since Iced receives bug fixes only: input to visible
 response within one frame, animations at the display's rate judged at the 99th percentile,
 rendering checked against reference images at scales 1 and 2, screen readers, full keyboard use,
 reduced motion and contrast.
@@ -124,8 +129,8 @@ reduced motion and contrast.
 | Secrets and privacy | Tokens only in the system keyring; every third party off until turned on; no telemetry ([ADR-0004](adr/0004-tokens-only-in-the-system-keyring.md), [ADR-0005](adr/0005-every-third-party-off-until-turned-on.md)) |
 | Running Windows games on Linux | umu and Proton builds Slatty downloads; isolation through umu's container ([ADR-0009](adr/0009-isolation-through-umus-container.md), [ADR-0010](adr/0010-proton-builds-downloaded-by-slatty.md)) |
 | Other stores | Steam read from its files and played through its client; GOG never told of other stores' games ([ADR-0013](adr/0013-steam-read-from-its-files-played-through-its-client.md), [ADR-0014](adr/0014-gog-never-told-of-other-stores-games.md)) |
-| Interface | Iced, with bug fixes only, until slime-ui runs Slatty; every piece of interface work waits for slime-ui; the state free of any framework ([ADR-0015](adr/0015-iced-for-the-interface.md), [ADR-0019](adr/0019-the-interfaces-state-free-of-any-framework.md), [ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)) |
-| Platforms | Linux (Wayland and X11, x86-64); Windows 10 and 11 from one code base, built from Linux, its window coming with slime-ui ([ADR-0022](adr/0022-windows-hosts.md)); no macOS |
+| Interface | Iced, with bug fixes only, until uwui runs Slatty; every piece of interface work waits for uwui; the state free of any framework ([ADR-0015](adr/0015-iced-for-the-interface.md), [ADR-0019](adr/0019-the-interfaces-state-free-of-any-framework.md), [ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md), [ADR-0030](adr/0030-ported-second-onto-uwui.md)) |
+| Platforms | Linux (Wayland and X11, x86-64); Windows 10 and 11 from one code base, built from Linux, its window coming with uwui ([ADR-0022](adr/0022-windows-hosts.md)); no macOS; unchanged by uwui's other targets ([ADR-0030](adr/0030-ported-second-onto-uwui.md)) |
 
 ### Open
 
@@ -136,13 +141,20 @@ Each is decided by an ADR at the stage where it becomes necessary, not earlier.
 | Windows toolchain | MinGW (now), Microsoft's MSVC | Stage 3, if the MinGW build shows a problem MSVC has not |
 | Packages for other distributions | Flatpak, AppImage, distribution packages | Stage 4 |
 | Slatty on a Steam Deck | The Nix package, a Flatpak, an AppImage | Stage 6 |
+| The theme file people already have, on uwui | Kept as Slatty's format, migrated to uwui's themes | Stage 5 |
+| The couch mode's gamepads and focus | Slatty's own (gilrs, `slatty-app`'s `pad`), uwui's | Stage 5 |
 | Translations | Fluent, gettext, a format of Slatty's own | Stage 7 |
 
 ## 4. Stages
 
 The stages are listed by number but run in this order: Stages 1 and 2; Stage 3 up to M3.3; a
-pause until SlimeEngine's Stage 6d can run an application; Stage 5; the rest of Stage 3; Stages 4,
-6 and 7 ([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)).
+pause; Stage 5; the rest of Stage 3; Stages 4, 6 and 7
+([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)).
+
+The pause lasts until Slatty's turn in SlimeEngine's Stage 6d
+([ADR-0030](adr/0030-ported-second-onto-uwui.md)). Only M3.3's check on Windows and M5.0, Iced's
+figures measured again, run meanwhile
+([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)).
 
 ### Stage 1 — GOG on Linux → 0.1.0 (done, 2026-10-21)
 
@@ -196,27 +208,31 @@ unchanged.
 **Exit.** Slatty installed and run from a package on a distribution other than NixOS, recorded in
 [compatibility.md](compatibility.md).
 
-### Stage 5 — The interface on slime-ui, Windows included → 0.3, after SlimeEngine 0.8
+### Stage 5 — The interface on uwui, Windows included → 0.3
 
-**Goal.** Slatty's interface drawn by SlimeEngine's interface framework, as the pilot of
-SlimeEngine's Stage 6d ([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)), on Linux and on
-Windows. Starts when SlimeEngine's Stage 6d can run an application. 0.3 is released for Linux;
+**Goal.** Slatty's interface drawn by uwui, on Linux and on Windows, as the second of the four
+programs that SlimeEngine's Stage 6d ports before uwui's API is declared stable
+([ADR-0030](adr/0030-ported-second-onto-uwui.md)). Starts when that stage's plan opens Slatty's
+port, after the music player's port on the desktop. 0.3 is released for Linux once the exit
+holds, on a pinned revision of uwui, without waiting for the API to be declared stable;
 Windows' first release is Stage 3's, 0.4.
 
-- Every page and the couch mode on slime-ui, over the same state; the interface's tests ported.
+- Every page and the couch mode on uwui, on its desktop host, over the same state; the interface's
+  tests ported. `slatty-core` and `slatty-app` never depend on uwui.
 - The interface on Windows: Linux-only settings hidden, the file chooser, gamepads, a window icon,
   paths shown the Windows way.
 - A checkpoint where the owner uses it day to day.
 - Iced removed.
 
-**Exit.** Slatty on slime-ui at least as good as on Iced on each figure of
-[measurements.md](measurements.md) (library shown, scrolling, rest under Wayland and Xwayland,
-memory), and within the [quality bar](#quality-bar); every page at parity; the window checked by a person on Windows; Iced gone from
-`Cargo.lock`.
+**Exit.** Slatty on uwui at least as good as on Iced on the library shown, scrolling, rest under
+Wayland and Xwayland, and memory, both measured side by side by M5.0's command
+([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)), and within the
+[quality bar](#quality-bar); every page at parity; the window checked by a person on Windows; Iced
+gone from `Cargo.lock`.
 
 ### Stage 6 — On a Steam Deck
 
-**Goal.** The couch mode on slime-ui as the Steam Deck's Game Mode needs it, checked on a real Deck.
+**Goal.** The couch mode on uwui as the Steam Deck's Game Mode needs it, checked on a real Deck.
 
 - Slatty installed on SteamOS, started from Steam and by itself in Game Mode.
 - What the checks find fixed: scale, gamepad, full screen, suspending and resuming.
@@ -243,7 +259,7 @@ subscribes to those topics on GOG for the account ([SECURITY.md](../SECURITY.md#
 |---|---|---|
 | 0.1.0 | 1 | GOG on Linux (released 2026-10-21) |
 | 0.2.0 | 2 | Beyond GOG (released 2026-10-27) |
-| 0.3 | 5 | The interface on slime-ui, Windows' window included |
+| 0.3 | 5 | The interface on uwui, Windows' window included |
 | 0.4 | 3 | Windows |
 | 0.5 | 4 | Packages and smaller work |
 | 0.6 | 6 | On a Steam Deck |

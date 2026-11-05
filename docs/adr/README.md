@@ -33,13 +33,15 @@ repository, which can be a little after it was taken.
 | [0017](0017-only-the-rows-in-view-are-built.md) | Grids and long lists build only the rows in view | Accepted |
 | [0018](0018-a-couch-mode-of-its-own.md) | A couch mode of its own | Accepted |
 | [0019](0019-the-interfaces-state-free-of-any-framework.md) | The interface's state free of any framework | Accepted; amends 0015 (the state leaves the Iced crate) |
-| [0020](0020-gpui-set-aside-for-slime-ui.md) | GPUI tried and set aside; Slatty is the pilot of SlimeEngine's interface framework | Accepted; amends 0015 (Iced stays until slime-ui runs Slatty); amended by 0025 |
+| [0020](0020-gpui-set-aside-for-slime-ui.md) | GPUI tried and set aside; Slatty is the pilot of SlimeEngine's interface framework | Accepted; amends 0015 (Iced stays until slime-ui runs Slatty); amended by 0025, 0030 and 0031 |
 | [0021](0021-interface-in-english-first.md) | The interface in English first | Accepted |
 | [0022](0022-windows-hosts.md) | Windows hosts: one code base, built from Linux, Linux's features kept Linux's | Accepted |
 | [0023](0023-a-quality-bar-close-to-what-is-measured.md) | A quality bar close to what is measured, its gaps closed in Stage 4 | Accepted |
 | [0024](0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md) | Hardware tiers from a 2016 laptop, and budgets for the whole working loop | Accepted; extends 0023; amended by 0026 |
-| [0025](0025-paused-after-m3-3-until-slime-ui.md) | Slatty paused after M3.3 until slime-ui runs it; then slime-ui, Windows, packages | Accepted; amends 0020 (the work outside the interface no longer goes on meanwhile) |
+| [0025](0025-paused-after-m3-3-until-slime-ui.md) | Slatty paused after M3.3 until slime-ui runs it; then slime-ui, Windows, packages | Accepted; amends 0020 (the work outside the interface no longer goes on meanwhile); amended by 0030 and 0031 |
 | [0026](0026-ci-runs-the-checks-in-three-parts-at-once.md) | CI runs `scripts/check.sh` in three parts at once, with a Cargo cache | Accepted; amends 0024 (how the CI's budget is reached) |
 | [0027](0027-linux-features-refused-on-windows-not-compiled-out.md) | Linux's features refused on Windows where they start, not compiled out, until Stage 5 | Accepted |
 | [0028](0028-windows-asks-before-gogs-setup-at-launch.md) | On Windows, GOG's setup runs once the person agreed, asked at launch | Accepted |
 | [0029](0029-every-installed-file-flushed-on-windows.md) | On Windows every file an install writes is flushed to the disk before it takes its name | Accepted |
+| [0030](0030-ported-second-onto-uwui.md) | Slatty ported onto uwui second, after the music player | Accepted; amends 0020 (no longer the pilot) and 0025 (the pause lasts until Slatty's turn; 0.3 once Stage 5's exit holds) |
+| [0031](0031-iceds-figures-measured-again-during-the-pause.md) | Iced's figures measured again, by a command, during the pause | Accepted; amends 0020 (the bar is Iced's figures measured again) and 0025 (one milestone during the pause) |

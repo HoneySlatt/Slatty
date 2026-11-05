@@ -86,3 +86,7 @@ descendant is left ([ADR-0008](adr/0008-sessions-followed-by-a-subreaper-supervi
 
 **Twin.** A Steam game that is also a GOG game the person owns; the library shows them as one
 ([ADR-0013](adr/0013-steam-read-from-its-files-played-through-its-client.md)).
+
+**uwui.** The owner's interface framework, called slime-ui in ADRs before 0030.
+[SlimeEngine](https://github.com/HoneySlatt/SlimeEngine) builds it; Slatty's interface moves to it at Stage 5
+([ADR-0030](adr/0030-ported-second-onto-uwui.md)).

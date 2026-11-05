@@ -11,7 +11,7 @@ Rules for AI agents working on Slatty. Read this file fully at the start of ever
   (Comet) of GOG's games, through services GOG never documented: all reverse engineered.
 - The library also shows Steam's and Epic's games, games added by hand and emulated games.
 - It handles people's accounts, saves and disks: **safety comes before features**.
-- 0.2.0 is released, on Linux; the Windows port is under way.
+- 0.2.0 is released, on Linux; Slatty is paused until its port onto uwui ([PLAN](docs/PLAN.md)).
 
 Anyone must be able to understand it from the repository alone.
 
@@ -30,8 +30,8 @@ You remember nothing from earlier sessions: what is not in these files is lost.
 - The current milestone, or what the owner asks. A request that changes the plan goes into the PLAN.
 - No later stage, no abstraction prepared for one. Nothing is built because the roadmap mentions it.
 - A task needs something out of scope: stop and say so.
-- Iced receives bug fixes only; every piece of interface work waits for slime-ui
-  ([ADR-0020](docs/adr/0020-gpui-set-aside-for-slime-ui.md)). No other interface framework.
+- Iced receives bug fixes only; every piece of interface work waits for Stage 5, the port onto
+  uwui ([ADR-0030](docs/adr/0030-ported-second-onto-uwui.md)). No other interface framework.
 
 ## Commands
 

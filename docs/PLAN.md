@@ -14,16 +14,20 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
   its check by the owner on Windows 10 or 11 still to run. What Slatty depends on Linux for, and
   the port's open questions, are in [windows-port.md](windows-port.md).
 - **The pause has begun** (2026-11-05,
-  [ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)): no milestone starts until
-  SlimeEngine's Stage 6d can run an application. CI's weekly run goes on. Only M3.3's check by
-  hand on Windows, and the fixes it calls for, may come meanwhile.
+  [ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)): no milestone starts until Slatty's
+  turn in SlimeEngine's Stage 6d ([ADR-0030](adr/0030-ported-second-onto-uwui.md)). CI's weekly
+  run goes on. Only M3.3's check by hand on Windows, its fixes, and
+  [M5.0](#m50--iceds-figures-measured-again) may come meanwhile.
+- **Next: [M5.0](#m50--iceds-figures-measured-again)**, Iced's figures measured again by a command
+  ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)). A window opens on the
+  owner's desktop only with their agreement.
 - **At the resumption**, in order: M3.3's check on Windows if it has not run, its results in
   [compatibility.md](compatibility.md); then Stage 5. Read first the Known debt below and
   [windows-port.md](windows-port.md#open-questions).
-- **Then Stage 5 — The interface on slime-ui**
-  ([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)), released as 0.3: Iced replaced wholly.
-  What slime-ui lacks and serves its other clients is built in slime-ui, in SlimeEngine. Until
-  then Iced receives bug fixes only, and `slatty-app` stays free of any framework.
+- **Then Stage 5 — The interface on uwui** (formerly slime-ui;
+  [ADR-0030](adr/0030-ported-second-onto-uwui.md)), released as 0.3 once its exit holds: Iced
+  replaced wholly. What uwui lacks and serves its other clients is built in uwui. Until then Iced
+  receives bug fixes only, and `slatty-app` stays free of any framework.
 - **Then the rest of Stage 3** (M3.4 to M3.8), with the window, released as 0.4; then Stage 4.
 
 ## Status
@@ -33,6 +37,7 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 | [M3.1](#m31--the-windows-build-environment) | Slatty can be built for Windows from Linux | Done |
 | [M3.2](#m32--everything-builds-for-windows) | Every crate builds for Windows, and the core's tests pass under Wine | Done |
 | [M3.3](#m33--play-a-gog-game) | A person plays a GOG game on Windows from the command line | Built; its check on Windows waits |
+| [M5.0](#m50--iceds-figures-measured-again) | Iced's figures measured again by a command, the reference for uwui's port | Planned; during the pause |
 | [M3.4](#m34--epic-and-steam) | A person plays Epic's and Steam's games on Windows | After Stage 5 |
 | [M3.5](#m35--games-added-by-hand) | A person adds a game from no store on Windows | After Stage 5 |
 | [M3.6](#m36--achievements) | Achievements through Comet on Windows | After Stage 5 |
@@ -44,7 +49,7 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 Slatty on Windows 10 and 11 (x86-64), from the same code base, built and tested from Linux; Windows
 games played directly, without Proton; what only Linux has stays Linux's
 ([ADR-0022](adr/0022-windows-hosts.md)). Up to M3.3 from the command line; M3.4 to M3.8 come after
-Stage 5, which brings the window on slime-ui, and are planned again then
+Stage 5, which brings the window on uwui, and are planned again then
 ([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)). Linux behaves exactly as before at
 every milestone.
 
@@ -145,11 +150,50 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
 ([ADR-0024](adr/0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md)). Audits are recorded in
 [audits/](audits/).
 
+## During the pause
+
+### M5.0 — Iced's figures measured again
+
+- **Goal.** Iced's figures taken again by one command, on the owner's machine as it is now
+  (Umbriel), as the reference that uwui's port must match
+  ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)).
+- **Delivers.**
+  - A generator of the fake profile of 10,000 games
+    ([testing.md](testing.md#the-application-at-10000-games)), its covers made with `image`
+    (already in `slatty-app`), about 860 MB, in a throwaway folder it refuses if not empty.
+  - The probe in `slatty-gui`, behind a feature off by default, built by `scripts/check.sh`'s lints
+    so that it keeps compiling during the pause. It writes a log whose format does not name Iced,
+    so that uwui's port writes the same.
+  - One command that sets the isolated profile itself (its XDG folders, no keyring, no network),
+    runs the measurements, and reads the log into figures with their spread. It does not depend on
+    the framework, so that it measures the port too.
+  - A headless compositor with Xwayland in the development shell (`flake.nix`).
+  - testing.md describing it; the figures in [measurements.md](measurements.md), with the commit.
+- **Measured**, release build, 10 runs where it repeats:
+  - the library shown after start, warm and cold;
+  - scrolling the grid by the probe, 1,200 frames: the time between frames (median, p99, max,
+    frames over 4.17, 6.25 and 16.7 ms) and `view`'s time;
+  - at rest for 60 s: frames drawn, CPU ticks, wake-ups of every thread, under Wayland and
+    Xwayland;
+  - resident memory after start, with every cover in, after scrolling the whole grid, after 200
+    game pages with key art;
+  - video memory at the same points, from the card's `fdinfo` (`drm-memory-vram`), measured first
+    as the owner decided;
+  - the GPU's power at rest against the desktop without Slatty.
+- **Where.** Start, rest and memory in the headless compositor; scrolling at 240 Hz and power on
+  the owner's display, with their agreement. The probe scrolls by itself: no input enters the
+  session.
+- **Done when.** The command ran twice and the second run's medians fall within the first run's
+  range; measurements.md holds the figures; the debt below on figures and video memory is closed or
+  restated.
+- **Not measured.** Input to visible response, which Iced does not report; the lowest tier, which no
+  machine stands for.
+
 ## Known debt
 
 - **Iced's and zbus's unmaintained crates** (`rustybuzz`, `ttf-parser`, `zbus_names`, `zvariant`,
   `zvariant_derive`) are ignored in `deny.toml`, each with its reason; they go with Iced
-  ([ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md)) and with zbus 6.
+  (Stage 5) and with zbus 6.
 - **Not checked for real**: the couch mode on a Steam Deck (Stage 6) and on a television; emulated
   games in each emulator; the rest is listed in [compatibility.md](compatibility.md).
 - **The lowest hardware tier and the Steam Deck are not measured**
@@ -158,6 +202,7 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
 - **The performance figures are not reproducible by a command**: [testing.md](testing.md) measures
   start-up, scrolling and memory with a temporary probe that is not in the repository, and the rows
   of [measurements.md](measurements.md) on covers predate the copies made at the size drawn.
+  [M5.0](#m50--iceds-figures-measured-again) pays it.
 - **Wake-ups at rest**: one thread of zbus's pool, kept by the keyring's connection, wakes every
   500 ms (120 wake-ups a minute, against a budget of 0 in the
   [quality bar](ROADMAP.md#quality-bar)). To be fixed in Stage 4.
@@ -170,11 +215,10 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
 - **The download and no-change sync budgets are not measured** (set 2026-11-05): their benchmarks
   are to be written.
 - **Video memory has no budget**: the owner decided on 2026-11-05 to measure it first (at rest,
-  after scrolling the whole grid, after 200 game pages), then set it. The measurement needs the
-  fake profile and the probe in the repository, and a headless compositor, so that no window opens
-  on the desktop.
+  after scrolling the whole grid, after 200 game pages), then set it;
+  [M5.0](#m50--iceds-figures-measured-again) measures it.
 - **A crash leaves no report** ([quality bar](ROADMAP.md#quality-bar)): to be built in the core and
-  the command line; the interface's notice waits for slime-ui (Stage 5), as Iced receives bug fixes
+  the command line; the interface's notice waits for uwui (Stage 5), as Iced receives bug fixes
   only.
 - **CI runs on GitHub's Linux machines only**: Windows is checked by building from Linux and by
   the core's and the command line's tests under Wine, in `scripts/check.sh`'s `windows` part, not

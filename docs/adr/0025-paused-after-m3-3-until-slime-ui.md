@@ -1,7 +1,10 @@
 # 0025. Slatty paused after M3.3 until slime-ui runs it; then slime-ui, Windows, packages
 
 - Status: Accepted; amends [0020](0020-gpui-set-aside-for-slime-ui.md) (the work outside the
-  interface no longer goes on while slime-ui is built)
+  interface no longer goes on while slime-ui is built); amended by
+  [0030](0030-ported-second-onto-uwui.md) (the pause lasts until Slatty's turn in Stage 6d; 0.3
+  released once Stage 5's exit holds) and
+  [0031](0031-iceds-figures-measured-again-during-the-pause.md) (one milestone during the pause)
 - Date: 2026-11-05
 
 ## Context
