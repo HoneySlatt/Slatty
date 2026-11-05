@@ -37,3 +37,4 @@ repository, which can be a little after it was taken.
 | [0021](0021-interface-in-english-first.md) | The interface in English first | Accepted |
 | [0022](0022-windows-hosts.md) | Windows hosts: one code base, built from Linux, Linux's features kept Linux's | Accepted |
 | [0023](0023-a-quality-bar-close-to-what-is-measured.md) | A quality bar close to what is measured, its gaps closed in Stage 4 | Accepted |
+| [0024](0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md) | Hardware tiers from a 2016 laptop, and budgets for the whole working loop | Accepted; extends 0023 |

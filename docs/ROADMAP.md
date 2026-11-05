@@ -53,7 +53,7 @@ References:
 Hardware: aiming at the top never narrows who can run Slatty. On the lowest tier it holds its frame
 rate, answers at once and every feature works, at 10,000 games; only detail is lost (blur, shadows,
 rich animation). A tier, or a GPU maker, never measured is said so, never assumed. Tiers set by the
-owner on 2026-11-05:
+owner on 2026-11-05 ([ADR-0024](adr/0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md)):
 
 | Tier | Reference machine | Display | Measured |
 |---|---|---|---|
