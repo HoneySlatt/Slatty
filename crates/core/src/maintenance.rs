@@ -134,7 +134,8 @@ pub(crate) fn delete_listed(
         let path = root.join(rel);
         installer::refuse_outside(root, &path)?;
         if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file() || m.is_symlink()) {
-            std::fs::remove_file(&path)
+            crate::platform::make_replaceable(&path)
+                .and_then(|()| crate::platform::remove_file_or_link(&path))
                 .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
             report.removed_files += 1;
         }
@@ -148,11 +149,11 @@ pub(crate) fn delete_listed(
             report.folder_removed = if std::fs::symlink_metadata(root).is_ok_and(|m| m.is_symlink())
             {
                 // A folder moved elsewhere and linked back: the folder it leads to, now empty,
-                // then the link (which `remove_dir` refuses).
+                // then the link.
                 let real = root
                     .canonicalize()
                     .is_ok_and(|real| std::fs::remove_dir(real).is_ok());
-                std::fs::remove_file(root).is_ok() && real
+                crate::platform::remove_file_or_link(root).is_ok() && real
             } else {
                 std::fs::remove_dir(root).is_ok()
             };
@@ -787,7 +788,8 @@ pub(crate) fn remove_obsolete(
         let path = dir.join(&rel);
         installer::refuse_outside(dir, &path)?;
         if std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file() || m.is_symlink()) {
-            std::fs::remove_file(&path)
+            crate::platform::make_replaceable(&path)
+                .and_then(|()| crate::platform::remove_file_or_link(&path))
                 .map_err(|e| Error::io(format!("delete {}", path.display()), e))?;
             removed.push(rel.clone());
             let mut parent = path.parent();
@@ -927,13 +929,13 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
+    /// A folder of the game replaced with a link out of it (a junction on Windows).
     #[test]
     fn uninstall_refuses_an_escaping_parent_before_deleting_any_file() {
         let env = Env::new("escaping-uninstall", true);
         let outside = env.root.join("outside");
         std::fs::rename(env.game().join("data"), &outside).unwrap();
-        std::os::unix::fs::symlink(&outside, env.game().join("data")).unwrap();
+        crate::platform::link_folder(&outside, &env.game().join("data"));
         let result = uninstall(&env.db, &env.dirs, "1", false);
         assert!(matches!(result, Err(Error::Refused(_))));
         assert!(env.game().join("Game.exe").exists());
@@ -941,13 +943,45 @@ mod tests {
         assert!(Install::get(&env.db, "1").unwrap().is_some());
     }
 
-    #[cfg(unix)]
+    /// A file the game installed, replaced with a link to a folder out of it (a junction on
+    /// Windows): uninstalling deletes the link, never what it leads to.
+    /// A file of the game left read-only (by the game or its setup) is uninstalled all the same,
+    /// on Windows too, which refuses to delete a read-only file: never a folder half deleted
+    /// with the game still installed.
+    #[test]
+    fn a_read_only_file_of_the_game_is_uninstalled() {
+        let env = Env::new("read-only-file", true);
+        std::fs::remove_dir_all(env.game().join("saves")).unwrap();
+        let exe = env.game().join("Game.exe");
+        let mut permissions = std::fs::metadata(&exe).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&exe, permissions).unwrap();
+        let r = uninstall(&env.db, &env.dirs, "1", false).unwrap();
+        assert_eq!(r.removed_files, 2);
+        assert!(!exe.exists());
+        assert!(Install::get(&env.db, "1").unwrap().is_none());
+    }
+
+    #[test]
+    fn a_link_in_place_of_an_installed_file_is_deleted_not_followed() {
+        let env = Env::new("linked-file", true);
+        let outside = env.root.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("kept"), b"kept").unwrap();
+        std::fs::remove_file(env.game().join("Game.exe")).unwrap();
+        crate::platform::link_folder(&outside, &env.game().join("Game.exe"));
+        uninstall(&env.db, &env.dirs, "1", false).unwrap();
+        assert!(std::fs::symlink_metadata(env.game().join("Game.exe")).is_err());
+        assert_eq!(std::fs::read(outside.join("kept")).unwrap(), b"kept");
+        assert!(Install::get(&env.db, "1").unwrap().is_none());
+    }
+
     #[test]
     fn obsolete_files_cannot_be_deleted_through_an_escaping_parent() {
         let env = Env::new("escaping-obsolete", true);
         let outside = env.root.join("outside");
         std::fs::rename(env.game().join("data"), &outside).unwrap();
-        std::os::unix::fs::symlink(&outside, env.game().join("data")).unwrap();
+        crate::platform::link_folder(&outside, &env.game().join("data"));
         let record = InstallRecord::load(&env.dirs, "1").unwrap().unwrap();
         assert!(remove_obsolete(&record, &env.game(), |_| false).is_err());
         assert!(env.game().join("Game.exe").exists());
@@ -979,17 +1013,16 @@ mod tests {
         assert!(Install::get(&env.db, "1").unwrap().is_none());
     }
 
-    /// A game folder moved to another disk and linked back: uninstalling it deletes its files
-    /// there, then the folder emptied and the link, instead of failing on the link for good with
-    /// the game still registered.
-    #[cfg(unix)]
+    /// A game folder moved to another disk and linked back (a junction on Windows): uninstalling
+    /// it deletes its files there, then the folder emptied and the link, instead of failing on the
+    /// link for good with the game still registered.
     #[test]
     fn a_game_folder_linked_from_elsewhere_is_uninstalled() {
         let env = Env::new("linked-folder", true);
         std::fs::remove_dir_all(env.game().join("saves")).unwrap();
         let elsewhere = env.root.join("elsewhere");
         std::fs::rename(env.game(), &elsewhere).unwrap();
-        std::os::unix::fs::symlink(&elsewhere, env.game()).unwrap();
+        crate::platform::link_folder(&elsewhere, &env.game());
         let r = uninstall(&env.db, &env.dirs, "1", false).unwrap();
         assert_eq!(r.removed_files, 2);
         assert!(r.folder_removed);

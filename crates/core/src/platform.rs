@@ -155,6 +155,40 @@ pub fn symlink(target: &Path, link: &Path) -> io::Result<()> {
     }
 }
 
+/// Deletes a file, or a link itself, never what it leads to. Windows deletes a link to a folder
+/// (a junction, a folder's symbolic link) as a folder, and refuses to as a file.
+pub fn remove_file_or_link(path: &Path) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileTypeExt;
+        if std::fs::symlink_metadata(path)?
+            .file_type()
+            .is_symlink_dir()
+        {
+            return std::fs::remove_dir(path);
+        }
+    }
+    std::fs::remove_file(path)
+}
+
+/// Makes `link` lead to the folder `target`, as a game or a person could: a symbolic link on
+/// Linux, a junction on Windows, which any user can make there (`mklink /J`).
+#[cfg(test)]
+pub(crate) fn link_folder(target: &Path, link: &Path) {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, link).unwrap();
+    #[cfg(windows)]
+    {
+        let made = std::process::Command::new("cmd")
+            .args(["/c", "mklink", "/J"])
+            .args([link, target])
+            .stdout(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(made.success(), "mklink /J {}", link.display());
+    }
+}
+
 /// Folders made readable by the user alone (0700 on Linux).
 pub fn private_dirs(builder: &mut DirBuilder) -> &mut DirBuilder {
     #[cfg(unix)]
@@ -185,6 +219,28 @@ pub fn with_mode(opts: &mut OpenOptions, mode: u32) -> &mut OpenOptions {
         let _ = mode;
         opts
     }
+}
+
+/// Lets the file at `path` be replaced or deleted, as Linux lets any file whose folder is
+/// writable be: Windows refuses to for a file marked read-only, as a game or its setup may leave
+/// its saves or its files. The mark is taken off; the file that replaces it has none, as on Linux.
+/// Nothing at `path` is no error.
+pub fn make_replaceable(path: &Path) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        let mut permissions = match std::fs::symlink_metadata(path) {
+            Ok(meta) => meta.permissions(),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e),
+        };
+        if permissions.readonly() {
+            permissions.set_readonly(false);
+            std::fs::set_permissions(path, permissions)?;
+        }
+    }
+    #[cfg(unix)]
+    let _ = path;
+    Ok(())
 }
 
 /// When a file was last changed, in seconds and nanoseconds since 1970, as Linux's `stat` gives

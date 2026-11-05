@@ -260,7 +260,8 @@ pub fn apply(source: &Path, delta: &Path, target: &Path, md5_target: &str) -> Re
         if let Ok(meta) = std::fs::metadata(source) {
             let _ = std::fs::set_permissions(&partial, meta.permissions());
         }
-        std::fs::rename(&partial, target)
+        crate::platform::make_replaceable(target)
+            .and_then(|()| std::fs::rename(&partial, target))
             .map_err(|e| Error::io(format!("rename {}", partial.display()), e))
     })();
     if result.is_err() {

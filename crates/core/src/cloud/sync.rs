@@ -313,6 +313,7 @@ impl<T: CloudTransport> Run<'_, T> {
         let dest = self.unchanged_local(key)?;
         if dest.exists() {
             self.backup(&dest, "local", key)?;
+            replaceable(&dest)?;
         }
         fsutil::write_atomic(&dest, &bytes)?;
         self.record(key, &fsutil::sha256_hex(&bytes), &hash)?;
@@ -332,6 +333,7 @@ impl<T: CloudTransport> Run<'_, T> {
     fn delete_local(&mut self, key: &str) -> Result<()> {
         let abs = self.unchanged_local(key)?;
         self.backup(&abs, "local", key)?;
+        replaceable(&abs)?;
         std::fs::remove_file(&abs)
             .map_err(|e| Error::io(format!("delete {}", abs.display()), e))?;
         delete_base(self.target, key)?;
@@ -617,6 +619,12 @@ fn delete_base(t: &SyncTarget<'_>, key: &str) -> Result<()> {
         params![t.user_id, t.game_id, t.location, key],
     )?;
     Ok(())
+}
+
+/// Lets a save, already backed up, be replaced or deleted though the game left it read-only.
+fn replaceable(save: &Path) -> Result<()> {
+    crate::platform::make_replaceable(save)
+        .map_err(|e| Error::io(format!("make {} writable", save.display()), e))
 }
 
 /// Where this account last synced a location.

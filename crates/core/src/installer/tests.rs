@@ -203,8 +203,7 @@ async fn a_manifest_with_an_impossible_chunk_size_is_refused() {
 }
 
 /// A game writes its folder: an empty folder of the build, under one the game replaced with a
-/// link out of it, is never made there by a repair.
-#[cfg(unix)]
+/// link out of it (a junction on Windows), is never made there by a repair.
 #[tokio::test]
 async fn a_repair_never_makes_folders_through_a_folder_the_game_replaced() {
     let mut env = Env::new("planted-dirs");
@@ -220,7 +219,7 @@ async fn a_repair_never_makes_folders_through_a_folder_the_game_replaced() {
     let outside = env.root.join("outside");
     std::fs::create_dir_all(&outside).unwrap();
     std::fs::remove_dir_all(env.target().join("saves")).unwrap();
-    std::os::unix::fs::symlink(&outside, env.target().join("saves")).unwrap();
+    crate::platform::link_folder(&outside, &env.target().join("saves"));
     let set = collect_files(&env.source, &env.depots).await.unwrap();
     let free_space = |_: &Path| Ok(PLENTY);
     let result = Download {
@@ -739,6 +738,30 @@ async fn check_finds_damaged_files_and_repair_fetches_only_those() {
             .bad
             .is_empty()
     );
+}
+
+/// A damaged file the game left read-only is repaired all the same, on Windows too, which refuses
+/// to replace a read-only file.
+#[tokio::test]
+async fn a_read_only_damaged_file_is_repaired() {
+    let env = Env::new("repair-read-only");
+    env.run(&CancellationToken::new(), PLENTY).await.unwrap();
+    let pak = env.target().join("data/level1.pak");
+    std::fs::write(&pak, b"0123456789abcdefghiX").unwrap();
+    let mut permissions = std::fs::metadata(&pak).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&pak, permissions).unwrap();
+    let set = collect_files(&env.source, &env.depots).await.unwrap();
+    let free_space = |_: &Path| Ok(PLENTY);
+    let dl = Download {
+        source: &env.source,
+        cancel: CancellationToken::new(),
+        progress: &|_| {},
+        free_space: &free_space,
+    };
+    let repaired = dl.check_installed(&set, &env.target(), true).await.unwrap();
+    assert_eq!(repaired.bad, [PathBuf::from("data/level1.pak")]);
+    assert_eq!(std::fs::read(&pak).unwrap(), b"0123456789abcdefghij");
 }
 
 #[tokio::test]

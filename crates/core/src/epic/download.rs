@@ -532,7 +532,8 @@ fn write_files(
         if job.executable {
             let _ = crate::platform::set_mode(&tmp, 0o755);
         }
-        std::fs::rename(&tmp, &dest)
+        crate::platform::make_replaceable(&dest)
+            .and_then(|()| std::fs::rename(&tmp, &dest))
             .map_err(|e| Error::io(format!("rename {}", tmp.display()), e))?;
     }
     Ok(())

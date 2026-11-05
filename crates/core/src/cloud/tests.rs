@@ -218,23 +218,47 @@ async fn remote_change_is_downloaded_with_a_backup() {
     assert_eq!(env.backups(), vec!["saves/local/a.sav=mine"]);
 }
 
-/// A save the game left read-only is still backed up, then replaced. Windows refuses to replace it:
-/// the sync reports it and keeps it (the PLAN's known debt).
-#[cfg(unix)]
+fn make_read_only(path: &Path) {
+    let mut permissions = std::fs::metadata(path).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(path, permissions).unwrap();
+}
+
+/// A save the game left read-only is still backed up, then replaced, on Windows too, which refuses
+/// to replace a read-only file.
 #[tokio::test]
 async fn a_read_only_save_is_backed_up_and_replaced() {
     let env = Env::new("read-only");
     env.write("a.sav", "mine");
     env.sync(SyncOptions::default()).await;
-    let save = env.root().join("a.sav");
-    let mut permissions = std::fs::metadata(&save).unwrap().permissions();
-    permissions.set_readonly(true);
-    std::fs::set_permissions(&save, permissions).unwrap();
+    make_read_only(&env.root().join("a.sav"));
     env.put_remote("a.sav", "other machine");
     let r = env.sync(SyncOptions::default()).await;
     assert!(r.errors.is_empty(), "{:?}", r.errors);
     assert_eq!(env.read("a.sav").as_deref(), Some("other machine"));
     assert_eq!(env.backups(), vec!["saves/local/a.sav=mine"]);
+}
+
+/// A read-only save the person chose to delete (the cloud's side of a deletion) is backed up,
+/// then deleted, on Windows too.
+#[tokio::test]
+async fn a_read_only_save_is_backed_up_and_deleted() {
+    let env = Env::new("read-only-deleted");
+    env.write("a.sav", "base");
+    env.write("b.sav", "keep cloud nonempty");
+    env.sync(SyncOptions::default()).await;
+    env.write("a.sav", "local edit");
+    make_read_only(&env.root().join("a.sav"));
+    env.cloud.files.lock().unwrap().remove("saves/a.sav");
+    let r = env
+        .sync(SyncOptions {
+            prefer: Some(Prefer::Remote),
+            ..Default::default()
+        })
+        .await;
+    assert_eq!(r.deleted_local, vec!["a.sav"], "{:?}", r.errors);
+    assert!(env.read("a.sav").is_none());
+    assert_eq!(env.backups(), vec!["saves/local/a.sav=local edit"]);
 }
 
 #[tokio::test]
@@ -613,7 +637,7 @@ async fn case_duplicates_in_the_cloud_skip_only_that_pair() {
     assert_eq!(env.remote("Save.dat").as_deref(), Some("upper"));
 }
 
-#[cfg(unix)]
+/// A folder of the saves that is a link out of them (a junction on Windows) is not followed.
 #[tokio::test]
 async fn a_download_cannot_follow_a_directory_symlink_outside_saves() {
     let env = Env::new("symlink-download");
@@ -621,7 +645,7 @@ async fn a_download_cannot_follow_a_directory_symlink_outside_saves() {
     std::fs::create_dir_all(&outside).unwrap();
     std::fs::create_dir_all(env.root()).unwrap();
     std::fs::write(outside.join("a.sav"), "keep me").unwrap();
-    std::os::unix::fs::symlink(&outside, env.root().join("linked")).unwrap();
+    crate::platform::link_folder(&outside, &env.root().join("linked"));
     env.put_remote("linked/a.sav", "remote");
     let r = env.sync(SyncOptions::default()).await;
     assert!(!r.is_clean());
