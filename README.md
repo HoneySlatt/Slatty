@@ -11,10 +11,10 @@ without the GOG Galaxy client and without a web view. Windows games run isolated
 by default.
 
 > **Status: early development.** The latest release, 0.2.0, runs on Linux. Slatty builds for
-> Windows 10 and 11 and its core's tests pass under Wine, but it cannot play a game there yet.
-> Once it can, Slatty pauses until its new interface framework, slime-ui, can run it: 0.3 brings
-> that interface, 0.4 Windows ([plan](docs/PLAN.md)). Until 1.0, commands and on-disk formats may
-> still change ([changelog](CHANGELOG.md)).
+> Windows 10 and 11, and installs and plays a GOG game there from the command line: tested under
+> Wine, not yet on Windows itself. Slatty is now paused until its new interface framework,
+> slime-ui, can run it: 0.3 brings that interface, 0.4 Windows ([plan](docs/PLAN.md)). Until 1.0,
+> commands and on-disk formats may still change ([changelog](CHANGELOG.md)).
 >
 > **Not affiliated with GOG, Valve or Epic Games.** GOG and Epic publish no API for launchers:
 > Slatty uses the services their own clients use, understood by reverse engineering (see
