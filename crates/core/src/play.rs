@@ -227,7 +227,10 @@ pub async fn play(
                     }
                     SetupEvent::Running(label) => PlayEvent::SetupStep(label),
                     SetupEvent::NonZeroExit { label, code } => {
-                        PlayEvent::SetupWarning(format!("{label} exited with code {code:?}"))
+                        PlayEvent::SetupWarning(format!(
+                            "{label} exited with {}",
+                            crate::session::exit_code(code)
+                        ))
                     }
                     SetupEvent::Unfinished { again: true } => PlayEvent::SetupWarning(
                         "the setup runs again at the next launch".into(),

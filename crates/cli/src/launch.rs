@@ -139,7 +139,10 @@ fn print_event(game_id: &str, event: PlayEvent) {
         ),
         PlayEvent::Started { pid } => println!("Game started (pid {pid})."),
         PlayEvent::LauncherExited { code } => {
-            println!("Launch process exited ({code:?}); waiting for remaining game processes…")
+            println!(
+                "Launch process exited with {}; waiting for remaining game processes…",
+                slatty_core::session::exit_code(code)
+            )
         }
         PlayEvent::StopRequested => println!("Stopping the game (Ctrl+C again to force)…"),
         PlayEvent::StoppedBeforeStart => println!("Stopped before the game started."),
@@ -148,7 +151,8 @@ fn print_event(game_id: &str, event: PlayEvent) {
             code,
             clean,
         } => println!(
-            "Session ended after {seconds}s (exit code {code:?}{}).",
+            "Session ended after {seconds}s (exited with {}{}).",
+            slatty_core::session::exit_code(code),
             if clean { "" } else { ", supervisor lost" }
         ),
         PlayEvent::CloudUploaded(s) => print_cloud("Cloud saves after playing", &s),

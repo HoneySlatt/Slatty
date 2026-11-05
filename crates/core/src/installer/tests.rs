@@ -354,6 +354,30 @@ async fn progress_counts_the_bytes_received_apart_from_those_written() {
     assert!(p.network_bytes > 0 && p.network_bytes < sent, "{p:?}");
 }
 
+/// A set with no file, as a game's support files often are, reports no progress: an install would
+/// otherwise end on a line of 0 files of 0.
+#[tokio::test]
+async fn an_empty_set_reports_no_progress() {
+    let env = Env::new("empty-set");
+    std::fs::create_dir_all(env.target()).unwrap();
+    let reported = AtomicUsize::new(0);
+    let free_space = |_: &Path| Ok(PLENTY);
+    for repair in [false, true] {
+        Download {
+            source: &env.source,
+            cancel: CancellationToken::new(),
+            progress: &|_| {
+                reported.fetch_add(1, Ordering::Relaxed);
+            },
+            free_space: &free_space,
+        }
+        .check_installed(&FileSet::default(), &env.target(), repair)
+        .await
+        .unwrap();
+    }
+    assert_eq!(reported.load(Ordering::Relaxed), 0);
+}
+
 /// A disk found full stops every file at once: the others would fail the same way after their
 /// chunks were downloaded for nothing. No temporary file is left behind.
 #[tokio::test]

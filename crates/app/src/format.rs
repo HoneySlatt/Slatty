@@ -275,7 +275,10 @@ pub fn describe_play_event(e: &PlayEvent) -> String {
         }
         PlayEvent::Started { pid } => format!("Game started (pid {pid})."),
         PlayEvent::LauncherExited { code } => {
-            format!("Launcher exited ({code:?}); following remaining game processes…")
+            format!(
+                "Launcher exited with {}; following remaining game processes…",
+                slatty_core::session::exit_code(*code)
+            )
         }
         PlayEvent::StopRequested => "Stopping…".into(),
         PlayEvent::StoppedBeforeStart => "Stopped before the game started.".into(),

@@ -107,7 +107,8 @@ pub fn comet_port_free() -> bool {
 }
 
 /// What Slatty needs; on Windows, the tools Linux needs (umu, bubblewrap, a runtime folder for
-/// Comet's handoff, the Galaxy service for Wine prefixes) are not checked.
+/// Comet's handoff, the Galaxy service for Wine prefixes) are not checked, nor Comet's port, as
+/// Comet does not run there yet.
 pub fn run(dirs: &Dirs) -> Vec<Check> {
     #[cfg(unix)]
     let tool = |name: &'static str, program: &str| match find_in_path(program) {
@@ -134,6 +135,12 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
             detail: e.to_string(),
         },
     };
+    #[cfg(windows)]
+    {
+        let _ = dirs;
+        return vec![keyring];
+    }
+    #[cfg(unix)]
     let port = Check {
         name: "comet port",
         ok: comet_port_free(),
@@ -142,11 +149,6 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
             crate::comet::PORT
         ),
     };
-    #[cfg(windows)]
-    {
-        let _ = dirs;
-        return vec![keyring, port];
-    }
     #[cfg(unix)]
     let runtime = Check {
         name: "runtime dir",
@@ -190,6 +192,16 @@ pub fn run(dirs: &Dirs) -> Vec<Check> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Comet does not run on Windows yet (M3.6): its port, held by GOG Galaxy's own service while
+    /// Galaxy runs, is no reason to fail there.
+    #[cfg(windows)]
+    #[test]
+    fn windows_does_not_check_comets_port() {
+        let root = std::env::temp_dir().join(format!("slatty-doctor-{}", std::process::id()));
+        let checks = run(&Dirs::under(&root));
+        assert!(checks.iter().all(|c| c.name != "comet port"), "{checks:?}");
+    }
 
     /// bubblewrap looks `true` up in `PATH` from the working directory: with an empty or `.`
     /// entry, started from a game's folder, it would run a `true` the game wrote there. The check

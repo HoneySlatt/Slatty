@@ -282,7 +282,10 @@ impl<S: ContentSource> Download<'_, S> {
                 ..total
             })
         };
-        report(0, 0);
+        // A set with no file has nothing to show: its 0 of 0 would end an install's progress.
+        if !set.files.is_empty() {
+            report(0, 0);
+        }
         let network = &network;
 
         // A failed file does not stop the others, so a retry has less to fetch; cancelling stops all,

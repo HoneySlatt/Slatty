@@ -132,6 +132,10 @@ pub async fn verify(ctx: &Ctx, args: VerifyArgs) -> Result<()> {
                 crate::install::size(checked.reused_bytes)
             );
         }
+        // A script that checks a game learns of it from the exit status too.
+        if !args.repair {
+            anyhow::bail!("files are missing or damaged");
+        }
     }
     Ok(())
 }
@@ -433,17 +437,23 @@ pub async fn setup(ctx: &Ctx, args: SetupArgs) -> Result<()> {
             "the Wine prefix does not exist yet; launch the game once (the setup then runs automatically)"
         );
     }
+    let unfinished = std::sync::atomic::AtomicBool::new(false);
     let emit = |e: slatty_core::setup::SetupEvent| match e {
         slatty_core::setup::SetupEvent::Downloading => println!("Downloading setup files…"),
         slatty_core::setup::SetupEvent::Running(label) => println!("Running {label}…"),
-        slatty_core::setup::SetupEvent::NonZeroExit { label, code } => {
-            println!("  {label} exited with code {code:?}")
-        }
-        slatty_core::setup::SetupEvent::Unfinished { again: true } => {
-            println!("A step failed: the setup runs again at the game's next launch.")
-        }
-        slatty_core::setup::SetupEvent::Unfinished { again: false } => {
-            println!("A step failed again: the setup is left as it is; `--force` runs it again.")
+        slatty_core::setup::SetupEvent::NonZeroExit { label, code } => println!(
+            "  {label} exited with {}",
+            slatty_core::session::exit_code(code)
+        ),
+        slatty_core::setup::SetupEvent::Unfinished { again } => {
+            unfinished.store(true, std::sync::atomic::Ordering::Relaxed);
+            if again {
+                println!("A step failed: the setup runs again at the game's next launch.")
+            } else {
+                println!(
+                    "A step failed again: the setup is left as it is; `--force` runs it again."
+                )
+            }
         }
     };
     // As before a launch: a runtime umu lacks is installed now, outside the sandbox.
@@ -469,6 +479,9 @@ pub async fn setup(ctx: &Ctx, args: SetupArgs) -> Result<()> {
         &emit,
     )
     .await?;
+    if unfinished.into_inner() {
+        anyhow::bail!("the setup did not finish");
+    }
     if ran.is_empty() {
         println!("Setup already done for the installed build (use --force to run it again).");
     } else {

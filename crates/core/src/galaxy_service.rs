@@ -79,8 +79,8 @@ pub async fn ensure(dirs: &Dirs, install: &Install, exe: &Path, supervisor: &Pat
             .await?;
         if outcome.main_code != Some(0) && !already_registered(&label, outcome.main_code) {
             return Err(Error::Refused(format!(
-                "`{label}` exited with code {:?}; see {}",
-                outcome.main_code,
+                "`{label}` exited with {}; see {}",
+                crate::session::exit_code(outcome.main_code),
                 log.display()
             )));
         }

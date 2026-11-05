@@ -270,6 +270,15 @@ pub struct SessionOutcome {
     pub clean: bool,
 }
 
+/// How a process ended, as a person reads it after "exited with": `code 2`, or `no code` when
+/// it left none (a signal ended it, on Linux).
+pub fn exit_code(code: Option<i32>) -> String {
+    match code {
+        Some(code) => format!("code {code}"),
+        None => "no code".into(),
+    }
+}
+
 impl SessionHandle {
     /// Spawns `supervisor SUPERVISE_ARG` and hands it the launch request. With `busy`
     /// (`lock::session`), the supervisor holds that lock until the session ends.
@@ -485,6 +494,13 @@ pub fn playtime(db: &Db, user_id: Option<&str>) -> Result<HashMap<String, Playti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_exit_code_reads_as_a_number() {
+        assert_eq!(exit_code(Some(2)), "code 2");
+        assert_eq!(exit_code(Some(-1)), "code -1");
+        assert_eq!(exit_code(None), "no code");
+    }
 
     #[test]
     fn playtime_sums_ended_sessions_and_keeps_the_latest_one() {
