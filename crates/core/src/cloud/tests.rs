@@ -215,6 +215,25 @@ async fn remote_change_is_downloaded_with_a_backup() {
     assert_eq!(env.backups(), vec!["saves/local/a.sav=mine"]);
 }
 
+/// A save the game left read-only is still backed up, then replaced. Windows refuses to replace it:
+/// the sync reports it and keeps it (the PLAN's known debt).
+#[cfg(unix)]
+#[tokio::test]
+async fn a_read_only_save_is_backed_up_and_replaced() {
+    let env = Env::new("read-only");
+    env.write("a.sav", "mine");
+    env.sync(SyncOptions::default()).await;
+    let save = env.root().join("a.sav");
+    let mut permissions = std::fs::metadata(&save).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&save, permissions).unwrap();
+    env.put_remote("a.sav", "other machine");
+    let r = env.sync(SyncOptions::default()).await;
+    assert!(r.errors.is_empty(), "{:?}", r.errors);
+    assert_eq!(env.read("a.sav").as_deref(), Some("other machine"));
+    assert_eq!(env.backups(), vec!["saves/local/a.sav=mine"]);
+}
+
 #[tokio::test]
 async fn concurrent_edits_are_a_conflict_and_nothing_is_written() {
     let env = Env::new("conflict");

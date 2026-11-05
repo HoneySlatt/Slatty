@@ -383,15 +383,14 @@ impl<T: CloudTransport> Run<'_, T> {
             crate::paths::ensure_dir(parent)?;
         }
         // On the disk before the save is replaced or deleted: a power cut must not leave neither.
-        // Windows flushes a file only through a handle that may write it.
-        std::fs::copy(file, &dest)
-            .and_then(|_| {
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .open(&dest)?
-                    .sync_all()
-            })
-            .map_err(|e| Error::io(format!("back up {}", file.display()), e))?;
+        // Flushed through the handle that wrote it, as Windows needs, whatever the save's own
+        // permissions (`fs::copy` would give a read-only save a copy that cannot be opened so).
+        (|| {
+            let mut out = std::fs::File::create(&dest)?;
+            std::io::copy(&mut std::fs::File::open(file)?, &mut out)?;
+            out.sync_all()
+        })()
+        .map_err(|e| Error::io(format!("back up {}", file.display()), e))?;
         self.report.backup_dir = Some(self.backup_root.clone());
         Ok(())
     }
