@@ -20,6 +20,11 @@ built. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the map of the code. `SLA
 `debug`) prints the core's logs on stderr. [docs/testing.md](docs/testing.md) has the tests that
 need real tools, the benchmarks, and how to run Slatty on a throwaway profile.
 
+Without Nix (not tried yet) you need Rust 1.90 or newer, a C compiler, `pkg-config`, the Wayland,
+X11, Vulkan and libudev development files, umu-launcher and Comet on `PATH`, and
+`GalaxyCommunication.exe` in `~/.local/share/slatty/` (or its path in
+`SLATTY_GALAXY_COMMUNICATION`).
+
 ## Before sending a change
 
 ```sh
@@ -64,7 +69,7 @@ same change:
 | A stage reshaped, merged or dropped, a budget | [docs/ROADMAP.md](docs/ROADMAP.md), with an ADR |
 | How something is tested or measured, a test that needs real tools | [docs/testing.md](docs/testing.md) |
 | A figure measured | [docs/measurements.md](docs/measurements.md) |
-| A real check against GOG, Steam, Epic or Windows (pass or fail) | [docs/compatibility.md](docs/compatibility.md), and README's summary of it |
+| A real check against GOG, Steam, Epic or Windows (pass or fail) | [docs/compatibility.md](docs/compatibility.md) |
 | A panel, a setting, a stored file | [docs/user-guide.md](docs/user-guide.md) |
 | A command or an option | [docs/command-line.md](docs/command-line.md), and the user guide where it shows the command |
 | A GOG request or what is known about it | [docs/gog-integration.md](docs/gog-integration.md) |

@@ -2,109 +2,68 @@
 
 <img width="3840" height="2121" alt="Slatty's library" src="https://github.com/user-attachments/assets/92b1c9ba-2551-44b2-867a-f3192db4f72a" />
 
-A native Linux launcher for your GOG games, written in Rust with an [Iced](https://iced.rs)
-interface. Your Steam games and the games you add yourself can sit in the same library.
+A native Linux launcher for your GOG games, written in Rust. Your Steam and Epic games, the games
+you add yourself and your games of other consoles sit in the same library.
 
-Slatty signs in to your GOG account, installs your games (Windows builds through Proton,
-or GOG's native Linux builds), keeps their cloud saves in sync and reports their achievements to
-GOG, all without the GOG Galaxy client and without a web view. Windows games run isolated from your
-files by default.
+Slatty signs in to your GOG account, installs your games (Windows builds through Proton, or GOG's
+native Linux builds), keeps their cloud saves in sync and reports their achievements to GOG, all
+without the GOG Galaxy client and without a web view. Windows games run isolated from your files
+by default.
 
-> **Status: early development.** Slatty's latest release is 0.2.0. Until 1.0, commands and
-> on-disk formats may still change ([changelog](CHANGELOG.md)).
+> **Status: early development.** The latest release, 0.2.0, runs on Linux. Windows 10 and 11 come
+> with 0.3: Slatty builds for Windows and its core's tests pass under Wine, but it cannot play a
+> game there yet ([plan](docs/PLAN.md)). Until 1.0, commands and on-disk formats may still change
+> ([changelog](CHANGELOG.md)).
 >
-> **Not affiliated with GOG or Valve.** GOG publishes no API for launchers: Slatty uses the
-> services GOG Galaxy uses, understood by reverse engineering (see [credits](#credits)). They may
-> change or stop working at any time.
+> **Not affiliated with GOG, Valve or Epic Games.** GOG and Epic publish no API for launchers:
+> Slatty uses the services their own clients use, understood by reverse engineering (see
+> [credits](#credits)). They may change or stop working at any time.
 
 ## Features
 
-**Library**
-- Your GOG games with their covers, kept for offline use, fluid at 10,000 games.
-- Shelves (all, installed, favorites, hidden), sorting, and filters by store, system,
-  achievements and cloud saves.
-- Change any game's title, sorting title, cover and background, from a file or from SteamGridDB;
-  hide the ones you do not want to see.
-- Built-in themes, your own theme file, the font and the cover size of your choice.
-- A couch mode for a gamepad, full screen, for a television or a Steam Deck, where it starts by
-  itself in the Game Mode (not tried on a Steam Deck yet).
+- **Library**: covers kept for offline use, fluid at 10,000 games; shelves, sorting and filters;
+  titles, covers and backgrounds you change, from a file or SteamGridDB; themes and your own theme
+  file; a couch mode for a gamepad, on a television or a Steam Deck (not tried on a Deck yet).
+- **Installing**: Windows builds from GOG's Galaxy content system and native Linux builds from its
+  offline installers; a download queue that resumes after a crash or a power cut; every file
+  checked against GOG's checksums before the game folder appears; updates in place with GOG's
+  binary patches; DLC and languages; verify, repair, uninstall; offline installers kept.
+- **Playing**: Windows games through
+  [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and the Proton build of
+  your choice, isolated from your files; Linux games natively; controller compatibility per game;
+  play time reported to GOG (can be turned off); GOG's post-install setup at the first launch.
+- **Saves and achievements**: cloud saves synced before and after each session, decided on file
+  contents, never replaced without a copy, conflicts never settled by themselves; achievements as
+  GOG records them, unlocked in game through [Comet](https://github.com/imLinguin/comet) once you
+  turn it on.
+- **Beyond GOG**: Steam games, through the Steam client; Epic games, installed, played, updated
+  and their cloud saves synced; games from no store; games of other consoles run in DuckStation,
+  PCSX2, PPSSPP, RPCS3, shadPS4, Kyty, Dolphin or Eden; GOG games imported from another tool;
+  Proton builds downloaded and kept up to date.
 
-**Installing**
-- Windows builds from GOG's Galaxy content system, native Linux builds from GOG's offline
-  installers, read file by file.
-- A download queue you reorder by dragging; downloads that resume after a crash or a power cut,
-  and wait while GOG is out of reach.
-- Every file checked against GOG's checksums; the game folder appears only once all are right.
-- Updates in place (automatically for games on their newest build), with GOG's binary patches
-  where GOG offers them; DLC and language changes; verify, repair and uninstall.
-- GOG's offline installers kept in a folder, for Windows, Linux or macOS, checked against GOG's
-  MD5 sums.
-
-**Playing**
-- Windows games through [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) and
-  the Proton build of your choice, per game; Linux games natively. A game that can be started
-  several ways asks which at its first Play.
-- Optional controller compatibility per game, through the SDL input mode of UMU-Proton, GE-Proton
-  and Proton-CachyOS.
-- Isolation from your files: an isolated game sees its own folder and a home of its own, and
-  cannot change the tools other games run through.
-- The session followed until the game's last process ends; play time reported to GOG as Galaxy
-  does (can be turned off).
-- GOG's post-install setup (install scripts, redistributables) at the first launch.
-
-**Saves and achievements**
-- Cloud saves synced before and after each session, decided on file contents. A conflict never
-  settles itself, and every save replaced is copied first.
-- Achievements as GOG records them; unlocked in game through
-  [Comet](https://github.com/imLinguin/comet) once you turn it on, or by hand.
-
-**Beyond GOG**
-- Steam games, read from the Steam client's own files and played, installed and uninstalled
-  through it. A game owned on both stores shows once. No GOG account needed for them.
-- Epic Games Store games, after signing in to Epic: shown in the library with their covers,
-  installed, played through Proton signed in to your Epic account, updated, verified, repaired
-  and uninstalled, their cloud saves synced with Epic's, their achievements shown.
-- Games from no store, added by the program that starts them, or from an installer or archive.
-- Games of other consoles, from your own files, run in DuckStation, PCSX2, PPSSPP, RPCS3, shadPS4,
-  Kyty, Dolphin or Eden: a scan of their folders adds them.
-- GOG games installed by another tool, imported from their folder or from Heroic.
-- Proton builds (GE-Proton, Proton-CachyOS, UMU-Proton) downloaded from GitHub, checked, and kept
-  up to date once you turn it on.
-
-Everything has automated tests. What has also been checked against real services, games and
-hardware is recorded in [docs/compatibility.md](docs/compatibility.md): sign-in, library, Windows
-and Linux installs, updates, DLC and languages, pausing and resuming, playing isolated, cloud
-saves both ways and their deletions, achievements earned in game, verify, repair and uninstall,
-offline installers, the download queue, Proton builds kept up to date, games added by hand,
-Steam's client and Web API, Epic sign-in, library and installs, controller compatibility, and the
-couch mode with a real gamepad.
-Not checked yet: a redistributable asking for a restart, the account shown online to GOG friends,
-an offline installer whose checksums GOG does not keep, Ubuntu with AppArmor, Steam as a Flatpak,
-and the couch mode on a Steam Deck or on a television.
-
-Linux only, tested and packaged on x86-64; macOS and Windows hosts are not supported. See the
-[roadmap](docs/ROADMAP.md).
+Everything has automated tests. What was also checked against the real services, games and
+hardware, and what was not yet, is in [docs/compatibility.md](docs/compatibility.md).
 
 ## Requirements
 
-- Linux with Wayland or X11, on x86-64 (the platform tested). Development happens on NixOS with
-  niri; X11 has not been tried yet.
+- Linux with Wayland or X11, on x86-64. Development happens on NixOS under Wayland; X11 has not
+  been tried yet.
+- Hardware: aimed to run from a 2016 laptop (two-core Core i5-6200U, Intel HD 520, 4 GB, a hard
+  disk) to a 4K 240 Hz desktop. Only the desktop is measured so far
+  ([quality bar](docs/ROADMAP.md#quality-bar)).
 - A Secret Service keyring: GNOME Keyring (the one checked), or KeePassXC or KWallet with its
   Secret Service bridge (not tried yet).
 - [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher) (checked with 1.4) and a
-  Proton build: one in `~/.local/share/Steam/compatibilitytools.d`, one of Valve's that Steam
-  downloaded, one umu downloaded, or one Slatty downloads (Settings → Runners).
+  Proton build: Steam's, umu's, one in `~/.local/share/Steam/compatibilitytools.d`, or one Slatty
+  downloads (Settings → Runners).
 - [bubblewrap](https://github.com/containers/bubblewrap), able to start a sandbox, for isolated
-  games. On Ubuntu 23.10 and later it needs an AppArmor profile first, for umu as well
-  ([how](docs/user-guide.md#ubuntu-and-apparmor); those steps were not tried yet).
+  games; on Ubuntu 23.10 and later it needs an AppArmor profile first
+  ([how](docs/user-guide.md#ubuntu-and-apparmor), not tried yet).
 - On NixOS, `steam-run` (or `steam-run-free`) for native Linux games; without it they run in umu's
   runtime.
-- Optional:
-  - [Comet](https://github.com/imLinguin/comet) and its `GalaxyCommunication.exe` service, for
-    achievements earned in game;
-  - an XDG desktop portal with a file chooser (xdg-desktop-portal-gtk, -gnome, -kde…) and libdbus,
-    to browse for folders and images (typing a path works without);
-  - the Steam client, for Steam games.
+- Optional: [Comet](https://github.com/imLinguin/comet) and its `GalaxyCommunication.exe` service,
+  for achievements earned in game; an XDG desktop portal with a file chooser, to browse for files;
+  the Steam client, for Steam games.
 
 ## Install
 
@@ -115,9 +74,8 @@ nix run github:HoneySlatt/Slatty     # or, from a checkout: nix run .
 nix profile install github:HoneySlatt/Slatty
 ```
 
-The package brings umu-launcher, bubblewrap, Comet, `GalaxyCommunication.exe` (built from Comet's
-sources) and `steam-run-free`, and installs a desktop entry and its icon. It was only used on
-NixOS; Nix on another distribution was not tried yet.
+The package brings umu-launcher, bubblewrap, Comet, `GalaxyCommunication.exe` and
+`steam-run-free`, with a desktop entry. It was only used on NixOS so far.
 
 **From source**, for development:
 
@@ -128,11 +86,8 @@ slatty doctor        # checks umu, bubblewrap, Comet, the keyring…
 slatty-gui
 ```
 
-`nix develop` provides the toolchain, umu-launcher, bubblewrap, Comet and
-`GalaxyCommunication.exe` (not `steam-run`), and puts `target/debug` on `PATH`. Without Nix
-(not tried yet) you need Rust 1.90 or newer, a C compiler, `pkg-config`, the Wayland, X11, Vulkan
-and libudev development files, umu-launcher and Comet on `PATH`, and `GalaxyCommunication.exe` in
-`~/.local/share/slatty/` (or its path in `SLATTY_GALAXY_COMMUNICATION`).
+Without Nix (not tried yet), [CONTRIBUTING.md](CONTRIBUTING.md#development-environment) lists what
+to install.
 
 ## First steps
 
@@ -155,37 +110,25 @@ The [user guide](docs/user-guide.md) covers the window, and the
 
 ## Security and privacy
 
-- You sign in on GOG's own page; Slatty never sees your password. Your session is kept in
-  the system keyring, never in a log or a process argument.
-- No telemetry. Besides GOG, every host contacted is listed in
-  [SECURITY.md](SECURITY.md#what-leaves-your-computer) with the setting that controls it, where
-  there is one; the
-  optional ones (GitHub, SteamGridDB, Steam's servers, umu's database) are off until you turn them
-  on.
-- Windows games run isolated from your files by default, inside umu's container and bubblewrap.
-  Isolation keeps games out of your files; [SECURITY.md](SECURITY.md#games-and-isolation) says what
-  it leaves open.
-- Achievements earned in game go through Comet only once you turn **Achievements in game** on:
-  while it runs, any program on this computer can get your GOG access token from it.
-- Saves are never replaced or deleted without a copy, and a cloud conflict never settles itself
-  ([how](docs/cloud-saves.md)).
-
-Report vulnerabilities privately, as [SECURITY.md](SECURITY.md#reporting-a-vulnerability) says.
+- You sign in on GOG's own page; Slatty never sees your password. Your session is kept in the
+  system keyring, never in a log or a process argument.
+- No telemetry. Every host Slatty contacts besides GOG is listed in
+  [SECURITY.md](SECURITY.md#what-leaves-your-computer); the optional ones are off until you turn
+  them on.
+- Windows games run isolated from your files by default;
+  [SECURITY.md](SECURITY.md#games-and-isolation) says what isolation leaves open.
+- Achievements earned in game go through Comet only once you turn them on: while it runs, any
+  program on this computer can get your GOG access token from it ([more](SECURITY.md#comet)).
+- Report vulnerabilities privately, as [SECURITY.md](SECURITY.md#reporting-a-vulnerability) says.
 
 ## Documentation
 
-- [User guide](docs/user-guide.md): the window, settings, where data is stored, troubleshooting
-- [Command line](docs/command-line.md): every command and option
-- [Cloud saves](docs/cloud-saves.md): how sync decides, and how your saves are protected
-- [Theming](docs/theming.md): colours, corners and motion from a file
-- [Architecture](docs/ARCHITECTURE.md): crates, modules and main flows; the design decisions in
-  [docs/adr](docs/adr/README.md)
-- [GOG integration](docs/gog-integration.md): every GOG service used, its source, what is verified
-- [Epic Games integration](docs/epic-integration.md): every Epic service used, its source, what is
-  verified
-- [Compatibility](docs/compatibility.md): results of real tests
-- [Testing](docs/testing.md): automated tests, benchmarks and checks against GOG and Steam;
-  [Measurements](docs/measurements.md): what the benchmarks found
+- [User guide](docs/user-guide.md), [command line](docs/command-line.md),
+  [cloud saves](docs/cloud-saves.md), [theming](docs/theming.md): using Slatty
+- [Architecture](docs/ARCHITECTURE.md) and its [decisions](docs/adr/README.md);
+  [GOG](docs/gog-integration.md) and [Epic](docs/epic-integration.md) integration, every service
+  used and its source; [compatibility](docs/compatibility.md); [testing](docs/testing.md) and
+  [measurements](docs/measurements.md)
 - [Roadmap](docs/ROADMAP.md) · [Plan](docs/PLAN.md) · [History](docs/history.md) ·
   [Changelog](CHANGELOG.md) · [Glossary](docs/glossary.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [AI agents](AGENTS.md)
