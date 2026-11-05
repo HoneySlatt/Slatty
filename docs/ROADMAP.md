@@ -80,6 +80,17 @@ in [measurements.md](measurements.md).
 | Command line start-up | `slatty library list` at 10,000 games ≤ 10 ms warm | `hyperfine` | By hand, when the command line changes |
 | Verifying a file | 1 GB in ≤ 0.45 s on four threads | `verifying_a_large_file` | By hand, when verification changes |
 | Bad input | Never a crash on a file or answer from outside (VDF, `appinfo.vdf`, GOG manifests, installers, archives) | Tests of hostile input; `cargo fuzz` from Stage 4 | `scripts/check.sh` (tests); fuzzing by hand and briefly in CI from Stage 4 |
+| Downloading a game (set 2026-11-05, not measured yet) | A GOG or Epic install takes ≥ 90 % of the rate of one plain download from the same server, with at most one core of CPU on average, unpacking and verifying included | A fake local server at a fixed rate; no account, no real download | By hand, when downloads change |
+| A cloud sync with nothing changed (set 2026-11-05, not measured yet) | Sends nothing, and ends in ≤ 50 ms off the network for 100 saves: it runs before each game | The tests' fake cloud | By hand, when the sync changes |
+
+Iteration, set by the owner on 2026-11-05: a CI run ≤ 20 min; `scripts/check.sh` ≤ 10 min warm on
+the high tier; `cargo test -p slatty-core` ≤ 1 min. Measured from GitHub's run times and `time`;
+checked at each change to CI or to the checks.
+
+Crashes, set by the owner on 2026-11-05: a crash writes a report in the logs folder (version,
+system, message, stack trace; never a token or the sign-in address), which the person may attach to
+an issue; nothing leaves the machine. The command line prints its path; the interface tells it at
+the next start. Checked by a test that makes a crash and looks for secrets in its report.
 
 Budgets on the lowest tier, with the same library and build. None is measured yet: no such machine
 has run Slatty.
@@ -171,7 +182,8 @@ unchanged.
   written ([quality bar](#quality-bar));
 - the parsers of outside data (Steam's VDF and `appinfo.vdf`, GOG's manifests, Linux installers,
   archives) fuzzed with `cargo fuzz`, from a nightly toolchain in the development shell, decided
-  in an ADR;
+  in an ADR; with the same toolchain, Miri run on the tests of `unsafe` code it can run, those it
+  cannot listed with the reason (the owner's decision, 2026-11-05);
 - the budgets `library_at_10000_games` measures checked by `scripts/check.sh` in CI, with limits
   for CI's machines written in the quality bar.
 

@@ -131,9 +131,22 @@ milestone.
 - **Wake-ups at rest**: one thread of zbus's pool, kept by the keyring's connection, wakes every
   500 ms (120 wake-ups a minute, against a budget of 0 in the
   [quality bar](ROADMAP.md#quality-bar)). To be fixed in Stage 4.
+- **CI is over its budget**: a run took over 30 minutes on 2026-11-05, against 20
+  ([quality bar](ROADMAP.md#quality-bar)), every build starting cold. A cache of the Nix store and
+  of Cargo's builds comes next, then, if needed, the Windows build in a job of its own.
+- **The download and no-change sync budgets are not measured** (set 2026-11-05): their benchmarks
+  are to be written.
+- **Video memory has no budget**: the owner decided on 2026-11-05 to measure it first (at rest,
+  after scrolling the whole grid, after 200 game pages), then set it. The measurement needs the
+  fake profile and the probe in the repository, and a headless compositor, so that no window opens
+  on the desktop; after the CI's cache.
+- **A crash leaves no report** ([quality bar](ROADMAP.md#quality-bar)): to be built in the core and
+  the command line after the CI's cache; the interface's notice waits for slime-ui (Stage 5), as
+  Iced receives bug fixes only.
 - **CI runs on GitHub's Linux machines only**: Windows is checked by building from Linux, not by a
-  Windows runner. The core's tests under Wine are run by hand, not by `scripts/check.sh`; nor is
-  Clippy for Windows, which the `windows` shell lacks.
+  Windows runner. The core's tests under Wine are run by hand; the owner decided on 2026-11-05 that
+  `scripts/check.sh` runs them, done with the CI's cache so that it stays within budget. Clippy for
+  Windows is not run either, as the `windows` shell lacks it.
 - **Links are tested on Linux only**: the tests that make symbolic links are `#[cfg(unix)]`, as
   making one on Windows needs a right users lack. Windows' refusal of reparse points planted by a
   game has no test yet, nor a game folder a person moved and linked back with a junction
