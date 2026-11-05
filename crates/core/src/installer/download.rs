@@ -428,6 +428,9 @@ impl<S: ContentSource> Download<'_, S> {
         }
         .await;
         drop(out);
+        // Windows replaces no file still open: the old one, read for its chunks, is closed first.
+        drop(chunks);
+        drop(local);
         let reused = written.inspect_err(|_| drop(std::fs::remove_file(&tmp)))?;
         if file.is_executable() {
             let _ = crate::platform::set_mode(&tmp, 0o755);
