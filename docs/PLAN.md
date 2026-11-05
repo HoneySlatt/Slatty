@@ -115,6 +115,11 @@ milestone.
 - **Done when.** The stage's exit in
   [ROADMAP.md](ROADMAP.md#stage-3--windows-without-the-interface--03) holds.
 
+The stage closes with a stage audit, every dimension of the project's method, before 0.3 is
+released: mutation testing (`cargo mutants`) first on cloud sync, installs and uninstalls
+([ADR-0024](adr/0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md)). Audits are recorded in
+[audits/](audits/).
+
 ## Known debt
 
 - **Iced's and zbus's unmaintained crates** (`rustybuzz`, `ttf-parser`, `zbus_names`, `zvariant`,
@@ -169,6 +174,15 @@ milestone.
   no such call for a user, and files smaller than `installer::SYNCED_FROM` are not flushed one by
   one. A power cut during an install or update on Windows could leave a file published but not
   written. To be settled in M3.3.
+
+## Ideas
+
+Not planned work: each says what it is and what it would gain. The owner decides which become
+milestones.
+
+- **A Windows runner in CI** for the core's tests, beside Wine: Wine let through no false failure
+  but is not Windows (NTFS's file index, POSIX renames, junctions behave as Windows does only
+  there).
 
 Finished stages move to [`history.md`](history.md), in a few lines each, so that this file holds the
 current stage only, under about 2,000 words.
