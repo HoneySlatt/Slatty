@@ -256,6 +256,8 @@ the API to be declared stable; Windows' first release is Stage 3's, 0.6.
   glass over the desktop where the compositor allows it, the tray while work runs after the window
   is closed.
 - Slatty's themes in uwui's format, a person's `theme.toml` converted, the old file kept.
+- The new emblem in the window and the package's icons
+  ([ADR-0035](adr/0035-slattys-emblem.md)).
 - French, through uwui's translation; WCAG 2.2 at level AA on the desktop and in the couch mode.
 - Nothing that wakes at rest: the thread of zbus's pool that wakes every 500 ms found and stopped
   ([quality bar](#quality-bar), [known debt](PLAN.md#known-debt)).

@@ -48,3 +48,4 @@ repository, which can be a little after it was taken.
 | [0032](0032-gpl-kept-on-a-permissive-framework.md) | GPL-3.0-or-later kept, on a framework under MIT OR Apache-2.0 | Accepted |
 | [0033](0033-a-push-of-markdown-alone-checks-only-the-links.md) | A push of Markdown alone checks only the links | Accepted; amends 0026 (a fourth part, not every part in every run) |
 | [0034](0034-what-slatty-is-to-become.md) | What Slatty is to become | Accepted; amends 0009, 0013, 0018, 0019, 0021, 0022, 0023, 0024, 0025 and 0030 |
+| [0035](0035-slattys-emblem.md) | Slatty's emblem: its author keeps its rights; in the program at Stage 5 | Accepted |

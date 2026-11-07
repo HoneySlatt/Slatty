@@ -166,7 +166,8 @@ Slatty stands on the work of others:
 
 ## License
 
-Copyright © 2026 HoneySlatt, emblem included. GPL-3.0-or-later. See [LICENSE](LICENSE);
+Copyright © 2026 HoneySlatt. GPL-3.0-or-later, but for the emblem in [logo/](logo/README.md),
+whose author keeps its rights. See [LICENSE](LICENSE);
 [NOTICE](NOTICE) gives the licences of the works of
 others Slatty includes. The Nix package installs both, with the font's and the icons' licences,
 in `share/licenses/slatty`.
