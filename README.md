@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo/slatty.svg" alt="Slatty's logo: a gothic S in a cracked ring, a small flame at its foot" width="192">
+</p>
+
 # Slatty
 
 <img width="3840" height="2121" alt="Slatty's library" src="https://github.com/user-attachments/assets/92b1c9ba-2551-44b2-867a-f3192db4f72a" />
