@@ -1,7 +1,8 @@
 # Roadmap
 
-> Living document, set by the owner on 2026-11-04. It defines direction, ordering and exit criteria.
-> It is not a task list: the current plan lives in [PLAN.md](PLAN.md), and decisions live in
+> Living document, set by the owner on 2026-11-04; its direction set on 2026-11-07
+> ([ADR-0034](adr/0034-what-slatty-is-to-become.md)). It defines direction, ordering and exit
+> criteria. It is not a task list: the current plan lives in [PLAN.md](PLAN.md), and decisions live in
 > [adr/](adr/README.md). Stages will be merged, reduced, reordered or dropped as the project evolves;
 > each such change is recorded in an ADR.
 
@@ -9,21 +10,27 @@
 
 Slatty is a native launcher for the games a person owns on GOG, and beside them their Steam and Epic
 games, the games they added by hand and their emulated games, in one library. It installs, updates,
-runs, isolates and saves those games so that a person never has to think about Wine, Proton or
-where a save went, and never loses one.
+runs, isolates, mods and saves those games so that a person never has to think about Wine, Proton
+or where a save went, and never loses one. It is for the general public, made first for its owner
+([ADR-0034](adr/0034-what-slatty-is-to-become.md)).
 
 It handles people's accounts, saves and disks: **safety comes before features**. Excellent means a
 library of 10,000 games that scrolls at every frame of a fast display, that costs nothing while it
 waits, that keeps every save, that tells no company more than the person allowed, and that is as
 easy to use from a sofa with a gamepad, or on a Steam Deck, as at a desk.
 
-It runs on Linux today. Its interface moves to uwui (formerly slime-ui), the owner's interface
-framework, built in SlimeEngine. Slatty is the second of four programs ported onto it before its API
-is declared stable ([Stage 5](#stage-5--the-interface-on-uwui-windows-included--03)). Every piece
-of interface work waits for that move. Slatty pauses once a GOG game plays on Windows from the
-command line, until its turn comes; then its interface moves first, Windows and packages after
+It is first a showcase of uwui, the owner's interface framework: its couch mode, its motion and
+materials, its speed at 10,000 games. A person opens it beside Steam for four reasons: all their
+games in one place, the couch mode and the Steam Deck, saves that follow between the computer and
+the Deck, and Windows games isolated. No other launcher does the last three.
+
+It runs on Linux today. Its interface moves to uwui, built in SlimeEngine and in its own
+repository: Slatty is one of the programs of uwui's first stage, ported whole
+([Stage 5](#stage-5--the-interface-on-uwui-windows-included--03)). Every piece of interface work
+waits for that move. Slatty pauses until its turn comes; then its interface moves first, the Steam
+Deck and saves everywhere next, Windows after
 ([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md),
-[ADR-0030](adr/0030-ported-second-onto-uwui.md)).
+[ADR-0030](adr/0030-ported-second-onto-uwui.md), [ADR-0034](adr/0034-what-slatty-is-to-become.md)).
 
 ## 2. Principles
 
@@ -57,13 +64,12 @@ Hardware: aiming at the top never narrows who can run Slatty. On the lowest tier
 rate, answers at once and every feature works, at 10,000 games; only detail is lost (blur, shadows,
 rich animation). A tier, or a GPU maker, never measured is said so, never assumed. Tiers set by the
 owner on 2026-11-05 ([ADR-0024](adr/0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md)).
-The lowest is the same class of machine as uwui's lower desktop tier for applications (the same
-GPU, cores, memory and display); Slatty's adds a hard disk
-([ADR-0030](adr/0030-ported-second-onto-uwui.md)):
+The lowest is the owner's laptop, the same machine as uwui's and Opium's lowest desktop
+([ADR-0034](adr/0034-what-slatty-is-to-become.md)):
 
 | Tier | Reference machine | Display | Measured |
 |---|---|---|---|
-| Lowest | A 2016 laptop: Core i5-6200U (2 cores, 4 threads), Intel HD 520, 4 GB of memory, a 5,400 rpm hard disk; Linux and Windows 10. Chosen as the lowest GPU with Vulkan on both systems | 1920×1080 at 60 Hz, scale 1 | No |
+| Lowest | The owner's laptop: AMD Athlon Silver 3050U (2 cores, 2 threads), its Radeon Vega, 4 GB of memory in one channel, about 3.25 GB left to programs; Linux. The cold start's budget on a hard disk is measured once a hard disk is at hand; Windows on this tier is not measured | 1920×1080 at 60 Hz, scale 1 | No |
 | Middle | Steam Deck (Stage 6): Zen 2, 4 cores; RDNA 2; 16 GB; its own storage | 1280×800 at 60 Hz | No; its budgets are set at Stage 6, the lowest tier's apply until then |
 | High | Ryzen 7 5800X, Radeon RX 6900 XT, NVMe | 3840×2160 at 240 Hz, scale 1.5 | Yes, the budgets below |
 
@@ -99,8 +105,8 @@ system, message, stack trace; never a token or the sign-in address), which the p
 an issue; nothing leaves the machine. The command line prints its path; the interface tells it at
 the next start. Checked by a test that makes a crash and looks for secrets in its report.
 
-Budgets on the lowest tier, with the same library and build. None is measured yet: no such machine
-has run Slatty.
+Budgets on the lowest tier, with the same library and build. None is measured yet: the owner's
+laptop has not run Slatty.
 
 | Budget | Target |
 |---|---|
@@ -115,8 +121,11 @@ has run Slatty.
 
 Left for the interface on uwui (Stage 5), since Iced receives bug fixes only: input to visible
 response within one frame, animations at the display's rate judged at the 99th percentile,
-rendering checked against reference images at scales 1 and 2, screen readers, full keyboard use,
-reduced motion and contrast.
+rendering checked against reference images at scales 1 and 2, WCAG 2.2 at level AA on the desktop
+and in the couch mode (screen readers, full keyboard and gamepad use, reduced motion and
+transparency, contrast). Beside its own budgets, Slatty on uwui beats Steam, gThumb and Nautilus on
+each criterion of uwui's screen of reference "Slatty's library"
+([uwui's quality bar](https://github.com/HoneySlatt/uwui/blob/main/docs/ROADMAP.md#the-bar-of-each-screen)).
 
 ## 3. Decisions
 
@@ -124,14 +133,18 @@ reduced motion and contrast.
 
 | Topic | Decision |
 |---|---|
+| Direction | A showcase of uwui, for the general public; GOG, Steam, Epic, games added by hand and emulated; its own GOG engine, never depending on GOG Galaxy; native and optional pieces ([ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
 | Language | Rust for the whole application; Proton, umu and Comet stay external tools ([ADR-0001](adr/0001-rust-with-proton-umu-and-comet-outside.md)) |
 | Licence | GPL-3.0-or-later; uwui, a dependency, is MIT OR Apache-2.0 ([ADR-0002](adr/0002-gpl-3-0-or-later.md), [ADR-0032](adr/0032-gpl-kept-on-a-permissive-framework.md)) |
 | Storage | SQLite through rusqlite; migrations only appended ([ADR-0003](adr/0003-sqlite-through-rusqlite-behind-a-mutex.md)) |
 | Secrets and privacy | Tokens only in the system keyring; every third party off until turned on; no telemetry ([ADR-0004](adr/0004-tokens-only-in-the-system-keyring.md), [ADR-0005](adr/0005-every-third-party-off-until-turned-on.md)) |
 | Running Windows games on Linux | umu and Proton builds Slatty downloads; isolation through umu's container ([ADR-0009](adr/0009-isolation-through-umus-container.md), [ADR-0010](adr/0010-proton-builds-downloaded-by-slatty.md)) |
-| Other stores | Steam read from its files and played through its client; GOG never told of other stores' games ([ADR-0013](adr/0013-steam-read-from-its-files-played-through-its-client.md), [ADR-0014](adr/0014-gog-never-told-of-other-stores-games.md)) |
-| Interface | Iced, with bug fixes only, until uwui runs Slatty; every piece of interface work waits for uwui; the state free of any framework ([ADR-0015](adr/0015-iced-for-the-interface.md), [ADR-0019](adr/0019-the-interfaces-state-free-of-any-framework.md), [ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md), [ADR-0030](adr/0030-ported-second-onto-uwui.md)) |
+| Other stores | Steam read from its files and played through its client, Slatty's installed games written into its shortcuts while it is closed; GOG never told of other stores' games ([ADR-0013](adr/0013-steam-read-from-its-files-played-through-its-client.md), [ADR-0014](adr/0014-gog-never-told-of-other-stores-games.md), [ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
+| Interface | Iced, with bug fixes only, until uwui runs Slatty; every piece of interface work waits for uwui; two interfaces, the desktop's and the couch mode's, with uwui's gamepads and focus; the interface's state in uwui's signals over pure models free of any framework ([ADR-0015](adr/0015-iced-for-the-interface.md), [ADR-0018](adr/0018-a-couch-mode-of-its-own.md), [ADR-0019](adr/0019-the-interfaces-state-free-of-any-framework.md), [ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md), [ADR-0030](adr/0030-ported-second-onto-uwui.md), [ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
+| Themes | Slatty's themes in uwui's format; a person's `theme.toml` converted, the old file kept ([ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
+| Translations | Through uwui's (Fluent); French with the port ([ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
 | Platforms | Linux (Wayland and X11, x86-64); Windows 10 and 11 from one code base, built from Linux, its window coming with uwui ([ADR-0022](adr/0022-windows-hosts.md)); no macOS; unchanged by uwui's other targets ([ADR-0030](adr/0030-ported-second-onto-uwui.md)) |
+| Packages | An AppImage and the Nix package, with the whole isolation; Flathub only if Flatpak's sandbox gives the same guarantees ([ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
 
 ### Open
 
@@ -140,21 +153,36 @@ Each is decided by an ADR at the stage where it becomes necessary, not earlier.
 | Topic | Candidates | Decide at |
 |---|---|---|
 | Windows toolchain | MinGW (now), Microsoft's MSVC | Stage 3, if the MinGW build shows a problem MSVC has not |
-| Packages for other distributions | Flatpak, AppImage, distribution packages | Stage 4 |
-| Slatty on a Steam Deck | The Nix package, a Flatpak, an AppImage | Stage 6 |
-| The theme file people already have, on uwui | Kept as Slatty's format, migrated to uwui's themes | Stage 5 |
-| The couch mode's gamepads and focus | Slatty's own (gilrs, `slatty-app`'s `pad`), uwui's | Stage 5 |
-| Translations | Fluent, gettext, a format of Slatty's own | Stage 7 |
+| What GOG Galaxy on Linux changes in the order of stages | A short review once its beta opens | When its beta opens |
+| Where each part of `slatty-app` goes | Pure models, signals, the core | Stage 5's start |
+| Flathub | Only if Flatpak's sandbox gives Slatty's guarantees | Stage 6, by a prototype |
+| How the AppImage updates itself | uwui's crate for updates, Slatty's own, AppImage's tools | Stage 6 |
+| The couch mode's sounds | Made for Slatty, or found under a free licence | Stage 6 |
+| A session of Slatty's own on a living room's computer | gamescope at login | After Stage 6 |
+| The format of the person's storage for saves and play time, and its retention | Files never written over, a log per device | Stage 8 |
+| Ludusavi's manifest | Used as compiled from PCGamingWiki, and how it is stored | Stage 8 |
+| Epic's achievements | Read, if it can be done safely | Stage 8 |
+| How Windows updates Slatty | uwui's crate, Slatty's own | Stage 3, M3.7 |
+| Packages for other distributions | Distribution packages beside the AppImage and Nix | Stage 4 |
+| How the network cut keeps the game's link to Comet | — | Stage 9 |
+| How native Linux games are isolated | The Steam Linux Runtime's container, bubblewrap of Slatty's own | Stage 9 |
+| Mods laid over a game | An overlay inside umu's container; hard links or copies on Windows | Stage 10, by a prototype |
+| The pairing and trust between devices | Shared with Opium Connect | Stage 11 |
+| Another store | itch.io, Amazon | After Stage 10 |
+| Games made with SlimeEngine | Recognised and launched by Slatty | When SlimeEngine ships a game |
+| What 1.0 holds | — | Later |
 
 ## 4. Stages
 
 The stages are listed by number but run in this order: Stages 1 and 2; Stage 3 up to M3.3; a
-pause; Stage 5; the rest of Stage 3; Stages 4, 6 and 7
-([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)).
+pause; Stages 5, 6 and 8; the rest of Stage 3; Stages 4, 10, 9 and 11
+([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md),
+[ADR-0034](adr/0034-what-slatty-is-to-become.md)). Stage 7 is folded into Stage 5.
 
-The pause lasts until Slatty's turn in SlimeEngine's Stage 6d
-([ADR-0030](adr/0030-ported-second-onto-uwui.md)). Only M3.3's check on Windows and M5.0, Iced's
-figures measured again, run meanwhile
+The pause lasts until Slatty's turn in uwui's first stage
+([ADR-0030](adr/0030-ported-second-onto-uwui.md),
+[SlimeEngine's ADR-0206](https://github.com/HoneySlatt/SlimeEngine/blob/main/docs/adr/0206-slatty-ported-again-the-daw-later.md)).
+Only M3.3's check on Windows and M5.0, Iced's figures measured again, ran meanwhile
 ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)).
 
 ### Stage 1 — GOG on Linux → 0.1.0 (done, 2026-10-21)
@@ -174,31 +202,32 @@ games, and a couch mode for a gamepad.
 tried on a Steam Deck (Stage 6), nor emulated games played in each emulator
 ([PLAN.md](PLAN.md#known-debt)).
 
-### Stage 3 — Windows → 0.4
+### Stage 3 — Windows → 0.6
 
 **Goal.** Slatty on Windows 10 and 11: GOG's, Epic's and Steam's games and games added by hand,
 played directly, with the same safety as on Linux ([ADR-0022](adr/0022-windows-hosts.md)). Up to
-M3.3 from the command line; the rest after Stage 5, which brings the window, planned again then
-([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)).
+M3.3 from the command line; the rest after Stages 5, 6 and 8, planned again then
+([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md),
+[ADR-0034](adr/0034-what-slatty-is-to-become.md)).
 
 - Everything builds for Windows; the core's tests pass under Wine.
 - GOG games installed, played, followed and synced on Windows; Epic and Steam; games added by hand;
   achievements through Comet.
+- What Stage 8 brought that needs no Linux: the person's storage for saves, play time and
+  achievements.
 - A zip with the command line and the licences.
 
 **Exit.** A person installed, played and synced a GOG game, an Epic game and a Steam game on a real
 Windows 10 or 11, recorded in [compatibility.md](compatibility.md); Linux
 unchanged.
 
-### Stage 4 — Packages and smaller work, outside the interface → 0.5
+### Stage 4 — Smaller work, outside the interface → 0.7
 
-**Goal.** Slatty installable outside NixOS, and the core's smaller items waiting:
+**Goal.** The core's smaller items waiting, before mods bring archives from outside:
 
-- packages for other distributions;
+- packages for other distributions, beside the AppImage and Nix of Stage 6;
 - Steam's downloads followed more exactly while the client downloads;
 - Wine without Proton for the games Slatty installs (it exists for imported games);
-- nothing that wakes at rest: the keyring's connection open only while a secret is read or
-  written ([quality bar](#quality-bar));
 - the parsers of outside data (Steam's VDF and `appinfo.vdf`, GOG's manifests, Linux installers,
   archives) fuzzed with `cargo fuzz`, from a nightly toolchain in the development shell, decided
   in an ADR; with the same toolchain, Miri run on the tests of `unsafe` code it can run, those it
@@ -206,20 +235,30 @@ unchanged.
 - the budgets `library_at_10000_games` measures checked by `scripts/check.sh` in CI, with limits
   for CI's machines written in the quality bar.
 
-**Exit.** Slatty installed and run from a package on a distribution other than NixOS, recorded in
-[compatibility.md](compatibility.md).
+**Exit.** The parsers fuzzed and the budgets checked in CI, and Slatty installed and run from a
+distribution's own package, recorded in [compatibility.md](compatibility.md).
 
 ### Stage 5 — The interface on uwui, Windows included → 0.3
 
-**Goal.** Slatty's interface drawn by uwui, on Linux and on Windows, as the second of the four
-programs that SlimeEngine's Stage 6d ports before uwui's API is declared stable
-([ADR-0030](adr/0030-ported-second-onto-uwui.md)). Starts when that stage's plan opens Slatty's
-port, after the music player's port on the desktop. 0.3 is released for Linux once the exit
-holds, on a pinned revision of uwui, without waiting for the API to be declared stable;
-Windows' first release is Stage 3's, 0.4.
+**Goal.** Slatty's interface drawn by uwui, on Linux and on Windows, as one of the programs of
+uwui's first stage ([ADR-0030](adr/0030-ported-second-onto-uwui.md),
+[ADR-0034](adr/0034-what-slatty-is-to-become.md)). Starts when uwui's plan opens Slatty's port.
+0.3 is released for Linux once the exit holds, on a pinned revision of uwui, without waiting for
+the API to be declared stable; Windows' first release is Stage 3's, 0.6.
 
-- Every page and the couch mode on uwui, on its desktop host, over the same state; the interface's
-  tests ported. `slatty-core` and `slatty-app` never depend on uwui.
+- First, under Iced: the rules of `slatty-app`'s `update` moved into pure models, free of any
+  framework, with their tests; Iced's figures measured unchanged.
+- Then every page and the couch mode on uwui, on its desktop host, the interface's state in uwui's
+  signals over the pure models; the interface's tests ported. `slatty-core` and the pure models
+  never depend on uwui.
+- The couch mode on uwui's gamepads, focus and on-screen keyboard.
+- The showcase: the cover that flies from the grid to its game's page, Slatty's own title bar,
+  glass over the desktop where the compositor allows it, the tray while work runs after the window
+  is closed.
+- Slatty's themes in uwui's format, a person's `theme.toml` converted, the old file kept.
+- French, through uwui's translation; WCAG 2.2 at level AA on the desktop and in the couch mode.
+- Nothing that wakes at rest: the thread of zbus's pool that wakes every 500 ms found and stopped
+  ([quality bar](#quality-bar), [known debt](PLAN.md#known-debt)).
 - The interface on Windows: Linux-only settings hidden, the file chooser, gamepads, a window icon,
   paths shown the Windows way.
 - A checkpoint where the owner uses it day to day.
@@ -227,32 +266,96 @@ Windows' first release is Stage 3's, 0.4.
 
 **Exit.** Slatty on uwui at least as good as on Iced on the library shown, scrolling, rest under
 Wayland and Xwayland, and memory, both measured side by side by M5.0's command
-([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)), and within the
-[quality bar](#quality-bar); every page at parity; the window checked by a person on Windows; Iced
-gone from `Cargo.lock`.
+([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)); within the
+[quality bar](#quality-bar); better than Steam, gThumb and Nautilus on each criterion of uwui's
+screen of reference "Slatty's library"; every page at parity, in English and French; the window
+checked by a person on Windows; Iced gone from `Cargo.lock`.
 
-### Stage 6 — On a Steam Deck
+### Stage 6 — On a Steam Deck → 0.4
 
-**Goal.** The couch mode on uwui as the Steam Deck's Game Mode needs it, checked on a real Deck.
+**Goal.** The couch mode on uwui as the Steam Deck's Game Mode needs it, checked on a real Deck, and
+Slatty installable outside NixOS.
 
-- Slatty installed on SteamOS, started from Steam and by itself in Game Mode.
+- An AppImage, and the Nix package, both with the whole isolation; Flathub only if a prototype
+  shows that Flatpak's sandbox gives the same guarantees.
+- Slatty started from Steam and by itself in Game Mode.
+- Slatty's installed games written into Steam's library, once turned on, while Steam is closed,
+  its file copied first, only Slatty's entries changed.
+- A disk chosen for each game, games moved between disks, an absent SD card's games shown absent.
+- The couch mode's sounds; on a computer, the Guide button bringing Slatty to the front during a
+  game.
 - What the checks find fixed: scale, gamepad, full screen, suspending and resuming.
+- The Deck's budgets set and measured on the owner's Deck.
 
 **Exit.** A person browsed, installed, played and synced a game on a real Steam Deck in Game Mode,
-recorded in [compatibility.md](compatibility.md).
+from the AppImage, and found it in Steam's library, recorded in
+[compatibility.md](compatibility.md).
 
 ### Stage 7 — Translations
 
-**Goal.** The interface in the languages people ask for, beginning with French.
+Folded into Stage 5 ([ADR-0034](adr/0034-what-slatty-is-to-become.md)): French ships with the
+port, through uwui's translation, whose files are the way for others to add a language.
 
-**Exit.** The interface wholly translated into one language besides English, and a way for others
-to add one.
+### Stage 8 — Saves, play time and achievements everywhere → 0.5
+
+**Goal.** A game played on the computer goes on on the Deck, whatever its store.
+
+- Games without a store's cloud synced through the person's storage, a folder or a WebDAV server,
+  in a format decided by an ADR, with the rules of [cloud-saves.md](cloud-saves.md).
+- Save locations from Ludusavi's manifest, once turned on, or chosen by hand.
+- Each game's save history shown, an older version brought back in one gesture.
+- Play time per game, sessions and simple statistics, followed between devices.
+- GOG's, Steam's and, if it can be done safely, Epic's achievements on one page;
+  RetroAchievements for emulated games, once turned on.
+- A game's page with its store's screenshots and videos, and HowLongToBeat's times once turned on.
+- Emulated games checked emulator by emulator.
+
+**Exit.** A person played a GOG game, an added game and an emulated game on the computer, then went
+on on the Deck from the same save, recorded in [compatibility.md](compatibility.md); every new case
+of sync tested, interrupted, concurrent and offline.
+
+### Stage 9 — Playing further on Linux → 0.9
+
+**Goal.** More control over how a game runs, at no cost to safety.
+
+- A game's network cut by a switch, its link to Comet kept.
+- GOG's native Linux games isolated.
+- Per game: MangoHud, gamescope, GameMode and a few launch options, with defaults that work.
+- ProtonDB's rating, once turned on.
+- Updates of GOG's and Epic's games automatic by a setting, never during a game.
+- GOG's offline installers kept on demand in a folder of the person's, and installed from.
+
+**Exit.** Each checked against real games, recorded in [compatibility.md](compatibility.md); the
+isolation tests extended to Linux games and to the network cut.
+
+### Stage 10 — Mods → 0.8
+
+**Goal.** Mods installed, ordered and turned off without ever changing a game's installed files.
+
+- A prototype first: mods laid over a game folder and its prefix inside umu's container.
+- Mods from local archives; then Nexus Mods (through its site's `nxm://` links, as a registered
+  application) and Thunderstore, each once turned on.
+- On Windows, hard links or copies, with a copy of what they cover.
+- An update or a verification warns before touching a file a mod covers.
+
+**Exit.** A person modded a game from each source on Linux and on Windows, then updated the game and
+turned the mods off, its files verified unchanged, recorded in [compatibility.md](compatibility.md).
+
+### Stage 11 — Devices that exchange saves
+
+**Goal.** Saves and play time exchanged between the computer and the Deck directly, on the local
+network, without a storage between them.
+
+- The pairing and trust, shared with Opium Connect, decided by an ADR.
+
+**Exit.** Two devices paired, a save exchanged both ways, every case tested.
 
 ### Out of scope
 
-Store purchases, friends and chat, multiplayer services, an in-game overlay, mods, plugins. Slatty
-has no friends or chat feature; Comet, which it starts for achievements once turned on, still
-subscribes to those topics on GOG for the account ([SECURITY.md](../SECURITY.md#comet)).
+Store purchases, friends and chat, multiplayer services, an overlay drawn inside games, installing
+emulators, moving a save between two stores' versions of a game, plugins. Slatty has no friends or
+chat feature; Comet, which it starts for achievements once turned on, still subscribes to those
+topics on GOG for the account ([SECURITY.md](../SECURITY.md#comet)).
 
 ## 5. Release map
 
@@ -260,8 +363,11 @@ subscribes to those topics on GOG for the account ([SECURITY.md](../SECURITY.md#
 |---|---|---|
 | 0.1.0 | 1 | GOG on Linux (released 2026-10-21) |
 | 0.2.0 | 2 | Beyond GOG (released 2026-10-27) |
-| 0.3 | 5 | The interface on uwui, Windows' window included |
-| 0.4 | 3 | Windows |
-| 0.5 | 4 | Packages and smaller work |
-| 0.6 | 6 | On a Steam Deck |
-| 0.7 | 7 | Translations |
+| 0.3 | 5 | The interface on uwui, Windows' window included, in English and French |
+| 0.4 | 6 | On a Steam Deck, with the AppImage and Nix |
+| 0.5 | 8 | Saves, play time and achievements everywhere |
+| 0.6 | 3 | Windows |
+| 0.7 | 4 | Smaller work outside the interface |
+| 0.8 | 10 | Mods |
+| 0.9 | 9 | Playing further on Linux |
+| Later | 11 | Devices that exchange saves |

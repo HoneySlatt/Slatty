@@ -3,8 +3,9 @@
 - Status: Accepted; amends [0020](0020-gpui-set-aside-for-slime-ui.md) (the work outside the
   interface no longer goes on while slime-ui is built); amended by
   [0030](0030-ported-second-onto-uwui.md) (the pause lasts until Slatty's turn in Stage 6d; 0.3
-  released once Stage 5's exit holds) and
-  [0031](0031-iceds-figures-measured-again-during-the-pause.md) (one milestone during the pause)
+  released once Stage 5's exit holds), [0031](0031-iceds-figures-measured-again-during-the-pause.md)
+  (one milestone during the pause) and [0034](0034-what-slatty-is-to-become.md) (Slatty goes on; the
+  order after Stage 5)
 - Date: 2026-11-05
 
 ## Context

@@ -3,7 +3,9 @@
 - Status: Accepted; amends [0020](0020-gpui-set-aside-for-slime-ui.md) (Slatty is no longer the
   pilot: it is the second of four programs ported, onto the framework now named uwui) and
   [0025](0025-paused-after-m3-3-until-slime-ui.md) (the pause lasts until Slatty's turn in
-  SlimeEngine's Stage 6d; 0.3 is released once Stage 5's exit holds)
+  SlimeEngine's Stage 6d; 0.3 is released once Stage 5's exit holds); amended by
+  [0034](0034-what-slatty-is-to-become.md) (ported whole in uwui's first stage; Stage 5's open
+  decisions taken; the market's bar in its exit)
 - Date: 2026-11-05
 
 ## Context

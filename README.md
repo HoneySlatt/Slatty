@@ -13,8 +13,9 @@ by default.
 > **Status: early development.** The latest release, 0.2.0, runs on Linux. Slatty builds for
 > Windows 10 and 11, and installs and plays a GOG game there from the command line: tested under
 > Wine, not yet on Windows itself. Slatty is now paused until its turn to be ported onto its new
-> interface framework, uwui (formerly slime-ui), after Opium, a music player by the same author:
-> 0.3 brings that interface, 0.4 Windows ([plan](docs/PLAN.md)). Until 1.0, commands and on-disk
+> interface framework, uwui (formerly slime-ui), by the same author: 0.3 brings that interface,
+> 0.4 the Steam Deck, 0.5 saves on every device, 0.6 Windows
+> ([roadmap](docs/ROADMAP.md#5-release-map)). Until 1.0, commands and on-disk
 > formats may still change ([changelog](CHANGELOG.md)).
 >
 > **Not affiliated with GOG, Valve or Epic Games.** GOG and Epic publish no API for launchers:

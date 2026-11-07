@@ -1,6 +1,7 @@
 # 0023. A quality bar close to what is measured, its gaps closed in Stage 4
 
-- Status: Accepted
+- Status: Accepted; amended by [0034](0034-what-slatty-is-to-become.md) (the wake-ups at rest fixed
+  in Stage 5)
 - Date: 2026-11-05
 
 ## Context
@@ -56,7 +57,7 @@ Stage 5, not on Iced.
 
 - Tight budgets leave little room for noise: a figure just above its budget is measured again
   before it counts as missed.
-- Stage 4 gains three items ([ROADMAP.md](../ROADMAP.md#stage-4--packages-and-smaller-work-outside-the-interface--05)).
+- Stage 4 gains three items ([ROADMAP.md](../ROADMAP.md#stage-4--smaller-work-outside-the-interface--07)).
 - Start-up, scrolling, rest and memory stay measured by hand, with a probe not kept in the
   repository ([PLAN.md](../PLAN.md#known-debt)).
 - The worst frame while scrolling was only checked against 16.7 ms so far; whether none goes above

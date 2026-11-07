@@ -1,6 +1,7 @@
 # 0022. Windows hosts: one code base, built from Linux, Linux's features kept Linux's
 
-- Status: Accepted
+- Status: Accepted; amended by [0034](0034-what-slatty-is-to-become.md) (Windows gains what needs no
+  Linux)
 - Date: 2026-10-28
 
 ## Context

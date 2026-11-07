@@ -1,6 +1,7 @@
 # 0013. Steam's games read from its files and played through its client
 
-- Status: Accepted
+- Status: Accepted; amended by [0034](0034-what-slatty-is-to-become.md) (Slatty's own games written
+  into Steam's shortcuts, guarded)
 - Date: 2026-10-12
 
 ## Context

@@ -14,23 +14,29 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
   Windows 11 on 2026-11-05, one failure left to understand (a launch's sync downloaded every save
   just after a sync found them unchanged). What Slatty depends on Linux for, and
   the port's open questions, are in [windows-port.md](windows-port.md).
-- **The pause has begun** (2026-11-05,
-  [ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)): no milestone starts until Slatty's
-  turn in SlimeEngine's Stage 6d ([ADR-0030](adr/0030-ported-second-onto-uwui.md)). CI's weekly
-  run goes on. Only M3.3's check by hand on Windows, its fixes, and
-  [M5.0](#m50--iceds-figures-measured-again) may come meanwhile.
-- **[M5.0](#m50--iceds-figures-measured-again) is done** (2026-11-05): Iced's figures measured
-  again by `slatty-measure` ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)),
-  the reference uwui's port must match.
-- **At the resumption**: Stage 5. Read first the Known debt below and
-  [windows-port.md](windows-port.md#open-questions).
-- **Then Stage 5 — The interface on uwui** (formerly slime-ui;
-  [ADR-0030](adr/0030-ported-second-onto-uwui.md)), released as 0.3 once its exit holds: Iced
-  replaced wholly. What uwui lacks and serves its other clients is built in uwui. Until then Iced
-  receives bug fixes only, and `slatty-app` stays free of any framework.
-- **Then the rest of Stage 3** (M3.4 to M3.8), with the window, released as 0.4; then Stage 4.
-  M3.3's checks left open on Windows come first: the owner chose on 2026-11-06 to run them with
-  the window rather than during the pause, as no Windows build is published before M3.7.
+- **Slatty goes on** (2026-11-07). On 2026-11-06 SlimeEngine's ADR-0203 had dropped Slatty's
+  port, GOG having announced GOG Galaxy for Linux; the owner changed their mind the next day.
+  Slatty is ported whole in uwui's first stage, with Opium and Pluto's client
+  ([SlimeEngine's ADR-0206](https://github.com/HoneySlatt/SlimeEngine/blob/main/docs/adr/0206-slatty-ported-again-the-daw-later.md)).
+  No stop was ever recorded here.
+- **What Slatty is to become** was decided on 2026-11-07, in an interview that built nothing
+  ([ADR-0034](adr/0034-what-slatty-is-to-become.md)): a showcase of uwui, for the general public;
+  the couch mode and the Steam Deck, saves on every device, mods; a new order of stages
+  ([ROADMAP.md](ROADMAP.md#4-stages)). What it asks of uwui is in [uwui-needs.md](uwui-needs.md),
+  for ADR-0206's check of uwui's signals; the owner carries it there.
+- **The pause goes on** ([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)): no milestone
+  starts until uwui's plan opens Slatty's port ([ADR-0030](adr/0030-ported-second-onto-uwui.md)).
+  CI's weekly run goes on. M3.3's check by hand on Windows and
+  [M5.0](#m50--iceds-figures-measured-again), Iced's figures measured again, are done.
+- **At the resumption**: Stage 5, the interface on uwui, released as 0.3 once its exit holds. Its
+  first milestone, under Iced, moves the rules of `slatty-app`'s `update` into pure models with
+  their tests; then the views on uwui, in signals over them; French and accessibility at level AA
+  with them. Read first the Known debt below and the open decisions of
+  [ROADMAP.md](ROADMAP.md#open). Until then Iced receives bug fixes only. What uwui lacks and
+  serves its other clients is built in uwui.
+- **Then** Stage 6, the Steam Deck (0.4); Stage 8, saves everywhere (0.5); the rest of Stage 3,
+  Windows (0.6), M3.3's checks left open on Windows first (the owner chose on 2026-11-06 to run
+  them with the window); then Stages 4, 10, 9 and 11.
 
 ## Status
 
@@ -40,19 +46,20 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
 | [M3.2](#m32--everything-builds-for-windows) | Every crate builds for Windows, and the core's tests pass under Wine | Done |
 | [M3.3](#m33--play-a-gog-game) | A person plays a GOG game on Windows from the command line | Checked on Windows; one failure open |
 | [M5.0](#m50--iceds-figures-measured-again) | Iced's figures measured again by a command, the reference for uwui's port | Done |
-| [M3.4](#m34--epic-and-steam) | A person plays Epic's and Steam's games on Windows | After Stage 5 |
-| [M3.5](#m35--games-added-by-hand) | A person adds a game from no store on Windows | After Stage 5 |
-| [M3.6](#m36--achievements) | Achievements through Comet on Windows | After Stage 5 |
-| [M3.7](#m37--packaging) | A zip a person can download and run | After Stage 5 |
-| [M3.8](#m38--real-checks) | Checked by a person on Windows 10 and 11, and documented | After Stage 5 |
+| [M3.4](#m34--epic-and-steam) | A person plays Epic's and Steam's games on Windows | After Stages 5, 6 and 8 |
+| [M3.5](#m35--games-added-by-hand) | A person adds a game from no store on Windows | After Stages 5, 6 and 8 |
+| [M3.6](#m36--achievements) | Achievements through Comet on Windows | After Stages 5, 6 and 8 |
+| [M3.7](#m37--packaging) | A zip a person can download and run | After Stages 5, 6 and 8 |
+| [M3.8](#m38--real-checks) | Checked by a person on Windows 10 and 11, and documented | After Stages 5, 6 and 8 |
 
 ## Stage 3 — Windows
 
 Slatty on Windows 10 and 11 (x86-64), from the same code base, built and tested from Linux; Windows
 games played directly, without Proton; what only Linux has stays Linux's
 ([ADR-0022](adr/0022-windows-hosts.md)). Up to M3.3 from the command line; M3.4 to M3.8 come after
-Stage 5, which brings the window on uwui, and are planned again then
-([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md)). Linux behaves exactly as before at
+Stage 5, which brings the window on uwui, and Stages 6 and 8, and are planned again then, with what
+Stage 8 adds that needs no Linux ([ADR-0025](adr/0025-paused-after-m3-3-until-slime-ui.md),
+[ADR-0034](adr/0034-what-slatty-is-to-become.md)). Linux behaves exactly as before at
 every milestone.
 
 ### M3.1 — The Windows build environment
@@ -153,9 +160,9 @@ every milestone.
 - **Delivers.** The checks recorded in [compatibility.md](compatibility.md); the command line's and
   the user guide's Windows parts; SECURITY.md (where secrets and files live on Windows); the README.
 - **Done when.** The stage's exit in
-  [ROADMAP.md](ROADMAP.md#stage-3--windows--04) holds.
+  [ROADMAP.md](ROADMAP.md#stage-3--windows--06) holds.
 
-The stage closes with a stage audit, every dimension of the project's method, before 0.4 is
+The stage closes with a stage audit, every dimension of the project's method, before 0.6 is
 released: mutation testing (`cargo mutants`) first on cloud sync, installs and uninstalls
 ([ADR-0024](adr/0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md)). Audits are recorded in
 [audits/](audits/).
@@ -218,11 +225,13 @@ released: mutation testing (`cargo mutants`) first on cloud sync, installs and u
   games in each emulator; the rest is listed in [compatibility.md](compatibility.md).
 - **The lowest hardware tier and the Steam Deck are not measured**
   ([quality bar](ROADMAP.md#quality-bar)), nor Intel's and NVIDIA's GPUs: the budgets are measured
-  on the high tier alone.
+  on the high tier alone. The lowest tier is now the owner's laptop
+  ([ADR-0034](adr/0034-what-slatty-is-to-become.md)), which can be measured; Windows on it cannot.
 - **Wake-ups at rest**: one thread of zbus's pool (`blocking-1`) wakes every 500 ms (120 wake-ups
   a minute, against a budget of 0 in the [quality bar](ROADMAP.md#quality-bar)). It was thought
   kept by the keyring's connection, but it wakes so with no session bus at all (M5.0): what keeps
-  it is to be found. To be fixed in Stage 4.
+  it is to be found. To be fixed in Stage 5, whose exit is within the quality bar
+  ([ADR-0034](adr/0034-what-slatty-is-to-become.md)).
 - **Start-up misses its budget**
   ([M5.0](measurements.md#the-application-at-10000-games-by-slatty-measure-2026-11-05)): the first
   frame shows 370–630 ms after the library is in the state, of which about 230 ms is the

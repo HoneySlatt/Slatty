@@ -57,11 +57,19 @@ and how it is tested ([PLAN.md](PLAN.md)).
 **Offline installer.** GOG's installer of a whole game, a file to download and keep; Linux builds are
 read from them file by file ([ADR-0007](adr/0007-linux-builds-from-offline-installers.md)).
 
+**Optional piece.** A part of Slatty that a build can leave out whole, a Cargo feature built by
+default: each reaches a third party that may break or close; the rest is native, always built
+([ADR-0034](adr/0034-what-slatty-is-to-become.md)).
+
 **Overview.** Per game, what the library's filters and cards read beside the game itself: its
 achievement counts, whether it has cloud saves, its play time; cached per account
 (`core/src/overview.rs`).
 
 **Prefix.** The Wine folder a Windows game runs in, with its own `C:` drive, registry and saves.
+
+**Person's storage.** A folder or a WebDAV server the person chooses, through which the saves and
+play time of games without a store's cloud follow between devices (Stage 8,
+[ADR-0034](adr/0034-what-slatty-is-to-become.md)).
 
 **Probe.** Code built into the interface only for measuring it (the `probe` feature of
 `slatty-gui`): it logs when the library and its covers show, each frame and each view, and
@@ -72,11 +80,20 @@ scrolls or opens pages by itself, for `slatty-measure`
 into a folder of its own, followed through `<project>-latest`
 ([ADR-0010](adr/0010-proton-builds-downloaded-by-slatty.md)).
 
+**Pure models.** The layer beside `slatty-core` that holds the interface's rules (the library's
+lists, sorting, filters, the wording shown) as plain functions and data, free of any framework;
+the interface's state on uwui reads them (Stage 5,
+[ADR-0034](adr/0034-what-slatty-is-to-become.md)).
+
 **Quality bar.** The programs Slatty is weighed against, and its budgets
 ([ROADMAP.md](ROADMAP.md#quality-bar)).
 
 **Queue.** The downloads waiting their turn, in an order the person sets by dragging, kept across
 restarts.
+
+**Screen of reference.** One of the screens uwui measures itself on, never changed to suit a
+benchmark; Slatty's library at 10,000 games is one
+([uwui's quality bar](https://github.com/HoneySlatt/uwui/blob/main/docs/ROADMAP.md#screens-of-reference)).
 
 **Session.** A game's run, from its start until its last process ends, followed by a supervisor;
 its length is the play time reported
@@ -93,5 +110,6 @@ descendant is left ([ADR-0008](adr/0008-sessions-followed-by-a-subreaper-supervi
 ([ADR-0013](adr/0013-steam-read-from-its-files-played-through-its-client.md)).
 
 **uwui.** The owner's interface framework, called slime-ui in ADRs before 0030.
-[SlimeEngine](https://github.com/HoneySlatt/SlimeEngine) builds it; Slatty's interface moves to it at Stage 5
+[SlimeEngine](https://github.com/HoneySlatt/SlimeEngine) and [its own repository](https://github.com/HoneySlatt/uwui)
+build it; Slatty's interface moves to it at Stage 5
 ([ADR-0030](adr/0030-ported-second-onto-uwui.md)).

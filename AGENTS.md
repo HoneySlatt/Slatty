@@ -11,6 +11,7 @@ Rules for AI agents working on Slatty. Read this file fully at the start of ever
   (Comet) of GOG's games, through services GOG never documented: all reverse engineered.
 - The library also shows Steam's and Epic's games, games added by hand and emulated games.
 - It handles people's accounts, saves and disks: **safety comes before features**.
+- Its direction: [ADR-0034](docs/adr/0034-what-slatty-is-to-become.md).
 - 0.2.0 is released, on Linux; Slatty is paused until its port onto uwui ([PLAN](docs/PLAN.md)).
 
 Anyone must be able to understand it from the repository alone.
