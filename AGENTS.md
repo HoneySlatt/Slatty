@@ -5,16 +5,16 @@ Rules for AI agents working on Slatty. Read this file fully at the start of ever
 
 ## Project
 
-- A native Linux launcher for GOG games, in Rust (edition 2024, 1.90+), with an
-  [Iced](https://iced.rs) 0.14 interface, under GPL-3.0-or-later.
+- A native Linux launcher for GOG games: Rust (edition 2024, 1.90+), an
+  [Iced](https://iced.rs) 0.14 interface, GPL-3.0-or-later.
 - It installs, runs (umu and Proton, or natively), syncs the saves of and reports the achievements
-  (Comet) of GOG's games, through services GOG never documented: all reverse engineered.
+  (Comet) of GOG's games, through undocumented GOG services: all reverse engineered.
 - The library also shows Steam's and Epic's games, games added by hand and emulated games.
 - It handles people's accounts, saves and disks: **safety comes before features**.
 - Its direction: [ADR-0034](docs/adr/0034-what-slatty-is-to-become.md).
-- 0.2.0 is released, on Linux; Slatty is paused until its port onto uwui ([PLAN](docs/PLAN.md)).
+- 0.2.0 is released on Linux; Slatty is paused until its port onto uwui ([PLAN](docs/PLAN.md)).
 
-Anyone must be able to understand it from the repository alone.
+Anyone must understand it from the repository alone.
 
 ## Read before working
 
@@ -29,9 +29,9 @@ You remember nothing from earlier sessions: what is not in these files is lost.
 ## Scope
 
 - The current milestone, or what the owner asks. A request that changes the plan goes into the PLAN.
-- No later stage, no abstraction prepared for one. Nothing is built because the roadmap mentions it.
+- No later stage, no abstraction prepared for one, nothing built because the roadmap mentions it.
 - A task needs something out of scope: stop and say so.
-- Iced receives bug fixes only; every piece of interface work waits for Stage 5, the port onto
+- Iced receives bug fixes only; all interface work waits for Stage 5, the port onto
   uwui ([ADR-0030](docs/adr/0030-ported-second-onto-uwui.md)). No other interface framework.
 
 ## Commands
@@ -39,28 +39,28 @@ You remember nothing from earlier sessions: what is not in these files is lost.
 In the Nix development shell; [CONTRIBUTING.md](CONTRIBUTING.md) has the details.
 
 ```sh
-nix develop -c scripts/check.sh                     # the definition of done's checks; what CI runs
+nix develop -c scripts/check.sh                     # the checks CI runs
 nix develop -c cargo build --workspace              # last: people run target/debug/slatty-gui
 nix develop .#windows -c cargo check --workspace    # the Windows build, from Linux
 ```
 
 - Run the program on a throwaway profile, never on the owner's data
   ([testing.md](docs/testing.md#the-application-at-10000-games)).
-- [docs/testing.md](docs/testing.md) has where tests live, their fakes, the snapshots, the
-  benchmarks, and the tests that need real Proton, Comet or bubblewrap: run those of your area.
+- [docs/testing.md](docs/testing.md) has where tests live, their fakes, snapshots, benchmarks, and
+  the tests needing real Proton, Comet or bubblewrap: run those of your area.
 
 ## Definition of done
 
 - `scripts/check.sh` passes.
-- The program was run on a throwaway profile and behaved as expected.
+- The program ran on a throwaway profile and behaved as expected.
 - New behaviour is tested where practical; a bug fix starts with a failing test.
 - The budgets the milestone touches are measured and met; the figures go to
   [docs/measurements.md](docs/measurements.md).
 - [docs/PLAN.md](docs/PLAN.md) gives the new status.
-- Every document affected is updated and reread as a newcomer would.
+- Every affected document is updated and reread as a newcomer would.
 - Every decision a newcomer would question is an ADR.
 
-A check against GOG, Steam, Epic or Windows that was not run for real is said so.
+A check against GOG, Steam, Epic or Windows not run for real is said so.
 
 ## Things an agent must not do on its own
 
@@ -76,7 +76,7 @@ Ask the owner first, every time:
 - **Touch real user data.** Tests use `Dirs::under(<temporary folder>)` and `Db::in_memory()`,
   never `Dirs::from_system()`. Never edit or delete under `~/.local/share/slatty`,
   `~/.cache/slatty`, `~/.config/slatty`, a game folder or a Wine prefix.
-- **Publish.** No tag, release or registry upload, and no pull request or comment on anyone
+- **Publish.** No tag, release or registry upload, no pull request or comment on anyone
   else's repository.
 - **Add a dependency.** Prefer the standard library or a crate in `Cargo.lock`; justify a new one.
   Audit after adding or updating one ([CONTRIBUTING.md](CONTRIBUTING.md#dependencies)).
@@ -98,7 +98,7 @@ Ask the owner first, every time:
 The library stays fluid at **10,000 games**
 ([why and how](docs/ARCHITECTURE.md#staying-fluid-at-10000-games)):
 
-- library and Achievements changes are measured with `library_at_10000_games`, never with a small
+- library and Achievements changes are measured with `library_at_10000_games`, never a small
   library, against a 16 ms frame; scrolling in the real application;
 - a grid or long list builds only the rows in view; `view` does no per-game work
   (`Message::keeps_lists`);
@@ -113,7 +113,7 @@ The library stays fluid at **10,000 games**
   a log, an error message or a process argument.
 - Sensitive values are wrapped in `secret::Secret`.
 - `reqwest` errors become `Error::network(context, e)`, which strips the URL.
-- The account's token is sent only through `http::gog_only`, to an address a GOG answer names.
+- The account's token goes only through `http::gog_only`, to an address a GOG answer names.
 - A request to a new host, by Slatty or a program it starts, needs a switch in Settings, off until
   turned on, and an entry in [SECURITY.md](SECURITY.md#what-leaves-your-computer).
 - No telemetry, ever.
@@ -145,8 +145,7 @@ The library stays fluid at **10,000 games**
 ### Known pitfalls
 
 Read [ARCHITECTURE.md](docs/ARCHITECTURE.md#known-pitfalls) before touching launches, Comet, the
-environment or the tests that run Proton: NixOS has no `/bin/bash`, umu cannot see
-`/tmp/nix-shell.*`, umu's container shares more than it is told.
+environment or the tests that run Proton.
 
 ## Tests
 
@@ -159,7 +158,8 @@ environment or the tests that run Proton: NixOS has no `/bin/bash`, umu cannot s
 - Comments say what the code cannot: a reason, a limit, a source. No commented-out code.
 - Doc comments describe behaviour in plain sentences ("Whether…", "Starts what downloads next…").
 - Search for an existing helper first. One way to do a thing; two found: unify or report.
-- Edit Rust with an editor tool, never `sed` or `perl`. Dead code you find goes to the PLAN's debt.
+- Edit Rust with an editor tool, never `sed` or `perl`. Dead code you find goes to
+  [the debt](docs/debt.md).
 - Follow [ARCHITECTURE.md](docs/ARCHITECTURE.md#rules-every-part-follows) and the ADRs; where none
   covers a case, propose an ADR. Report drift from them; do not work around it.
 
@@ -177,7 +177,7 @@ environment or the tests that run Proton: NixOS has no `/bin/bash`, umu cannot s
 ## Commits
 
 - One change per commit, once `scripts/check.sh` passes, added by its paths, never `git add -A`.
-- Commit, push to `main` and open issues without asking once the checks pass; done means CI green.
+- Commit, push to `main` and open issues without asking; done means CI green.
 - The subject, imperative, says what changes for the user; the body says why, with figures for
   speed.
 
