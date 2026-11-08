@@ -15,7 +15,7 @@ and they have three weaknesses:
 - They were taken from 2026-10-10 to 2026-10-12, under niri. The owner's desktop now runs another
   compositor, Umbriel.
 - They came from a temporary probe that was never committed: no command takes them again
-  ([PLAN.md](../PLAN.md#known-debt)).
+  ([debt.md](../debt.md)).
 - Some rows predate covers drawn from copies made at their size, and video memory was never
   measured.
 

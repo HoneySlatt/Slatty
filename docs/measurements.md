@@ -85,7 +85,7 @@ What they say:
 - **The card's power at rest** holds: 35 W with Slatty, as without.
 - **Memory is over its budgets**: 154 MB resident with every cover in (budget 140, October 135),
   224 MB after 200 game pages (budget 200, October 191).
-- **Rest** holds but for the known wake-ups, 120 a minute ([PLAN](PLAN.md#known-debt)). Counted by
+- **Rest** holds but for the known wake-ups, 120 a minute ([debt.md](debt.md)). Counted by
   hand per thread (`/proc/<pid>/task/*/status`, 30 s at rest, in sway without a screen), they are
   all one thread, `blocking-1`, of the pool of zbus (the D-Bus library), every 500 ms. It wakes so
   even here, where no session bus exists and the keyring cannot connect.

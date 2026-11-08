@@ -8,7 +8,7 @@ decisions. The current stage is in [`PLAN.md`](PLAN.md); what changed for users 
 
 One library for every game a person owns: Steam's and Epic's games, games added by hand, emulated
 games, the list of games beside the library, and the couch mode for a gamepad. Not yet tried on a
-Steam Deck (Stage 6), nor emulated games in each emulator ([PLAN.md](PLAN.md#known-debt)).
+Steam Deck (Stage 6), nor emulated games in each emulator ([debt.md](debt.md)).
 Decisions: [ADR-0013](adr/0013-steam-read-from-its-files-played-through-its-client.md),
 [ADR-0014](adr/0014-gog-never-told-of-other-stores-games.md),
 [ADR-0018](adr/0018-a-couch-mode-of-its-own.md).

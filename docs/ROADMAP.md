@@ -200,7 +200,7 @@ games, and a couch mode for a gamepad.
 
 **Exit.** Met: the features of 0.2.0 in [CHANGELOG.md](../CHANGELOG.md). The couch mode is not yet
 tried on a Steam Deck (Stage 6), nor emulated games played in each emulator
-([PLAN.md](PLAN.md#known-debt)).
+([debt.md](debt.md)).
 
 ### Stage 3 — Windows → 0.6
 
@@ -260,7 +260,7 @@ the API to be declared stable; Windows' first release is Stage 3's, 0.6.
   ([ADR-0035](adr/0035-slattys-emblem.md)).
 - French, through uwui's translation; WCAG 2.2 at level AA on the desktop and in the couch mode.
 - Nothing that wakes at rest: the thread of zbus's pool that wakes every 500 ms found and stopped
-  ([quality bar](#quality-bar), [known debt](PLAN.md#known-debt)).
+  ([quality bar](#quality-bar), [known debt](debt.md)).
 - The interface on Windows: Linux-only settings hidden, the file chooser, gamepads, a window icon,
   paths shown the Windows way.
 - A checkpoint where the owner uses it day to day.

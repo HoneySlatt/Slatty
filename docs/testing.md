@@ -75,7 +75,7 @@ desktop running the tests. Tests of what only Linux
 has (Proton, umu, isolation, Wine prefixes, file modes, pipes, symbolic links to files planted by
 a game) are marked `#[cfg(unix)]`, and so are the command line's test files that run Linux
 programs; so, for now, are some tests of shared behaviour whose setup needs Linux
-([known debt](PLAN.md#known-debt)). Where only part of a test needs Linux, that part alone is
+([known debt](debt.md)). Where only part of a test needs Linux, that part alone is
 marked. A link to a folder is a junction on Windows (`platform::link_folder`), which any user can
 make. Wine is not Windows: a test passing there checks the code, not Windows' behaviour.
 

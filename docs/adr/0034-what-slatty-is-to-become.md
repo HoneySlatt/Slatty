@@ -34,7 +34,7 @@ uwui had chosen signals for applications' state that same day, from three other 
 ADR-0206 checks that choice against Slatty's list once it is written.
 
 The owner answered on 2026-11-07, theme by theme, in a design session that built nothing. The
-questions came from the ADRs' open points, the [known debt](../PLAN.md#known-debt), the inventory of
+questions came from the ADRs' open points, the [known debt](../debt.md), the inventory of
 what Slatty asks of a framework (2026-11-04), uwui's requirements (SlimeEngine's
 [ADR-0190](https://github.com/HoneySlatt/SlimeEngine/blob/main/docs/adr/0190-uwuis-requirements.md)),
 and a survey of the field. A fresh review then attacked the recommendations; what it found changed
@@ -72,7 +72,7 @@ Facts checked for the decisions below:
   site's `nxm://` links ([its policy](https://help.nexusmods.com/article/114-api-acceptable-use-policy)).
 - Ludusavi's manifest is MIT, compiled from PCGamingWiki, about 18 MB of YAML, updated several
   times a day ([its repository](https://github.com/mtkennerly/ludusavi-manifest)).
-- Making a symbolic link on Windows needs a right users lack ([PLAN](../PLAN.md#known-debt)).
+- Making a symbolic link on Windows needs a right users lack ([debt.md](../debt.md)).
 
 ## Decision
 

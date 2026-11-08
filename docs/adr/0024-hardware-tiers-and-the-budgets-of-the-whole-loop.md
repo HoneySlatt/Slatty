@@ -70,6 +70,6 @@ lose data (cloud sync, installs, uninstalls).
 
 ## Consequences
 
-- None of these budgets is met or measured yet; each gap is in the PLAN's known debt.
+- None of these budgets is met or measured yet; each gap is in the [known debt](../debt.md).
 - The figures of the lowest tier stay unmeasured until such a machine runs Slatty.
 - The CI's cache comes before the next milestone's work, since every change waits on CI.

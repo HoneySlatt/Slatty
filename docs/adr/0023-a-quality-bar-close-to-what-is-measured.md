@@ -28,7 +28,7 @@ every cover in. A change that costs speed or memory shows at once. The table is 
 [ROADMAP.md](../ROADMAP.md#quality-bar).
 
 **Zero wake-ups at rest, met in Stage 4.** The keyring's connection is opened only while a secret
-is read or written. Until then, the miss is known debt in [PLAN.md](../PLAN.md#known-debt).
+is read or written. Until then, the miss is known debt in [debt.md](../debt.md).
 
 **Fuzzing in Stage 4.** The parsers of outside data (Steam's VDF and `appinfo.vdf`, GOG's
 manifests, Linux installers, archives) are fuzzed with `cargo fuzz`. The nightly toolchain it needs
@@ -59,6 +59,6 @@ Stage 5, not on Iced.
   before it counts as missed.
 - Stage 4 gains three items ([ROADMAP.md](../ROADMAP.md#stage-4--smaller-work-outside-the-interface--07)).
 - Start-up, scrolling, rest and memory stay measured by hand, with a probe not kept in the
-  repository ([PLAN.md](../PLAN.md#known-debt)).
+  repository ([debt.md](../debt.md)).
 - The worst frame while scrolling was only checked against 16.7 ms so far; whether none goes above
   6.25 ms is measured at the next measurement of scrolling.

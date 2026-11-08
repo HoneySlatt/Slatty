@@ -54,7 +54,7 @@ alone stays in Slatty (SlimeEngine's ADR-0170).
 
 ## Consequences
 
-- The known debt stays as [PLAN.md](../PLAN.md#known-debt) records it during the pause, CI's
+- The known debt stays as [debt.md](../debt.md) records it during the pause, CI's
   30 minutes against a budget of 20 included.
 - No release of Slatty for Windows before Stage 3 ends, after Stage 5. The stage audit and the
   mutation testing that [ADR-0024](0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md) set
