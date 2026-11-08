@@ -69,7 +69,8 @@ Ask the owner first, every time:
 - **Act on their accounts.** `slatty install`, `installers --download` (gigabytes), `cloud sync`
   (writes saves on both sides), `achievements --unlock/--clear` (a public profile), `launch` (play
   time). Check with read-only commands: `cloud status`, `install --info`, `installers <id>`,
-  `update --check`, `library list`.
+  `update --check`, `library list`. Steam and real installations: see
+  [CONTRIBUTING.md](CONTRIBUTING.md#real-accounts-and-installations).
 - **Handle secrets.** Never ask for, print or copy a password, a token or the sign-in address.
   Never read the keyring. The person signs in, in their browser.
 - **Touch real user data.** Tests use `Dirs::under(<temporary folder>)` and `Db::in_memory()`,

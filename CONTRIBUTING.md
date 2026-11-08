@@ -130,6 +130,25 @@ decoders face downloaded files.
 - A new request to a host other than GOG's needs a switch in Settings, off until turned on, and a
   line in [SECURITY.md](SECURITY.md#what-leaves-your-computer). No telemetry.
 
+## Real accounts and installations
+
+Slatty reads the person's own Steam, Epic and GOG installations. Working on it, a person checks by
+hand; an agent or a test never acts through them, and reads only what it needs:
+
+- **Steam:** never write into Steam's folders, open a `steam://` address, start Steam or a game, or
+  contact Steam's servers or its Web API. Its files may be read, except those that hold secrets:
+  `config/config.vdf`, `local.vdf`, `registry.vdf` (CD keys), `ssfn*`, and the tokens in
+  `localconfig.vdf`, of which only play time and last played are kept.
+- **The interface and Proton** run on the
+  [fake profile](docs/testing.md#the-application-at-10000-games), never on a real one. Before
+  starting either, check with `pgrep` that no game runs, and leave the person's own `slatty-gui`
+  running: never stop it.
+- **Proton and umu** run on throwaway prefixes and homes. A test that may write into a Proton build
+  uses a copy of it (`cp -a --reflink=auto`).
+- **Output from a real installation** shows only numbers, key names and durations, taken out by a
+  fixed pattern (`grep -oE`): never the raw output, nor output masked afterwards. Raw output names
+  the account and its games.
+
 ## Reverse-engineered services
 
 When you rely on a GOG behaviour, cite where it comes from (a project, a document, a capture you
