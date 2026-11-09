@@ -69,7 +69,7 @@ same change:
 | What an item does, its contracts, its limits | The code's documentation |
 | A module or a flow | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | A decision (a framework, a platform, a format, a security choice, something tried and dropped) | A new ADR in [docs/adr/](docs/adr/README.md), from `0000-template.md`, and the index |
-| A milestone's status, an idea for later | [docs/PLAN.md](docs/PLAN.md); a finished stage moves to [docs/history.md](docs/history.md) |
+| A milestone's status, an idea for later | [docs/PLAN.md](docs/PLAN.md); a finished milestone or stage moves to [docs/history.md](docs/history.md) |
 | The known debt: a shortcut taken, a bar missed, something not checked for real | [docs/debt.md](docs/debt.md) |
 | A review or an audit: its scope, findings and what became of them | [docs/audits/](docs/audits/), one file per audit |
 | A stage reshaped, merged or dropped, a budget | [docs/ROADMAP.md](docs/ROADMAP.md), with an ADR |
