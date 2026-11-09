@@ -7,8 +7,9 @@
 #   windows  every crate checked for Windows in the `windows` shell, then the core's and the
 #            command line's tests under Wine (ADR-0022, ADR-0024).
 #   package  the Nix package.
-#   docs     the links between Markdown files (lychee, offline); a push to main that changes only
-#            Markdown files runs this part alone in CI (ADR-0033).
+#   docs     the links between Markdown files (lychee, offline); AGENTS.md within 1,500 words and
+#            docs/PLAN.md within 2,000. A push to main that changes only Markdown files runs this
+#            part alone in CI (ADR-0033).
 # Before any part, it checks that CI runs every part. With no argument it runs every part in turn:
 # what to run before a commit. `scripts/check.sh windows` runs one part. CI runs each part in a job
 # of its own, at the same time (.github/workflows/ci.yml, ADR-0026), inside the Nix development
@@ -67,6 +68,23 @@ package() {
 docs() {
   step "links between Markdown files"
   git ls-files -z '*.md' | xargs -0 lychee --offline --include-fragments --no-progress
+
+  # Every agent reads these two files at the start of every session, so their length is paid
+  # each time.
+  step "length of the files read at every session"
+  words_at_most AGENTS.md 1500
+  words_at_most docs/PLAN.md 2000
+}
+
+# Fails when a file holds more words than its limit.
+words_at_most() {
+  local words
+  words=$(wc -w < "$1")
+  if [[ $words -gt $2 ]]; then
+    echo "$1 has $words words, over its limit of $2: every agent reads it at each session" \
+      "(CONTRIBUTING.md, Before sending a change)." >&2
+    exit 1
+  fi
 }
 
 if [[ $# -eq 0 ]]; then

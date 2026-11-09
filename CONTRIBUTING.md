@@ -37,7 +37,9 @@ cargo build --workspace                   # last: tests and clippy do not rebuil
 ```
 
 `scripts/check.sh` says at its head what it runs, in four parts: Linux, Windows (built from Linux,
-the core's tests under Wine), the Nix package and the links between documents. CI
+the core's tests under Wine), the Nix package and the documents: their links, and the length of
+the two files every agent reads at each session, `AGENTS.md` (at most 1,500 words) and
+`docs/PLAN.md` (at most 2,000; what it outgrows goes to `docs/debt.md` and `docs/history.md`). CI
 (`.github/workflows/ci.yml`) runs it unchanged, each part in a job of its own, at the same time
 ([ADR-0026](docs/adr/0026-ci-runs-the-checks-in-three-parts-at-once.md)); a push that changes only
 Markdown files runs the links alone ([ADR-0033](docs/adr/0033-a-push-of-markdown-alone-checks-only-the-links.md)).

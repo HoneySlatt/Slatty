@@ -128,5 +128,5 @@ milestones.
   there).
 
 A finished milestone moves to [`history.md`](history.md), leaving its row in the status table; a
-finished stage moves there in a few lines. This file holds the current stage only, under about 2,000
-words.
+finished stage moves there in a few lines. This file holds the current stage only, within 2,000 words
+(`scripts/check.sh` refuses more).
