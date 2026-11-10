@@ -36,6 +36,12 @@ until 1.0, a minor version may change commands and on-disk formats.
 - A second Ctrl+C quits at once while files are downloaded or checked (install, update, verify,
   installers, Proton builds); it was ignored.
 
+### Security
+
+- The SQLite built into Slatty is 3.54.1 (through `rusqlite` 0.41.1), out of RUSTSEC-2026-0459:
+  before 3.54.0, a database file opened beside a `-wal` file of another page size, both crafted
+  by someone else, could make queries return leftover bytes of Slatty's memory.
+
 ## 0.2.0 (2026-10-27)
 
 ### Added

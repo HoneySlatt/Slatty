@@ -107,11 +107,14 @@ nix shell nixpkgs#cargo-audit -c cargo audit
 nix shell nixpkgs#cargo-deny -c cargo deny check
 ```
 
-Both download the advisory database. The last audit (2026-10-21) found no vulnerability, and
-`cargo deny check` passes. Four warnings come with Iced 0.14 and should go with an Iced update:
-`paste` (unmaintained; only in macOS's Metal backend, not built on Linux), `rustybuzz` and
-`ttf-parser` (unmaintained; text and font reading, ignored in `deny.toml` with the reason), and
-`lru` (unsound only when a key's `Drop` panics, which the glyph cache's keys never do). Three
+Both download the advisory database. The last audit (2026-11-10, after `rusqlite` 0.41.1 brought
+`libsqlite3-sys` 0.39.1 and SQLite 3.54.1 for RUSTSEC-2026-0459) found no vulnerability, and
+`cargo deny check` passes. Six warnings come with Iced 0.14 and should go with an Iced update:
+`paste` (unmaintained; only in macOS's Metal backend, not built on Linux), `pin-utils`
+(unmaintained; only in `wasmtimer`, for WebAssembly, never built), `clipboard-win` 5.4.1 (yanked;
+the clipboard on Windows), `rustybuzz` and `ttf-parser` (unmaintained; text and font reading,
+ignored in `deny.toml` with the reason), and `lru` (unsound only when a key's `Drop` panics,
+which the glyph cache's keys never do). Three
 come with zbus 5, used for the keyring and desktop notifications: `zbus_names`, `zvariant` and
 `zvariant_derive` (unmaintained since they were merged into zbus 6, which the `keyring` crate
 does not use yet; ignored in `deny.toml` with the reason). Image

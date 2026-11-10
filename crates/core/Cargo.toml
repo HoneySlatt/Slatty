@@ -17,7 +17,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 reqwest = { version = "0.13", default-features = false, features = ["json", "query", "gzip", "rustls", "charset", "http2"] }
 keyring = "4"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41.1", features = ["bundled"] }
 directories = "6"
 sha2 = "0.11.0"
 md-5 = "0.11.0"
