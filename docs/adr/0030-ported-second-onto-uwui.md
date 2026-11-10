@@ -5,7 +5,9 @@
   [0025](0025-paused-after-m3-3-until-slime-ui.md) (the pause lasts until Slatty's turn in
   SlimeEngine's Stage 6d; 0.3 is released once Stage 5's exit holds); amended by
   [0034](0034-what-slatty-is-to-become.md) (ported whole in uwui's first stage; Stage 5's open
-  decisions taken; the market's bar in its exit)
+  decisions taken; the market's bar in its exit) and
+  [0036](0036-slattys-bar-against-the-market.md) (build times measured during the pause; macOS an
+  open decision)
 - Date: 2026-11-05
 
 ## Context

@@ -12,7 +12,9 @@
   [0024](0024-hardware-tiers-and-the-budgets-of-the-whole-loop.md) (the lowest tier is the owner's
   laptop), [0025](0025-paused-after-m3-3-until-slime-ui.md) (Slatty goes on; the order after Stage
   5) and [0030](0030-ported-second-onto-uwui.md) (ported whole in uwui's first stage; Stage 5's open
-  decisions taken; the market's bar in its exit)
+  decisions taken; the market's bar in its exit); amended by
+  [0036](0036-slattys-bar-against-the-market.md) (the port's exit; features added; a new optional
+  piece; agents)
 - Date: 2026-11-07
 
 ## Context

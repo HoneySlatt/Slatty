@@ -1,7 +1,8 @@
 # 0018. A couch mode of its own
 
 - Status: Accepted; amended by [0034](0034-what-slatty-is-to-become.md) (gamepads, focus and the
-  on-screen keyboard from uwui; the Guide button; sounds)
+  on-screen keyboard from uwui; the Guide button; sounds) and
+  [0036](0036-slattys-bar-against-the-market.md) (a poster mode; controller mappings per game)
 - Date: 2026-10-12
 
 ## Context

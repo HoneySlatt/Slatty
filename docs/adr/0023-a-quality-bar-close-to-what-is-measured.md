@@ -1,7 +1,8 @@
 # 0023. A quality bar close to what is measured, its gaps closed in Stage 4
 
 - Status: Accepted; amended by [0034](0034-what-slatty-is-to-become.md) (the wake-ups at rest fixed
-  in Stage 5)
+  in Stage 5) and [0036](0036-slattys-bar-against-the-market.md) (rivals measured on the moments of
+  play, with a lead)
 - Date: 2026-11-05
 
 ## Context

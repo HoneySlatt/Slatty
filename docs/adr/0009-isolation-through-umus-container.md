@@ -1,7 +1,8 @@
 # 0009. Isolation through umu's container, the tools read-only through bubblewrap
 
 - Status: Accepted; amended by [0034](0034-what-slatty-is-to-become.md) (a game's network cut; Linux
-  games isolated too)
+  games isolated too) and [0036](0036-slattys-bar-against-the-market.md) (isolation measured apart;
+  no virtual input device inside the sandbox)
 - Date: 2026-10-10
 
 ## Context

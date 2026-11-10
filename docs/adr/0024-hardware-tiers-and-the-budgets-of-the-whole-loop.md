@@ -1,7 +1,8 @@
 # 0024. Hardware tiers from a 2016 laptop, and budgets for the whole working loop
 
 - Status: Accepted; extends 0023; amended by 0026 and [0034](0034-what-slatty-is-to-become.md) (the
-  lowest tier is the owner's laptop)
+  lowest tier is the owner's laptop) and [0036](0036-slattys-bar-against-the-market.md) (a launch
+  budget; the lowest tier measured before 0.3; the Deck at 90 Hz; battery; mutants weekly)
 - Date: 2026-11-05
 
 ## Context
