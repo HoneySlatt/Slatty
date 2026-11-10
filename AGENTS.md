@@ -92,6 +92,8 @@ Ask the owner first, every time:
 - The interface follows the module you change and [its conventions](docs/ARCHITECTURE.md#interface):
   nothing slow on its thread, views never name a colour, dialogs are layers over the page.
 - Interface text is short and plain.
+- On uwui, the interface holds no line for one platform: what differs lives in the core's
+  `platform` module ([ADR-0036](docs/adr/0036-slattys-bar-against-the-market.md)).
 
 ### Performance
 

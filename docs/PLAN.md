@@ -17,6 +17,11 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
   Slatty's port, whole, in uwui's first stage ([ADR-0030](adr/0030-ported-second-onto-uwui.md),
   [ADR-0034](adr/0034-what-slatty-is-to-become.md)); until then Iced receives bug fixes only. What
   Slatty asks of uwui is in [uwui-needs.md](uwui-needs.md).
+- **The bar, set against the market** on 2026-11-08
+  ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)): Steam and Heroic measured on the
+  moments of play, the lowest tier measured before 0.3, features placed in their stages
+  ([ROADMAP.md](ROADMAP.md#quality-bar)). Waiting for the owner's go: Slatty's present build times
+  measured as a floor, and the laptop's display, storage and driver read.
 - **At the resumption**: Stage 5, the interface on uwui, released as 0.3 once its exit holds. Its
   first milestone, under Iced, moves the rules of `slatty-app`'s `update` into pure models with
   their tests; then the views on uwui, in signals over them, with French and accessibility at
