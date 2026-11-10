@@ -13,6 +13,8 @@ removed when it is paid; the current stage's plan is in [PLAN.md](PLAN.md).
   ([quality bar](ROADMAP.md#quality-bar)), nor Intel's and NVIDIA's GPUs: the budgets are measured
   on the high tier alone. The lowest tier is now the owner's laptop
   ([ADR-0034](adr/0034-what-slatty-is-to-become.md)), which can be measured; Windows on it cannot.
+  Its display, storage and Vulkan driver are not yet read. Video memory is read from
+  `drm-memory-vram` alone, which misses what an integrated GPU borrows from main memory.
 - **Wake-ups at rest**: one thread of zbus's pool (`blocking-1`) wakes every 500 ms (120 wake-ups
   a minute, against a budget of 0 in the [quality bar](ROADMAP.md#quality-bar)). It was thought
   kept by the keyring's connection, but it wakes so with no session bus at all (M5.0): what keeps
@@ -42,7 +44,30 @@ removed when it is paid; the current stage's plan is in [PLAN.md](PLAN.md).
   are to be written.
 - **A crash leaves no report** ([quality bar](ROADMAP.md#quality-bar)): to be built in the core and
   the command line; the interface's notice waits for uwui (Stage 5), as Iced receives bug fixes
-  only.
+  only. Nor are hours of use counted.
+- **A core dump may hold session tokens** ([SECURITY.md](../SECURITY.md)): nothing in the code
+  keeps secrets out of one (no `MADV_DONTDUMP`, no `PR_SET_DUMPABLE`). To be fixed with the crash
+  reports ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+- **Saves are not proven against cuts**: no bench interrupts a sync at each step, and the tests
+  inject a full disk only into installs. GOG's and Epic's clouds take no conditional upload, so two
+  devices syncing at once can overwrite each other within a window not yet measured
+  ([cloud-saves.md](cloud-saves.md)). The bench comes before Stage 8
+  ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+- **Slatty is not quiet while a game runs**: Comet's unlocks are polled every second
+  (`play::UNLOCKS_EVERY`), the window and its covers keep their memory, and in the couch mode every
+  gamepad event is still read during play, though not sent (`pad::set_away`). For Stage 5, which makes Slatty step back during play
+  ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+- **Isolation copies its runtime at each launch** ([SECURITY.md](../SECURITY.md)): about a second
+  on btrfs, about 750 MB written on ext4, the Steam Deck's file system, not measured. To be copied
+  once per version at Stage 6 ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+- **`/dev/uinput` is not masked in the sandbox**: where a person can open it, an isolated game
+  could make a keyboard and type into the desktop. To be masked
+  ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+- **Slatty's build times are not measured**: the floor for uwui's budgets of compiling waits for
+  the owner's go ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+- **The rivals are not measured**: Steam's and Heroic's launches, installs and cost during play,
+  against which the lead of three times becomes figures
+  ([quality bar](ROADMAP.md#quality-bar)).
 - **CI runs on GitHub's Linux machines only**: Windows is checked by building from Linux and by
   the core's and the command line's tests under Wine, in `scripts/check.sh`'s `windows` part, not
   by a Windows runner.
