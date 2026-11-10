@@ -45,7 +45,9 @@ the two files every agent reads at each session, `AGENTS.md` (at most 1,500 word
 Markdown files runs the links alone ([ADR-0033](docs/adr/0033-a-push-of-markdown-alone-checks-only-the-links.md)).
 It runs on every push to `main` and every pull request, and every Monday at 06:41 UTC even without
 a push, so that new advisories against the dependencies and changes to the CI's environment show
-while the project is at rest; a push cancels the run in progress. GitHub turns the weekly run off after
+while the project is at rest; a push cancels the run in progress. `gh workflow run ci.yml` (or the
+Actions tab) starts a run by hand that checks everything, as the weekly one does, for instance to
+confirm at once that a fix clears an advisory. GitHub turns the weekly run off after
 60 days without activity on a public repository: a click in the Actions tab turns it back on.
 Build last: the person testing your change runs `target/debug/slatty-gui`.
 

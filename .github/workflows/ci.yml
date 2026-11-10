@@ -21,6 +21,9 @@ on:
   # on a public repository; a click in the Actions tab turns it back on.
   schedule:
     - cron: "41 6 * * 1"
+  # By hand (`gh workflow run ci.yml`, or the Actions tab), checking everything as the weekly run
+  # does: to see at once that a fix clears an advisory, rather than wait for Monday.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -28,7 +31,8 @@ permissions:
 jobs:
   # Whether the code is checked. Only for a push, against the last run on main that passed: a run
   # cancelled by the next push, or one that failed, then counts nothing as checked. A pull request,
-  # the weekly run, and a push with no such run to compare with check everything.
+  # the weekly run, a run started by hand, and a push with no such run to compare with check
+  # everything.
   scope:
     runs-on: ubuntu-24.04
     permissions:
