@@ -32,8 +32,13 @@ uwui yet.
 - **In uwui's requirements**: whether SlimeEngine's
   [ADR-0190](https://github.com/HoneySlatt/SlimeEngine/blob/main/docs/adr/0190-uwuis-requirements.md),
   its ADR-0205 and [uwui's roadmap](https://github.com/HoneySlatt/uwui/blob/main/docs/ROADMAP.md)
-  hold the need, as read on 2026-11-07. *Yes*: they hold it. *Precision*: they hold it in general
-  terms, and this list says exactly what is needed. *New*: they do not hold it.
+  hold the need, as read on 2026-11-07; the rows that SlimeEngine's
+  [ADR-0213](https://github.com/HoneySlatt/SlimeEngine/blob/main/docs/adr/0213-uwuis-reach-its-lead-its-themes-and-agents.md),
+  [ADR-0215](https://github.com/HoneySlatt/SlimeEngine/blob/main/docs/adr/0215-the-engine-measured-against-the-market.md)
+  and [ADR-0218](https://github.com/HoneySlatt/SlimeEngine/blob/main/docs/adr/0218-one-core-for-agents-in-uwui.md)
+  touch, and those Slatty's [ADR-0036](adr/0036-slattys-bar-against-the-market.md) adds, as read on
+  2026-11-10. *Yes*: they hold it. *Precision*: they hold it in general terms, and this list says
+  exactly what is needed. *New*: they do not hold it.
 
 ## How Slatty's state changes its interface
 
@@ -107,7 +112,8 @@ left open.
 | The focus kept per page and given back when the person returns | Back from a game's page to the same cover | Indispensable: Stage 5 | Precision |
 | A held direction repeated, faster as it is held | Moving through 10,000 covers with a stick | Indispensable: Stage 5 | Precision |
 | An event when the focus moves or an element is activated, that the application can hook | The couch mode's sounds, which uwui does not make | Indispensable: Stage 6 | New |
-| Chosen gamepad buttons heard while the window is not in front, and the window brought to the front at that moment | The Guide button during a game; on Wayland, bringing a window forward needs the compositor's token (`xdg-activation`), which a window behind does not have | Indispensable: Stage 6 | New |
+| Chosen gamepad buttons heard while the window is not in front, and the window brought to the front at that moment | The Guide button during a game; on Wayland, bringing a window forward needs the compositor's token (`xdg-activation`), which a window behind does not have; only that button read, not every event of the game's pad | Indispensable: Stage 6 | New |
+| Controller mappings given to SDL, read and written per game, without a virtual input device | Controller mappings per game, inside the game's sandbox ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)) | Wished: Stage 6 | New |
 | A keyboard on screen driven by a gamepad, read by screen readers | Searching in the couch mode, on a television and on the Deck | Indispensable: Stage 5 | Yes |
 | Text fields: masked ones, submitted by Enter, the input method's text | 13 fields, two masked (API keys) | Indispensable: Stage 5 | Yes |
 | A click of the right button with its place; menus at that place | A cover's menu | Indispensable: Stage 5 | Yes |
@@ -162,6 +168,8 @@ left open.
 | A window shown with its first frame within the budget, the state read on a thread started before the window, nothing slow before the first frame | The library shown within 95 ms warm, the compositor's answer included | Indispensable: Stage 5 | Precision: Slatty's budget is stricter than uwui's 100 ms |
 | No frame, processor time or wake-up at rest, under Wayland and Xwayland | 0 in 60 s at rest | Indispensable: Stage 5 | Yes |
 | uwui's own threads few, and its decoding of images at the lowest priority | Games run beside Slatty on two cores on the lowest tier | Indispensable: Stage 5 | Precision: Magnolia asks for few threads |
+| The window's GPU memory and caches freed on demand while the program lives on, down to a blank window's, then shown again within 100 ms, its first screen's images kept decoded in memory | Slatty stepping back while a game runs ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)) | Indispensable: Stage 5 | New |
+| Crashes reported on the machine (a panic, an abort, a signal, the GPU lost) and hours of use counted, nothing sent; secrets kept out of core dumps | Slatty's crash reports and its 99.9 % of hours without a crash | Indispensable: Stage 5 | Yes: the host's local crash reports (SlimeEngine's M6d.7) and uwui's hours without a crash; precision: core dumps |
 
 ### Tests, measures and platforms
 
@@ -169,8 +177,13 @@ left open.
 |---|---|---|---|
 | Tests without a window: elements found by text or path, clicks, typing, gamepad input and focus moves simulated, time simulated, no task run | The interface's tests, ported from `iced_test` | Indispensable: Stage 5 | Precision: gamepad input in tests |
 | Images of reference for each theme, for the desktop and the couch density, at scales 1 and 2 | Rendering checked in CI | Indispensable: Stage 5 | Yes |
-| Agents driving the running program | End-to-end checks | Wished: Stage 5 | Yes: uwui's MCP server |
-| Linux under Wayland and Xwayland, Windows 10 and 11 | Slatty's platforms | Indispensable: Stage 5 | Yes |
+| Agents driving the running program, named and consented to, built into test builds only | Tester agents at each stage's end, on the fake profile and fake servers | Indispensable: Stage 5 | Yes: one core for agents and its MCP server (SlimeEngine's M6d.9a); precision: test builds only |
+| Actions declared once for a person's own agents, offered on a local socket only that person can open | Read-only actions on local data first: the library, the saves' state, play time | Wished: Stage 5 | Yes: actions declared once (SlimeEngine's M6d.9b); precision: the socket |
+| Missed refreshes counted from the compositor's presentation feedback | No refresh missed on everything that moves | Indispensable: Stage 5 | Precision |
+| A blank window measured beside each screen, and input to photon timed by a light sensor | The lead of three times; input to photon equal to the blank window's | Indispensable: Stage 5 | Yes: SlimeEngine's M6d.7 and Stage 6e |
+| Video memory read with what an integrated GPU borrows from main memory (GTT) | The lowest tier's and the Deck's budgets | Indispensable: Stage 5 | New |
+| HDR images | Key art on the Deck OLED and HDR displays | Wished: when uwui offers it | Yes: after uwui's first stage |
+| Linux under Wayland and Xwayland, Windows 10 and 11, with no line of the application written for one | Slatty's platforms; the interface holds no code per platform ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)) | Indispensable: Stage 5 | Yes: uwui's budget of porting |
 | The lowest tier smooth at 60 Hz with effects reduced: an Athlon Silver 3050U, its Radeon Vega, 4 GB | ADR-0034's lowest tier, uwui's too | Indispensable: Stage 5 | Yes |
 | Drawing without a GPU driver that works, chosen at start or after a failed start | Iced fell back to its CPU renderer; Slatty's "Vulkan only" setting | Wished: Stage 5 | Precision: the CPU renderer, optional |
 | Run from an AppImage, its own libraries within, on SteamOS and other distributions | Slatty's package for the Deck and other distributions ([ADR-0034](adr/0034-what-slatty-is-to-become.md)) | Indispensable: Stage 6 | Precision: ADR-0190's packages name AppImage |
@@ -201,8 +214,13 @@ uwui already measures Slatty's library as one of its screens of reference
 key art fading in. Its floor is Slatty on Iced, measured on 2026-11-06; its bar, the best of Steam,
 gThumb and Nautilus on each criterion
 ([uwui's measurements](https://github.com/HoneySlatt/uwui/blob/main/docs/measurements.md#slattys-library-with-iced-2026-11-06)).
-Slatty's port must beat both (ADR-0034). The couch mode has no screen of reference: what its
-gamepad, focus and density cost is measured by Slatty's own budgets, a move shown in the next frame.
+Slatty's port must beat both (ADR-0034); beating each line is the least. uwui also asks a lead: its
+*own cost*, what a program adds above a *blank window* that only clears and presents, at most a third
+of the best rival's, and the blank window's figure at rest and from input to present. Slatty measures
+it, and a figure missed is debt that does not hold 0.3 back
+([ADR-0036](adr/0036-slattys-bar-against-the-market.md)). The couch mode has no screen of reference:
+what its gamepad, focus and density cost is measured by Slatty's own budgets, a move shown in the
+next frame, and its input to photon against Steam's Game Mode.
 
 ## What Stage 5 needs first
 
@@ -218,7 +236,9 @@ if it is general. Those that matter most to the order of uwui's work:
   next frame;
 - the title bar drawn by the application, the tray, glass over the desktop;
 - the element that flies between screens;
-- accessibility of a virtual grid, translation, tests without a window with a gamepad.
+- accessibility of a virtual grid, translation, tests without a window with a gamepad;
+- the window's GPU memory freed while a game runs and shown again within 100 ms, missed refreshes
+  counted from the compositor, video memory read with what an integrated GPU borrows.
 
 Several of these are in uwui's plan for after its first stage: translation, accessibility at level
 AA, the tray. Slatty's port asks for them sooner, as Opium's first release does.
