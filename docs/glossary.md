@@ -3,6 +3,18 @@
 The terms this project defines, in alphabetical order. Each says what it means here, and links to
 where it is decided or built.
 
+**Bare tool.** What does a launcher's work with nothing around it: the same game started by
+`umu-run` on the same Proton, or one plain download. A launcher's *own cost* is measured above it
+([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+
+**Blank window.** A program that only clears its window and presents it, measured beside a screen
+of reference; an interface's *own cost* is measured above it. uwui's, decided in SlimeEngine's
+[ADR-0213](https://github.com/HoneySlatt/SlimeEngine/blob/main/docs/adr/0213-uwuis-reach-its-lead-its-themes-and-agents.md).
+
+**Blind test.** Captures of Slatty and of other interfaces judged without knowing which is which,
+by people who never saw Slatty, against a threshold written before the test
+([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+
 **Build id.** Which build of a game is installed: GOG's build id for a Windows build from the content
 system, `linux:<version>` for a Linux build from an offline installer
 ([ADR-0007](adr/0007-linux-builds-from-offline-installers.md)).
@@ -20,6 +32,10 @@ the interface shows it ([ADR-0016](adr/0016-images-shown-from-files-at-the-size-
 
 **Couch mode.** The interface's pages for a gamepad and a television or a Steam Deck, full screen,
 with a focus of their own ([ADR-0018](adr/0018-a-couch-mode-of-its-own.md)).
+
+**Declared action.** Something Slatty lets a person's own agent call, declared once with its
+parameters and permission through uwui; read-only actions on local data come first
+([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
 
 **Fake profile.** A data, cache and configuration folder of made-up games and a made-up account,
 used to run and measure the program without touching a person's own data
@@ -54,6 +70,10 @@ that it sees nothing of the person's files and cannot change what other games ru
 **Milestone.** A small, verifiable step of a stage, with its goal, what it delivers, when it is done
 and how it is tested ([PLAN.md](PLAN.md)).
 
+**Moments of play.** What a player waits through around a game: Play to the game's first frame,
+installs and updates, downloads, Slatty's cost while the game runs. Slatty is measured against
+Steam and Heroic on them ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+
 **Offline installer.** GOG's installer of a whole game, a file to download and keep; Linux builds are
 read from them file by file ([ADR-0007](adr/0007-linux-builds-from-offline-installers.md)).
 
@@ -65,11 +85,17 @@ default: each reaches a third party that may break or close; the rest is native,
 achievement counts, whether it has cloud saves, its play time; cached per account
 (`core/src/overview.rs`).
 
+**Own cost.** What a program adds above the *bare tool* or the *blank window* doing the same: the
+measure on which Slatty's lead over its rivals is set ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+
 **Prefix.** The Wine folder a Windows game runs in, with its own `C:` drive, registry and saves.
 
 **Person's storage.** A folder or a WebDAV server the person chooses, through which the saves and
 play time of games without a store's cloud follow between devices (Stage 8,
 [ADR-0034](adr/0034-what-slatty-is-to-become.md)).
+
+**Poster mode.** The couch mode showing one still picture of the game in focus when nothing is
+touched; it never changes by itself, so that nothing wakes at rest ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
 
 **Probe.** Code built into the interface only for measuring it (the `probe` feature of
 `slatty-gui`): it logs when the library and its covers show, each frame and each view, and
@@ -105,6 +131,9 @@ its length is the play time reported
 
 **Supervisor.** The copy of Slatty's own binary that starts a game and follows its session until no
 descendant is left ([ADR-0008](adr/0008-sessions-followed-by-a-subreaper-supervisor.md)).
+
+**Test of signature.** A check that judges shown applications on uwui among others cannot tell, by
+their look, which share uwui ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
 
 **Twin.** A Steam game that is also a GOG game the person owns; the library shows them as one
 ([ADR-0013](adr/0013-steam-read-from-its-files-played-through-its-client.md)).
