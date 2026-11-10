@@ -9,6 +9,34 @@ the machine, the build, the command, and the figures with their spread. How each
 Every figure here was taken with the Iced interface. Those before 2026-11-05 predate the method's
 budgets.
 
+## SQLite 3.53.2 against 3.54.1, by `slatty-measure headless` (2026-11-10)
+
+Whether `rusqlite` 0.41.1, which brought SQLite 3.54.1 for RUSTSEC-2026-0459, changes the start,
+the memory or the rest. Command: `slatty-measure headless`, 10 runs a series, on one fake profile
+([testing.md](testing.md#the-application-at-10000-games)). Machine and compositor as on
+2026-11-05, below. Builds: release of d218ff8 (SQLite 3.54.1), then of bc48f40 (3.53.2) and
+d218ff8 again, back to back. Each figure is the median of its series, and its range.
+
+| | d218ff8, first | bc48f40 | d218ff8, second |
+|---|---|---|---|
+| Start, warm: library in the state / shown / every cover shown (ms) | 97 (89–197) / 731 (653–1124) / 932 (827–1461) | 90 (79–265) / 840 (631–2234) / 1004 (762–3409) | 70 (65–75) / 554 (535–576) / 698 (679–728) |
+| Start, cold: the same (ms) | 155 (149–492) / 762 (652–2853) / 1038 (789–3402) | 167 (165–460) / 764 (740–2210) / 912 (866–3180) | 154 (150–175) / 660 (625–679) / 799 (758–816) |
+| Memory, every cover shown: resident / video (MB) | 154 (153–154) / 303 (303–311) | 154 (154–155) / 309 (301–309) | 153 (153–153) / 301 (301–301) |
+| Memory after scrolling the whole grid: resident / video (MB) | 155 (155–155) / 443 (435–451) | 155 (154–155) / 443 (426–452) | 155 (154–156) / 443 (411–443) |
+| Memory after 200 game pages with key art: resident / video (MB) | 224 (218–257) / 387 (386–394) | 223 (220–256) / 386 (379–386) | 223 (218–224) / 387 (386–395) |
+| At rest 60 s, Wayland: frames / CPU ticks / wake-ups | 0 (0–0) / 0 (0–1) / 120 (120–121) | 0 (0–0) / 0 (0–1) / 120 (120–121) | 0 (0–0) / 0 (0–0) / 120 (120–123) |
+| At rest 60 s, Xwayland: the same | 0 (0–0) / 0 (0–1) / 121 (120–123) | 0 (0–0) / 0 (0–0) / 120 (120–121) | 0 (0–0) / 0 (0–1) / 120 (120–121) |
+
+What they say:
+
+- **The update changes nothing measurable.** Memory and rest are the same in every series. The
+  quiet series of d218ff8 starts as fast as 2026-11-05's, which ran on SQLite 3.53.2.
+- **Two series of three were disturbed, the old build's among them.** Their ranges reach two to
+  four times their medians, warm and cold alike; the third series' stay within 10%. Why is not
+  known: what else ran on the machine meanwhile was not recorded. A difference between two builds
+  is read only between quiet series.
+- The budgets missed on 2026-11-05 (shown, memory) are missed as before.
+
 ## Flushing every installed file on Windows (2026-11-05)
 
 Command: `syncing_every_small_file` ([testing.md](testing.md#benchmarks)), 2,000 files of 16 KiB
