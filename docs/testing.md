@@ -235,6 +235,24 @@ keeps its lines until the step ends, so that writing them does not weigh on the 
 The format names no framework: an interface on another one that writes the same log is measured by
 the same command ([ADR-0031](adr/0031-iceds-figures-measured-again-during-the-pause.md)).
 
+## Build times
+
+How long a person waits for a build, the floor that uwui's budgets of compiling are compared with
+([ADR-0036](adr/0036-slattys-bar-against-the-market.md)):
+
+```sh
+# About an hour on the high tier, the machine otherwise at rest.
+nix develop -c scripts/compile-times.sh [--runs <count>] [--cold-runs <count>]
+```
+
+It times, in debug, the workspace from nothing, then a real change in the interface, in its state
+and in the core, and a public function added to the core, each followed by
+`cargo build -p slatty-gui`; then the release build from nothing. It builds a copy of the tracked
+files, never the repository's `target`. Agents' sessions build and test on the same machine, so
+the script runs in a systemd scope of its own and throws away a run during which the rest of the
+machine used over 1.5 cores; its head says how. `systemctl --user stop slatty-compile-times.scope`
+stops it, with everything it started.
+
 ## Tests that need real tools
 
 These are ignored by default and run on purpose. Each names its test binary: a name filter could
