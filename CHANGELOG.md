@@ -51,6 +51,8 @@ until 1.0, a minor version may change commands and on-disk formats.
 
 ### Security
 
+- The clipboard library used on Windows is `clipboard-win` 5.4.3, through Iced: 5.4.1, built
+  before, was withdrawn from crates.io by its author.
 - On Linux, a crash of Slatty no longer leaves a core dump, which could hold your session tokens:
   Slatty turns core dumps off as it starts, for itself and the programs it starts (games, umu,
   Proton, Comet). systemd-coredump honours this.
