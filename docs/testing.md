@@ -299,6 +299,9 @@ gilrs's events cannot be made outside it: the tests feed the reading loop a fake
   `cat /proc/<pid>/task/*/comm | grep -cx gilrs`, with the pid of that `slatty-gui`, prints 1.
 - **No move lost or replayed**: press buttons with the couch mode closed, then enter it: the
   focus does not move until a button is pressed, and moves at the first one.
+- **Repeats on time**: hold the left stick down on a long shelf for 3 s, a thumb resting on the
+  right stick: the focus moves about 25 times (once, then every 110 ms from 400 ms), at a steady
+  pace. The same with the d-pad.
 
 ## Checks against GOG
 

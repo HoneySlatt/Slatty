@@ -38,6 +38,9 @@ until 1.0, a minor version may change commands and on-disk formats.
 - Entering and leaving the couch mode no longer leaves a thread behind each time, woken whenever
   an input device is plugged in or out; gamepads are read by one thread for the whole run, which
   waits without waking while the couch mode is off.
+- In the couch mode, a direction held on a gamepad repeats at its steady pace even while a stick
+  shakes slightly or a thumb rests on the other stick; such small movements delayed the repeats,
+  or stopped them while the direction was still held.
 - On Windows, a game added by hand is refused your profile folder as its folder, as it is your
   home folder on Linux; it was accepted once games were installed elsewhere.
 - On Windows, `slatty import --from-heroic` looks for Heroic's records in `AppData\Roaming\heroic`,

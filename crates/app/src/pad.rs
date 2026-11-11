@@ -190,9 +190,36 @@ trait Source {
     fn now(&self) -> Instant;
 }
 
+/// The gilrs the couch mode reads, without its default filters: after each event they drop
+/// (`Jitter`'s, an axis that moved by less than 0.01), gilrs waits again for the whole wait
+/// (gilrs 0.11.2, `Gilrs::next_event_blocking`), so a stick held or a thumb resting on the other
+/// one held the repeats back. `Source::next` applies the other two, as gilrs does; the
+/// `Repeater`'s thresholds absorb what `Jitter` dropped.
+fn open_gilrs() -> Option<gilrs::Gilrs> {
+    gilrs::GilrsBuilder::new()
+        .with_default_filters(false)
+        .set_update_state(false)
+        .build()
+        .ok()
+}
+
 impl Source for gilrs::Gilrs {
+    /// Waits for one event only: one the filters drop ends the wait, so the repeat due comes on
+    /// time.
     fn next(&mut self, wait: Duration) -> Option<Timed> {
-        let event = self.next_event_blocking(Some(wait))?;
+        use gilrs::Filter;
+        use gilrs::ev::filter::{axis_dpad_to_button, deadzone};
+        // The d-pad of gamepads that send it as a hat axis, as buttons; the sticks' dead zone.
+        let event = self
+            .next_event_blocking(Some(wait))
+            .filter_ev(&axis_dpad_to_button, self)
+            .filter_ev(&deadzone, self)?;
+        if event.is_dropped() {
+            return None;
+        }
+        // As gilrs does after its own filters: the state they read is that of what they let
+        // through.
+        self.update(&event);
         Some((pad_input(event.event)?, event.time))
     }
 
@@ -217,7 +244,7 @@ type Reader = std::sync::OnceLock<std::sync::mpsc::Sender<Listener>>;
 /// the next entry without waking.
 pub fn moves() -> impl Stream<Item = Nav> {
     static READER: Reader = std::sync::OnceLock::new();
-    listen(&READER, || gilrs::Gilrs::new().ok())
+    listen(&READER, open_gilrs)
 }
 
 /// The moves `reader` reads from the source `open` gives, starting it at the first call.
@@ -344,6 +371,9 @@ mod tests {
     #[derive(Clone, Copy)]
     enum Step {
         Input(PadInput),
+        /// An event that is no input of the couch mode, or one dropped: the other stick resting
+        /// under a thumb, an axis that barely moved.
+        Noise,
         /// The couch mode left.
         Leave,
     }
@@ -369,6 +399,7 @@ mod tests {
                 self.clock = self.clock.max(at);
                 match step {
                     Step::Input(input) => return Some((input, wall(at))),
+                    Step::Noise => return None,
                     Step::Leave => self.listening.close(),
                 }
             }
@@ -443,6 +474,44 @@ mod tests {
         pad.listening = rx;
         assert_eq!(serve(&mut pad, &again, pending), None);
         assert_eq!(received(&mut pad.listening), [Nav::Confirm]);
+    }
+
+    /// Holding a direction for 3 s, among events of no use every 30 ms: one move, then one every
+    /// 110 ms from 400 ms, 25 in all. The noise must not hold the repeats back, as gilrs's own
+    /// filters did by waiting again after each event they dropped.
+    #[test]
+    fn a_held_direction_repeats_on_time_through_noise() {
+        let noise = (0..100).map(|i| (10 + 30 * i, Step::Noise));
+        for (press, jitter, release) in [
+            (
+                PadInput::Pressed(Nav::Down),
+                None,
+                PadInput::Released(Nav::Down),
+            ),
+            // An 8-bit stick held: it shakes by a step, about 0.0078, each time.
+            (
+                PadInput::StickX(0.9),
+                Some([PadInput::StickX(0.9078), PadInput::StickX(0.8922)]),
+                PadInput::StickX(0.0),
+            ),
+        ] {
+            let mut steps: Vec<(u64, Step)> = noise
+                .clone()
+                .enumerate()
+                .map(|(i, (at, step))| match jitter {
+                    Some(shakes) => (at, Step::Input(shakes[i % 2])),
+                    None => (at, step),
+                })
+                .collect();
+            steps.insert(0, (0, Step::Input(press)));
+            steps.push((3000, Step::Input(release)));
+            let (couch, rx) = listener(0);
+            let mut pad = fake(&steps, rx);
+            serve(&mut pad, &couch, None);
+            let moves = received(&mut pad.listening);
+            assert_eq!(moves.len(), 25, "{press:?}: {moves:?}");
+            assert!(moves.iter().all(|nav| *nav == moves[0]));
+        }
     }
 
     /// A gamepad fed by the test, in real time.

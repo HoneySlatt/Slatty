@@ -814,8 +814,9 @@ are drawn in place of the desktop's while `App::couch` holds its state.
 - `pad::moves` reads every gamepad through gilrs on a thread of its own, made at the first entry
   into the couch mode and kept for the whole run: on Linux each gilrs made leaves a thread behind.
   While the couch mode is off, it waits for the next entry without waking, and what a gamepad
-  did meanwhile is not replayed (`Listener::since`). It turns presses and the left stick into
-  `Nav`; `Repeater` repeats a held direction
+  did meanwhile is not replayed (`Listener::since`). gilrs's default filters are off: the one
+  that drops small axis changes made it wait again after each, holding the repeats back
+  (`pad::open_gilrs`). It turns presses and the left stick into `Nav`; `Repeater` repeats a held direction
   (after 400 ms, every 110 ms), the stick moving once per lean. Gamepads are read whatever window
   is in front, so their moves are not sent while the window is behind another one or a game runs
   (`pad::set_away`, after each message): they would wake the launcher for nothing.
