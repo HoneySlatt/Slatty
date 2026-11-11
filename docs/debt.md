@@ -45,9 +45,11 @@ removed when it is paid; the current stage's plan is in [PLAN.md](PLAN.md).
 - **A crash leaves no report** ([quality bar](ROADMAP.md#quality-bar)): to be built in the core and
   the command line; the interface's notice waits for uwui (Stage 5), as Iced receives bug fixes
   only. Nor are hours of use counted.
-- **A core dump may hold session tokens** ([SECURITY.md](../SECURITY.md)): nothing in the code
-  keeps secrets out of one (no `MADV_DONTDUMP`, no `PR_SET_DUMPABLE`). To be fixed with the crash
-  reports ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+- **On Windows, a crash dump may hold session tokens** ([SECURITY.md](../SECURITY.md)): where
+  Windows Error Reporting's local dumps are turned on, or in the small dump it may send to
+  Microsoft. Linux's are off ([ADR-0037](adr/0037-core-dumps-kept-off.md)); a crash handler
+  other than systemd-coredump is not checked to honour that. With the interface on Windows or the
+  crash reports.
 - **Saves are not proven against cuts**: no bench interrupts a sync at each step, and the tests
   inject a full disk only into installs. GOG's and Epic's clouds take no conditional upload, so two
   devices syncing at once can overwrite each other within a window not yet measured

@@ -49,6 +49,10 @@ impl App {
 }
 
 fn main() -> iced::Result {
+    // First, for the session supervisor too: a crash must not write the tokens to the disk.
+    if let Err(e) = slatty_core::platform::no_core_dumps() {
+        eprintln!("slatty: core dumps could not be turned off: {e}");
+    }
     if std::env::args_os()
         .nth(1)
         .is_some_and(|a| a == slatty_core::session::SUPERVISE_ARG)

@@ -378,6 +378,33 @@ pub fn home() -> Option<std::path::PathBuf> {
     }
 }
 
+/// Keeps this process, and the programs it starts, from leaving a core dump when they crash: it
+/// would hold the session tokens, copied in many buffers beyond `secret::Secret` (ADR-0037). On
+/// Linux the core size limit is set to 0, the hard limit left as it is, which systemd-coredump
+/// honours; nothing on Windows yet.
+/// Fails only if the system refuses to read or lower the limit.
+pub fn no_core_dumps() -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use nix::libc::{RLIMIT_CORE, getrlimit, rlimit, setrlimit};
+        let mut limit = rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        // SAFETY: `getrlimit` writes the limits into `limit`, valid for the whole call.
+        if unsafe { getrlimit(RLIMIT_CORE, &mut limit) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        limit.rlim_cur = 0;
+        // SAFETY: `setrlimit` only reads `limit`, valid for the whole call; lowering a soft limit
+        // below its hard one needs no privilege.
+        if unsafe { setrlimit(RLIMIT_CORE, &limit) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
 /// The bytes available to the user on the filesystem holding `path`.
 pub fn free_space(path: &Path) -> io::Result<u64> {
     #[cfg(unix)]
@@ -579,6 +606,26 @@ mod windows {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The core size limit goes to 0 and the hard one stays, so nothing else is taken away.
+    #[cfg(unix)]
+    #[test]
+    fn core_dumps_are_turned_off_and_the_hard_limit_kept() {
+        use nix::libc::{RLIMIT_CORE, getrlimit, rlimit};
+        let read = || {
+            let mut limit = rlimit {
+                rlim_cur: 0,
+                rlim_max: 0,
+            };
+            // SAFETY: `getrlimit` writes the limits into `limit`, valid for the whole call.
+            assert_eq!(unsafe { getrlimit(RLIMIT_CORE, &mut limit) }, 0);
+            limit
+        };
+        let hard = read().rlim_max;
+        no_core_dumps().unwrap();
+        let after = read();
+        assert_eq!((after.rlim_cur, after.rlim_max), (0, hard));
+    }
 
     /// The clock of play time moves with the time awake, at the timer's resolution.
     #[test]

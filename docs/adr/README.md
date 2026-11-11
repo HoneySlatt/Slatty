@@ -50,3 +50,4 @@ repository, which can be a little after it was taken.
 | [0034](0034-what-slatty-is-to-become.md) | What Slatty is to become | Accepted; amends 0009, 0013, 0018, 0019, 0021, 0022, 0023, 0024, 0025 and 0030; amended by 0036 |
 | [0035](0035-slattys-emblem.md) | Slatty's emblem: its author keeps its rights; in the program at Stage 5 | Accepted |
 | [0036](0036-slattys-bar-against-the-market.md) | Slatty's bar set against the market: rivals on the moments of play, a lead by family, features added | Accepted; amends 0009, 0018, 0023, 0024, 0030 and 0034 |
+| [0037](0037-core-dumps-kept-off.md) | Core dumps kept off for Slatty and the programs it starts, on Linux | Accepted |
