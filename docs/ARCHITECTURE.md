@@ -493,8 +493,9 @@ at each launch; on other systems through the interpreter its first line names.
 
 A launch starts the running binary again (through `/proc/self/exe`, which still works after the
 file was replaced by an update or a rebuild) with a hidden argument. That copy becomes the session's
-supervisor: it marks itself `PR_SET_CHILD_SUBREAPER`, starts the game in its own process group and
-reports events as JSON lines. Processes that detach (launchers that exit early, Wine services) are
+supervisor: it marks itself `PR_SET_CHILD_SUBREAPER`, starts the game in a session of its own
+(`setsid`: its own process group, which a stop signals, and no controlling terminal, so it cannot
+type into the one Slatty was started in) and reports events as JSON lines. Processes that detach (launchers that exit early, Wine services) are
 re-parented to it, so the session ends only when no descendant is left. umu's `waitforexitandrun`
 already waits for Windows processes; the supervisor is the safety net for everything else.
 

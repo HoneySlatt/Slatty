@@ -245,7 +245,8 @@ isolated game.
   `linux32` folders, read-only, for the client library those builds load, and nothing else of
   Steam.
 - **Processes.** It sees and signals only its own processes: your other programs are not visible to
-  it, nor can it signal them.
+  it, nor can it signal them. Like every game Slatty starts, it has no terminal: started from one,
+  Slatty keeps it from typing commands there.
 - **Your environment cannot open it further.** The variables umu and its container turn into shared
   folders (`PRESSURE_VESSEL_SHARE_HOME`, the `STEAM_COMPAT_*` paths, `PROTON_LOG_DIR`, `WINEPREFIX`
   for a Linux game) are set by Slatty for every isolated launch.

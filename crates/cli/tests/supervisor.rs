@@ -74,6 +74,26 @@ async fn session_follows_double_forked_new_session_process() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+/// The game leads a session of its own, so it has no controlling terminal: it cannot type into
+/// the terminal Slatty was started in (TIOCSTI), which only a terminal's own session may.
+#[tokio::test]
+async fn the_game_runs_in_a_session_of_its_own_without_a_terminal() {
+    let dir = scratch("session");
+    // /proc/<pid>/stat: pid, (comm), state, parent, group, session, terminal.
+    let spec = sh(
+        "set -- $(cat /proc/$$/stat); echo \"$1 $6 $7\" > \"$MARK\"",
+        &dir,
+    );
+    run_session(&spec, &dir).await;
+    let seen = std::fs::read_to_string(dir.join("mark")).unwrap();
+    let [pid, session, terminal] = seen.split_whitespace().collect::<Vec<_>>()[..] else {
+        panic!("unexpected probe output: {seen}");
+    };
+    assert_eq!(session, pid, "the game leads its own session");
+    assert_eq!(terminal, "0", "the game has no controlling terminal");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
 #[tokio::test]
 async fn missing_program_is_reported() {
     let dir = scratch("missing");

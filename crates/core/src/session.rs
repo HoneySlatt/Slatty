@@ -165,15 +165,26 @@ fn supervise(
     // SAFETY: the handler does nothing.
     unsafe { signal::sigaction(Signal::SIGCHLD, &woken) }.expect("installing a signal handler");
 
-    let child = std::process::Command::new(&spec.program)
+    let mut command = std::process::Command::new(&spec.program);
+    command
         .args(&spec.args)
         .current_dir(&spec.cwd)
         .envs(spec.env.iter().map(|(k, v)| (k, v)))
         .stdin(Stdio::null())
         .stdout(stdout)
-        .stderr(stderr)
-        .process_group(0)
-        .spawn();
+        .stderr(stderr);
+    // A session of its own, whose process group is numbered by the game's pid as `killpg` below
+    // expects: without a controlling terminal, the game cannot type into the one Slatty was
+    // started in (TIOCSTI).
+    // SAFETY: setsid is async-signal-safe and touches no memory of the parent.
+    unsafe {
+        command.pre_exec(|| {
+            nix::unistd::setsid()
+                .map(drop)
+                .map_err(std::io::Error::from)
+        });
+    }
+    let child = command.spawn();
     let main_pid = match child {
         Ok(c) => Pid::from_raw(c.id() as i32),
         Err(e) => {
