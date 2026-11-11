@@ -61,7 +61,8 @@ pub fn read_game_file(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
     Ok(Some(bytes))
 }
 
-/// Flushes `file`, written at `path`, to the disk.
+/// Flushes `file`, written at `path`, to the disk: the one way to flush a file a download or an
+/// unpack wrote. `path` serves the tests alone, which read what was flushed in `FLUSHED`.
 pub(crate) fn sync_file(file: &std::fs::File, path: &Path) -> std::io::Result<()> {
     file.sync_all()?;
     #[cfg(test)]

@@ -521,7 +521,7 @@ fn write_files(
                 )));
             }
             if crate::installer::synced_on_write(job.size) {
-                out.sync_all()
+                crate::fsutil::sync_file(&out, &tmp)
                     .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
             }
             Ok(())

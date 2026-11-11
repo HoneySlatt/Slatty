@@ -429,11 +429,13 @@ impl<S: ContentSource> Download<'_, S> {
                 on_bytes(data.len() as u64);
             }
             if synced_on_write(file.size()) {
-                let out = out.try_clone();
-                tokio::task::spawn_blocking(move || out.and_then(|out| out.sync_all()))
-                    .await
-                    .expect("sync task panicked")
-                    .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
+                let (out, path) = (out.try_clone(), tmp.clone());
+                tokio::task::spawn_blocking(move || {
+                    out.and_then(|out| fsutil::sync_file(&out, &path))
+                })
+                .await
+                .expect("sync task panicked")
+                .map_err(|e| Error::io(format!("write {}", tmp.display()), e))?;
             }
             Ok::<_, Error>(reused)
         }
