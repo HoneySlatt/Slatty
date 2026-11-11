@@ -554,8 +554,12 @@ it at most once a day, outside the sandbox.
 (`/dev/uinput`, `/dev/uhid`, `/dev/userio`) the system has over itself with `--ro-bind`, which
 bubblewrap mounts without device access: the node stays, but opening it fails, also in the `/dev`
 pressure-vessel binds from this one. A game that opened one could make a keyboard and type into the
-desktop ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)). Gamepads (`/dev/input/*`,
-`/dev/hidraw*`) are left as they are.
+desktop ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)). The `/dev/hidraw*` nodes of
+FIDO security keys are masked the same way (`runner::security_keys`), told by the FIDO usage page
+in their report descriptors under `/sys/class/hidraw`; only those plugged in at the launch, as the
+game's `/dev` follows the system's. Gamepads (`/dev/input/*`, other `/dev/hidraw*`) are left as
+they are: some controllers' configuration interfaces use a vendor's page, as keyboards' do, so no
+wider rule tells them apart.
 
 **Before each isolated launch**, `runner::sandbox` tries bubblewrap (`doctor::sandbox_problem`, a
 few milliseconds): a sandbox, then one inside it. On Ubuntu 23.10 and later, without an AppArmor

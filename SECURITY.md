@@ -265,6 +265,8 @@ isolated game.
   program makes a keyboard, a mouse or a controller the desktop takes as real, cannot be opened,
   even where your account may open them, as it often may for Steam Input. The gamepads it reads
   are not changed.
+- **No security keys.** The FIDO security keys (YubiKey and the like) plugged in as it starts
+  cannot be opened. A key plugged in while it runs can be, where your account may open it.
 
 What isolation leaves open:
 
@@ -274,6 +276,10 @@ What isolation leaves open:
   is Xwayland's clients only. PipeWire's manager socket gives access to every stream, the
   microphone among them. Comet's port and the Unix sockets other programs open in the abstract
   namespace are reachable.
+- **Writing to the input devices it may open.** Gamepads are shared writable, as their rumble and
+  lights need: a game can send a gamepad events as if they were pressed, and talk to any device of
+  `/dev/hidraw*` your account may open (some keyboards' settings, for one). Keyboards and mice are
+  out of its reach unless your account may open them (the `input` group).
 - **Your environment.** Apart from the variables above, the game inherits your environment: a token
   you keep in an environment variable is visible to it. The modules in `LD_PRELOAD` (MangoHud,
   GameMode) and your Vulkan layers are brought into the container, read-only, as pressure-vessel

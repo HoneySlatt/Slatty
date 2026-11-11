@@ -44,6 +44,8 @@ until 1.0, a minor version may change commands and on-disk formats.
 - An isolated game can no longer make a keyboard of its own and type into the desktop:
   `/dev/uinput`, `/dev/uhid` and `/dev/userio` cannot be opened in its sandbox, even where your
   account may open them, as it often may for gamepads. Gamepads read as before.
+- An isolated game can no longer reach the FIDO security keys (YubiKey and the like) plugged in
+  as it starts.
 - A game no longer shares the terminal Slatty was started from, through which it could type
   commands there on systems that still allow it (TIOCSTI).
 

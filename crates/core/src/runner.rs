@@ -841,13 +841,72 @@ const INPUT_MAKERS: [&str; 4] = [
     "/dev/userio",
 ];
 
+/// The `/dev/hidraw*` nodes of the FIDO security keys plugged in, found through `sys` (`/sys`),
+/// masked for an isolated game: the person's keys are none of a game's business. A key plugged in
+/// during play is not masked: the game's `/dev` follows the system's (SECURITY.md).
+fn security_keys(sys: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(sys.join("class/hidraw")) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            let number = name.strip_prefix("hidraw")?;
+            if number.is_empty() || !number.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            let file = std::fs::File::open(entry.path().join("device/report_descriptor")).ok()?;
+            let mut descriptor = Vec::new();
+            // The kernel's own bound on a report descriptor (HID_MAX_DESCRIPTOR_SIZE).
+            std::io::Read::read_to_end(&mut std::io::Read::take(file, 4096), &mut descriptor)
+                .ok()?;
+            is_security_key(&descriptor).then(|| Path::new("/dev").join(name))
+        })
+        .collect()
+}
+
+/// Whether a HID report descriptor names the FIDO Alliance's usage page (0xF1D0), which CTAP's
+/// HID transport, every FIDO security key's, declares: as a usage page item, or in the high half
+/// of an extended usage. A long item is skipped whole; a descriptor cut short is read up to its
+/// end (HID 1.11, section 6.2.2).
+fn is_security_key(descriptor: &[u8]) -> bool {
+    const FIDO: u32 = 0xF1D0;
+    let mut rest = descriptor;
+    while let Some((&prefix, tail)) = rest.split_first() {
+        if prefix == 0xFE {
+            let Some(&size) = tail.first() else {
+                return false;
+            };
+            rest = tail.get(2 + usize::from(size)..).unwrap_or_default();
+            continue;
+        }
+        let size = [0, 1, 2, 4][usize::from(prefix & 0b11)];
+        let Some(data) = tail.get(..size) else {
+            return false;
+        };
+        let value = data
+            .iter()
+            .rev()
+            .fold(0u32, |value, &byte| value << 8 | u32::from(byte));
+        let usage_page = prefix & 0b1111_1100 == 0x04;
+        let extended_usage = prefix & 0b1111_1100 == 0x08 && size == 4;
+        if (usage_page && value == FIDO) || (extended_usage && value >> 16 == FIDO) {
+            return true;
+        }
+        rest = &tail[size..];
+    }
+    false
+}
+
 /// `umu` and its arguments, run inside bubblewrap with umu's runtimes and the Proton build
 /// read-only. umu has the container share both writable (STEAM_COMPAT_MOUNTS), and programs of
 /// the runtime run outside the container at every launch: an isolated game could otherwise change
 /// them, and have its code run outside its container at the next launch, or in other games. What
 /// pressure-vessel writes as a game starts (its copy of the runtime in `var`, its `.ref` locks)
 /// stays writable; umu leaves the runtime as it is meanwhile (`UMU_RUNTIME_UPDATE=0`, see
-/// `refresh_runtimes`). The devices of `INPUT_MAKERS` the system has cannot be opened there.
+/// `refresh_runtimes`). The devices of `INPUT_MAKERS` the system has, and the security keys
+/// plugged in (`security_keys`), cannot be opened there.
 fn read_only_tools(
     umu: PathBuf,
     args: Vec<String>,
@@ -859,6 +918,9 @@ fn read_only_tools(
     // but cannot be opened, even through the `/dev` pressure-vessel binds from this one.
     for device in INPUT_MAKERS.map(Path::new).iter().filter(|d| d.exists()) {
         bind(&mut out, "--ro-bind", device)?;
+    }
+    for key in security_keys(Path::new("/sys")) {
+        bind(&mut out, "--ro-bind", &key)?;
     }
     for runtime in runtimes() {
         bind(&mut out, "--ro-bind", &runtime)?;
@@ -1254,6 +1316,70 @@ mod tests {
         std::fs::create_dir_all(&other).unwrap();
         assert!(!set_up_valve_build(&other).unwrap(), "not one of Valve's");
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// CTAP's HID report descriptor, as FIDO security keys give it.
+    const SECURITY_KEY: &[u8] = &[
+        0x06, 0xD0, 0xF1, 0x09, 0x01, 0xA1, 0x01, 0x09, 0x20, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75,
+        0x08, 0x95, 0x40, 0x81, 0x02, 0x09, 0x21, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95,
+        0x40, 0x91, 0x02, 0xC0,
+    ];
+    /// The start of a gamepad's: Generic Desktop, Game Pad.
+    const GAMEPAD: &[u8] = &[
+        0x05, 0x01, 0x09, 0x05, 0xA1, 0x01, 0x15, 0x00, 0x25, 0x01, 0xC0,
+    ];
+
+    #[test]
+    fn a_security_key_is_told_by_its_report_descriptor() {
+        assert!(is_security_key(SECURITY_KEY));
+        // The FIDO page in four bytes, or in an extended usage without a page of its own.
+        assert!(is_security_key(&[0x07, 0xD0, 0xF1, 0x00, 0x00, 0xA1, 0x01]));
+        assert!(is_security_key(&[0x0B, 0x01, 0x00, 0xD0, 0xF1, 0xA1, 0x01]));
+        // After a long item, skipped whole: its data holds the page's bytes.
+        let mut long = vec![0xFE, 0x03, 0x10, 0x06, 0xD0, 0xF1];
+        long.extend_from_slice(GAMEPAD);
+        assert!(!is_security_key(&long));
+        long.extend_from_slice(SECURITY_KEY);
+        assert!(is_security_key(&long));
+
+        assert!(!is_security_key(GAMEPAD));
+        // A vendor's own page, as the Steam Deck's controller and many keyboards give.
+        assert!(!is_security_key(&[
+            0x06, 0x00, 0xFF, 0x09, 0x01, 0xA1, 0x01, 0xC0
+        ]));
+        // Cut short, or empty: nothing read past the end.
+        assert!(!is_security_key(&[0x06, 0xD0]));
+        assert!(!is_security_key(&[0xFE, 0x40, 0x10]));
+        assert!(!is_security_key(&[]));
+    }
+
+    /// Only the nodes of security keys are masked, found through `/sys`; any other name, or a
+    /// descriptor that cannot be read, is left alone.
+    #[cfg(unix)]
+    #[test]
+    fn only_security_keys_are_found_among_hid_devices() {
+        let sys = std::env::temp_dir().join(format!("slatty-hidraw-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&sys);
+        let device = |name: &str, descriptor: Option<&[u8]>| {
+            let dir = sys.join("class/hidraw").join(name).join("device");
+            std::fs::create_dir_all(&dir).unwrap();
+            if let Some(bytes) = descriptor {
+                std::fs::write(dir.join("report_descriptor"), bytes).unwrap();
+            }
+        };
+        device("hidraw0", Some(GAMEPAD));
+        device("hidraw3", Some(SECURITY_KEY));
+        device("hidraw5", None);
+        device("hidraw7", Some(SECURITY_KEY));
+        device("hidrawx", Some(SECURITY_KEY));
+        let mut found = security_keys(&sys);
+        found.sort();
+        assert_eq!(
+            found,
+            [PathBuf::from("/dev/hidraw3"), PathBuf::from("/dev/hidraw7")]
+        );
+        assert!(security_keys(&sys.join("missing")).is_empty());
+        std::fs::remove_dir_all(sys).unwrap();
     }
 
     /// A game set to a `<project>-latest` build closed at once when isolated: bubblewrap cannot
