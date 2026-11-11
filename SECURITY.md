@@ -260,14 +260,19 @@ isolated game.
   allows it, suspending the computer or mounting a drive). From Wine's sources, Wine uses the system
   bus only to find drives and network adapters, which it showed the same without it, and for
   Bluetooth devices.
+- **No input devices of its own.** `/dev/uinput`, `/dev/uhid` and `/dev/userio`, through which a
+  program makes a keyboard, a mouse or a controller the desktop takes as real, cannot be opened,
+  even where your account may open them, as it often may for Steam Input. The gamepads it reads
+  are not changed.
 
 What isolation leaves open:
 
 - **Display, sound, devices and network.** Wayland or X11, PipeWire or PulseAudio, the GPU, `/dev`
-  (gamepads) and the network are shared, as games need them. The X11 socket lets any client read
-  what other X clients receive, keyboard included; under Wayland, that is Xwayland's clients only.
-  PipeWire's manager socket gives access to every stream, the microphone among them. Comet's port
-  and the Unix sockets other programs open in the abstract namespace are reachable.
+  (gamepads, but not the devices above) and the network are shared, as games need them. The X11
+  socket lets any client read what other X clients receive, keyboard included; under Wayland, that
+  is Xwayland's clients only. PipeWire's manager socket gives access to every stream, the
+  microphone among them. Comet's port and the Unix sockets other programs open in the abstract
+  namespace are reachable.
 - **Your environment.** Apart from the variables above, the game inherits your environment: a token
   you keep in an environment variable is visible to it. The modules in `LD_PRELOAD` (MangoHud,
   GameMode) and your Vulkan layers are brought into the container, read-only, as pressure-vessel

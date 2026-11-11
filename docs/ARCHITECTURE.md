@@ -549,6 +549,13 @@ Steam update (SteamPipe's fixups) is done before the launch, outside the sandbox
 read-only, so isolated launches set `UMU_RUNTIME_UPDATE=0`, and `runner::refresh_runtimes` updates
 it at most once a day, outside the sandbox.
 
+**No input devices of its own.** The same sandbox mounts each of `runner::INPUT_MAKERS`
+(`/dev/uinput`, `/dev/uhid`, `/dev/userio`) the system has over itself with `--ro-bind`, which
+bubblewrap mounts without device access: the node stays, but opening it fails, also in the `/dev`
+pressure-vessel binds from this one. A game that opened one could make a keyboard and type into the
+desktop ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)). Gamepads (`/dev/input/*`,
+`/dev/hidraw*`) are left as they are.
+
 **Before each isolated launch**, `runner::sandbox` tries bubblewrap (`doctor::sandbox_problem`, a
 few milliseconds): a sandbox, then one inside it. On Ubuntu 23.10 and later, without an AppArmor
 profile, either can fail: the launch is refused with the reason, never run without isolation.

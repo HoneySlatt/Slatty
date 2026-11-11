@@ -60,9 +60,6 @@ removed when it is paid; the current stage's plan is in [PLAN.md](PLAN.md).
 - **Isolation copies its runtime at each launch** ([SECURITY.md](../SECURITY.md)): about a second
   on btrfs, about 750 MB written on ext4, the Steam Deck's file system, not measured. To be copied
   once per version at Stage 6 ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
-- **`/dev/uinput` is not masked in the sandbox**: where a person can open it, an isolated game
-  could make a keyboard and type into the desktop. To be masked
-  ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
 - **Slatty's build times are not measured**: the floor for uwui's budgets of compiling waits for
   the owner's go ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
 - **The rivals are not measured**: Steam's and Heroic's launches, installs and cost during play,

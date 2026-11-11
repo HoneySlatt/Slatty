@@ -41,6 +41,9 @@ until 1.0, a minor version may change commands and on-disk formats.
 - The SQLite built into Slatty is 3.54.1 (through `rusqlite` 0.41.1), out of RUSTSEC-2026-0459:
   before 3.54.0, a database file opened beside a `-wal` file of another page size, both crafted
   by someone else, could make queries return leftover bytes of Slatty's memory.
+- An isolated game can no longer make a keyboard of its own and type into the desktop:
+  `/dev/uinput`, `/dev/uhid` and `/dev/userio` cannot be opened in its sandbox, even where your
+  account may open them, as it often may for gamepads. Gamepads read as before.
 
 ## 0.2.0 (2026-10-27)
 

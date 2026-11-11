@@ -262,6 +262,102 @@ async fn an_isolated_game_cannot_signal_nor_read_the_users_other_programs() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+/// The devices through which a program makes input devices of its own, by label: a keyboard an
+/// isolated game made there would type into the desktop. `/dev/input/uinput` is uinput's older
+/// name.
+const INPUT_MAKERS: [(&str, &str); 4] = [
+    ("uinput", "/dev/uinput"),
+    ("input-uinput", "/dev/input/uinput"),
+    ("uhid", "/dev/uhid"),
+    ("userio", "/dev/userio"),
+];
+
+/// The same launch without the devices it masks: bubblewrap's `--ro-bind` of a node in `/dev`.
+fn without_masks(spec: &LaunchSpec) -> LaunchSpec {
+    let mut spec = spec.clone();
+    let mut args = Vec::new();
+    let mut rest = spec.args.iter();
+    while let Some(arg) = rest.next() {
+        let mut ahead = rest.clone();
+        if arg == "--ro-bind" && ahead.next().is_some_and(|from| from.starts_with("/dev/")) {
+            rest.nth(1);
+            continue;
+        }
+        args.push(arg.clone());
+    }
+    spec.args = args;
+    spec
+}
+
+/// An isolated game can open no device that makes input devices, while it reads the gamepads it
+/// could read before. The probe only opens and closes each node: no device is ever made.
+#[tokio::test]
+#[ignore]
+async fn an_isolated_game_cannot_make_an_input_device_and_still_reads_gamepads() {
+    let (root, dirs) = fixture("input");
+    let script = root.join("game/start.sh");
+    let mut probe = format!("#!/bin/sh\ncd '{}'\n", root.join("game").display());
+    for (label, path) in INPUT_MAKERS {
+        probe.push_str(&format!(
+            "if [ ! -e '{path}' ]; then echo absent; \
+             elif (exec 3<>'{path}') 2>/dev/null; then echo OPENED; \
+             elif grep -q ' {path} [^ ]*nodev' /proc/self/mountinfo; then echo masked; \
+             else echo refused; fi > out-{label}\n"
+        ));
+    }
+    probe.push_str(
+        "for d in /dev/input/event* /dev/input/js* /dev/hidraw*; do \
+         if [ -c \"$d\" ] && (exec 3<\"$d\") 2>/dev/null; then echo \"$d\"; fi; \
+         done > out-readable\n",
+    );
+    std::fs::write(&script, probe).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let spec = runner::launch_spec(&dirs, &linux_install(&root), None).unwrap();
+    let log = root.join("game.log");
+    let outcomes =
+        |root: &Path| INPUT_MAKERS.map(|(label, _)| result(root, &format!("out-{label}")));
+
+    // Without the masks, the container opens what the user can: the checks below mean something.
+    // Opening and closing a node makes no device.
+    let openable = INPUT_MAKERS.map(|(_, path)| {
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .is_ok()
+    });
+    run(&without_masks(&spec), &log).await;
+    let unmasked = outcomes(&root);
+    let readable_unmasked = result(&root, "out-readable");
+    clear_results(&root);
+    for ((outcome, open), (_, path)) in unmasked.iter().zip(openable).zip(INPUT_MAKERS) {
+        if open {
+            assert_eq!(outcome, "OPENED", "{path} without the masks");
+        }
+    }
+
+    run(&spec, &log).await;
+    let masked = outcomes(&root);
+    let readable = result(&root, "out-readable");
+    for (outcome, (_, path)) in masked.iter().zip(INPUT_MAKERS) {
+        let expected = if Path::new(path).exists() {
+            "masked"
+        } else {
+            "absent"
+        };
+        assert_eq!(outcome, expected, "{path}");
+    }
+    assert!(
+        !readable.is_empty(),
+        "no gamepad or input device is readable here: connect one, or the check proves nothing"
+    );
+    assert_eq!(
+        readable, readable_unmasked,
+        "the input devices a game reads"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 /// A Linux game runs through a compatibility tool of the runtime alone, as a Windows game runs
 /// through Proton: a tool an isolated game could change would run its code in every later game
 /// that uses it, isolated or not.

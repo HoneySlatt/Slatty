@@ -731,13 +731,6 @@ fn check_shared(install: &Install, args: &[String], cwd: &Path) -> Result<()> {
     Ok(())
 }
 
-/// `umu` and its arguments, run inside bubblewrap with umu's runtimes and the Proton build
-/// read-only. umu has the container share both writable (STEAM_COMPAT_MOUNTS), and programs of
-/// the runtime run outside the container at every launch: an isolated game could otherwise change
-/// them, and have its code run outside its container at the next launch, or in other games. What
-/// pressure-vessel writes as a game starts (its copy of the runtime in `var`, its `.ref` locks)
-/// stays writable; umu leaves the runtime as it is meanwhile (`UMU_RUNTIME_UPDATE=0`, see
-/// `refresh_runtimes`).
 /// The bubblewrap an isolated game runs in, once tried: a system where it cannot hold one (no
 /// AppArmor profile on Ubuntu) says why before the launch, rather than the game failing as it
 /// starts. Never a launch without isolation instead.
@@ -838,6 +831,23 @@ fn set_up_valve_build(proton: &Path) -> Result<bool> {
     Ok(true)
 }
 
+/// The devices through which a program makes input devices of its own, masked for an isolated
+/// game: a keyboard it made there would type into the desktop (ADR-0036). Gamepads, read through
+/// `/dev/input` and `/dev/hidraw*`, stay as they are. `/dev/input/uinput` is uinput's older name.
+const INPUT_MAKERS: [&str; 4] = [
+    "/dev/uinput",
+    "/dev/input/uinput",
+    "/dev/uhid",
+    "/dev/userio",
+];
+
+/// `umu` and its arguments, run inside bubblewrap with umu's runtimes and the Proton build
+/// read-only. umu has the container share both writable (STEAM_COMPAT_MOUNTS), and programs of
+/// the runtime run outside the container at every launch: an isolated game could otherwise change
+/// them, and have its code run outside its container at the next launch, or in other games. What
+/// pressure-vessel writes as a game starts (its copy of the runtime in `var`, its `.ref` locks)
+/// stays writable; umu leaves the runtime as it is meanwhile (`UMU_RUNTIME_UPDATE=0`, see
+/// `refresh_runtimes`). The devices of `INPUT_MAKERS` the system has cannot be opened there.
 fn read_only_tools(
     umu: PathBuf,
     args: Vec<String>,
@@ -845,6 +855,11 @@ fn read_only_tools(
 ) -> Result<(PathBuf, Vec<String>)> {
     let bwrap = sandbox(find_in_path("bwrap"))?;
     let mut out: Vec<String> = ["--dev-bind", "/", "/"].map(String::from).to_vec();
+    // Mounted over itself without device access (`--ro-bind` is `nodev`), a node stays in place
+    // but cannot be opened, even through the `/dev` pressure-vessel binds from this one.
+    for device in INPUT_MAKERS.map(Path::new).iter().filter(|d| d.exists()) {
+        bind(&mut out, "--ro-bind", device)?;
+    }
     for runtime in runtimes() {
         bind(&mut out, "--ro-bind", &runtime)?;
         let var = runtime.join("var");
