@@ -2309,7 +2309,9 @@ mod tests {
         assert_eq!(flushed, if cfg!(windows) { 4 } else { 0 });
     }
 
-    /// The home folder, and what holds it, is refused on Windows too, which sets no `HOME`.
+    /// The home folder, and what holds it, is refused on Windows too, which sets no `HOME`. Its
+    /// run under Wine is the one that tests `platform::home`: on Linux, a folder of `PATH` in the
+    /// home folder (the development shell's) has it refused already.
     #[test]
     fn the_home_folder_is_refused() {
         // Never made: Slatty's own folders, in the temporary folder, inside the profile on

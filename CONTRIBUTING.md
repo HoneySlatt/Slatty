@@ -119,9 +119,9 @@ only when a key's `Drop` panics, which the glyph cache's keys never do). Three
 come with zbus 5, used for the keyring and desktop notifications: `zbus_names`, `zvariant` and
 `zvariant_derive` (unmaintained since they were merged into zbus 6, which the `keyring` crate
 does not use yet; ignored in `deny.toml` with the reason). One is new: `rustix` 1.1.5, through
-zbus and Wayland's clipboard, is unsound in its functions reading extended attributes, given an
-empty buffer (RUSTSEC-2026-0486); Slatty itself calls none of them, and 1.1.6 is out, not yet
-taken. Image
+zbus, `tempfile`, the Wayland and X11 crates and others, is unsound in its functions reading
+extended attributes, given an empty buffer (RUSTSEC-2026-0486); neither Slatty nor the crates
+that depend on it call them. 1.1.6 is out, not yet taken. Image
 decoding is limited to the formats Slatty shows (JPEG, PNG, WebP, GIF, BMP), so fewer
 decoders face downloaded files.
 
