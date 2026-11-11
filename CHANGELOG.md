@@ -35,9 +35,10 @@ until 1.0, a minor version may change commands and on-disk formats.
 - `slatty library list` lists Epic's games too, as the library was last read from Epic.
 - A second Ctrl+C quits at once while files are downloaded or checked (install, update, verify,
   installers, Proton builds); it was ignored.
-- Entering and leaving the couch mode no longer leaves a thread behind each time, woken whenever
-  an input device is plugged in or out; gamepads are read by one thread for the whole run, which
-  waits without waking while the couch mode is off.
+- Entering and leaving the couch mode no longer leaves two threads behind each time, one woken
+  whenever an input device is plugged in or out, the other 20 times a second for the gamepads'
+  rumble, which Slatty never uses; gamepads are read by one thread for the whole run, which waits
+  without waking while the couch mode is off.
 - In the couch mode, a direction held on a gamepad repeats at its steady pace even while a stick
   shakes slightly or a thumb rests on the other stick; such small movements delayed the repeats,
   or stopped them while the direction was still held.

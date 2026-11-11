@@ -186,8 +186,11 @@ trait Source {
     /// an event comes that is no input of the couch mode.
     fn next(&mut self, wait: Duration) -> Option<Timed>;
 
-    /// The time now, for the repeats.
+    /// The time now, for the repeats and the entries: a steady clock.
     fn now(&self) -> Instant;
+
+    /// The time now on the wall clock, which stamps the inputs.
+    fn wall(&self) -> SystemTime;
 }
 
 /// The gilrs the couch mode reads, without its default filters: after each event they drop
@@ -199,6 +202,9 @@ fn open_gilrs() -> Option<gilrs::Gilrs> {
     gilrs::GilrsBuilder::new()
         .with_default_filters(false)
         .set_update_state(false)
+        // Its server is a thread that wakes every 50 ms for the rest of the run (gilrs 0.11.2,
+        // `ff::server`), and Slatty makes no gamepad rumble.
+        .with_force_feedback(false)
         .build()
         .ok()
 }
@@ -226,12 +232,16 @@ impl Source for gilrs::Gilrs {
     fn now(&self) -> Instant {
         Instant::now()
     }
+
+    fn wall(&self) -> SystemTime {
+        SystemTime::now()
+    }
 }
 
-/// The couch mode, open since `since`, which receives the moves.
+/// The couch mode, entered at `entered` on the steady clock, which receives the moves.
 struct Listener {
     tx: tokio::sync::mpsc::UnboundedSender<Nav>,
-    since: SystemTime,
+    entered: Instant,
 }
 
 /// The thread reading the gamepads for the whole process, started at the first entry into the
@@ -256,7 +266,7 @@ fn listen<S: Source + 'static>(
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let listener = Listener {
             tx,
-            since: SystemTime::now(),
+            entered: Instant::now(),
         };
         if start(reader, open).send(listener).is_err() {
             return;
@@ -301,6 +311,20 @@ fn read(source: &mut impl Source, listeners: &std::sync::mpsc::Receiver<Listener
     }
 }
 
+/// Whether an input stamped `at`, on the wall clock as gilrs stamps them (evdev's
+/// `CLOCK_REALTIME` on Linux), was made once the couch mode was entered at `entered`, on the steady
+/// clock. Its age is read on the wall clock at once, so a wall clock set back or forward between
+/// the entry and the input, as a time service does at boot, does not silence the gamepad. Only a
+/// step between an input and its reading counts: inputs waiting since before the couch mode
+/// opened, across a step back, would then be taken once.
+fn made_since(source: &impl Source, at: SystemTime, entered: Instant) -> bool {
+    let age = source.wall().duration_since(at).unwrap_or_default();
+    source
+        .now()
+        .checked_sub(age)
+        .is_some_and(|made| made >= entered)
+}
+
 /// Sends `listener` the moves `source` makes, starting with `pending`, until it stops listening;
 /// what a gamepad did before it listened is not its. An input read as it stopped is given back,
 /// for whoever listens next.
@@ -324,7 +348,7 @@ fn serve(
             return read;
         }
         let input = read
-            .filter(|(_, at)| *at >= listener.since)
+            .filter(|(_, at)| made_since(source, *at, listener.entered))
             .map(|(input, _)| input);
         let away = AWAY.load(Ordering::Relaxed);
         for nav in step(&mut repeater, input, source.now(), away) {
@@ -376,13 +400,16 @@ mod tests {
         Noise,
         /// The couch mode left.
         Leave,
+        /// The wall clock set back by this many minutes, as a time service does at boot.
+        SetBack(u64),
     }
 
     /// A gamepad that does `steps`, each at its time from the start, on a clock of its own; the
     /// couch mode listening on `listening` is left once they run out.
     struct Fake {
-        start: Instant,
         clock: Duration,
+        /// How far the wall clock was set back.
+        set_back: Duration,
         steps: VecDeque<(u64, Step)>,
         listening: tokio::sync::mpsc::UnboundedReceiver<Nav>,
     }
@@ -398,9 +425,10 @@ mod tests {
                 self.steps.pop_front();
                 self.clock = self.clock.max(at);
                 match step {
-                    Step::Input(input) => return Some((input, wall(at))),
+                    Step::Input(input) => return Some((input, wall(at) - self.set_back)),
                     Step::Noise => return None,
                     Step::Leave => self.listening.close(),
+                    Step::SetBack(minutes) => self.set_back += Duration::from_secs(60 * minutes),
                 }
             }
             if self.steps.is_empty() {
@@ -411,8 +439,18 @@ mod tests {
         }
 
         fn now(&self) -> Instant {
-            self.start + self.clock
+            start() + self.clock
         }
+
+        fn wall(&self) -> SystemTime {
+            wall(self.clock) - self.set_back
+        }
+    }
+
+    /// When every fake starts, on the steady clock.
+    fn start() -> Instant {
+        static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+        *START.get_or_init(Instant::now)
     }
 
     /// The wall clock `at` after the fake's start.
@@ -423,14 +461,14 @@ mod tests {
     /// A listener that entered `since` ms after the fake's start, and what it receives.
     fn listener(since: u64) -> (Listener, tokio::sync::mpsc::UnboundedReceiver<Nav>) {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let since = wall(Duration::from_millis(since));
-        (Listener { tx, since }, rx)
+        let entered = start() + Duration::from_millis(since);
+        (Listener { tx, entered }, rx)
     }
 
     fn fake(steps: &[(u64, Step)], listening: tokio::sync::mpsc::UnboundedReceiver<Nav>) -> Fake {
         Fake {
-            start: Instant::now(),
             clock: Duration::ZERO,
+            set_back: Duration::ZERO,
             steps: steps.iter().copied().collect(),
             listening,
         }
@@ -456,6 +494,22 @@ mod tests {
         assert_eq!(received(&mut pad.listening), [Nav::Confirm]);
     }
 
+    /// The wall clock set back an hour after the entry, as a time service may at boot, after
+    /// Windows kept the hardware clock in local time: the gamepad still moves the couch mode.
+    #[test]
+    fn a_clock_set_back_after_entering_loses_no_move() {
+        let (couch, rx) = listener(1000);
+        let mut pad = fake(
+            &[
+                (1100, Step::SetBack(60)),
+                (1200, Step::Input(PadInput::Pressed(Nav::Confirm))),
+            ],
+            rx,
+        );
+        serve(&mut pad, &couch, None);
+        assert_eq!(received(&mut pad.listening), [Nav::Confirm]);
+    }
+
     /// The couch mode left and entered again while the reader waits: a move made after the new
     /// entry, read for the old one, goes to the new one.
     #[test]
@@ -477,8 +531,10 @@ mod tests {
     }
 
     /// Holding a direction for 3 s, among events of no use every 30 ms: one move, then one every
-    /// 110 ms from 400 ms, 25 in all. The noise must not hold the repeats back, as gilrs's own
-    /// filters did by waiting again after each event they dropped.
+    /// 110 ms from 400 ms, 25 in all. The noise must not hold the repeats back. This checks the
+    /// loop alone: that gilrs's own filters waited again after each event they dropped, and that
+    /// `open_gilrs` turns them off, no test can show, as gilrs's events cannot be made outside it;
+    /// docs/testing.md has the check by hand.
     #[test]
     fn a_held_direction_repeats_on_time_through_noise() {
         let noise = (0..100).map(|i| (10 + 30 * i, Step::Noise));
@@ -524,6 +580,10 @@ mod tests {
 
         fn now(&self) -> Instant {
             Instant::now()
+        }
+
+        fn wall(&self) -> SystemTime {
+            SystemTime::now()
         }
     }
 
