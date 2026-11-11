@@ -639,20 +639,9 @@ fn steam_libraries(steam: &Path) -> Vec<PathBuf> {
     libraries
 }
 
-/// The user's home folder: `HOME` on Linux; on Windows, which sets no `HOME`, the profile folder.
+/// The user's home folder (`platform::home`).
 fn home() -> PathBuf {
-    #[cfg(windows)]
-    {
-        directories::BaseDirs::new()
-            .map(|d| d.home_dir().to_path_buf())
-            .unwrap_or_default()
-    }
-    #[cfg(unix)]
-    {
-        std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_default()
-    }
+    crate::platform::home().unwrap_or_default()
 }
 
 #[cfg(test)]

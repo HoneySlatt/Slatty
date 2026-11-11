@@ -17,8 +17,8 @@ use tokio_util::sync::CancellationToken;
 
 use super::zip::{self, ZipEntry};
 use super::{
-    Checked, Progress, RecordedFile, SYNCED_FROM, leads_inside, refuse_outside, safe_relative,
-    synced,
+    Checked, Progress, RecordedFile, leads_inside, refuse_outside, safe_relative, synced,
+    synced_on_write,
 };
 use crate::auth::Tokens;
 use crate::error::{Error, Result};
@@ -916,11 +916,11 @@ impl<S: Source> LinuxDownload<'_, S> {
             }
         }
         drop(body);
-        let sync = e.size >= SYNCED_FROM;
+        let sync = synced_on_write(e.size).then(|| tmp.to_path_buf());
         let sink = tokio::task::spawn_blocking(move || {
             let sink = inflate.expect("inflater put back").finish()?;
-            if sync {
-                sink.out.get_ref().sync_all()?;
+            if let Some(tmp) = sync {
+                fsutil::sync_file(sink.out.get_ref(), &tmp)?;
             }
             Ok(sink)
         })

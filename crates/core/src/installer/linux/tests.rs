@@ -2,6 +2,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::sync::Mutex;
 
 use super::*;
+use crate::installer::SYNCED_FROM;
 use crate::installer::zip::build::{File, installer};
 
 /// An address for a file's sums where GOG keeps none (not found) is taken as no sums: the file is

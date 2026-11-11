@@ -363,6 +363,21 @@ pub fn user_folder(folder: UserFolder) -> io::Result<std::path::PathBuf> {
     windows::user_folder(folder)
 }
 
+/// The user's home folder: `HOME` on Linux; on Windows, which sets no `HOME`, the profile folder
+/// (`FOLDERID_Profile`). `None` when neither is known.
+pub fn home() -> Option<std::path::PathBuf> {
+    #[cfg(windows)]
+    {
+        directories::BaseDirs::new().map(|d| d.home_dir().to_path_buf())
+    }
+    #[cfg(unix)]
+    {
+        std::env::var_os("HOME")
+            .filter(|h| !h.is_empty())
+            .map(std::path::PathBuf::from)
+    }
+}
+
 /// The bytes available to the user on the filesystem holding `path`.
 pub fn free_space(path: &Path) -> io::Result<u64> {
     #[cfg(unix)]

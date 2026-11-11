@@ -61,6 +61,20 @@ pub fn read_game_file(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
     Ok(Some(bytes))
 }
 
+/// Flushes `file`, written at `path`, to the disk.
+pub(crate) fn sync_file(file: &std::fs::File, path: &Path) -> std::io::Result<()> {
+    file.sync_all()?;
+    #[cfg(test)]
+    FLUSHED.lock().unwrap().push(path.to_path_buf());
+    #[cfg(not(test))]
+    let _ = path;
+    Ok(())
+}
+
+/// Every file `sync_file` flushed, for tests to tell which were.
+#[cfg(test)]
+pub(crate) static FLUSHED: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
 /// Flushes everything written to the filesystem holding `path`: one call after many files is far
 /// cheaper than syncing each of them. Does nothing on Windows, which has no such call for a user.
 pub fn sync_filesystem(path: &Path) -> Result<()> {

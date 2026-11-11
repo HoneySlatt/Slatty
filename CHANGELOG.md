@@ -35,6 +35,13 @@ until 1.0, a minor version may change commands and on-disk formats.
 - `slatty library list` lists Epic's games too, as the library was last read from Epic.
 - A second Ctrl+C quits at once while files are downloaded or checked (install, update, verify,
   installers, Proton builds); it was ignored.
+- On Windows, a game added by hand is refused your profile folder as its folder, as it is your
+  home folder on Linux; it was accepted once games were installed elsewhere.
+- On Windows, `slatty import --from-heroic` looks for Heroic's records in `AppData\Roaming\heroic`,
+  where Heroic keeps them, not in a folder relative to where Slatty was started.
+- On Windows, every file of a game unpacked from an archive is on the disk before the game
+  appears, as an install's are: a power cut can no longer leave one with its name but not its
+  content.
 
 ### Security
 

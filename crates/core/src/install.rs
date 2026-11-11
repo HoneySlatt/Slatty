@@ -242,6 +242,15 @@ fn found_in(dir: &Path, game_id: Option<&str>, runner: Runner) -> Result<Install
     })
 }
 
+/// Where Heroic keeps its records: `heroic` in Electron's `appData`, the user's configuration
+/// folder (`XDG_CONFIG_HOME`, else `~/.config`; `AppData\Roaming` on Windows), as Heroic's
+/// `src/backend/constants/paths.ts` says. Fails when no home folder is known.
+pub fn heroic_config() -> Result<PathBuf> {
+    directories::BaseDirs::new()
+        .map(|d| d.config_dir().join("heroic"))
+        .ok_or_else(|| Error::NotFound("no home folder, where Heroic keeps its records".into()))
+}
+
 /// Reads (never writes) Heroic's records for a GOG game it installed.
 pub fn from_heroic(heroic_config: &Path, game_id: &str) -> Result<Install> {
     let read = |p: PathBuf| -> Result<Value> {
@@ -437,6 +446,23 @@ mod tests {
             }
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Heroic's records are looked for where Heroic keeps them, on Windows too, which sets
+    /// neither `HOME` nor `XDG_CONFIG_HOME`: never relative to where Slatty was started.
+    #[test]
+    fn heroic_is_looked_for_in_the_users_configuration_folder() {
+        let folder = heroic_config().unwrap();
+        assert!(folder.is_absolute(), "{}", folder.display());
+        assert!(folder.ends_with("heroic"));
+        // Electron's `appData`, where Heroic keeps its folder (`src/backend/constants/paths.ts`).
+        #[cfg(windows)]
+        assert_eq!(
+            folder,
+            crate::platform::user_folder(crate::platform::UserFolder::RoamingAppData)
+                .unwrap()
+                .join("heroic")
+        );
     }
 
     #[cfg(unix)]

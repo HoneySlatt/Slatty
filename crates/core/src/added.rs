@@ -1012,7 +1012,7 @@ pub fn gog_game_in(folder: &Path) -> Option<String> {
 /// folder, or hold the folder games are installed in.
 fn check_folder(db: &Db, dirs: &Dirs, folder: &Path, game_id: Option<&str>) -> Result<()> {
     let real = |p: &Path| p.canonicalize().ok();
-    let home = std::env::var_os("HOME").and_then(|h| real(Path::new(&h)));
+    let home = crate::platform::home().and_then(|h| real(&h));
     let runtime = std::env::var_os("XDG_RUNTIME_DIR").and_then(|r| real(Path::new(&r)));
     let programs: Vec<PathBuf> = std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).filter_map(|p| real(&p)).collect())
@@ -2261,5 +2261,71 @@ mod tests {
         assert!(!folder.exists(), "nothing else was in it");
 
         assert!(!is_archive(&f.game.join("bin/game.exe")));
+    }
+
+    /// Every file unpacked is on the disk before the game's folder takes its name: on Windows,
+    /// which cannot flush a whole filesystem, each one is flushed, small ones too, as an install's
+    /// are (ADR-0029); on Linux the filesystem is, once.
+    #[tokio::test]
+    async fn every_file_unpacked_is_flushed_on_windows() {
+        let f = fake("flushed");
+        let zip = f.root.join("[FAKE] game.zip");
+        std::fs::write(
+            &zip,
+            crate::installer::zip::build::installer(
+                b"",
+                &[
+                    zip_file("Game/run.sh", b"#!/bin/sh\n"),
+                    zip_file("Game/data.pak", b"[FAKE] data"),
+                ],
+                false,
+            ),
+        )
+        .unwrap();
+        unpacked(&f, &zip, "[FAKE] Zipped").await.unwrap();
+        let mut tar = tar::Builder::new(Vec::new());
+        for name in ["Game/run.sh", "Game/data.pak"] {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(10);
+            header.set_mode(0o644);
+            header.set_cksum();
+            tar.append_data(&mut header, name, &b"[FAKE] 10b"[..])
+                .unwrap();
+        }
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        std::io::Write::write_all(&mut gz, &tar.into_inner().unwrap()).unwrap();
+        let tarball = f.root.join("[FAKE] game.tar.gz");
+        std::fs::write(&tarball, gz.finish().unwrap()).unwrap();
+        unpacked(&f, &tarball, "[FAKE] Tarred").await.unwrap();
+
+        // Other tests flush files too, each under a folder of its own.
+        let root = f.root.canonicalize().unwrap();
+        let flushed = crate::fsutil::FLUSHED
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| p.starts_with(&root))
+            .count();
+        assert_eq!(flushed, if cfg!(windows) { 4 } else { 0 });
+    }
+
+    /// The home folder, and what holds it, is refused on Windows too, which sets no `HOME`.
+    #[test]
+    fn the_home_folder_is_refused() {
+        // Never made: Slatty's own folders, in the temporary folder, inside the profile on
+        // Windows, would have it refused for holding them.
+        let dirs = Dirs::under(&std::env::temp_dir().join("slatty-added-[FAKE]-never-made"));
+        let db = Db::in_memory().unwrap();
+        let home = directories::BaseDirs::new()
+            .unwrap()
+            .home_dir()
+            .canonicalize()
+            .unwrap();
+        // Games installed out of the home folder, where they go by default, and never made.
+        let library = home.ancestors().last().unwrap().join("[FAKE] Games");
+        crate::settings::set_library_root(&db, &library).unwrap();
+        let refused = |folder: &Path| check_folder(&db, &dirs, folder, None).is_err();
+        assert!(refused(&home), "{}", home.display());
+        assert!(refused(home.parent().unwrap()), "{}", home.display());
     }
 }

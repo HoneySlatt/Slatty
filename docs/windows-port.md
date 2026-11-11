@@ -44,7 +44,10 @@ Found by running the core's tests under Wine; each broke code that works on Linu
 - The clock behind Rust's `Instant` (`QueryPerformanceCounter`) counts the time the computer
   sleeps; play time is measured on the unbiased interrupt time, which does not
   (`platform::Awake`).
-- `HOME` is not set: the home folder is the profile's (`directories`).
+- `HOME` is not set: the home folder is the profile's (`platform::home`), and the configuration
+  folder `AppData\Roaming` (`directories`).
+- No call flushes a whole filesystem for a user: every file an install or an unpack writes is
+  flushed on its own ([ADR-0029](adr/0029-every-installed-file-flushed-on-windows.md)).
 - A program whose manifest asks for administrator rights does not start at all
   (`ERROR_ELEVATION_REQUIRED`) unless started through Windows' prompt for them; an elevated
   process cannot join a job object of a process without those rights.

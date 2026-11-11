@@ -1054,6 +1054,12 @@ pub(crate) fn unpack_tar(
             let mut out = std::io::BufWriter::with_capacity(1 << 20, out);
             std::io::copy(&mut entry, &mut out).map_err(|e| Error::io(context(), e))?;
             std::io::Write::flush(&mut out).map_err(|e| Error::io(context(), e))?;
+            // On the disk before a game's folder takes its name: Windows cannot flush the whole
+            // filesystem afterwards, as `added::unpack` does on Linux (ADR-0029).
+            if cfg!(windows) {
+                crate::fsutil::sync_file(out.get_ref(), &dest)
+                    .map_err(|e| Error::io(format!("flush {}", dest.display()), e))?;
+            }
         }
         progress(read.load(std::sync::atomic::Ordering::Relaxed), total);
     }

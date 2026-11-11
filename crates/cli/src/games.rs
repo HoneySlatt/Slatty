@@ -46,14 +46,7 @@ pub struct ImportArgs {
 
 pub fn import(ctx: &Ctx, args: ImportArgs) -> Result<()> {
     let install = match (args.from_heroic, args.dir) {
-        (Some(id), _) => {
-            let heroic = std::env::var_os("XDG_CONFIG_HOME")
-                .map(PathBuf::from)
-                .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
-                .unwrap_or_default()
-                .join("heroic");
-            install::from_heroic(&heroic, &id)?
-        }
+        (Some(id), _) => install::from_heroic(&install::heroic_config()?, &id)?,
         (None, Some(dir)) => {
             let runner = match (args.runner, args.proton, args.wine, args.prefix) {
                 (Some(RunnerKind::Native), None, None, None) => Runner::Native,

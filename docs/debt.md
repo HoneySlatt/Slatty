@@ -84,12 +84,9 @@ removed when it is paid; the current stage's plan is in [PLAN.md](PLAN.md).
   `epic::download::an_unreadable_file_is_repaired`,
   `steam::local::what_steam_wrote_of_a_download_is_measured_in_its_folder`. To be made for Windows
   (a file held open, a lock) with the milestone of each area.
-- **Windows gaps found while testing, not fixed**: `added::check_folder` reads `HOME`, which
-  Windows does not set, so the profile folder is not refused there (M3.5); `import --from-heroic`
-  looks for Heroic's folder from `HOME` or `XDG_CONFIG_HOME` too, so on Windows it reads a folder
-  relative to where Slatty started (it only reads, and finds nothing); games added by hand are not
-  flushed to the disk on Windows, which has no `fsutil::sync_filesystem` (M3.5, as installs do in
-  [ADR-0029](adr/0029-every-installed-file-flushed-on-windows.md)).
+- **`import --from-heroic` cannot import a Windows game on Windows**: it takes every Windows
+  game for one run through Wine or Proton, and fails on a game Heroic runs as it is. Not tried
+  on Windows; for M3.5.
 - **Windows behaviour checked under Wine only**: `platform::lowest_priority`'s background mode (its
   disk priority shows nowhere under Wine; its processor priority does), and a thread that work in
   the background starts lowers itself only if it calls it (`installer::verify_file`'s do); a
