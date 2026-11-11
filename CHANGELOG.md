@@ -56,7 +56,8 @@ until 1.0, a minor version may change commands and on-disk formats.
   before, was withdrawn from crates.io by its author.
 - On Linux, a crash of Slatty no longer leaves a core dump, which could hold your session tokens:
   Slatty turns core dumps off as it starts, for itself and the programs it starts (games, umu,
-  Proton, Comet). systemd-coredump honours this.
+  Proton, Comet), but for the Steam client and what your desktop opens. systemd-coredump honours
+  this.
 - The SQLite built into Slatty is 3.54.1 (through `rusqlite` 0.41.1), out of RUSTSEC-2026-0459:
   before 3.54.0, a database file opened beside a `-wal` file of another page size, both crafted
   by someone else, could make queries return leftover bytes of Slatty's memory.

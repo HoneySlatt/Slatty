@@ -71,9 +71,10 @@ pub fn open_with_desktop(target: &std::ffi::OsStr) -> std::io::Result<()> {
 }
 
 /// Starts `command` and reaps it once it exits, rather than leaving it a zombie for as long as
-/// the launcher runs. Its process id.
+/// the launcher runs. Its process id. It starts the desktop's programs and the Steam client, which
+/// never see a token: their core dumps are given back (`platform::with_core_dumps`).
 pub(crate) fn spawn_reaped(command: &mut std::process::Command) -> std::io::Result<u32> {
-    let mut child = command.spawn()?;
+    let mut child = crate::platform::with_core_dumps(command).spawn()?;
     let pid = child.id();
     std::thread::spawn(move || child.wait());
     Ok(pid)
@@ -270,5 +271,38 @@ mod tests {
             !proc.exists()
         });
         assert!(gone, "still a zombie after 5 s");
+    }
+
+    /// The Steam client and what the desktop opens never see a token: they start with the core
+    /// size limit Slatty was started with, not the 0 it keeps for itself (ADR-0037).
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn an_opener_keeps_its_core_dumps() {
+        let read = |limits: &str| {
+            limits
+                .lines()
+                .find(|l| l.starts_with("Max core file size"))
+                .and_then(|l| l.split_whitespace().nth(4).map(str::to_owned))
+        };
+        crate::platform::no_core_dumps().unwrap();
+        let at_start = crate::platform::core_limit_at_start().unwrap();
+        let at_start = match at_start {
+            nix::libc::RLIM_INFINITY => "unlimited".to_owned(),
+            bytes => bytes.to_string(),
+        };
+        let file = std::env::temp_dir().join(format!("slatty-opener-core-{}", std::process::id()));
+        let mut command = std::process::Command::new("/bin/sh");
+        command.args([
+            "-c",
+            "cat /proc/self/limits > \"$0.part\" && mv \"$0.part\" \"$0\"",
+        ]);
+        command.arg(&file);
+        spawn_reaped(&mut command).unwrap();
+        let limits = (0..500).find_map(|_| {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            std::fs::read_to_string(&file).ok()
+        });
+        let _ = std::fs::remove_file(&file);
+        assert_eq!(read(&limits.expect("no limits after 5 s")), Some(at_start));
     }
 }

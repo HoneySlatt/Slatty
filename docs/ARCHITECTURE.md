@@ -916,7 +916,8 @@ The protections are told from the user's side in [SECURITY.md](../SECURITY.md); 
 - Slatty's folders 0700 and its database 0600, set again at every start;
 - on Linux, core dumps off for every Slatty process and the programs it starts
   (`platform::no_core_dumps`, first thing in `main`): a dump would hold the tokens, copied in
-  buffers far beyond `Secret` ([ADR-0037](adr/0037-core-dumps-kept-off.md));
+  buffers far beyond `Secret`; the Steam client and the desktop's programs get theirs back
+  (`platform::with_core_dumps`) ([ADR-0037](adr/0037-core-dumps-kept-off.md));
 - every request Slatty itself sends to a host other than GOG's has a switch in Settings,
   off until turned on, and a line in SECURITY.md, which also lists what the programs it starts
   contact (umu asks Valve about its runtime, Comet talks to GOG);

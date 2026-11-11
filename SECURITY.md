@@ -159,8 +159,9 @@ service, not to the network, but they can show game titles and achievement names
 - **Core dumps.** A crash could write Slatty's memory, your session tokens with it, to the disk,
   where systemd-coredump and others keep it. On Linux, Slatty turns its own core dumps off as it
   starts (its core size limit at 0), and the programs it starts inherit that: games, umu, Proton
-  and Comet, which is given your tokens too. systemd-coredump honours the limit; another crash
-  handler (apport, ABRT) may not, which is not checked. A crash of Slatty, or of a game it started,
+  and Comet, which is given your tokens too; the Steam client and what your desktop opens, which
+  never see them, keep theirs. systemd-coredump honours the limit; another crash handler (apport,
+  ABRT) may not, which is not checked. A crash of Slatty, or of a game it started,
   so leaves no core dump to study
   ([ADR-0037](docs/adr/0037-core-dumps-kept-off.md)). On Windows nothing is done yet: Windows
   Error Reporting writes a full dump only where its local dumps were turned on, and otherwise

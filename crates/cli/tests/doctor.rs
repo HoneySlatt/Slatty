@@ -52,7 +52,11 @@ fn core_dumps_are_off_for_slatty_and_what_it_starts() {
     std::fs::set_permissions(&bwrap, std::fs::Permissions::from_mode(0o755)).unwrap();
     let limit = root.join("limit");
     Command::new("/bin/sh")
-        .args(["-c", "ulimit -S -c \"$(ulimit -H -c)\"; exec \"$0\" doctor"])
+        .args([
+            "-c",
+            "ulimit -S -c \"$(ulimit -H -c)\"; ulimit -c > \"$SLATTY_TEST_LIMIT.start\"; \
+             exec \"$0\" doctor",
+        ])
         .arg(env!("CARGO_BIN_EXE_slatty"))
         .env_clear()
         .env("PATH", root.join("bin"))
@@ -68,6 +72,13 @@ fn core_dumps_are_off_for_slatty_and_what_it_starts() {
         .env("SLATTY_TEST_LIMIT", &limit)
         .output()
         .unwrap();
+    // Started at 0, Slatty would pass without doing anything.
+    let start = std::fs::read_to_string(root.join("limit.start")).unwrap();
+    assert_ne!(
+        start.trim(),
+        "0",
+        "a hard limit of 0 here: nothing to prove"
+    );
     assert_eq!(std::fs::read_to_string(&limit).unwrap().trim(), "0");
     std::fs::remove_dir_all(&root).unwrap();
 }

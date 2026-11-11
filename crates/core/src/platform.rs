@@ -381,8 +381,8 @@ pub fn home() -> Option<std::path::PathBuf> {
 /// Keeps this process, and the programs it starts, from leaving a core dump when they crash: it
 /// would hold the session tokens, copied in many buffers beyond `secret::Secret` (ADR-0037). On
 /// Linux the core size limit is set to 0, the hard limit left as it is, which systemd-coredump
-/// honours; nothing on Windows yet.
-/// Fails only if the system refuses to read or lower the limit.
+/// honours; nothing on Windows yet. The limit it had is kept for `with_core_dumps`. Fails only if
+/// the system refuses to read or lower the limit.
 pub fn no_core_dumps() -> io::Result<()> {
     #[cfg(unix)]
     {
@@ -395,6 +395,7 @@ pub fn no_core_dumps() -> io::Result<()> {
         if unsafe { getrlimit(RLIMIT_CORE, &mut limit) } != 0 {
             return Err(io::Error::last_os_error());
         }
+        CORE_LIMIT_AT_START.get_or_init(|| (limit.rlim_cur, limit.rlim_max));
         limit.rlim_cur = 0;
         // SAFETY: `setrlimit` only reads `limit`, valid for the whole call; lowering a soft limit
         // below its hard one needs no privilege.
@@ -403,6 +404,51 @@ pub fn no_core_dumps() -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// The core size limits, soft and hard, Slatty was started with, before `no_core_dumps`.
+#[cfg(unix)]
+static CORE_LIMIT_AT_START: std::sync::OnceLock<(nix::libc::rlim_t, nix::libc::rlim_t)> =
+    std::sync::OnceLock::new();
+
+/// The soft core size limit `no_core_dumps` kept, for the tests.
+#[cfg(all(test, unix))]
+pub(crate) fn core_limit_at_start() -> Option<nix::libc::rlim_t> {
+    CORE_LIMIT_AT_START.get().map(|&(soft, _)| soft)
+}
+
+/// Gives the program `command` starts the core size limit Slatty was started with, which
+/// `no_core_dumps` took away: for a program that never sees a token, such as the Steam client,
+/// which would otherwise pass it to every game it starts until it quits (ADR-0037). Nothing on
+/// Windows.
+pub fn with_core_dumps(command: &mut std::process::Command) -> &mut std::process::Command {
+    #[cfg(unix)]
+    if let Some(&limits) = CORE_LIMIT_AT_START.get() {
+        set_core_limit(command, limits);
+    }
+    command
+}
+
+/// Starts `command`'s program with the core size limits `(soft, hard)`. If the system refuses
+/// them, it starts all the same: a crash dump is not worth failing a start.
+#[cfg(unix)]
+fn set_core_limit(
+    command: &mut std::process::Command,
+    (soft, hard): (nix::libc::rlim_t, nix::libc::rlim_t),
+) {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: the closure runs in the child between fork and exec, where only async-signal-safe
+    // calls may be made: it makes one, `setrlimit`, on a value of its own, and allocates nothing.
+    unsafe {
+        command.pre_exec(move || {
+            let limit = nix::libc::rlimit {
+                rlim_cur: soft,
+                rlim_max: hard,
+            };
+            nix::libc::setrlimit(nix::libc::RLIMIT_CORE, &limit);
+            Ok(())
+        });
+    }
 }
 
 /// The bytes available to the user on the filesystem holding `path`.
@@ -625,6 +671,26 @@ mod tests {
         no_core_dumps().unwrap();
         let after = read();
         assert_eq!((after.rlim_cur, after.rlim_max), (0, hard));
+    }
+
+    /// A program can be given back a core size limit, here 1 MiB, whatever the test runs with.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_program_started_gets_the_core_limit_given() {
+        use nix::libc::{RLIMIT_CORE, getrlimit, rlimit};
+        let mut limit = rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        // SAFETY: `getrlimit` writes the limits into `limit`, valid for the whole call.
+        assert_eq!(unsafe { getrlimit(RLIMIT_CORE, &mut limit) }, 0);
+        assert!(limit.rlim_max >= 1 << 20, "a hard limit too low to test");
+        let mut command = std::process::Command::new("/bin/sh");
+        command.args(["-c", "grep 'Max core file size' /proc/self/limits"]);
+        set_core_limit(&mut command, (1 << 20, limit.rlim_max));
+        let output = command.output().unwrap();
+        let line = String::from_utf8_lossy(&output.stdout).into_owned();
+        assert_eq!(line.split_whitespace().nth(4), Some("1048576"), "{line}");
     }
 
     /// The clock of play time moves with the time awake, at the timer's resolution.
