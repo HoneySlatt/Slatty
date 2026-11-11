@@ -272,14 +272,16 @@ const INPUT_MAKERS: [(&str, &str); 4] = [
     ("userio", "/dev/userio"),
 ];
 
-/// The same launch without the devices it masks: bubblewrap's `--ro-bind` of a node in `/dev`.
+/// The same launch without the devices it masks: bubblewrap's `--ro-bind` or `--ro-bind-try` of a
+/// node in `/dev`.
 fn without_masks(spec: &LaunchSpec) -> LaunchSpec {
     let mut spec = spec.clone();
     let mut args = Vec::new();
     let mut rest = spec.args.iter();
     while let Some(arg) = rest.next() {
         let mut ahead = rest.clone();
-        if arg == "--ro-bind" && ahead.next().is_some_and(|from| from.starts_with("/dev/")) {
+        let masks = arg == "--ro-bind" || arg == "--ro-bind-try";
+        if masks && ahead.next().is_some_and(|from| from.starts_with("/dev/")) {
             rest.nth(1);
             continue;
         }
@@ -355,6 +357,63 @@ async fn an_isolated_game_cannot_make_an_input_device_and_still_reads_gamepads()
         readable, readable_unmasked,
         "the input devices a game reads"
     );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// The person's terminals open as an isolated game starts: it could write into them, and some
+/// terminals act on what they are sent (OSC 52 sets the clipboard). The terminals the game makes
+/// itself still work.
+#[tokio::test]
+#[ignore]
+async fn an_isolated_game_cannot_write_to_the_terminals_open_as_it_starts() {
+    let (root, dirs) = fixture("terminal");
+    // A terminal of the test's own, made by script(1): no window shows it.
+    let named = root.join("tty");
+    let mut terminal = std::process::Command::new("script")
+        .args([
+            "-qfc",
+            &format!("tty > '{}'; exec sleep 600", named.display()),
+            "/dev/null",
+        ])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .expect("script(1), from util-linux");
+    for _ in 0..50 {
+        if std::fs::read_to_string(&named).is_ok_and(|t| t.ends_with('\n')) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let pts = std::fs::read_to_string(&named).unwrap().trim().to_string();
+    assert!(pts.starts_with("/dev/pts/"), "{pts}");
+    let script = root.join("game/start.sh");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\ncd '{}'\n\
+             if (exec 3>'{pts}') 2>/dev/null; then echo OPENED; else echo refused; fi > out-terminal\n\
+             if script -qec true /dev/null >/dev/null 2>&1; then echo made; else echo failed; fi \
+             > out-own\n",
+            root.join("game").display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let spec = runner::launch_spec(&dirs, &linux_install(&root), None).unwrap();
+    let log = root.join("game.log");
+
+    // Without the masks, the game writes into the test's terminal: the check below means
+    // something.
+    run(&without_masks(&spec), &log).await;
+    let unmasked = (result(&root, "out-terminal"), result(&root, "out-own"));
+    clear_results(&root);
+    run(&spec, &log).await;
+    let masked = (result(&root, "out-terminal"), result(&root, "out-own"));
+    let _ = terminal.kill();
+    let _ = terminal.wait();
+    assert_eq!(unmasked, ("OPENED".into(), "made".into()));
+    assert_eq!(masked, ("refused".into(), "made".into()));
     std::fs::remove_dir_all(root).unwrap();
 }
 

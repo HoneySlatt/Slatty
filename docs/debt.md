@@ -60,10 +60,10 @@ removed when it is paid; the current stage's plan is in [PLAN.md](PLAN.md).
 - **Isolation copies its runtime at each launch** ([SECURITY.md](../SECURITY.md)): about a second
   on btrfs, about 750 MB written on ext4, the Steam Deck's file system, not measured. To be copied
   once per version at Stage 6 ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
-- **The sandbox's `/dev` follows the system's**: a security key plugged in during play is not
-  masked, and the input devices a game may open are writable, so it can send a gamepad events
-  ([SECURITY.md](../SECURITY.md#games-and-isolation)). A fixed `/dev` would lose gamepads plugged
-  in during play, and read-only input devices their rumble; no fix is planned.
+- **The sandbox's `/dev` follows the system's**: a security key plugged in or a terminal opened
+  during play is not masked, and the input devices a game may open are writable, so it can send a
+  gamepad events ([SECURITY.md](../SECURITY.md#games-and-isolation)). A fixed `/dev` would lose
+  gamepads plugged in during play, and read-only input devices their rumble; no fix is planned.
 - **Slatty's build times are not measured**: the floor for uwui's budgets of compiling waits for
   the owner's go ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
 - **The rivals are not measured**: Steam's and Heroic's launches, installs and cost during play,

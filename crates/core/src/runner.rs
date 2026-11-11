@@ -870,6 +870,25 @@ fn security_keys(sys: &Path) -> Vec<PathBuf> {
 /// HID transport, every FIDO security key's, declares: as a usage page item, or in the high half
 /// of an extended usage. A long item is skipped whole; a descriptor cut short is read up to its
 /// end (HID 1.11, section 6.2.2).
+/// The terminals open as the game starts, the numbered entries of `pts` (`/dev/pts`), masked for
+/// an isolated game: it could write into them, and some terminals act on what they are sent
+/// (OSC 52 sets the clipboard). The terminals it makes itself are numbered anew and work; one the
+/// person opens during play is not masked: the game's `/dev` follows the system's (SECURITY.md).
+fn open_terminals(pts: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(pts) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter(|entry| {
+            let name = entry.file_name();
+            let name = name.as_encoded_bytes();
+            !name.is_empty() && name.iter().all(u8::is_ascii_digit)
+        })
+        .map(|entry| entry.path())
+        .collect()
+}
+
 fn is_security_key(descriptor: &[u8]) -> bool {
     const FIDO: u32 = 0xF1D0;
     let mut rest = descriptor;
@@ -905,8 +924,8 @@ fn is_security_key(descriptor: &[u8]) -> bool {
 /// them, and have its code run outside its container at the next launch, or in other games. What
 /// pressure-vessel writes as a game starts (its copy of the runtime in `var`, its `.ref` locks)
 /// stays writable; umu leaves the runtime as it is meanwhile (`UMU_RUNTIME_UPDATE=0`, see
-/// `refresh_runtimes`). The devices of `INPUT_MAKERS` the system has, and the security keys
-/// plugged in (`security_keys`), cannot be opened there.
+/// `refresh_runtimes`). The devices of `INPUT_MAKERS` the system has, the security keys plugged
+/// in (`security_keys`) and the terminals open (`open_terminals`) cannot be opened there.
 fn read_only_tools(
     umu: PathBuf,
     args: Vec<String>,
@@ -919,8 +938,12 @@ fn read_only_tools(
     for device in INPUT_MAKERS.map(Path::new).iter().filter(|d| d.exists()) {
         bind(&mut out, "--ro-bind", device)?;
     }
-    for key in security_keys(Path::new("/sys")) {
-        bind(&mut out, "--ro-bind", &key)?;
+    let keys = security_keys(Path::new("/sys"));
+    for node in keys.iter().chain(&open_terminals(Path::new("/dev/pts"))) {
+        // `-try`: a key pulled out or a terminal closed before bubblewrap starts needs no mask,
+        // and must not fail the launch.
+        let node = node.display().to_string();
+        out.extend(["--ro-bind-try".to_string(), node.clone(), node]);
     }
     for runtime in runtimes() {
         bind(&mut out, "--ro-bind", &runtime)?;
@@ -1355,6 +1378,23 @@ mod tests {
 
     /// Only the nodes of security keys are masked, found through `/sys`; any other name, or a
     /// descriptor that cannot be read, is left alone.
+    /// The terminals are the numbered entries of `/dev/pts`; `ptmx`, which makes new ones, and any
+    /// other name are left alone.
+    #[test]
+    fn the_open_terminals_are_the_numbered_entries() {
+        let pts = std::env::temp_dir().join(format!("slatty-pts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&pts);
+        std::fs::create_dir_all(&pts).unwrap();
+        for name in ["0", "12", "ptmx", "x1", "3a"] {
+            std::fs::write(pts.join(name), b"").unwrap();
+        }
+        let mut found = open_terminals(&pts);
+        found.sort();
+        assert_eq!(found, [pts.join("0"), pts.join("12")]);
+        assert!(open_terminals(&pts.join("missing")).is_empty());
+        std::fs::remove_dir_all(pts).unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn only_security_keys_are_found_among_hid_devices() {

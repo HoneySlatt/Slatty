@@ -274,8 +274,10 @@ unshare -rn sh -c 'ip link set lo up && cargo test -p slatty-cli --test comet --
 # Wine's z: drive under Proton, and shows when the same launch is not isolated; the game can
 # neither change umu's runtime, the Proton build or the runtime tool, nor reach the user's other
 # processes, nor open a device that makes input devices (/dev/uinput), while it reads the gamepads
-# it read before (an input device must be readable: connect a gamepad); an installer run for a game added by hand reads its own folder, installs on drive D:
-# (the game's folder) and cannot write beside itself, and a launcher it put on C: sees the game on D:.
+# it read before (an input device must be readable: connect a gamepad), nor write to a terminal
+# open as it starts (one script(1) makes), while it makes its own; an installer run for a game
+# added by hand reads its own folder, installs on drive D: (the game's folder) and cannot write
+# beside itself, and a launcher it put on C: sees the game on D:.
 # A failing check writes a probe into the tools: give it copies (cp -a --reflink=auto)
 # of ~/.local/share/umu, as <data>/umu, and of a Proton build. Offline: each launch is given a
 # closed proxy

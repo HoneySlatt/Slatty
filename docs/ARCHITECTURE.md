@@ -495,9 +495,10 @@ A launch starts the running binary again (through `/proc/self/exe`, which still 
 file was replaced by an update or a rebuild) with a hidden argument. That copy becomes the session's
 supervisor: it marks itself `PR_SET_CHILD_SUBREAPER`, starts the game in a session of its own
 (`setsid`: its own process group, which a stop signals, and no controlling terminal, so it cannot
-type into the one Slatty was started in) and reports events as JSON lines. Processes that detach (launchers that exit early, Wine services) are
-re-parented to it, so the session ends only when no descendant is left. umu's `waitforexitandrun`
-already waits for Windows processes; the supervisor is the safety net for everything else.
+type into the one Slatty was started in) and reports events as JSON lines. Processes that detach
+(launchers that exit early, Wine services) are re-parented to it, so the session ends only when
+no descendant is left. umu's `waitforexitandrun` already waits for Windows processes; the
+supervisor is the safety net for everything else.
 
 On Windows the supervisor is started again through `current_exe` and puts itself in a job object
 before it starts the game, so that every process the game starts is in the job; the session ends
@@ -556,10 +557,13 @@ bubblewrap mounts without device access: the node stays, but opening it fails, a
 pressure-vessel binds from this one. A game that opened one could make a keyboard and type into the
 desktop ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)). The `/dev/hidraw*` nodes of
 FIDO security keys are masked the same way (`runner::security_keys`), told by the FIDO usage page
-in their report descriptors under `/sys/class/hidraw`; only those plugged in at the launch, as the
-game's `/dev` follows the system's. Gamepads (`/dev/input/*`, other `/dev/hidraw*`) are left as
-they are: some controllers' configuration interfaces use a vendor's page, as keyboards' do, so no
-wider rule tells them apart.
+in their report descriptors under `/sys/class/hidraw`, and so are the terminals open, the
+numbered entries of `/dev/pts` (`runner::open_terminals`): only those there at the launch, as the
+game's `/dev` follows the system's, with `--ro-bind-try`, so one gone meanwhile does not fail it.
+A fresh `/dev/pts` cannot be given instead: bubblewrap takes every source from the host's tree,
+and hiding the folder would break the terminals a game makes. Gamepads (`/dev/input/*`, other
+`/dev/hidraw*`) are left as they are: some controllers' configuration interfaces use a vendor's
+page, as keyboards' do, so no wider rule tells them apart.
 
 **Before each isolated launch**, `runner::sandbox` tries bubblewrap (`doctor::sandbox_problem`, a
 few milliseconds): a sandbox, then one inside it. On Ubuntu 23.10 and later, without an AppArmor

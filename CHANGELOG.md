@@ -46,6 +46,8 @@ until 1.0, a minor version may change commands and on-disk formats.
   account may open them, as it often may for gamepads. Gamepads read as before.
 - An isolated game can no longer reach the FIDO security keys (YubiKey and the like) plugged in
   as it starts.
+- An isolated game can no longer write into your terminals open as it starts, where some
+  terminals act on what they are sent (setting the clipboard, for one).
 - A game no longer shares the terminal Slatty was started from, through which it could type
   commands there on systems that still allow it (TIOCSTI).
 

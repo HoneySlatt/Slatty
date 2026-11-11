@@ -267,6 +267,9 @@ isolated game.
   are not changed.
 - **No security keys.** The FIDO security keys (YubiKey and the like) plugged in as it starts
   cannot be opened. A key plugged in while it runs can be, where your account may open it.
+- **Not your terminals.** It cannot write into the terminals open as it starts, where it could
+  show what it likes, and some terminals act on what they are sent (setting the clipboard, for
+  one). A terminal opened while it runs is reachable. The terminals it makes itself work.
 
 What isolation leaves open:
 
