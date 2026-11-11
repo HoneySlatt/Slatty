@@ -57,6 +57,12 @@ removed when it is paid; the current stage's plan is in [PLAN.md](PLAN.md).
   (`play::UNLOCKS_EVERY`), the window and its covers keep their memory, and in the couch mode every
   gamepad event is still read during play, though not sent (`pad::set_away`). For Stage 5, which makes Slatty step back during play
   ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
+- **On Windows, the couch mode's gamepad reader would keep gilrs polling**: gilrs-core 0.6.8
+  reads Windows' gamepads on a thread that wakes every 8 ms while its gilrs lives, and queues
+  their events while nobody reads them; Slatty keeps its gilrs from the first entry into the
+  couch mode on (`pad::moves`), as each one made on Linux leaves a thread behind. The interface
+  does not run on Windows before uwui's port
+  ([ADR-0022](adr/0022-windows-hosts.md)), which settles it.
 - **Isolation copies its runtime at each launch** ([SECURITY.md](../SECURITY.md)): about a second
   on btrfs, about 750 MB written on ext4, the Steam Deck's file system, not measured. To be copied
   once per version at Stage 6 ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).

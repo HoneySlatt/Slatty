@@ -1,9 +1,9 @@
 //! Gamepads and the keyboard, as the moves of the couch mode. Gamepads are read through gilrs on a
-//! thread of their own, while the couch mode is on; a direction held repeats, from the d-pad as
-//! from the left stick.
+//! thread of their own, made at the first entry into the couch mode, waiting while it is off; a
+//! direction held repeats, from the d-pad as from the left stick.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use futures::{SinkExt, Stream};
 
@@ -173,18 +173,65 @@ fn pad_input(event: gilrs::EventType) -> Option<PadInput> {
     }
 }
 
-/// How long the reading thread waits for an event when nothing is held: it ends this long, at
+/// How long the reading thread waits for an event when nothing is held: it notices this long, at
 /// most, after the couch mode is left.
 const IDLE: Duration = Duration::from_secs(1);
 
-/// The moves of every gamepad connected, now or later.
+/// An input, and when the gamepad made it.
+type Timed = (PadInput, SystemTime);
+
+/// Where the reading thread takes the gamepads' input from: gilrs, or a fake in tests.
+trait Source {
+    /// The next input, waiting at most `wait` for it; `None` once `wait` is over, or as soon as
+    /// an event comes that is no input of the couch mode.
+    fn next(&mut self, wait: Duration) -> Option<Timed>;
+
+    /// The time now, for the repeats.
+    fn now(&self) -> Instant;
+}
+
+impl Source for gilrs::Gilrs {
+    fn next(&mut self, wait: Duration) -> Option<Timed> {
+        let event = self.next_event_blocking(Some(wait))?;
+        Some((pad_input(event.event)?, event.time))
+    }
+
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+}
+
+/// The couch mode, open since `since`, which receives the moves.
+struct Listener {
+    tx: tokio::sync::mpsc::UnboundedSender<Nav>,
+    since: SystemTime,
+}
+
+/// The thread reading the gamepads for the whole process, started at the first entry into the
+/// couch mode: where each entry gives it the listener to serve.
+type Reader = std::sync::OnceLock<std::sync::mpsc::Sender<Listener>>;
+
+/// The moves of every gamepad connected, now or later. One gilrs, made once per process, reads
+/// them: on Linux each one leaves a thread behind (gilrs-core 0.6.8's hotplug thread, blocked on
+/// udev until a device next comes or goes). While the couch mode is closed, the reader waits for
+/// the next entry without waking.
 pub fn moves() -> impl Stream<Item = Nav> {
-    crate::task::channel(32, async |mut output| {
+    static READER: Reader = std::sync::OnceLock::new();
+    listen(&READER, || gilrs::Gilrs::new().ok())
+}
+
+/// The moves `reader` reads from the source `open` gives, starting it at the first call.
+fn listen<S: Source + 'static>(
+    reader: &'static Reader,
+    open: fn() -> Option<S>,
+) -> impl Stream<Item = Nav> {
+    crate::task::channel(32, async move |mut output| {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let started = std::thread::Builder::new()
-            .name("slatty-gamepads".into())
-            .spawn(move || read(&tx));
-        if started.is_err() {
+        let listener = Listener {
+            tx,
+            since: SystemTime::now(),
+        };
+        if start(reader, open).send(listener).is_err() {
             return;
         }
         while let Some(nav) = rx.recv().await {
@@ -195,22 +242,67 @@ pub fn moves() -> impl Stream<Item = Nav> {
     })
 }
 
-fn read(tx: &tokio::sync::mpsc::UnboundedSender<Nav>) {
-    // Without udev, no gamepad: the keyboard still works.
-    let Ok(mut gilrs) = gilrs::Gilrs::new() else {
-        return;
-    };
+/// Where to give `reader` a listener, its thread started the first time. A thread that cannot
+/// start, or finds no gamepad support (no udev), ends: what it is given is refused, and the
+/// keyboard still works.
+fn start<S: Source + 'static>(
+    reader: &'static Reader,
+    open: fn() -> Option<S>,
+) -> &'static std::sync::mpsc::Sender<Listener> {
+    reader.get_or_init(|| {
+        let (tx, listeners) = std::sync::mpsc::channel();
+        let _ = std::thread::Builder::new()
+            .name("slatty-gamepads".into())
+            .spawn(move || {
+                if let Some(mut source) = open() {
+                    read(&mut source, &listeners);
+                }
+            });
+        tx
+    })
+}
+
+/// Serves each listener in turn, the latest given when several wait; between them, blocks on
+/// `listeners`.
+fn read(source: &mut impl Source, listeners: &std::sync::mpsc::Receiver<Listener>) {
+    let mut pending = None;
+    while let Ok(mut listener) = listeners.recv() {
+        while let Ok(later) = listeners.try_recv() {
+            listener = later;
+        }
+        pending = serve(source, &listener, pending);
+    }
+}
+
+/// Sends `listener` the moves `source` makes, starting with `pending`, until it stops listening;
+/// what a gamepad did before it listened is not its. An input read as it stopped is given back,
+/// for whoever listens next.
+fn serve(
+    source: &mut impl Source,
+    listener: &Listener,
+    mut pending: Option<Timed>,
+) -> Option<Timed> {
     let mut repeater = Repeater::default();
-    while !tx.is_closed() {
-        let wait = repeater
-            .next_repeat()
-            .map_or(IDLE, |at| at.saturating_duration_since(Instant::now()));
-        let event = gilrs.next_event_blocking(Some(wait));
-        let input = event.and_then(|e| pad_input(e.event));
+    loop {
+        if listener.tx.is_closed() {
+            return pending;
+        }
+        let read = pending.take().or_else(|| {
+            let wait = repeater
+                .next_repeat()
+                .map_or(IDLE, |at| at.saturating_duration_since(source.now()));
+            source.next(wait)
+        });
+        if listener.tx.is_closed() {
+            return read;
+        }
+        let input = read
+            .filter(|(_, at)| *at >= listener.since)
+            .map(|(input, _)| input);
         let away = AWAY.load(Ordering::Relaxed);
-        for nav in step(&mut repeater, input, Instant::now(), away) {
-            if tx.send(nav).is_err() {
-                return;
+        for nav in step(&mut repeater, input, source.now(), away) {
+            if listener.tx.send(nav).is_err() {
+                return None;
             }
         }
     }
@@ -246,6 +338,155 @@ pub enum Key {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::VecDeque;
+
+    /// What the fake gamepad does at a time.
+    #[derive(Clone, Copy)]
+    enum Step {
+        Input(PadInput),
+        /// The couch mode left.
+        Leave,
+    }
+
+    /// A gamepad that does `steps`, each at its time from the start, on a clock of its own; the
+    /// couch mode listening on `listening` is left once they run out.
+    struct Fake {
+        start: Instant,
+        clock: Duration,
+        steps: VecDeque<(u64, Step)>,
+        listening: tokio::sync::mpsc::UnboundedReceiver<Nav>,
+    }
+
+    impl Source for Fake {
+        fn next(&mut self, wait: Duration) -> Option<Timed> {
+            let until = self.clock + wait;
+            while let Some(&(at, step)) = self.steps.front() {
+                let at = Duration::from_millis(at);
+                if at > until {
+                    break;
+                }
+                self.steps.pop_front();
+                self.clock = self.clock.max(at);
+                match step {
+                    Step::Input(input) => return Some((input, wall(at))),
+                    Step::Leave => self.listening.close(),
+                }
+            }
+            if self.steps.is_empty() {
+                self.listening.close();
+            }
+            self.clock = until;
+            None
+        }
+
+        fn now(&self) -> Instant {
+            self.start + self.clock
+        }
+    }
+
+    /// The wall clock `at` after the fake's start.
+    fn wall(at: Duration) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_000_000) + at
+    }
+
+    /// A listener that entered `since` ms after the fake's start, and what it receives.
+    fn listener(since: u64) -> (Listener, tokio::sync::mpsc::UnboundedReceiver<Nav>) {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let since = wall(Duration::from_millis(since));
+        (Listener { tx, since }, rx)
+    }
+
+    fn fake(steps: &[(u64, Step)], listening: tokio::sync::mpsc::UnboundedReceiver<Nav>) -> Fake {
+        Fake {
+            start: Instant::now(),
+            clock: Duration::ZERO,
+            steps: steps.iter().copied().collect(),
+            listening,
+        }
+    }
+
+    fn received(rx: &mut tokio::sync::mpsc::UnboundedReceiver<Nav>) -> Vec<Nav> {
+        std::iter::from_fn(|| rx.try_recv().ok()).collect()
+    }
+
+    /// What a gamepad did while the couch mode was closed, waiting in gilrs, is not replayed when
+    /// it opens: only what comes after.
+    #[test]
+    fn moves_made_before_entering_are_not_the_couch_modes() {
+        let (couch, rx) = listener(1000);
+        let mut pad = fake(
+            &[
+                (500, Step::Input(PadInput::Pressed(Nav::Down))),
+                (1200, Step::Input(PadInput::Pressed(Nav::Confirm))),
+            ],
+            rx,
+        );
+        assert_eq!(serve(&mut pad, &couch, None), None);
+        assert_eq!(received(&mut pad.listening), [Nav::Confirm]);
+    }
+
+    /// The couch mode left and entered again while the reader waits: a move made after the new
+    /// entry, read for the old one, goes to the new one.
+    #[test]
+    fn a_move_made_as_the_couch_mode_is_entered_again_is_not_lost() {
+        let (first, rx) = listener(0);
+        let mut pad = fake(
+            &[
+                (300, Step::Leave),
+                (800, Step::Input(PadInput::Pressed(Nav::Confirm))),
+            ],
+            rx,
+        );
+        let pending = serve(&mut pad, &first, None);
+        assert!(received(&mut pad.listening).is_empty());
+        let (again, rx) = listener(500);
+        pad.listening = rx;
+        assert_eq!(serve(&mut pad, &again, pending), None);
+        assert_eq!(received(&mut pad.listening), [Nav::Confirm]);
+    }
+
+    /// A gamepad fed by the test, in real time.
+    struct Pad(std::sync::mpsc::Receiver<Timed>);
+
+    impl Source for Pad {
+        fn next(&mut self, wait: Duration) -> Option<Timed> {
+            self.0.recv_timeout(wait).ok()
+        }
+
+        fn now(&self) -> Instant {
+            Instant::now()
+        }
+    }
+
+    static READER: Reader = std::sync::OnceLock::new();
+    static PAD: std::sync::Mutex<Option<std::sync::mpsc::Receiver<Timed>>> =
+        std::sync::Mutex::new(None);
+    static OPENED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    fn open_pad() -> Option<Pad> {
+        OPENED.fetch_add(1, Ordering::Relaxed);
+        PAD.lock().unwrap().take().map(Pad)
+    }
+
+    /// Each entry into the couch mode listens to the one reader of the process: gilrs, made
+    /// once, leaves no thread of its own behind at each entry.
+    #[tokio::test]
+    async fn entering_the_couch_mode_again_reuses_its_reader() {
+        use futures::{FutureExt, StreamExt};
+        let (pad, inputs) = std::sync::mpsc::channel();
+        *PAD.lock().unwrap() = Some(inputs);
+        let mut first = Box::pin(listen(&READER, open_pad));
+        assert_eq!(first.next().now_or_never(), None);
+        // Left, then entered again.
+        drop(first);
+        let mut again = Box::pin(listen(&READER, open_pad));
+        assert_eq!(again.next().now_or_never(), None);
+        pad.send((PadInput::Pressed(Nav::Confirm), SystemTime::now()))
+            .unwrap();
+        let next = tokio::time::timeout(Duration::from_secs(5), again.next()).await;
+        assert_eq!(next.ok().flatten(), Some(Nav::Confirm));
+        assert_eq!(OPENED.load(Ordering::Relaxed), 1);
+    }
 
     fn at(ms: u64, start: Instant) -> Instant {
         start + Duration::from_millis(ms)

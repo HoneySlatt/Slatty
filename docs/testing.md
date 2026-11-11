@@ -289,6 +289,17 @@ TMPDIR=$HOME/.cache XDG_DATA_HOME=<data> SLATTY_TEST_PROTON=<copy of a Proton fo
 isolation tests need bubblewrap, as isolated games do, and run one at a time, since they set
 variables of the test process's own environment.
 
+### The couch mode with a gamepad
+
+gilrs's events cannot be made outside it: the tests feed the reading loop a fake source
+(`pad::Source`), and a person checks the rest with a real gamepad, on the
+[fake profile](#the-application-at-10000-games):
+
+- **One reader for the whole run**: enter and leave the couch mode three times, then
+  `cat /proc/<pid>/task/*/comm | grep -cx gilrs`, with the pid of that `slatty-gui`, prints 1.
+- **No move lost or replayed**: press buttons with the couch mode closed, then enter it: the
+  focus does not move until a button is pressed, and moves at the first one.
+
 ## Checks against GOG
 
 These need a GOG account and write to it (cloud saves, achievements). Back up the saves of any game

@@ -35,6 +35,9 @@ until 1.0, a minor version may change commands and on-disk formats.
 - `slatty library list` lists Epic's games too, as the library was last read from Epic.
 - A second Ctrl+C quits at once while files are downloaded or checked (install, update, verify,
   installers, Proton builds); it was ignored.
+- Entering and leaving the couch mode no longer leaves a thread behind each time, woken whenever
+  an input device is plugged in or out; gamepads are read by one thread for the whole run, which
+  waits without waking while the couch mode is off.
 - On Windows, a game added by hand is refused your profile folder as its folder, as it is your
   home folder on Linux; it was accepted once games were installed elsewhere.
 - On Windows, `slatty import --from-heroic` looks for Heroic's records in `AppData\Roaming\heroic`,
