@@ -86,7 +86,7 @@ Ask the owner first, every time:
 - `slatty-core` holds all behaviour, for the command line and the interface: no interface code,
   typed errors (`error::Error`) and events. User-visible wording lives in the front ends.
 - `slatty-app`, the interface's state, builds without Iced
-  ([ADR-0019](docs/adr/0019-the-interfaces-state-free-of-any-framework.md)); `slatty-gui` draws it.
+  ([ADR-0038](docs/adr/0038-long-operations-owned-by-the-core.md)); `slatty-gui` draws it.
 - Long operations take a `CancellationToken` and report progress through a callback.
 - Network services sit behind traits with in-memory fakes, new ones too.
 - The interface follows the module you change and [its conventions](docs/ARCHITECTURE.md#interface):

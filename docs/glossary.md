@@ -109,7 +109,8 @@ into a folder of its own, followed through `<project>-latest`
 **Pure models.** The layer beside `slatty-core` that holds the interface's rules (the library's
 lists, sorting, filters, the wording shown) as plain functions and data, free of any framework;
 the interface's state on uwui reads them (Stage 5,
-[ADR-0034](adr/0034-what-slatty-is-to-become.md)).
+[ADR-0034](adr/0034-what-slatty-is-to-become.md)). They own no work: long operations, such as the
+queue, are the core's ([ADR-0038](adr/0038-long-operations-owned-by-the-core.md)).
 
 **Quality bar.** The programs Slatty is weighed against, and its budgets
 ([ROADMAP.md](ROADMAP.md#quality-bar)).

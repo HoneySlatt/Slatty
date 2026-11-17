@@ -32,7 +32,7 @@ repository, which can be a little after it was taken.
 | [0016](0016-images-shown-from-files-at-the-size-drawn.md) | Images shown from files, made at the size drawn | Accepted |
 | [0017](0017-only-the-rows-in-view-are-built.md) | Grids and long lists build only the rows in view | Accepted |
 | [0018](0018-a-couch-mode-of-its-own.md) | A couch mode of its own | Accepted; amended by 0034 and 0036 |
-| [0019](0019-the-interfaces-state-free-of-any-framework.md) | The interface's state free of any framework | Accepted; amends 0015 (the state leaves the Iced crate); amended by 0034 |
+| [0019](0019-the-interfaces-state-free-of-any-framework.md) | The interface's state free of any framework | Superseded by 0038; amended 0015 (the state leaves the Iced crate) |
 | [0020](0020-gpui-set-aside-for-slime-ui.md) | GPUI tried and set aside; Slatty is the pilot of SlimeEngine's interface framework | Accepted; amends 0015 (Iced stays until slime-ui runs Slatty); amended by 0025, 0030 and 0031 |
 | [0021](0021-interface-in-english-first.md) | The interface in English first | Accepted; amended by 0034 |
 | [0022](0022-windows-hosts.md) | Windows hosts: one code base, built from Linux, Linux's features kept Linux's | Accepted; amended by 0034 |
@@ -47,7 +47,8 @@ repository, which can be a little after it was taken.
 | [0031](0031-iceds-figures-measured-again-during-the-pause.md) | Iced's figures measured again, by a command, during the pause | Accepted; amends 0020 (the bar is Iced's figures measured again) and 0025 (one milestone during the pause) |
 | [0032](0032-gpl-kept-on-a-permissive-framework.md) | GPL-3.0-or-later kept, on a framework under MIT OR Apache-2.0 | Accepted |
 | [0033](0033-a-push-of-markdown-alone-checks-only-the-links.md) | A push of Markdown alone checks only the links | Accepted; amends 0026 (a fourth part, not every part in every run) |
-| [0034](0034-what-slatty-is-to-become.md) | What Slatty is to become | Accepted; amends 0009, 0013, 0018, 0019, 0021, 0022, 0023, 0024, 0025 and 0030; amended by 0036 |
+| [0034](0034-what-slatty-is-to-become.md) | What Slatty is to become | Accepted; amends 0009, 0013, 0018, 0019, 0021, 0022, 0023, 0024, 0025 and 0030; amended by 0036 and 0038 |
 | [0035](0035-slattys-emblem.md) | Slatty's emblem: its author keeps its rights; in the program at Stage 5 | Accepted |
 | [0036](0036-slattys-bar-against-the-market.md) | Slatty's bar set against the market: rivals on the moments of play, a lead by family, features added | Accepted; amends 0009, 0018, 0023, 0024, 0030 and 0034 |
 | [0037](0037-core-dumps-kept-off.md) | Core dumps kept off for Slatty and the programs it starts, on Linux | Accepted |
+| [0038](0038-long-operations-owned-by-the-core.md) | Long operations owned by the core; the interface's state free of any framework | Accepted; supersedes 0019; amends 0034 (where the downloads' rules live) |

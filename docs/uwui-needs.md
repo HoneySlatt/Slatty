@@ -164,7 +164,7 @@ left open.
 | Signals fed by a state outside uwui, in batches, by parts and by key | The pure models give the lists; the interface shows them | Indispensable: Stage 5 | New |
 | Work bound to the part of the interface that started it, cancelled with it, bridged to a cancellation token of the core | Leaving a page stops what it asked | Indispensable: Stage 5 | Yes |
 | tokio's adapter for heavy work | The core runs on tokio | Indispensable: Stage 5 | Yes |
-| Timers that wake only while they matter, and relative times that change at the granularity shown, only while shown | Updates checked every 6 hours, downloads retried every minute; "3 minutes ago" | Indispensable: Stage 5 | Precision: ADR-0205 leaves it to uwui's first stage |
+| Timers that wake only while they matter, and relative times that change at the granularity shown, only while shown | "3 minutes ago"; the core's own timers (updates checked every 6 hours, downloads retried every minute) run beside uwui ([ADR-0038](adr/0038-long-operations-owned-by-the-core.md)) | Indispensable: Stage 5 | Precision: ADR-0205 leaves it to uwui's first stage |
 | A window shown with its first frame within the budget, the state read on a thread started before the window, nothing slow before the first frame | The library shown within 95 ms warm, the compositor's answer included | Indispensable: Stage 5 | Precision: Slatty's budget is stricter than uwui's 100 ms |
 | No frame, processor time or wake-up at rest, under Wayland and Xwayland | 0 in 60 s at rest | Indispensable: Stage 5 | Yes |
 | uwui's own threads few, and its decoding of images at the lowest priority | Games run beside Slatty on two cores on the lowest tier | Indispensable: Stage 5 | Precision: Magnolia asks for few threads |

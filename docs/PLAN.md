@@ -27,9 +27,14 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
   driver are still to read.
 - **At the resumption**: Stage 5, the interface on uwui, released as 0.3 once its exit holds. Its
   first milestone, under Iced, moves the rules of `slatty-app`'s `update` into pure models with
-  their tests; then the views on uwui, in signals over them, with French and accessibility at
-  level AA. Read first [the known debt](#known-debt) and the open decisions of
-  [ROADMAP.md](ROADMAP.md#open).
+  their tests, and the queue, the jobs' states and automatic updates into the core
+  ([ADR-0038](adr/0038-long-operations-owned-by-the-core.md)); then the views on uwui, in signals
+  over them, with French and accessibility at level AA. Read first [the known debt](#known-debt)
+  and the open decisions of [ROADMAP.md](ROADMAP.md#open).
+- **The audit of 2026-11-17** ([audits/2026-11-17-architecture.md](audits/2026-11-17-architecture.md))
+  found what to do before and during the port, two items proposed as exceptions to the pause (game
+  files the person changed, a cloud file sent again with the same content); each waits for the
+  owner's choice.
 - **Then** Stage 6, the Steam Deck (0.4); Stage 8, saves everywhere (0.5); the rest of Stage 3,
   Windows (0.6), M3.3's open checks first; then Stages 4, 10, 9 and 11
   ([ROADMAP.md](ROADMAP.md#4-stages)).

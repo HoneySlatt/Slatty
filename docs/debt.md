@@ -38,13 +38,39 @@ removed when it is paid; the current stage's plan is in [PLAN.md](PLAN.md).
   a Cargo cache ([ADR-0026](adr/0026-ci-runs-the-checks-in-three-parts-at-once.md)), and a warm
   run took 9 min 13 s, within its 20 minutes, the package's 9 minutes being all of it, as no Cargo
   cache reaches its build. A run whose Linux cache is cold, after a change to `Cargo.lock` or
-  `flake.lock`, took 18 min 55 s once: close to the budget. Building the package with crane is the
-  step left if runs come closer ([measurements.md](measurements.md#ci-in-three-parts-2026-11-05)).
+  `flake.lock`, took 18 min 55 s once, and a run on 2026-11-11 took 20 min 35 s, over the budget.
+  Building the package with crane is the step left
+  ([measurements.md](measurements.md#ci-in-three-parts-2026-11-05)).
 - **The download and no-change sync budgets are not measured** (set 2026-11-05): their benchmarks
   are to be written.
 - **A crash leaves no report** ([quality bar](ROADMAP.md#quality-bar)): to be built in the core and
   the command line; the interface's notice waits for uwui (Stage 5), as Iced receives bug fixes
-  only. Nor are hours of use counted.
+  only. Nor are hours of use counted. Nor does Slatty keep a journal of what its operations
+  decided: its logs go to stderr alone, so a cloud sync that went wrong cannot be explained after
+  the fact (M3.3's open failure). Where it is paid is the owner's decision
+  ([audit](audits/2026-11-17-architecture.md)).
+- **Game files the person changed are not protected**: repair and updates replace, and uninstall
+  deletes, every file the install record lists, whatever it now holds, without a copy; a mod that
+  replaces a game's file is lost. The install record keeps paths and sizes only. Games added by
+  hand already delete a file only while it is as unpacked (`added::remove`). Where it is paid is
+  the owner's decision, before Stage 10's mods at the latest
+  ([audit](audits/2026-11-17-architecture.md)).
+- **A cloud file sent again with the same content is downloaded again**: a listed hash that changed
+  reads as a change, even when the bytes are the local file's, which is then backed up and
+  written again at each sync (GOG Galaxy beside Slatty may cause it). The fake cloud hashes raw
+  content, as GOG's does not ([audit](audits/2026-11-17-architecture.md)).
+- **Errors carry English prose**: `Error::Refused`, `Unsupported` and `NotFound` hold a sentence
+  made in the core (327 of them), shown as they are; French at Stage 5 and the agents' actions
+  need errors as data ([audit](audits/2026-11-17-architecture.md)).
+- **Stored files have no format version**: install records, games added by hand and emulated, and
+  Epic's files are JSON an older build reads and may rewrite without the fields it does not know;
+  the database is not copied before a migration; going back to an older version is not documented
+  ([audit](audits/2026-11-17-architecture.md)).
+- **Saves' limits**: backups of saves are never deleted, so they grow without bound; a save is
+  held whole in memory, up to 4 GiB, more than the lowest tier has; a cloud sync cannot be
+  cancelled. Stage 8's history and retention ([ADR-0034](adr/0034-what-slatty-is-to-become.md))
+  pay the first; the others are the owner's decision
+  ([audit](audits/2026-11-17-architecture.md)).
 - **On Windows, a crash dump may hold session tokens** ([SECURITY.md](../SECURITY.md)): where
   Windows Error Reporting's local dumps are turned on, or in the small dump it may send to
   Microsoft. Linux's are off ([ADR-0037](adr/0037-core-dumps-kept-off.md)); a crash handler

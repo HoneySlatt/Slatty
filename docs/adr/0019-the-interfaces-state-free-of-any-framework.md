@@ -1,8 +1,7 @@
 # 0019. The interface's state free of any framework
 
-- Status: Accepted; amends [0015](0015-iced-for-the-interface.md) (the state leaves the Iced crate);
-  amended by [0034](0034-what-slatty-is-to-become.md) (the interface's state in uwui's signals; pure
-  models free of any framework)
+- Status: Superseded by [0038](0038-long-operations-owned-by-the-core.md); amended
+  [0015](0015-iced-for-the-interface.md) (the state leaves the Iced crate)
 - Date: 2026-11-04
 
 ## Context

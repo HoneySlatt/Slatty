@@ -14,7 +14,8 @@
   5) and [0030](0030-ported-second-onto-uwui.md) (ported whole in uwui's first stage; Stage 5's open
   decisions taken; the market's bar in its exit); amended by
   [0036](0036-slattys-bar-against-the-market.md) (the port's exit; features added; a new optional
-  piece; agents)
+  piece; agents) and [0038](0038-long-operations-owned-by-the-core.md) (the downloads' rules and
+  the jobs' states in the core)
 - Date: 2026-11-07
 
 ## Context

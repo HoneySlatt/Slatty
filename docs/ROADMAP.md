@@ -46,7 +46,8 @@ Deck and saves everywhere next, Windows after
    fake library of 10,000 games ([testing.md](testing.md)); a change that costs them is measured
    before and after.
 5. **The core holds the behaviour.** The command line and the interface share `slatty-core`; the
-   interface's state names no framework ([ADR-0019](adr/0019-the-interfaces-state-free-of-any-framework.md)).
+   interface's state names no framework; long operations and their state are the core's
+   ([ADR-0038](adr/0038-long-operations-owned-by-the-core.md)).
 
 ## Quality bar
 
@@ -193,7 +194,7 @@ alone ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)).
 | Secrets and privacy | Tokens only in the system keyring; every third party off until turned on; no telemetry ([ADR-0004](adr/0004-tokens-only-in-the-system-keyring.md), [ADR-0005](adr/0005-every-third-party-off-until-turned-on.md)) |
 | Running Windows games on Linux | umu and Proton builds Slatty downloads; isolation through umu's container ([ADR-0009](adr/0009-isolation-through-umus-container.md), [ADR-0010](adr/0010-proton-builds-downloaded-by-slatty.md)) |
 | Other stores | Steam read from its files and played through its client, Slatty's installed games written into its shortcuts while it is closed; GOG never told of other stores' games ([ADR-0013](adr/0013-steam-read-from-its-files-played-through-its-client.md), [ADR-0014](adr/0014-gog-never-told-of-other-stores-games.md), [ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
-| Interface | Iced, with bug fixes only, until uwui runs Slatty; every piece of interface work waits for uwui; two interfaces, the desktop's and the couch mode's, with uwui's gamepads and focus; the interface's state in uwui's signals over pure models free of any framework ([ADR-0015](adr/0015-iced-for-the-interface.md), [ADR-0018](adr/0018-a-couch-mode-of-its-own.md), [ADR-0019](adr/0019-the-interfaces-state-free-of-any-framework.md), [ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md), [ADR-0030](adr/0030-ported-second-onto-uwui.md), [ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
+| Interface | Iced, with bug fixes only, until uwui runs Slatty; every piece of interface work waits for uwui; two interfaces, the desktop's and the couch mode's, with uwui's gamepads and focus; the interface's state in uwui's signals over pure models free of any framework ([ADR-0015](adr/0015-iced-for-the-interface.md), [ADR-0018](adr/0018-a-couch-mode-of-its-own.md), [ADR-0038](adr/0038-long-operations-owned-by-the-core.md), [ADR-0020](adr/0020-gpui-set-aside-for-slime-ui.md), [ADR-0030](adr/0030-ported-second-onto-uwui.md), [ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
 | Themes | Slatty's themes in uwui's format; a person's `theme.toml` converted, the old file kept ([ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
 | Translations | Through uwui's (Fluent); French with the port ([ADR-0034](adr/0034-what-slatty-is-to-become.md)) |
 | Platforms | Linux (Wayland and X11, x86-64); Windows 10 and 11 from one code base, built from Linux, its window coming with uwui ([ADR-0022](adr/0022-windows-hosts.md)); unchanged by uwui's other targets ([ADR-0030](adr/0030-ported-second-onto-uwui.md)); the interface on uwui holds no line written for one platform ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)) |
@@ -208,7 +209,7 @@ Each is decided by an ADR at the stage where it becomes necessary, not earlier.
 |---|---|---|
 | Windows toolchain | MinGW (now), Microsoft's MSVC | Stage 3, if the MinGW build shows a problem MSVC has not |
 | What GOG Galaxy on Linux changes in the order of stages | A short review once its beta opens | When its beta opens |
-| Where each part of `slatty-app` goes | Pure models, signals, the core | Stage 5's start |
+| Where each part of `slatty-app` goes, but the long operations, which go to the core ([ADR-0038](adr/0038-long-operations-owned-by-the-core.md)) | Pure models, signals | Stage 5's start |
 | The look Slatty's themes start from | uwui's own look, an official theme, a structure of Slatty's own | Stage 5's start |
 | The actions a person's agents may call | Read-only on local data first; acting ones left out or confirmed each time ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)) | Stage 5's start |
 | Flathub | Only if Flatpak's sandbox gives Slatty's guarantees | Stage 6, by a prototype |
@@ -309,7 +310,8 @@ uwui's first stage ([ADR-0030](adr/0030-ported-second-onto-uwui.md),
 the API to be declared stable; Windows' first release is Stage 3's, 0.6.
 
 - First, under Iced: the rules of `slatty-app`'s `update` moved into pure models, free of any
-  framework, with their tests; Iced's figures measured unchanged.
+  framework, with their tests, and the queue, the jobs' states and automatic updates into the core
+  ([ADR-0038](adr/0038-long-operations-owned-by-the-core.md)); Iced's figures measured unchanged.
 - Then every page and the couch mode on uwui, on its desktop host, the interface's state in uwui's
   signals over the pure models; the interface's tests ported. `slatty-core` and the pure models
   never depend on uwui.
