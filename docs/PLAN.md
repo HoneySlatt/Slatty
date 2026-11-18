@@ -17,6 +17,9 @@ Every milestone ends with the definition of done in [`AGENTS.md`](../AGENTS.md#d
   Slatty's port, whole, in uwui's first stage ([ADR-0030](adr/0030-ported-second-onto-uwui.md),
   [ADR-0034](adr/0034-what-slatty-is-to-become.md)); until then Iced receives bug fixes only. What
   Slatty asks of uwui is in [uwui-needs.md](uwui-needs.md).
+- **Rust toolchain**: keep the current toolchain and the declared minimum of Rust 1.90 during
+  the pause. Reassess the stable release available when Stage 5 starts
+  ([ADR-0039](adr/0039-rust-toolchain-review-at-resumption.md)).
 - **The bar, set against the market** on 2026-11-08
   ([ADR-0036](adr/0036-slattys-bar-against-the-market.md)): Steam and Heroic measured on the
   moments of play, the lowest tier measured before 0.3, features placed in their stages

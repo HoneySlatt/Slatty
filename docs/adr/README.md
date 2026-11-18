@@ -52,3 +52,4 @@ repository, which can be a little after it was taken.
 | [0036](0036-slattys-bar-against-the-market.md) | Slatty's bar set against the market: rivals on the moments of play, a lead by family, features added | Accepted; amends 0009, 0018, 0023, 0024, 0030 and 0034 |
 | [0037](0037-core-dumps-kept-off.md) | Core dumps kept off for Slatty and the programs it starts, on Linux | Accepted |
 | [0038](0038-long-operations-owned-by-the-core.md) | Long operations owned by the core; the interface's state free of any framework | Accepted; supersedes 0019; amends 0034 (where the downloads' rules live) |
+| [0039](0039-rust-toolchain-review-at-resumption.md) | Rust toolchain review at resumption | Accepted |
